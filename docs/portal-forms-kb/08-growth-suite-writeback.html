@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Connecting form data back to Growth Suite – Portal Forms Knowledge Base</title>
+<style>
+:root{--brand:#047857;--brand-soft:#ecfdf5;--brand-fg:#064e3b;--ink:#111827;--muted:#6b7280;--border:#e5e7eb;--warn-bg:#fef3c7}
+*{box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;color:var(--ink);background:#fff;line-height:1.65;max-width:760px;margin:0 auto;padding:2rem 1.5rem 4rem}
+h1{font-size:1.875rem;line-height:1.25;margin:0 0 .5rem}
+h2{font-size:1.25rem;margin:2rem 0 .75rem;color:var(--brand-fg);border-bottom:1px solid var(--border);padding-bottom:.4rem}
+h3{font-size:1.05rem;margin:1.25rem 0 .5rem}
+p,ul,ol{margin:0 0 1rem}
+ul,ol{padding-left:1.4rem}
+li{margin-bottom:.35rem}
+a{color:var(--brand)}
+code{background:#f3f4f6;padding:.1rem .35rem;border-radius:4px;font-size:.9em}
+.meta{color:var(--muted);font-size:.85rem;margin-bottom:2rem}
+.callout{background:var(--brand-soft);border-left:3px solid var(--brand);padding:.85rem 1rem;border-radius:4px;margin:1.25rem 0}
+.callout.warn{background:var(--warn-bg);border-left-color:#d97706}
+.callout p:last-child{margin-bottom:0}
+.footer-note{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--border);color:var(--muted);font-size:.85rem}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.95rem}
+th,td{text-align:left;padding:.55rem .7rem;border-bottom:1px solid var(--border);vertical-align:top}
+th{background:#f9fafb;font-weight:600;color:var(--brand-fg)}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.9em;color:var(--brand-fg)}
+</style>
+</head>
+<body>
+
+<h1>Connecting form data back to Growth Suite</h1>
+<p class="meta">Article 8 of 12 · Portal Forms Knowledge Base</p>
+
+<p>
+A submission isn&rsquo;t much use if it just sits in a database. Portal Forms can
+automatically push answers into the parent&rsquo;s Growth Suite contact record &mdash; so your
+existing workflows, automations, tags, and pipelines can react to a submission like
+any other Growth Suite event. This article explains how that connection works and
+how to set it up on a form.
+</p>
+
+<h2>The basics</h2>
+<p>
+Each form has an optional <strong>writeback configuration</strong>. It&rsquo;s a small list that maps
+a form field to a Growth Suite custom field, like this:
+</p>
+
+<table>
+  <tr><th>Form field key</th><th>Growth Suite custom field key</th><th>Per-student?</th></tr>
+  <tr><td class="mono">permission_granted</td><td class="mono">cafe_worker_permission</td><td>Yes</td></tr>
+  <tr><td class="mono">signature_date</td><td class="mono">cafe_worker_permission_date</td><td>Yes</td></tr>
+</table>
+
+<p>
+When a parent submits the form, the system writes those answers into the
+parent&rsquo;s Growth Suite contact record. The write happens within a few seconds of
+submission and runs in the background &mdash; the parent doesn&rsquo;t wait on it.
+</p>
+
+<h2>Per-student writeback (the slot pattern)</h2>
+<p>
+Per-student forms write answers into <strong>per-student slots</strong> on the parent&rsquo;s contact.
+A family with three children has three slots: <span class="mono">student_1</span>,
+<span class="mono">student_2</span>, <span class="mono">student_3</span>. The slot is
+chosen automatically based on which child the form was for.
+</p>
+
+<p>So a Cafe Worker Permission Form for the second child would write:</p>
+<ul>
+  <li>Growth Suite field <span class="mono">student_2_cafe_worker_permission</span> &larr; whatever the parent answered</li>
+  <li>Growth Suite field <span class="mono">student_2_cafe_worker_permission_date</span> &larr; the signature date</li>
+</ul>
+
+<p>
+This matches the per-student slot pattern that already powers the Family Hub and
+other parts of Growth Suite, so all your existing reporting still works.
+</p>
+
+<h2>Why this matters</h2>
+<p>
+Once form answers are on the Growth Suite contact, your existing Growth Suite automation
+tools work unchanged. You can:
+</p>
+<ul>
+  <li><strong>Add a tag</strong> when a specific form is submitted (&ldquo;Photo Release on file 25-26&rdquo;).</li>
+  <li><strong>Send a workflow email</strong> when a permission is granted or denied.</li>
+  <li><strong>Filter contact lists</strong> by completion status (e.g. &ldquo;families who haven&rsquo;t submitted handbook acknowledgement&rdquo;).</li>
+  <li><strong>Trigger conditional follow-ups</strong> &mdash; if a parent uploaded an immunization exemption, send the next step in your enrollment workflow.</li>
+  <li><strong>Power any segment</strong> in your dashboards using the same field as a filter.</li>
+</ul>
+
+<h2>Setting up writeback on a form</h2>
+<p>
+For each form, the writeback config has a simple table the operator (or you, in a future
+version of the form builder) fills in:
+</p>
+<ol>
+  <li>Pick the form field you want to push.</li>
+  <li>Pick the matching Growth Suite custom field key. (Use the Custom Fields page in your Growth Suite admin to find or create the field first.)</li>
+  <li>Mark whether the writeback should use the per-student slot prefix or write to a family-wide field.</li>
+</ol>
+
+<div class="callout warn">
+  <p><strong>The Growth Suite field has to exist first.</strong> Writeback uses the field key
+  to find the field in your Growth Suite account. If the key doesn&rsquo;t exist, the write is
+  silently skipped (and shown as a &ldquo;skipped&rdquo; warning in the submission&rsquo;s sync status).
+  Create the custom fields in Growth Suite first, then add the writeback config.</p>
+</div>
+
+<h2>What happens if the write fails</h2>
+<p>
+The submission itself always succeeds &mdash; even if Growth Suite is temporarily
+unreachable. The writeback runs in the background and one of three things happens:
+</p>
+<ul>
+  <li><strong>Synced</strong> &mdash; everything wrote successfully.</li>
+  <li><strong>Synced with skipped keys</strong> &mdash; some target fields didn&rsquo;t exist. Submission still succeeded; you just need to create the missing fields.</li>
+  <li><strong>Error</strong> &mdash; the connection was temporarily unreachable. Shown as a red badge on the submission. Re-syncs are scheduled automatically.</li>
+</ul>
+
+<p>
+You can see the status of every submission in the <strong>Portal Forms Inbox</strong> widget on
+your admin dashboard.
+</p>
+
+<h2>Tips</h2>
+<ul>
+  <li><strong>Keep field keys consistent across forms.</strong> If two forms ask &ldquo;is this child allowed to take OTC medication&rdquo;, both should write back to the same Growth Suite field. The most-recent submission wins, which is normally what you want.</li>
+  <li><strong>Don&rsquo;t map every field.</strong> Map only the fields you actually need to filter or automate on. A free-form &ldquo;additional notes&rdquo; field probably doesn&rsquo;t need writeback &mdash; you&rsquo;ll read it in the inbox when reviewing the submission.</li>
+  <li><strong>Date fields write back as ISO dates</strong> (<span class="mono">2025-09-15</span>). Growth Suite&rsquo;s date triggers handle this format natively.</li>
+</ul>
+
+<div class="callout">
+  <p><strong>Next:</strong> Article 9 &mdash; <em>The parent experience</em> &mdash; walks through what your
+  families actually see, click by click.</p>
+</div>
+
+<p class="footer-note">Portal Forms Knowledge Base · Growth Suite</p>
+
+</body>
+</html>

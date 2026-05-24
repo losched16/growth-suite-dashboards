@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>How parents log in – Parent Portal Knowledge Base</title>
+<style>
+:root{--brand:#047857;--brand-soft:#ecfdf5;--brand-fg:#064e3b;--ink:#111827;--muted:#6b7280;--border:#e5e7eb;--warn-bg:#fef3c7}
+*{box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;color:var(--ink);background:#fff;line-height:1.65;max-width:760px;margin:0 auto;padding:2rem 1.5rem 4rem}
+h1{font-size:1.875rem;line-height:1.25;margin:0 0 .5rem}
+h2{font-size:1.25rem;margin:2rem 0 .75rem;color:var(--brand-fg);border-bottom:1px solid var(--border);padding-bottom:.4rem}
+h3{font-size:1.05rem;margin:1.25rem 0 .5rem}
+p,ul,ol{margin:0 0 1rem}
+ul,ol{padding-left:1.4rem}
+li{margin-bottom:.35rem}
+a{color:var(--brand)}
+code{background:#f3f4f6;padding:.1rem .35rem;border-radius:4px;font-size:.9em}
+.meta{color:var(--muted);font-size:.85rem;margin-bottom:2rem}
+.callout{background:var(--brand-soft);border-left:3px solid var(--brand);padding:.85rem 1rem;border-radius:4px;margin:1.25rem 0}
+.callout.warn{background:var(--warn-bg);border-left-color:#d97706}
+.callout p:last-child{margin-bottom:0}
+.footer-note{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--border);color:var(--muted);font-size:.85rem}
+.step{display:flex;gap:.85rem;align-items:flex-start;margin-bottom:1rem}
+.step-num{flex:0 0 1.7rem;height:1.7rem;border-radius:50%;background:var(--brand);color:#fff;font-weight:600;font-size:.85rem;display:flex;align-items:center;justify-content:center;line-height:1}
+.step-body{flex:1}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.95rem}
+th,td{text-align:left;padding:.55rem .7rem;border-bottom:1px solid var(--border);vertical-align:top}
+th{background:#f9fafb;font-weight:600;color:var(--brand-fg)}
+</style>
+</head>
+<body>
+
+<h1>How parents log in</h1>
+<p class="meta">Article 2 of 12 · Parent Portal Knowledge Base</p>
+
+<p>
+The Parent Portal uses <strong>passwordless magic-link login</strong>. Parents
+never create or remember a password. Instead, they enter their email, we send
+them a one-tap link, and they&rsquo;re in. This article explains the flow, why we built
+it that way, and how to support parents who get stuck.
+</p>
+
+<h2>The login flow, step by step</h2>
+
+<div class="step">
+  <div class="step-num">1</div>
+  <div class="step-body">
+    <p>The parent opens the portal in their browser and is shown a single field: <strong>Email</strong>.</p>
+  </div>
+</div>
+
+<div class="step">
+  <div class="step-num">2</div>
+  <div class="step-body">
+    <p>They type the email address you have on file for them and tap <strong>Send me a sign-in link</strong>.</p>
+  </div>
+</div>
+
+<div class="step">
+  <div class="step-num">3</div>
+  <div class="step-body">
+    <p>Within a few seconds, they receive an email with the subject line <em>&ldquo;Sign in to [your school name]&rdquo;</em>. The body has a single big button: <strong>Sign in to your portal</strong>.</p>
+  </div>
+</div>
+
+<div class="step">
+  <div class="step-num">4</div>
+  <div class="step-body">
+    <p>They tap the button. The portal opens, they&rsquo;re signed in. The session lasts 30 days &mdash; on that device they won&rsquo;t need to sign in again for a month.</p>
+  </div>
+</div>
+
+<h2>Why no passwords?</h2>
+<p>
+Parents log in to the school portal a few times a month at most. Every time you
+add a password to anything, the most likely outcome is &ldquo;parent forgets it,
+parent emails the office, office resets it.&rdquo; Magic links remove the password
+entirely &mdash; the parent&rsquo;s email account itself becomes the security boundary.
+This is the same approach used by Slack&rsquo;s family-of-apps invitations,
+Substack, and many modern banking apps.
+</p>
+
+<p>The practical wins:</p>
+<ul>
+  <li>No password reset tickets for your office.</li>
+  <li>No insecure password choices (&ldquo;School123&rdquo;, &ldquo;Mason2024&rdquo;).</li>
+  <li>No password manager fights for parents on shared family devices.</li>
+  <li>Faster login on mobile &mdash; no autofill problems.</li>
+</ul>
+
+<h2>What email gets the link?</h2>
+<p>
+The link goes to whatever email address is on file for that parent in Growth Suite.
+For a parent to log in, two things must be true:
+</p>
+<ol>
+  <li>They are listed as an active parent on a family record in Growth Suite.</li>
+  <li>That parent record has a valid email address.</li>
+</ol>
+
+<p>If either is missing, the magic-link request will silently fail (no email is sent). This is by design &mdash; we don&rsquo;t want to leak whether an email is &ldquo;known&rdquo; to your school.</p>
+
+<h2>What you should tell families on day one</h2>
+
+<div class="callout">
+  <p>Send this in your launch email:</p>
+  <p><em>&ldquo;Your portal is at <strong>[your portal URL]</strong>. To sign in, enter the email
+  address we have on file for you. We&rsquo;ll email you a one-tap sign-in link &mdash; no
+  password to remember. Bookmark the page once you&rsquo;re signed in. The portal
+  works on phones, tablets, and computers.&rdquo;</em></p>
+</div>
+
+<h2>Common login questions parents ask</h2>
+
+<table>
+  <tr><th>Question</th><th>Answer</th></tr>
+  <tr>
+    <td>&ldquo;I never got the email.&rdquo;</td>
+    <td>Check spam/promotions. If it&rsquo;s not there after 5 minutes, the email on file probably doesn&rsquo;t match what they typed. The school can verify and update.</td>
+  </tr>
+  <tr>
+    <td>&ldquo;Do my spouse and I share a login?&rdquo;</td>
+    <td>No &mdash; each parent has their own login tied to their own email. They both see the same family data. Both can take any action (sign a form, check a kid in, message the school).</td>
+  </tr>
+  <tr>
+    <td>&ldquo;The link expired.&rdquo;</td>
+    <td>Magic links expire after a short window. Just request a new one &mdash; takes 5 seconds.</td>
+  </tr>
+  <tr>
+    <td>&ldquo;Can I log in from a different device?&rdquo;</td>
+    <td>Yes. The portal works on any modern browser. Each device is its own 30-day session.</td>
+  </tr>
+  <tr>
+    <td>&ldquo;Do I need to download an app?&rdquo;</td>
+    <td>No. It&rsquo;s a website that works perfectly on a phone&rsquo;s browser. They can &ldquo;Add to Home Screen&rdquo; for an app-like icon if they want.</td>
+  </tr>
+</table>
+
+<h2>What the portal address is</h2>
+<p>
+Each school has a stable parent portal URL set during onboarding. Once you
+have the URL, share it on your school&rsquo;s public website, in your enrollment
+welcome email, in your parent handbook &mdash; anywhere parents will look for it.
+</p>
+
+<div class="callout warn">
+  <p><strong>Don&rsquo;t share specific portal URLs that include parameters or tokens.</strong>
+  Always share the bare login page (e.g. <span style="font-family:monospace">your-school.growthsuite.app</span>),
+  not a full link from your own session. If you copy a URL while logged in, it might
+  contain something specific to your session that won&rsquo;t work for someone else.</p>
+</div>
+
+<div class="callout">
+  <p><strong>Next:</strong> Article 3 &mdash; <em>A tour of the Parent Portal</em> &mdash; walks through every
+  section of the portal, what each does, and what parents see.</p>
+</div>
+
+<p class="footer-note">Parent Portal Knowledge Base · Growth Suite</p>
+
+</body>
+</html>

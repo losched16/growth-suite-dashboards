@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Field types – Portal Forms Knowledge Base</title>
+<style>
+:root{--brand:#047857;--brand-soft:#ecfdf5;--brand-fg:#064e3b;--ink:#111827;--muted:#6b7280;--border:#e5e7eb;--warn-bg:#fef3c7}
+*{box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;color:var(--ink);background:#fff;line-height:1.65;max-width:760px;margin:0 auto;padding:2rem 1.5rem 4rem}
+h1{font-size:1.875rem;line-height:1.25;margin:0 0 .5rem}
+h2{font-size:1.25rem;margin:2rem 0 .75rem;color:var(--brand-fg);border-bottom:1px solid var(--border);padding-bottom:.4rem}
+h3{font-size:1.05rem;margin:1.25rem 0 .5rem}
+p,ul,ol{margin:0 0 1rem}
+ul,ol{padding-left:1.4rem}
+li{margin-bottom:.35rem}
+a{color:var(--brand)}
+code{background:#f3f4f6;padding:.1rem .35rem;border-radius:4px;font-size:.9em}
+.meta{color:var(--muted);font-size:.85rem;margin-bottom:2rem}
+.callout{background:var(--brand-soft);border-left:3px solid var(--brand);padding:.85rem 1rem;border-radius:4px;margin:1.25rem 0}
+.callout.warn{background:var(--warn-bg);border-left-color:#d97706}
+.callout p:last-child{margin-bottom:0}
+.footer-note{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--border);color:var(--muted);font-size:.85rem}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.95rem}
+th,td{text-align:left;padding:.55rem .7rem;border-bottom:1px solid var(--border);vertical-align:top}
+th{background:#f9fafb;font-weight:600;color:var(--brand-fg)}
+.fieldname{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:var(--brand-fg);font-weight:600}
+</style>
+</head>
+<body>
+
+<h1>Field types in the form builder</h1>
+<p class="meta">Article 4 of 12 · Portal Forms Knowledge Base</p>
+
+<p>
+Each form is a stack of fields. This article lists every field type available,
+when to use each, and what data you get back.
+</p>
+
+<h2>Display-only blocks</h2>
+<p>
+These don&rsquo;t collect data &mdash; they just structure the form so parents can navigate it.
+</p>
+
+<table>
+  <tr><th>Block</th><th>What it does</th><th>Use it when</th></tr>
+  <tr><td class="fieldname">Header</td><td>A large title that breaks the form into sections.</td><td>Long forms with multiple parts.</td></tr>
+  <tr><td class="fieldname">Paragraph</td><td>Plain explanatory text. Can be styled as a note or warning.</td><td>Anywhere you need to explain a policy, give instructions, or call attention to something.</td></tr>
+  <tr><td class="fieldname">Section</td><td>A smaller divider with an optional sub-description.</td><td>To group two or three related fields under a heading like &ldquo;Person 1&rdquo;.</td></tr>
+</table>
+
+<h2>Input fields</h2>
+<p>These are the questions parents actually answer.</p>
+
+<h3>Text-style inputs</h3>
+<table>
+  <tr><th>Field</th><th>What it accepts</th><th>Common use</th></tr>
+  <tr><td class="fieldname">text</td><td>A single line of plain text.</td><td>Name, relationship, free-form short answer.</td></tr>
+  <tr><td class="fieldname">email</td><td>Validates as an email address.</td><td>Emergency contact email, alternate parent email.</td></tr>
+  <tr><td class="fieldname">tel</td><td>Validates as a phone number.</td><td>Phone numbers (any format).</td></tr>
+  <tr><td class="fieldname">url</td><td>Validates as a web URL.</td><td>Rare &mdash; e.g. link to an external document.</td></tr>
+  <tr><td class="fieldname">textarea</td><td>Multi-line text, up to several paragraphs.</td><td>Allergies, special instructions, notes to the school.</td></tr>
+</table>
+
+<h3>Numeric &amp; date inputs</h3>
+<table>
+  <tr><th>Field</th><th>What it accepts</th><th>Common use</th></tr>
+  <tr><td class="fieldname">number</td><td>Numeric only, with optional min/max.</td><td>Age in years, grade level, weight, dosage.</td></tr>
+  <tr><td class="fieldname">date</td><td>A calendar date picker.</td><td>Date of birth, signature date, trip date.</td></tr>
+</table>
+
+<h3>Choice inputs</h3>
+<table>
+  <tr><th>Field</th><th>What it accepts</th><th>Common use</th></tr>
+  <tr><td class="fieldname">select</td><td>One choice from a dropdown.</td><td>Grade level, relationship type, T-shirt size.</td></tr>
+  <tr><td class="fieldname">radio</td><td>One choice, shown as a list of buttons.</td><td>Yes/No, opt in/out, short choice lists.</td></tr>
+  <tr><td class="fieldname">checkbox</td><td>A single yes/no acknowledgement.</td><td>&ldquo;I have read and agree to the handbook.&rdquo;</td></tr>
+  <tr><td class="fieldname">multi_checkbox</td><td>Multiple selections from a list.</td><td>Languages spoken at home, list of allergies to choose from.</td></tr>
+</table>
+
+<h3>Signatures</h3>
+<table>
+  <tr><th>Field</th><th>What it accepts</th><th>Common use</th></tr>
+  <tr><td class="fieldname">signature_drawn</td><td>A signature drawn with mouse or finger.</td><td>Forms where a signature visual is required (most permission slips).</td></tr>
+  <tr><td class="fieldname">signature_typed</td><td>The parent&rsquo;s full legal name, typed, with an acknowledgement statement above it.</td><td>Acknowledgements, low-risk forms, situations where a typed legal name is sufficient.</td></tr>
+</table>
+
+<p>
+See <em>Article 6 &mdash; Signatures (typed vs drawn)</em> for guidance on which one to use.
+</p>
+
+<h3>File uploads</h3>
+<table>
+  <tr><th>Field</th><th>What it accepts</th><th>Common use</th></tr>
+  <tr><td class="fieldname">file_upload</td><td>PDF, JPG, PNG, HEIC. Max ~10MB per file. Can be configured for single or multiple files.</td><td>Immunization records, custody papers, insurance card images.</td></tr>
+</table>
+
+<h2>Field-level options</h2>
+<p>
+Every input field has these common settings:
+</p>
+<ul>
+  <li><strong>Label.</strong> What the parent sees as the question.</li>
+  <li><strong>Required.</strong> Whether the parent must fill it in. Required fields show a red asterisk.</li>
+  <li><strong>Help text.</strong> A short sub-line under the question to explain what you want.</li>
+  <li><strong>Pre-fill.</strong> An optional source (parent name, student name, today&rsquo;s date, etc.) that auto-fills the field. See <em>Article 5</em>.</li>
+  <li><strong>Width.</strong> Whether the field takes the full row, half, or a third &mdash; used for compact two-column layouts.</li>
+</ul>
+
+<h2>What you get back</h2>
+<p>
+Every submission stores its data as a single record on the parent&rsquo;s family. Each field
+becomes a key/value pair you can see in:
+</p>
+<ul>
+  <li>The <strong>Portal Forms Inbox</strong> widget on your admin dashboard</li>
+  <li>The submission&rsquo;s <strong>printable PDF view</strong></li>
+  <li>The parent&rsquo;s contact record in Growth Suite (if the form has writeback configured &mdash; see <em>Article 8</em>)</li>
+</ul>
+
+<div class="callout">
+  <p><strong>Next:</strong> Article 5 &mdash; <em>Pre-filling parent and student data</em> &mdash; the
+  single most-loved feature for parents, because it saves them typing.</p>
+</div>
+
+<p class="footer-note">Portal Forms Knowledge Base · Growth Suite</p>
+
+</body>
+</html>

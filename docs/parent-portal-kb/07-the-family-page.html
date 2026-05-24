@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Family page – Parent Portal Knowledge Base</title>
+<style>
+:root{--brand:#047857;--brand-soft:#ecfdf5;--brand-fg:#064e3b;--ink:#111827;--muted:#6b7280;--border:#e5e7eb;--warn-bg:#fef3c7}
+*{box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;color:var(--ink);background:#fff;line-height:1.65;max-width:760px;margin:0 auto;padding:2rem 1.5rem 4rem}
+h1{font-size:1.875rem;line-height:1.25;margin:0 0 .5rem}
+h2{font-size:1.25rem;margin:2rem 0 .75rem;color:var(--brand-fg);border-bottom:1px solid var(--border);padding-bottom:.4rem}
+h3{font-size:1.05rem;margin:1.25rem 0 .5rem}
+p,ul,ol{margin:0 0 1rem}
+ul,ol{padding-left:1.4rem}
+li{margin-bottom:.35rem}
+a{color:var(--brand)}
+code{background:#f3f4f6;padding:.1rem .35rem;border-radius:4px;font-size:.9em}
+.meta{color:var(--muted);font-size:.85rem;margin-bottom:2rem}
+.callout{background:var(--brand-soft);border-left:3px solid var(--brand);padding:.85rem 1rem;border-radius:4px;margin:1.25rem 0}
+.callout.warn{background:var(--warn-bg);border-left-color:#d97706}
+.callout p:last-child{margin-bottom:0}
+.footer-note{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--border);color:var(--muted);font-size:.85rem}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.95rem}
+th,td{text-align:left;padding:.55rem .7rem;border-bottom:1px solid var(--border);vertical-align:top}
+th{background:#f9fafb;font-weight:600;color:var(--brand-fg)}
+</style>
+</head>
+<body>
+
+<h1>The Family page</h1>
+<p class="meta">Article 7 of 12 · Parent Portal Knowledge Base</p>
+
+<p>
+The Family page is where parents see and update the data your school has on file
+about their household. This article covers what&rsquo;s on the page, what parents can
+edit themselves, and what stays read-only.
+</p>
+
+<h2>What&rsquo;s on the page</h2>
+
+<h3>Parents</h3>
+<p>
+A card for each parent in the family record. Each card shows:
+</p>
+<ul>
+  <li>First name, last name, preferred name</li>
+  <li>Role (Mother, Father, Guardian, Step-parent, etc.)</li>
+  <li>Email address</li>
+  <li>Phone number</li>
+  <li>Primary parent flag (one parent per family is the primary contact)</li>
+</ul>
+
+<h3>Students</h3>
+<p>
+A card for each enrolled child. Each card shows:
+</p>
+<ul>
+  <li>First name, last name, preferred name</li>
+  <li>Date of birth</li>
+  <li>Classroom and lead teacher (if classroom is on file)</li>
+  <li>Enrollment status (enrolled, withdrawn, etc.)</li>
+  <li>Academic year</li>
+</ul>
+
+<h2>What parents can edit themselves</h2>
+
+<table>
+  <tr><th>Field</th><th>Self-edit?</th><th>Why</th></tr>
+  <tr><td>Their own first name / last name</td><td>Yes</td><td>For typo fixes or legal name changes.</td></tr>
+  <tr><td>Their own preferred name</td><td>Yes</td><td>So school staff can address them how they prefer.</td></tr>
+  <tr><td>Their own email</td><td>Limited</td><td>Email is the login &mdash; we route changes through a verification step to prevent lockout.</td></tr>
+  <tr><td>Their own phone number</td><td>Yes</td><td>Phone changes happen constantly &mdash; we let parents update directly.</td></tr>
+  <tr><td>Their student&rsquo;s preferred name</td><td>Yes</td><td>Common case: nickname change.</td></tr>
+  <tr><td>The other parent&rsquo;s info</td><td>Limited</td><td>Either parent can edit shared family info, but personal contact details (phone, email) are owned by each parent.</td></tr>
+  <tr><td>Student first / last name</td><td>No</td><td>Legal name changes need a registrar-style update. Parents request via Messages.</td></tr>
+  <tr><td>Student date of birth</td><td>No</td><td>Same reason &mdash; corrections route through the office.</td></tr>
+  <tr><td>Classroom or teacher</td><td>No</td><td>Class placement is the school&rsquo;s decision, not a parent edit.</td></tr>
+  <tr><td>Enrollment status</td><td>No</td><td>Withdrawals and enrollment changes go through the office.</td></tr>
+</table>
+
+<h2>How edits flow back to your records</h2>
+<p>
+When a parent edits something they can update directly:
+</p>
+<ol>
+  <li>The change is saved to the family record immediately.</li>
+  <li>The new value is synced to that parent&rsquo;s contact in Growth Suite within a few seconds.</li>
+  <li>Any of your existing tags, workflows, and reporting that use that field automatically pick up the new value.</li>
+</ol>
+
+<p>
+This means a parent updating their phone number once at 8pm replaces the old number
+everywhere &mdash; no double entry, no &ldquo;remind office to update the spreadsheet.&rdquo;
+</p>
+
+<h2>Email change flow</h2>
+<p>
+Email is special because it&rsquo;s also the login. The flow goes:
+</p>
+<ol>
+  <li>Parent enters their new email.</li>
+  <li>A confirmation magic-link is sent to the new email.</li>
+  <li>Parent clicks the link to confirm.</li>
+  <li>Email is updated and the parent is logged in on the new credentials.</li>
+</ol>
+<p>
+This prevents an accidental typo from locking a parent out.
+</p>
+
+<h2>What about adding a new parent to a family?</h2>
+<p>
+Today, parents can&rsquo;t self-add a new parent (a new step-parent, a co-parent who
+wasn&rsquo;t in the original enrollment, etc.). This goes through your office &mdash; parents
+should request it via the Messages tab and your staff updates the record from
+the admin side.
+</p>
+
+<h2>What about adding a new student?</h2>
+<p>
+Same as adding a parent &mdash; enrollment changes go through your office. Most schools
+handle re-enrollment, new sibling enrollment, and program changes via dedicated
+forms (see the Portal Forms knowledge base).
+</p>
+
+<h2>Custom fields</h2>
+<p>
+Some schools have additional information on file beyond the basics &mdash; allergies,
+custody notes, transportation method, primary language. These show on the parent
+side as a series of editable or read-only fields, depending on how your school
+configured them. Reach out to your account contact if you want to add a new
+parent-visible or parent-editable field.
+</p>
+
+<div class="callout warn">
+  <p><strong>Be thoughtful about what&rsquo;s parent-editable.</strong> The default is conservative
+  &mdash; let parents fix typos and update contact info, route everything else through
+  the office. The reason: edits to enrollment, legal names, and classroom assignment
+  have downstream effects (state reporting, tuition billing, classroom rosters) that
+  benefit from a human checkpoint.</p>
+</div>
+
+<div class="callout">
+  <p><strong>Next:</strong> Article 8 &mdash; <em>Documents &amp; file uploads</em> &mdash; the catch-all
+  for files that don&rsquo;t belong to a specific form.</p>
+</div>
+
+<p class="footer-note">Parent Portal Knowledge Base · Growth Suite</p>
+
+</body>
+</html>

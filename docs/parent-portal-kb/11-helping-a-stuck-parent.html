@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Helping a parent who's stuck – Parent Portal Knowledge Base</title>
+<style>
+:root{--brand:#047857;--brand-soft:#ecfdf5;--brand-fg:#064e3b;--ink:#111827;--muted:#6b7280;--border:#e5e7eb;--warn-bg:#fef3c7}
+*{box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;color:var(--ink);background:#fff;line-height:1.65;max-width:760px;margin:0 auto;padding:2rem 1.5rem 4rem}
+h1{font-size:1.875rem;line-height:1.25;margin:0 0 .5rem}
+h2{font-size:1.25rem;margin:2rem 0 .75rem;color:var(--brand-fg);border-bottom:1px solid var(--border);padding-bottom:.4rem}
+h3{font-size:1.05rem;margin:1.25rem 0 .5rem}
+p,ul,ol{margin:0 0 1rem}
+ul,ol{padding-left:1.4rem}
+li{margin-bottom:.35rem}
+a{color:var(--brand)}
+code{background:#f3f4f6;padding:.1rem .35rem;border-radius:4px;font-size:.9em}
+.meta{color:var(--muted);font-size:.85rem;margin-bottom:2rem}
+.callout{background:var(--brand-soft);border-left:3px solid var(--brand);padding:.85rem 1rem;border-radius:4px;margin:1.25rem 0}
+.callout.warn{background:var(--warn-bg);border-left-color:#d97706}
+.callout p:last-child{margin-bottom:0}
+.footer-note{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--border);color:var(--muted);font-size:.85rem}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.95rem}
+th,td{text-align:left;padding:.55rem .7rem;border-bottom:1px solid var(--border);vertical-align:top}
+th{background:#f9fafb;font-weight:600;color:var(--brand-fg)}
+</style>
+</head>
+<body>
+
+<h1>Helping a parent who&rsquo;s stuck</h1>
+<p class="meta">Article 11 of 12 · Parent Portal Knowledge Base</p>
+
+<p>
+This is the troubleshooting article your front desk should bookmark. It covers
+the most common parent issues and how to resolve them in under a minute. If
+something here doesn&rsquo;t fix the problem, escalate to your account contact.
+</p>
+
+<h2>1. &ldquo;I can&rsquo;t log in.&rdquo;</h2>
+
+<h3>First check: which email are they using?</h3>
+<p>
+Ask the parent which email they typed into the login screen. Open their family record
+in your admin dashboard and confirm that exact email is on file for them.
+</p>
+<ul>
+  <li><strong>Match.</strong> The magic-link should have sent. Ask them to check spam and the &ldquo;Promotions&rdquo; tab in Gmail.</li>
+  <li><strong>Mismatch.</strong> They&rsquo;re typing an old email. Either update the email on file (if it&rsquo;s changed for real) or have them try the correct email.</li>
+  <li><strong>No email on file.</strong> Their parent record exists but has no email. Add one in your admin dashboard, then have them try.</li>
+</ul>
+
+<h3>Second check: did the email arrive?</h3>
+<ul>
+  <li>Did it land in spam? Have them mark it &ldquo;not spam&rdquo; once so future ones land in inbox.</li>
+  <li>Did it get caught by a school-district firewall? (Common with .edu email addresses.) Suggest a personal email instead.</li>
+  <li>Did they click the link more than 15 minutes after it arrived? Magic links expire. Request a fresh one.</li>
+</ul>
+
+<h2>2. &ldquo;I don&rsquo;t see my student.&rdquo;</h2>
+<p>
+The student must be tied to the family record the parent is signed in to. Check:
+</p>
+<ul>
+  <li>Is the student in your admin dashboard, tagged to this family?</li>
+  <li>Is the student&rsquo;s status set to <em>active</em>? Withdrawn or pending students don&rsquo;t show in the parent view.</li>
+  <li>Is the parent on the right family? Occasionally a parent has been moved between family records and we&rsquo;re looking at the wrong one.</li>
+</ul>
+
+<h2>3. &ldquo;The form won&rsquo;t let me submit.&rdquo;</h2>
+<p>
+Most form-submission failures are validation errors. Ask the parent what error message they saw &mdash; the portal always shows a specific reason.
+</p>
+<ul>
+  <li><strong>&ldquo;X is required.&rdquo;</strong> A required field was empty. They need to scroll up and fill it in.</li>
+  <li><strong>&ldquo;Please sign before submitting.&rdquo;</strong> They didn&rsquo;t lock the drawn signature. Have them sign and tap <em>Lock signature</em> (the box turns green).</li>
+  <li><strong>&ldquo;File too large.&rdquo;</strong> Their attached PDF or image is over the 10 MB limit. Suggest compressing or splitting into pages.</li>
+  <li><strong>&ldquo;Already submitted.&rdquo;</strong> They&rsquo;ve already submitted this one-per-year form. Check the History page &mdash; their submission is on file.</li>
+</ul>
+
+<h2>4. &ldquo;I signed my child in but it shows them as not yet checked in.&rdquo;</h2>
+<p>Three things to check, in order:</p>
+<ol>
+  <li>Is the parent on the right child? In a family with multiple kids, sometimes a parent confirms the form thinking they hit child A when they hit child B.</li>
+  <li>Refresh the page. The Attendance page is server-rendered, so a stale cached view from before the submission can sometimes show the old state.</li>
+  <li>Look at the admin Attendance dashboard for the event. If you see the event there, the portal is just showing a stale view. If you don&rsquo;t, the submission didn&rsquo;t go through &mdash; have them try again.</li>
+</ol>
+
+<h2>5. &ldquo;The site keeps signing me out.&rdquo;</h2>
+<ul>
+  <li>The session is 30 days. If they&rsquo;re signed out earlier, they probably cleared their browser cookies or used a private/incognito window.</li>
+  <li>Some browsers (especially Safari on iOS) aggressively clear third-party cookies. Tell them to add the portal as a Home Screen icon &mdash; that pins the session.</li>
+  <li>Multiple devices is fine, but each device counts as its own 30-day session. If they&rsquo;re bouncing between phone, work laptop, and home iPad, they&rsquo;ll log in fresh on each one.</li>
+</ul>
+
+<h2>6. &ldquo;My uploaded document is stuck on &lsquo;sending&hellip;&rsquo;&rdquo;</h2>
+<p>
+Documents push to your admin Conversations area in the background. If the push fails
+(rare), the status badge shows <em>syncing&hellip;</em> and the system retries
+automatically. In all cases the file is safely stored on the Portal side &mdash; you can
+download it from the admin Family Uploads dashboard regardless of sync status.
+</p>
+
+<h2>7. &ldquo;I don&rsquo;t see the Financial Aid tab.&rdquo;</h2>
+<p>
+The Financial Aid tab only appears if your school uses TuitionBridge. If a family
+should see it but doesn&rsquo;t, check that TuitionBridge is enabled for your school and
+that the family has been marked as eligible.
+</p>
+
+<h2>8. &ldquo;A field in my profile is wrong but I can&rsquo;t edit it.&rdquo;</h2>
+<p>
+Some fields are intentionally not parent-editable (legal name, date of birth,
+classroom, enrollment status). For those, ask the parent to send a Messages note
+or call the office &mdash; your staff can update the record on the admin side.
+</p>
+
+<h2>9. &ldquo;The page won&rsquo;t load.&rdquo;</h2>
+<ul>
+  <li>Have them refresh once.</li>
+  <li>Have them try a different browser. (Chrome and Safari are the most-tested.)</li>
+  <li>Have them try a different device (phone vs computer).</li>
+  <li>If still broken on multiple devices, escalate &mdash; it&rsquo;s probably a real outage and your account contact needs to know.</li>
+</ul>
+
+<h2>10. &ldquo;I&rsquo;m getting locked out / the form keeps clearing.&rdquo;</h2>
+<p>
+Most often this is a session-expired situation. The portal is generally tolerant
+&mdash; if a parent&rsquo;s session expires mid-form, the form data is lost. Tell them:
+</p>
+<ul>
+  <li>Log in fresh.</li>
+  <li>Fill out the form in one session without leaving the tab idle for 30+ minutes.</li>
+  <li>Use the &ldquo;Lock signature&rdquo; step early once they&rsquo;ve signed, so they don&rsquo;t lose work.</li>
+</ul>
+
+<h2>When to escalate</h2>
+<p>If you&rsquo;ve tried the steps above and the parent is still stuck, escalate to your account contact with:</p>
+<ul>
+  <li>The parent&rsquo;s name and email.</li>
+  <li>What they were trying to do.</li>
+  <li>What error message (if any) they saw.</li>
+  <li>What device + browser they were using.</li>
+  <li>A timestamp (&ldquo;happened around 8:15am today&rdquo;) so we can look at server logs.</li>
+</ul>
+
+<div class="callout">
+  <p><strong>Tip:</strong> The single most common cause of &ldquo;I can&rsquo;t log in&rdquo; is a typo in the email
+  the parent is entering. Save 15 minutes per ticket by having them screenshot the
+  login screen so you can see the exact email they&rsquo;re typing.</p>
+</div>
+
+<div class="callout">
+  <p><strong>Next:</strong> Article 12 &mdash; <em>Onboarding your families to the portal</em> &mdash;
+  the rollout playbook for getting parents using the portal from day one.</p>
+</div>
+
+<p class="footer-note">Parent Portal Knowledge Base · Growth Suite</p>
+
+</body>
+</html>

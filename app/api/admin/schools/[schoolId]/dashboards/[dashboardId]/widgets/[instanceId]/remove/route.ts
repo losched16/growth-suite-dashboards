@@ -1,0 +1,48 @@
+// POST remove-widget: removes the matching instance from the layout.
+
+import { NextResponse } from 'next/server';
+import type { NextRequest } from 'next/server';
+import { query } from '@/lib/db';
+import type { WidgetInstance } from '@/lib/widgets/types';
+
+type Params = Promise<{ schoolId: string; dashboardId: string; instanceId: string }>;
+
+export async function POST(_request: NextRequest, { params }: { params: Params }) {
+  const { schoolId, dashboardId, instanceId } = await params;
+  try {
+    const { rows } = await query<{ layout: WidgetInstance[] }>(
+      `SELECT layout FROM school_dashboards WHERE id = $1 AND school_id = $2`,
+      [dashboardId, schoolId],
+    );
+    if (rows.length === 0) return back(_request, schoolId, dashboardId, { err: 'Dashboard not found' });
+
+    const layout = rows[0].layout;
+    const before = layout.length;
+    const filtered = layout.filter((w) => w.instance_id !== instanceId);
+    if (filtered.length === before) return back(_request, schoolId, dashboardId, { err: 'Widget not found' });
+
+    await query(
+      `UPDATE school_dashboards SET layout = $1::jsonb, updated_at = now() WHERE id = $2`,
+      [JSON.stringify(filtered), dashboardId],
+    );
+    return back(_request, schoolId, dashboardId, { msg: 'Widget removed.' });
+  } catch (err) {
+    return back(_request, schoolId, dashboardId, {
+      err: err instanceof Error ? err.message : String(err),
+    });
+  }
+}
+
+function back(
+  request: NextRequest,
+  schoolId: string,
+  dashboardId: string,
+  q: { msg?: string; err?: string },
+) {
+  const url = request.nextUrl.clone();
+  url.pathname = `/admin/${schoolId}/dashboard/${dashboardId}`;
+  url.search = '';
+  if (q.msg) url.searchParams.set('msg', q.msg);
+  if (q.err) url.searchParams.set('err', q.err);
+  return NextResponse.redirect(url, 303);
+}

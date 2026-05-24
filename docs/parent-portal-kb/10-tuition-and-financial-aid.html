@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tuition &amp; Financial Aid – Parent Portal Knowledge Base</title>
+<style>
+:root{--brand:#047857;--brand-soft:#ecfdf5;--brand-fg:#064e3b;--ink:#111827;--muted:#6b7280;--border:#e5e7eb;--warn-bg:#fef3c7}
+*{box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;color:var(--ink);background:#fff;line-height:1.65;max-width:760px;margin:0 auto;padding:2rem 1.5rem 4rem}
+h1{font-size:1.875rem;line-height:1.25;margin:0 0 .5rem}
+h2{font-size:1.25rem;margin:2rem 0 .75rem;color:var(--brand-fg);border-bottom:1px solid var(--border);padding-bottom:.4rem}
+h3{font-size:1.05rem;margin:1.25rem 0 .5rem}
+p,ul,ol{margin:0 0 1rem}
+ul,ol{padding-left:1.4rem}
+li{margin-bottom:.35rem}
+a{color:var(--brand)}
+code{background:#f3f4f6;padding:.1rem .35rem;border-radius:4px;font-size:.9em}
+.meta{color:var(--muted);font-size:.85rem;margin-bottom:2rem}
+.callout{background:var(--brand-soft);border-left:3px solid var(--brand);padding:.85rem 1rem;border-radius:4px;margin:1.25rem 0}
+.callout.warn{background:var(--warn-bg);border-left-color:#d97706}
+.callout p:last-child{margin-bottom:0}
+.footer-note{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--border);color:var(--muted);font-size:.85rem}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.95rem}
+th,td{text-align:left;padding:.55rem .7rem;border-bottom:1px solid var(--border);vertical-align:top}
+th{background:#f9fafb;font-weight:600;color:var(--brand-fg)}
+</style>
+</head>
+<body>
+
+<h1>Tuition &amp; Financial Aid</h1>
+<p class="meta">Article 10 of 12 · Parent Portal Knowledge Base</p>
+
+<p>
+Two related areas inside the portal handle tuition and financial aid. They&rsquo;re separate
+because the audiences are different &mdash; <strong>Tuition</strong> is for every paying family;
+<strong>Financial Aid</strong> is for families applying for or receiving tuition assistance.
+This article covers both.
+</p>
+
+<h2>Tuition</h2>
+
+<h3>What parents see</h3>
+<p>The Tuition tab shows a snapshot of the family&rsquo;s tuition status:</p>
+<ul>
+  <li><strong>Current balance</strong> &mdash; what they owe right now.</li>
+  <li><strong>Next payment due</strong> &mdash; date and amount.</li>
+  <li><strong>Payment plan</strong> &mdash; if applicable, the schedule (monthly, quarterly, annually) and the total annual amount.</li>
+  <li><strong>Payment history</strong> &mdash; past payments with dates, amounts, and what they were for.</li>
+  <li><strong>Pay now</strong> &mdash; a link to your school&rsquo;s payment processor, if you&rsquo;ve enabled online payment.</li>
+</ul>
+
+<h3>Where the data comes from</h3>
+<p>
+The Tuition tab reflects what&rsquo;s in your tuition-management system. If you use
+the built-in Growth Suite tuition tracking, the portal mirrors it. If you use an
+external system (FACTS, TADS, Smart Tuition, your own bookkeeping), the portal can
+either:
+</p>
+<ul>
+  <li>Show a summary that&rsquo;s synced from the external system (preferred), or</li>
+  <li>Display a link out to the external system if no integration is set up</li>
+</ul>
+<p>
+Reach out to your account contact about integrating your specific tuition system.
+</p>
+
+<h3>Online payment</h3>
+<p>
+If your school accepts online payments, the <strong>Pay now</strong> button links to your
+configured processor (Stripe, FACTS, or whatever you use). The portal doesn&rsquo;t
+process payments directly &mdash; it&rsquo;s a hand-off to your payment provider, which keeps
+PCI compliance simple.
+</p>
+
+<h2>Financial Aid (TuitionBridge)</h2>
+
+<h3>What it is</h3>
+<p>
+TuitionBridge is Growth Suite&rsquo;s financial aid module. It lets families apply for
+tuition assistance directly through the portal, and lets your school review,
+approve, and track those applications without a separate FA platform.
+</p>
+
+<h3>What parents see &mdash; first visit</h3>
+<p>
+A family that hasn&rsquo;t applied yet sees a welcome panel explaining the financial aid
+process at your school, with a clear <strong>Start application</strong> button. Most schools
+write a brief paragraph about who qualifies and what&rsquo;s required &mdash; that text is
+configurable per school.
+</p>
+
+<h3>What parents see &mdash; with an application in progress</h3>
+<ul>
+  <li><strong>Application status</strong> &mdash; in progress, submitted, under review, awarded, declined.</li>
+  <li><strong>Required documents</strong> &mdash; a checklist of what they still need to upload (tax returns, W-2s, supporting docs).</li>
+  <li><strong>Upload area</strong> &mdash; uploads tied to the FA application specifically.</li>
+  <li><strong>Notes from the FA committee</strong> &mdash; if your school sends notes back during review.</li>
+  <li><strong>Award decision</strong> &mdash; once a decision is made, the awarded amount and any conditions.</li>
+  <li><strong>Accept / decline buttons</strong> on the award.</li>
+</ul>
+
+<h3>What school staff see</h3>
+<p>
+On the admin side, the <strong>Financial Aid Queue</strong> dashboard shows every application
+with:
+</p>
+<ul>
+  <li>Family name and contact info</li>
+  <li>Application status</li>
+  <li>Documents received vs missing</li>
+  <li>Household financial summary (computed from submitted docs)</li>
+  <li>Internal notes from your FA committee</li>
+  <li>Buttons to request more info, award an amount, or decline</li>
+</ul>
+
+<h3>Per-household vs per-student</h3>
+<p>
+Financial Aid applications are filed per household. One application covers all
+students enrolled in that family for the academic year. Award amounts can be
+allocated per student inside the household when needed.
+</p>
+
+<h2>Privacy</h2>
+<p>
+Financial aid is the most sensitive data in the Portal. A few defaults:
+</p>
+<ul>
+  <li>Only authenticated parents in the applying family can see their FA application.</li>
+  <li>School staff access is controlled by admin role &mdash; not every staff member has FA-queue access.</li>
+  <li>Uploaded financial documents are encrypted at rest and only accessible to authenticated FA reviewers.</li>
+  <li>FA data does not appear on general family-hub views &mdash; it&rsquo;s siloed in its own dashboard.</li>
+</ul>
+
+<div class="callout warn">
+  <p><strong>Reminder:</strong> If your school doesn&rsquo;t use TuitionBridge today, the Financial
+  Aid tab in the parent portal is simply not shown to families. There&rsquo;s no half-built
+  empty state for families to stumble into.</p>
+</div>
+
+<div class="callout">
+  <p><strong>Next:</strong> Article 11 &mdash; <em>Helping a parent who&rsquo;s stuck</em> &mdash; the most
+  common front-desk issues and how to resolve them quickly.</p>
+</div>
+
+<p class="footer-note">Parent Portal Knowledge Base · Growth Suite</p>
+
+</body>
+</html>

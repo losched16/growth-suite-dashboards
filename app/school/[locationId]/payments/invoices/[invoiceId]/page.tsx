@@ -1,0 +1,444 @@
+// /school/[locationId]/payments/invoices/[invoiceId] — school-scoped
+// invoice detail. Mirrors /admin/[schoolId]/payments/invoices/[invoiceId]
+// but its back link returns to the Payments hub Invoices tab so the
+// operator never escapes the DGM iframe.
+
+import Link from 'next/link';
+import { notFound } from 'next/navigation';
+import { ArrowLeft, Send, Ban, Zap, ZapOff } from 'lucide-react';
+import { query } from '@/lib/db';
+import { loadSchoolByLocationId } from '@/lib/dashboards/loader';
+import { CopyButton } from '@/app/admin/[schoolId]/payments/invoices/[invoiceId]/CopyButton';
+
+export const dynamic = 'force-dynamic';
+
+type Params = Promise<{ locationId: string; invoiceId: string }>;
+type SearchParams = Promise<{ msg?: string; err?: string }>;
+
+interface InvoiceRow {
+  id: string;
+  invoice_number: string;
+  family_id: string;
+  family_label: string;
+  title: string;
+  description: string | null;
+  status: string;
+  subtotal_cents: number;
+  platform_fee_cents: number;
+  processing_fee_cents: number;
+  discount_total_cents: number;
+  total_cents: number;
+  amount_paid_cents: number;
+  due_at: string;
+  issued_at: string | null;
+  paid_at: string | null;
+  voided_at: string | null;
+  voided_reason: string | null;
+  includes_platform_setup_fee: boolean;
+  created_at: string;
+  created_by_email: string | null;
+  autopay_enabled: boolean;
+  autopay_payment_method_id: string | null;
+  autopay_charge_on: string | null;
+  next_retry_at: string | null;
+  retry_attempt_count: number;
+  last_autopay_attempted_at: string | null;
+}
+
+interface PaymentMethodOption {
+  id: string;
+  type: 'card' | 'us_bank_account';
+  brand: string | null;
+  last4: string | null;
+  is_default: boolean;
+}
+
+interface LineRow {
+  id: string;
+  position: number;
+  description: string;
+  quantity: number;
+  unit_amount_cents: number;
+  amount_cents: number;
+}
+
+interface PaymentRow {
+  id: string;
+  amount_cents: number;
+  fee_cents: number;
+  platform_fee_cents: number;
+  status: string;
+  stripe_payment_method_type: string | null;
+  failure_message: string | null;
+  created_at: string;
+}
+
+export default async function InvoiceDetailScoped({
+  params, searchParams,
+}: { params: Params; searchParams: SearchParams }) {
+  const { locationId, invoiceId } = await params;
+  const sp = await searchParams;
+
+  const school = await loadSchoolByLocationId(locationId);
+  if (!school) notFound();
+  const schoolId = school.id;
+
+  const { rows } = await query<InvoiceRow>(
+    `SELECT i.id, i.invoice_number, i.family_id,
+            COALESCE(NULLIF(f.display_name, ''),
+                     CONCAT_WS(' ', p.first_name, p.last_name),
+                     '(unnamed)') AS family_label,
+            i.title, i.description, i.status,
+            i.subtotal_cents, i.platform_fee_cents, i.processing_fee_cents,
+            i.discount_total_cents, i.total_cents, i.amount_paid_cents,
+            i.due_at, i.issued_at, i.paid_at, i.voided_at, i.voided_reason,
+            i.includes_platform_setup_fee,
+            i.created_at, i.created_by_email,
+            i.autopay_enabled, i.autopay_payment_method_id,
+            i.autopay_charge_on, i.next_retry_at,
+            i.retry_attempt_count, i.last_autopay_attempted_at
+       FROM invoices i
+       JOIN families f ON f.id = i.family_id
+       LEFT JOIN LATERAL (
+         SELECT first_name, last_name FROM parents
+         WHERE family_id = i.family_id AND is_primary = true LIMIT 1
+       ) p ON true
+      WHERE i.school_id = $1 AND i.id = $2`,
+    [schoolId, invoiceId],
+  );
+  const inv = rows[0];
+  if (!inv) notFound();
+
+  const { rows: lines } = await query<LineRow>(
+    `SELECT id, position, description, quantity, unit_amount_cents, amount_cents
+       FROM invoice_line_items WHERE invoice_id = $1 ORDER BY position`,
+    [invoiceId],
+  );
+
+  const { rows: pays } = await query<PaymentRow>(
+    `SELECT id, amount_cents, fee_cents, platform_fee_cents, status,
+            stripe_payment_method_type, failure_message, created_at
+       FROM payments WHERE invoice_id = $1 ORDER BY created_at DESC`,
+    [invoiceId],
+  );
+
+  const { rows: methods } = await query<PaymentMethodOption>(
+    `SELECT id, type, brand, last4, is_default
+       FROM payment_methods
+      WHERE school_id = $1 AND family_id = $2 AND active = true
+      ORDER BY is_default DESC, created_at DESC`,
+    [schoolId, inv.family_id],
+  );
+
+  const parentPayUrl = `https://growth-suite-parent-portal.vercel.app/billing/pay/${inv.id}`;
+  // Bouncing back from action forms (send/void/autopay) — keeps operator
+  // inside the iframe. Each form posts this in a hidden field.
+  const returnTo = `/school/${locationId}/payments/invoices/${invoiceId}`;
+
+  return (
+    <main className="flex flex-1 flex-col items-center bg-slate-50 p-6 min-h-screen">
+      <div className="w-full max-w-3xl space-y-4">
+        <Link
+          href={`/school/${locationId}/payments?tab=invoices`}
+          className="inline-flex items-center gap-1 text-xs text-slate-500 hover:text-slate-700"
+        >
+          <ArrowLeft className="h-3 w-3" /> Back to Invoices
+        </Link>
+
+        {sp.msg ? (
+          <div className="rounded border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">{sp.msg}</div>
+        ) : null}
+        {sp.err ? (
+          <div className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{sp.err}</div>
+        ) : null}
+
+        <div className="rounded-xl border border-slate-200 bg-white p-6 space-y-5">
+          <div className="flex items-baseline justify-between">
+            <div>
+              <div className="font-mono text-xs text-slate-500">{inv.invoice_number}</div>
+              <h1 className="text-xl font-semibold text-slate-900 mt-1">{inv.title}</h1>
+              <p className="text-sm text-slate-600 mt-1">{inv.family_label}</p>
+            </div>
+            <StatusPill status={inv.status} />
+          </div>
+
+          {inv.description ? <p className="text-sm text-slate-700">{inv.description}</p> : null}
+
+          <div className="rounded-md border border-slate-200 overflow-hidden">
+            <table className="w-full text-sm">
+              <thead className="bg-slate-50 text-left text-[10px] uppercase tracking-wide text-slate-500">
+                <tr>
+                  <th className="px-3 py-2 font-medium">Description</th>
+                  <th className="px-2 py-2 font-medium text-right">Qty</th>
+                  <th className="px-2 py-2 font-medium text-right">Unit</th>
+                  <th className="px-3 py-2 font-medium text-right">Amount</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {lines.map((l) => {
+                  const isDiscount = l.amount_cents < 0;
+                  return (
+                    <tr key={l.id} className={isDiscount ? 'text-emerald-700' : ''}>
+                      <td className="px-3 py-2">{l.description}</td>
+                      <td className="px-2 py-2 text-right text-slate-600">{l.quantity}</td>
+                      <td className="px-2 py-2 text-right font-mono">
+                        {isDiscount ? '−' : ''}${(Math.abs(l.unit_amount_cents) / 100).toFixed(2)}
+                      </td>
+                      <td className="px-3 py-2 text-right font-mono">
+                        {isDiscount ? '−' : ''}${(Math.abs(l.amount_cents) / 100).toFixed(2)}
+                      </td>
+                    </tr>
+                  );
+                })}
+                <tr className="border-t-2 border-slate-200">
+                  <td colSpan={3} className="px-3 py-2 text-right text-slate-600">Subtotal (before discounts)</td>
+                  <td className="px-3 py-2 text-right font-mono">${(inv.subtotal_cents / 100).toFixed(2)}</td>
+                </tr>
+                {inv.discount_total_cents > 0 ? (
+                  <tr>
+                    <td colSpan={3} className="px-3 py-2 text-right text-emerald-700">Discounts applied</td>
+                    <td className="px-3 py-2 text-right font-mono text-emerald-700">−${(inv.discount_total_cents / 100).toFixed(2)}</td>
+                  </tr>
+                ) : null}
+                {inv.platform_fee_cents > 0 ? (
+                  <tr>
+                    <td colSpan={3} className="px-3 py-2 text-right text-slate-600">
+                      Family Portal Setup Fee
+                      <span className="ml-1 text-[10px] text-slate-400">(one-time, Growth Suite)</span>
+                    </td>
+                    <td className="px-3 py-2 text-right font-mono">${(inv.platform_fee_cents / 100).toFixed(2)}</td>
+                  </tr>
+                ) : null}
+                <tr className="bg-slate-50 font-semibold">
+                  <td colSpan={3} className="px-3 py-2 text-right text-slate-900">Total (parent pays processing fee on top, depending on rail)</td>
+                  <td className="px-3 py-2 text-right font-mono text-slate-900">${(inv.total_cents / 100).toFixed(2)}</td>
+                </tr>
+                {inv.amount_paid_cents > 0 ? (
+                  <tr className="bg-emerald-50">
+                    <td colSpan={3} className="px-3 py-2 text-right text-emerald-700">Paid to date</td>
+                    <td className="px-3 py-2 text-right font-mono text-emerald-800">${(inv.amount_paid_cents / 100).toFixed(2)}</td>
+                  </tr>
+                ) : null}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+            <DateField label="Created" value={inv.created_at} />
+            <DateField label="Due" value={inv.due_at} />
+            {inv.issued_at ? <DateField label="Sent" value={inv.issued_at} /> : null}
+            {inv.paid_at ? <DateField label="Paid" value={inv.paid_at} /> : null}
+          </div>
+
+          {inv.status !== 'voided' && inv.status !== 'paid' ? (
+            <AutopayPanel
+              schoolId={schoolId}
+              invoiceId={inv.id}
+              returnTo={returnTo}
+              enabled={inv.autopay_enabled}
+              currentMethodId={inv.autopay_payment_method_id}
+              chargeOn={inv.autopay_charge_on}
+              dueAt={inv.due_at}
+              retryAttemptCount={inv.retry_attempt_count}
+              nextRetryAt={inv.next_retry_at}
+              lastAttemptedAt={inv.last_autopay_attempted_at}
+              methods={methods}
+            />
+          ) : null}
+
+          <div className="flex flex-wrap gap-2 pt-3 border-t border-slate-100">
+            {inv.status === 'draft' ? (
+              <form action={`/api/admin/schools/${schoolId}/payments/invoices/${invoiceId}/send`} method="POST">
+                <input type="hidden" name="return_to" value={returnTo} />
+                <button type="submit" className="inline-flex items-center gap-1 rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700">
+                  <Send className="h-3.5 w-3.5" /> Send to parent
+                </button>
+              </form>
+            ) : null}
+            {(inv.status === 'open' || inv.status === 'draft') ? (
+              <CopyButton url={parentPayUrl} />
+            ) : null}
+            {inv.status !== 'voided' && inv.status !== 'paid' ? (
+              <form action={`/api/admin/schools/${schoolId}/payments/invoices/${invoiceId}/void`} method="POST">
+                <input type="hidden" name="return_to" value={returnTo} />
+                <button type="submit" className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50">
+                  <Ban className="h-3.5 w-3.5" /> Void invoice
+                </button>
+              </form>
+            ) : null}
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-slate-200 bg-white p-5">
+          <h2 className="text-sm font-semibold text-slate-900 mb-2">Payment attempts ({pays.length})</h2>
+          {pays.length === 0 ? (
+            <p className="text-xs text-slate-500 italic">No payment attempts yet. The parent will be billed when they open the invoice.</p>
+          ) : (
+            <ul className="divide-y divide-slate-100 text-sm">
+              {pays.map((p) => (
+                <li key={p.id} className="py-2 flex flex-wrap items-baseline gap-2 justify-between">
+                  <div>
+                    <span className="font-mono text-xs text-slate-700">{p.stripe_payment_method_type ?? '—'}</span>
+                    <span className="ml-2 text-slate-900">${(p.amount_cents / 100).toFixed(2)}</span>
+                    <PaymentStatusPill status={p.status} />
+                    {p.failure_message ? (
+                      <div className="text-xs text-red-700 mt-0.5">{p.failure_message}</div>
+                    ) : null}
+                  </div>
+                  <div className="text-xs text-slate-500">{new Date(p.created_at).toLocaleString()}</div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
+    </main>
+  );
+}
+
+function AutopayPanel({
+  schoolId, invoiceId, returnTo, enabled, currentMethodId, chargeOn, dueAt,
+  retryAttemptCount, nextRetryAt, lastAttemptedAt, methods,
+}: {
+  schoolId: string;
+  invoiceId: string;
+  returnTo: string;
+  enabled: boolean;
+  currentMethodId: string | null;
+  chargeOn: string | null;
+  dueAt: string;
+  retryAttemptCount: number;
+  nextRetryAt: string | null;
+  lastAttemptedAt: string | null;
+  methods: PaymentMethodOption[];
+}) {
+  if (enabled) {
+    const current = methods.find((m) => m.id === currentMethodId);
+    return (
+      <div className="rounded-md border-2 border-emerald-200 bg-emerald-50/40 p-4 space-y-2">
+        <div className="flex items-start gap-2">
+          <Zap className="h-4 w-4 text-emerald-700 mt-0.5" />
+          <div className="text-sm flex-1">
+            <div className="font-semibold text-emerald-900">Autopay enabled</div>
+            <div className="text-xs text-emerald-800 mt-0.5">
+              Will charge {current ? <code className="font-mono">{(current.brand ?? current.type).toUpperCase()} ····{current.last4 ?? ''}</code> : 'the saved payment method'}
+              {' '}on{' '}
+              <strong>{new Date(chargeOn ?? dueAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</strong>.
+            </div>
+            {lastAttemptedAt ? (
+              <div className="text-[11px] text-emerald-800 mt-1">
+                Last attempt: {new Date(lastAttemptedAt).toLocaleString()} (attempt {retryAttemptCount})
+                {nextRetryAt ? ` · next retry ${new Date(nextRetryAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}` : ''}
+              </div>
+            ) : null}
+          </div>
+        </div>
+        <form action={`/api/admin/schools/${schoolId}/payments/invoices/${invoiceId}/autopay`} method="POST">
+          <input type="hidden" name="return_to" value={returnTo} />
+          <input type="hidden" name="action" value="disable" />
+          <button type="submit" className="inline-flex items-center gap-1 rounded-md border border-emerald-300 bg-white px-3 py-1.5 text-xs font-semibold text-emerald-900 hover:bg-emerald-100">
+            <ZapOff className="h-3 w-3" /> Disable autopay
+          </button>
+        </form>
+      </div>
+    );
+  }
+
+  if (methods.length === 0) {
+    return (
+      <div className="rounded-md border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
+        <div className="flex items-start gap-2">
+          <Zap className="h-4 w-4 text-slate-400 mt-0.5" />
+          <div>
+            <strong className="block">Autopay unavailable</strong>
+            <p className="text-xs mt-0.5">
+              The family doesn&rsquo;t have a saved payment method yet. They&rsquo;ll save one
+              automatically the first time they pay an invoice with the
+              &ldquo;Save for future autopay&rdquo; box checked.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-md border border-emerald-200 bg-emerald-50/30 p-4">
+      <div className="flex items-start gap-2 mb-2">
+        <Zap className="h-4 w-4 text-emerald-700 mt-0.5" />
+        <div className="text-sm">
+          <strong className="block text-emerald-900">Enable autopay</strong>
+          <p className="text-xs text-emerald-800 mt-0.5">
+            The system will charge the family automatically on the chosen date.
+            If the charge fails, it retries on the school&rsquo;s configured retry schedule.
+          </p>
+        </div>
+      </div>
+      <form action={`/api/admin/schools/${schoolId}/payments/invoices/${invoiceId}/autopay`} method="POST" className="flex flex-wrap items-end gap-2">
+        <input type="hidden" name="return_to" value={returnTo} />
+        <input type="hidden" name="action" value="enable" />
+        <label className="block text-xs">
+          <span className="block font-medium text-slate-700">Payment method</span>
+          <select name="method_id" className="mt-0.5 rounded border border-slate-300 px-2 py-1 text-sm">
+            {methods.map((m) => (
+              <option key={m.id} value={m.id}>
+                {(m.brand ?? m.type).toUpperCase()} ····{m.last4 ?? ''}
+                {m.is_default ? ' (default)' : ''}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="block text-xs">
+          <span className="block font-medium text-slate-700">Charge on</span>
+          <input type="date" name="charge_on" defaultValue={new Date(dueAt).toISOString().slice(0, 10)}
+            className="mt-0.5 rounded border border-slate-300 px-2 py-1 text-sm" />
+        </label>
+        <button type="submit" className="inline-flex items-center gap-1 rounded-md bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-blue-700">
+          <Zap className="h-3.5 w-3.5" /> Enable autopay
+        </button>
+      </form>
+    </div>
+  );
+}
+
+function DateField({ label, value }: { label: string; value: string }) {
+  const d = new Date(value);
+  return (
+    <div>
+      <div className="text-[10px] uppercase tracking-wide text-slate-500">{label}</div>
+      <div className="text-slate-900">{d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</div>
+    </div>
+  );
+}
+
+function StatusPill({ status }: { status: string }) {
+  const map: Record<string, { bg: string; fg: string; label: string }> = {
+    draft:              { bg: 'bg-slate-100', fg: 'text-slate-700', label: 'Draft' },
+    open:               { bg: 'bg-amber-100', fg: 'text-amber-800', label: 'Open' },
+    paid:               { bg: 'bg-emerald-100', fg: 'text-emerald-800', label: 'Paid' },
+    partially_paid:     { bg: 'bg-amber-100', fg: 'text-amber-800', label: 'Partial' },
+    voided:             { bg: 'bg-slate-100', fg: 'text-slate-500', label: 'Voided' },
+  };
+  const cfg = map[status] ?? { bg: 'bg-slate-100', fg: 'text-slate-700', label: status };
+  return (
+    <span className={`rounded-full ${cfg.bg} px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${cfg.fg}`}>
+      {cfg.label}
+    </span>
+  );
+}
+
+function PaymentStatusPill({ status }: { status: string }) {
+  const map: Record<string, { bg: string; fg: string }> = {
+    pending:    { bg: 'bg-slate-100', fg: 'text-slate-700' },
+    processing: { bg: 'bg-amber-100', fg: 'text-amber-800' },
+    succeeded:  { bg: 'bg-emerald-100', fg: 'text-emerald-800' },
+    failed:     { bg: 'bg-red-100', fg: 'text-red-800' },
+    refunded:   { bg: 'bg-red-100', fg: 'text-red-800' },
+  };
+  const cfg = map[status] ?? { bg: 'bg-slate-100', fg: 'text-slate-700' };
+  return (
+    <span className={`ml-2 rounded-full ${cfg.bg} px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide ${cfg.fg}`}>
+      {status}
+    </span>
+  );
+}

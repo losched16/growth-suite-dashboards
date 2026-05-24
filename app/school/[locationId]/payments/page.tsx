@@ -1,0 +1,148 @@
+// /school/[locationId]/payments — GHL-embedded payments hub.
+//
+// Designed to live inside a GHL "Custom Menu Link" iframe. Replaces
+// GHL's native /payments page entirely. Visual language mirrors GHL:
+// light gray background, white cards, blue primary actions, horizontal
+// sub-nav across the top.
+//
+// Sub-nav tabs (URL param `tab=`):
+//   overview  (default) — KPIs + at-a-glance
+//   invoices            — invoice list with filters + create CTA
+//   plans               — family tuition enrollments
+//   discounts           — discount policies
+//   forms               — link to form editor (heavier UI, separate)
+//   settings            — Stripe Connect + billing config + tuition grids
+//
+// Auth: gated by the existing school session cookie (set via GHL embed
+// token). The proxy keeps this route locked to the school's location.
+
+import Link from 'next/link';
+import { notFound } from 'next/navigation';
+import { query } from '@/lib/db';
+import { loadSchoolByLocationId } from '@/lib/dashboards/loader';
+import { loadPaymentAccount } from '@/lib/stripe/connect-onboarding';
+import { PaymentsHubOverview } from './tabs/Overview';
+import { PaymentsHubInvoices } from './tabs/Invoices';
+import { PaymentsHubPlans } from './tabs/Plans';
+import { PaymentsHubDiscounts } from './tabs/Discounts';
+import { PaymentsHubForms } from './tabs/Forms';
+import { PaymentsHubSettings } from './tabs/Settings';
+
+export const dynamic = 'force-dynamic';
+export const maxDuration = 60;
+
+type Params = Promise<{ locationId: string }>;
+type SearchParams = Promise<{ tab?: string; msg?: string; err?: string }>;
+
+const TABS = [
+  { value: 'overview',  label: 'Overview' },
+  { value: 'invoices',  label: 'Invoices' },
+  { value: 'plans',     label: 'Tuition Plans' },
+  { value: 'discounts', label: 'Discounts' },
+  { value: 'forms',     label: 'Forms' },
+  { value: 'settings',  label: 'Settings' },
+] as const;
+
+export default async function PaymentsHubPage({
+  params, searchParams,
+}: { params: Params; searchParams: SearchParams }) {
+  const { locationId } = await params;
+  const sp = await searchParams;
+  const tab = (sp.tab && TABS.some((t) => t.value === sp.tab)) ? sp.tab : 'overview';
+
+  const school = await loadSchoolByLocationId(locationId);
+  if (!school) notFound();
+
+  // Always resolve the Stripe Connect status so the header pill stays
+  // visible across tabs.
+  const account = await loadPaymentAccount(school.id);
+  const stripeStatus =
+    account?.charges_enabled ? 'live'
+    : account?.details_submitted ? 'needs_info'
+    : account ? 'in_progress'
+    : 'not_connected';
+
+  return (
+    <div className="min-h-screen bg-slate-50">
+      {/* Header */}
+      <div className="bg-white border-b border-slate-200">
+        <div className="px-6 pt-5 pb-0">
+          <div className="flex items-baseline justify-between gap-4 flex-wrap">
+            <div className="flex items-baseline gap-3">
+              <h1 className="text-2xl font-semibold text-slate-900">Payments</h1>
+              <StripePill status={stripeStatus} />
+            </div>
+            <div className="flex items-center gap-2">
+              {tab === 'invoices' ? (
+                <Link
+                  href={`/school/${locationId}/payments?tab=settings`}
+                  className="text-xs text-slate-600 hover:text-slate-900 underline"
+                >
+                  Settings →
+                </Link>
+              ) : null}
+            </div>
+          </div>
+
+          {/* Sub-nav */}
+          <nav className="mt-4 -mb-px flex items-center gap-1 overflow-x-auto">
+            {TABS.map((t) => {
+              const active = t.value === tab;
+              return (
+                <Link
+                  key={t.value}
+                  href={`/school/${locationId}/payments?tab=${t.value}`}
+                  className={`px-3 py-2 text-sm border-b-2 -mb-px whitespace-nowrap ${
+                    active
+                      ? 'border-blue-600 text-blue-700 font-semibold'
+                      : 'border-transparent text-slate-600 hover:text-slate-900 hover:border-slate-300'
+                  }`}
+                >
+                  {t.label}
+                </Link>
+              );
+            })}
+          </nav>
+        </div>
+      </div>
+
+      {/* Toast row */}
+      {sp.msg || sp.err ? (
+        <div className="px-6 pt-4">
+          {sp.msg ? (
+            <div className="rounded border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">{sp.msg}</div>
+          ) : null}
+          {sp.err ? (
+            <div className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{sp.err}</div>
+          ) : null}
+        </div>
+      ) : null}
+
+      {/* Tab content */}
+      <div className="px-6 py-5">
+        {tab === 'overview'  ? <PaymentsHubOverview  schoolId={school.id} locationId={locationId} /> : null}
+        {tab === 'invoices'  ? <PaymentsHubInvoices  schoolId={school.id} locationId={locationId} /> : null}
+        {tab === 'plans'     ? <PaymentsHubPlans     schoolId={school.id} locationId={locationId} /> : null}
+        {tab === 'discounts' ? <PaymentsHubDiscounts schoolId={school.id} locationId={locationId} /> : null}
+        {tab === 'forms'     ? <PaymentsHubForms     schoolId={school.id} locationId={locationId} /> : null}
+        {tab === 'settings'  ? <PaymentsHubSettings  schoolId={school.id} locationId={locationId} account={account} /> : null}
+      </div>
+    </div>
+  );
+}
+
+function StripePill({ status }: { status: 'live' | 'needs_info' | 'in_progress' | 'not_connected' }) {
+  const cfg = {
+    live:          { bg: 'bg-emerald-100', fg: 'text-emerald-800',  label: 'Stripe: Live'      },
+    needs_info:    { bg: 'bg-amber-100',   fg: 'text-amber-800',    label: 'Stripe: Needs info'},
+    in_progress:   { bg: 'bg-blue-100',    fg: 'text-blue-800',     label: 'Stripe: Onboarding'},
+    not_connected: { bg: 'bg-slate-100',   fg: 'text-slate-600',    label: 'Stripe: Not connected'},
+  }[status];
+  return (
+    <span className={`inline-flex items-center gap-1 rounded-full ${cfg.bg} px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${cfg.fg}`}>
+      {cfg.label}
+    </span>
+  );
+}
+
+void query; // re-export for tabs that import lazily from this file

@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Attendance: check-in &amp; check-out – Parent Portal Knowledge Base</title>
+<style>
+:root{--brand:#047857;--brand-soft:#ecfdf5;--brand-fg:#064e3b;--ink:#111827;--muted:#6b7280;--border:#e5e7eb;--warn-bg:#fef3c7}
+*{box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;color:var(--ink);background:#fff;line-height:1.65;max-width:760px;margin:0 auto;padding:2rem 1.5rem 4rem}
+h1{font-size:1.875rem;line-height:1.25;margin:0 0 .5rem}
+h2{font-size:1.25rem;margin:2rem 0 .75rem;color:var(--brand-fg);border-bottom:1px solid var(--border);padding-bottom:.4rem}
+h3{font-size:1.05rem;margin:1.25rem 0 .5rem}
+p,ul,ol{margin:0 0 1rem}
+ul,ol{padding-left:1.4rem}
+li{margin-bottom:.35rem}
+a{color:var(--brand)}
+code{background:#f3f4f6;padding:.1rem .35rem;border-radius:4px;font-size:.9em}
+.meta{color:var(--muted);font-size:.85rem;margin-bottom:2rem}
+.callout{background:var(--brand-soft);border-left:3px solid var(--brand);padding:.85rem 1rem;border-radius:4px;margin:1.25rem 0}
+.callout.warn{background:var(--warn-bg);border-left-color:#d97706}
+.callout p:last-child{margin-bottom:0}
+.footer-note{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--border);color:var(--muted);font-size:.85rem}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.95rem}
+th,td{text-align:left;padding:.55rem .7rem;border-bottom:1px solid var(--border);vertical-align:top}
+th{background:#f9fafb;font-weight:600;color:var(--brand-fg)}
+.pill{display:inline-block;border-radius:999px;padding:.1rem .55rem;font-size:.7rem;font-weight:600;letter-spacing:.04em;text-transform:uppercase}
+.pill.green{background:#d1fae5;color:#065f46}
+.pill.amber{background:#fef3c7;color:#92400e}
+.pill.gray{background:#f3f4f6;color:#374151}
+</style>
+</head>
+<body>
+
+<h1>Attendance: check-in &amp; check-out</h1>
+<p class="meta">Article 5 of 12 · Parent Portal Knowledge Base</p>
+
+<p>
+Attendance is the most-used feature of the Portal. Every parent uses it every school
+day. This article covers how the check-in and check-out flows work, what data is captured,
+and how it shows up on your admin dashboard.
+</p>
+
+<h2>The Attendance page</h2>
+<p>
+When a parent taps <strong>Attendance</strong> in the nav, they see a card for each enrolled
+student in the family. Each card shows:
+</p>
+<ul>
+  <li>The student&rsquo;s name and classroom</li>
+  <li>Today&rsquo;s status: <span class="pill gray">Not yet</span> <span class="pill green">Present</span> <span class="pill amber">Picked up</span></li>
+  <li>The current sign-in / pick-up time, if set</li>
+  <li>A button: <strong>Check in</strong> or <strong>Check out</strong>, depending on state</li>
+</ul>
+
+<h2>Check-in flow</h2>
+<p>
+The parent taps <strong>Check in</strong> for a student. They&rsquo;re taken to a clean form with:
+</p>
+<ul>
+  <li>The student&rsquo;s name confirmed at the top</li>
+  <li>An optional <strong>Notes for school staff</strong> textarea (slept poorly, new med, late breakfast, etc.)</li>
+  <li>A signature pad where the parent signs with finger or mouse</li>
+  <li>A <strong>Confirm drop-off</strong> button</li>
+</ul>
+<p>
+On submit, the student&rsquo;s status flips to <strong>Present</strong>, the timestamp is recorded,
+and the parent is returned to the Attendance page. The whole flow takes about 15 seconds.
+</p>
+
+<h2>Check-out flow</h2>
+<p>
+At pick-up, the parent taps <strong>Check out</strong>. The form is slightly bigger because
+school policy usually requires recording <em>who</em> picked up:
+</p>
+<ul>
+  <li>The student&rsquo;s name confirmed at the top</li>
+  <li>A <strong>Who is picking up?</strong> selector with three kinds of options:
+    <ul>
+      <li><em>Myself</em> &mdash; the parent signing in</li>
+      <li><em>Other parent</em> &mdash; any other parent on the family record</li>
+      <li><em>Authorized pickup person</em> &mdash; anyone the family has added to their authorized list (see <em>Article 6</em>)</li>
+    </ul>
+  </li>
+  <li>A <strong>Curbside pickup</strong> checkbox</li>
+  <li>An optional <strong>Notes for school staff</strong> textarea</li>
+  <li>A signature pad</li>
+  <li>A <strong>Confirm pick-up</strong> button</li>
+</ul>
+
+<p>
+On submit, the student&rsquo;s status flips to <strong>Picked up</strong>, the time and the named
+pickup person are recorded.
+</p>
+
+<h2>What gets saved per event</h2>
+
+<table>
+  <tr><th>Field</th><th>Captured on</th></tr>
+  <tr><td>Event type (check-in / check-out)</td><td>Both</td></tr>
+  <tr><td>Exact timestamp</td><td>Both</td></tr>
+  <tr><td>Signing parent (the logged-in user)</td><td>Both</td></tr>
+  <tr><td>Signature image</td><td>Both</td></tr>
+  <tr><td>Optional note</td><td>Both</td></tr>
+  <tr><td>IP address &amp; device info</td><td>Both</td></tr>
+  <tr><td>Who picked up (parent or authorized person, with a snapshot of the name)</td><td>Check-out only</td></tr>
+  <tr><td>Curbside flag</td><td>Check-out only</td></tr>
+</table>
+
+<p>
+Attendance events are <strong>append-only</strong>: once recorded, they can&rsquo;t be edited or
+deleted. Corrections happen by adding a new event (e.g. an admin manual override),
+which preserves the original record. This protects you for audit and dispute purposes.
+</p>
+
+<h2>Where staff see the data</h2>
+<p>
+On the admin side, your <strong>Attendance dashboard</strong> shows:
+</p>
+<ul>
+  <li>A live feed of recent events for today, with timestamps and signatures &mdash; including any notes parents wrote</li>
+  <li>A per-classroom roster of who&rsquo;s present, absent, or yet-to-arrive</li>
+  <li>Per-student history with full event log</li>
+  <li>Notes appear as a 📝 badge on the student&rsquo;s row so the front desk doesn&rsquo;t miss them</li>
+</ul>
+
+<h2>What about notes parents leave?</h2>
+<p>
+The optional <strong>Notes for school staff</strong> textarea is small but powerful. Common
+uses:
+</p>
+<ul>
+  <li>&ldquo;Didn&rsquo;t sleep well, please go easy on him today.&rdquo;</li>
+  <li>&ldquo;New allergy &mdash; please update file.&rdquo;</li>
+  <li>&ldquo;Grandpa is picking up tomorrow.&rdquo;</li>
+  <li>&ldquo;Gave Tylenol at 7am.&rdquo;</li>
+</ul>
+<p>
+Notes are visible to your staff in three places on the admin Attendance dashboard:
+inline in the recent-events feed, in the per-student accordion drawer, and as a
+hover-tooltip on the row badge.
+</p>
+
+<h2>What about absences?</h2>
+<p>
+Today, parents don&rsquo;t mark absences in the portal &mdash; if a parent doesn&rsquo;t check their
+student in, they show up on the staff roster as <em>Not yet</em>. School staff can mark
+a student absent from the admin dashboard if needed. A parent-side absence flow
+is on the roadmap.
+</p>
+
+<h2>What happens if a parent forgets to check out?</h2>
+<p>
+The student stays in <em>Present</em> state for that day. School staff can mark
+the check-out from the admin dashboard the next day (which writes a corrective
+manual-override event). Most schools train their teachers to do a quick end-of-day
+roster check.
+</p>
+
+<h2>What about pick-ups by authorized non-parents?</h2>
+<p>
+If a parent isn&rsquo;t the one picking up &mdash; say a grandparent or a nanny &mdash; the parent
+still signs in advance from their portal selecting the authorized person, then the
+school staff verifies ID on arrival. The portal record establishes that the family
+authorized the pickup, and the staff record establishes the in-person verification.
+</p>
+<p>
+See <em>Article 6 &mdash; Authorized pickup people</em> for how parents manage their list.
+</p>
+
+<div class="callout">
+  <p><strong>Next:</strong> Article 6 &mdash; <em>Authorized pickup people</em> &mdash; the per-family
+  list of approved adults parents can hand off pickup to.</p>
+</div>
+
+<p class="footer-note">Parent Portal Knowledge Base · Growth Suite</p>
+
+</body>
+</html>

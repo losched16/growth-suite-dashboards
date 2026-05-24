@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Per-student vs per-family forms – Portal Forms Knowledge Base</title>
+<style>
+:root{--brand:#047857;--brand-soft:#ecfdf5;--brand-fg:#064e3b;--ink:#111827;--muted:#6b7280;--border:#e5e7eb;--warn-bg:#fef3c7}
+*{box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;color:var(--ink);background:#fff;line-height:1.65;max-width:760px;margin:0 auto;padding:2rem 1.5rem 4rem}
+h1{font-size:1.875rem;line-height:1.25;margin:0 0 .5rem}
+h2{font-size:1.25rem;margin:2rem 0 .75rem;color:var(--brand-fg);border-bottom:1px solid var(--border);padding-bottom:.4rem}
+h3{font-size:1.05rem;margin:1.25rem 0 .5rem}
+p,ul,ol{margin:0 0 1rem}
+ul,ol{padding-left:1.4rem}
+li{margin-bottom:.35rem}
+a{color:var(--brand)}
+code{background:#f3f4f6;padding:.1rem .35rem;border-radius:4px;font-size:.9em}
+.meta{color:var(--muted);font-size:.85rem;margin-bottom:2rem}
+.callout{background:var(--brand-soft);border-left:3px solid var(--brand);padding:.85rem 1rem;border-radius:4px;margin:1.25rem 0}
+.callout.warn{background:var(--warn-bg);border-left-color:#d97706}
+.callout p:last-child{margin-bottom:0}
+.footer-note{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--border);color:var(--muted);font-size:.85rem}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.95rem}
+th,td{text-align:left;padding:.55rem .7rem;border-bottom:1px solid var(--border);vertical-align:top}
+th{background:#f9fafb;font-weight:600;color:var(--brand-fg)}
+</style>
+</head>
+<body>
+
+<h1>Per-student vs per-family forms</h1>
+<p class="meta">Article 3 of 12 · Portal Forms Knowledge Base</p>
+
+<p>
+Every form you build is one of two flavors: <strong>per-student</strong> or
+<strong>per-family</strong>. That single toggle changes how parents see the form,
+how completion is tracked, and how the data flows back into Growth Suite.
+This article explains both and gives you a clear rule for picking the right one.
+</p>
+
+<h2>The difference in one sentence</h2>
+<p>
+A <strong>per-student form</strong> is filled out once per child in the family.
+A <strong>per-family form</strong> is filled out once per family, no matter how many children.
+</p>
+
+<h2>What changes between the two</h2>
+
+<table>
+  <tr><th></th><th>Per-student form</th><th>Per-family form</th></tr>
+  <tr>
+    <td><strong>What parents see</strong></td>
+    <td>A &ldquo;Which child is this for?&rdquo; selector at the top with each child listed as a button. Filling out the form for one child leaves it pending for the others.</td>
+    <td>No student selector. The form fields apply to the whole household.</td>
+  </tr>
+  <tr>
+    <td><strong>Completion tracking</strong></td>
+    <td>A family of three is &ldquo;complete&rdquo; only when all three children have a submission on file.</td>
+    <td>A single submission marks the family complete.</td>
+  </tr>
+  <tr>
+    <td><strong>Pre-filling</strong></td>
+    <td>Student name, date of birth, and health profile pre-fill based on the selected child.</td>
+    <td>Only family-level fields pre-fill (parent name, parent email, etc.).</td>
+  </tr>
+  <tr>
+    <td><strong>Growth Suite write-back</strong></td>
+    <td>Data writes to per-student fields on the parent&rsquo;s contact record using a slot pattern (e.g. <code>student_1_cafe_permission</code>, <code>student_2_cafe_permission</code>).</td>
+    <td>Data writes to family-level fields on the parent&rsquo;s contact record.</td>
+  </tr>
+</table>
+
+<h2>The decision rule</h2>
+<p>
+Ask yourself: <strong>could the answer reasonably differ between siblings?</strong>
+</p>
+<ul>
+  <li>Yes, the answer could differ &rarr; <strong>per-student</strong></li>
+  <li>No, the answer is the same for the whole family &rarr; <strong>per-family</strong></li>
+</ul>
+
+<h2>Examples</h2>
+
+<h3>Per-student examples</h3>
+<table>
+  <tr><th>Form</th><th>Why per-student</th></tr>
+  <tr>
+    <td>Photography Release</td>
+    <td>Many families want photos of one child but not another (custody, religion, online safety preferences).</td>
+  </tr>
+  <tr>
+    <td>OTC Medication Authorization</td>
+    <td>Each child has their own medical history and the medication / dosage / parent preferences differ.</td>
+  </tr>
+  <tr>
+    <td>Field Trip Permission</td>
+    <td>A 3rd-grader and a 7th-grader might go on completely different trips on different dates.</td>
+  </tr>
+  <tr>
+    <td>Cafe Worker Permission</td>
+    <td>Only the kid old enough / interested needs to opt in. Younger siblings stay out.</td>
+  </tr>
+  <tr>
+    <td>Sports Participation</td>
+    <td>One sibling plays soccer, another plays nothing.</td>
+  </tr>
+</table>
+
+<h3>Per-family examples</h3>
+<table>
+  <tr><th>Form</th><th>Why per-family</th></tr>
+  <tr>
+    <td>Parent / Student Handbook Acknowledgement</td>
+    <td>The parent signs once that they&rsquo;ve read and agreed to the handbook &mdash; signing once covers all the household&rsquo;s kids.</td>
+  </tr>
+  <tr>
+    <td>Authorized Pickup List</td>
+    <td>The list of people allowed to pick up children belongs to the household, not to any one child.</td>
+  </tr>
+  <tr>
+    <td>Tuition Agreement</td>
+    <td>One household signs one agreement covering all enrolled children.</td>
+  </tr>
+  <tr>
+    <td>Volunteer Background-Check Acknowledgement</td>
+    <td>Adult parents are doing the volunteering, not the children &mdash; this attaches to the parent, not to a student.</td>
+  </tr>
+</table>
+
+<h2>Edge cases</h2>
+
+<h3>What about &ldquo;Emergency Contact Form&rdquo;?</h3>
+<p>
+This is the most common edge case. Two schools do it two different ways:
+</p>
+<ul>
+  <li><strong>Per-family</strong> if your emergency contact list is the same for every child in the household (most schools).</li>
+  <li><strong>Per-student</strong> if you have custodial arrangements that mean each child has a different emergency contact list (less common, but real for some families).</li>
+</ul>
+<p>The right answer depends on your school&rsquo;s policy. If unsure, choose per-family.</p>
+
+<h3>What about an &ldquo;Annual Re-Enrollment Form&rdquo;?</h3>
+<p>
+Per-student. Parents make an enrollment decision for each child separately
+(returning, not returning, transferring schools, etc.).
+</p>
+
+<div class="callout warn">
+  <p><strong>Heads up:</strong> Once a form has submissions on file, switching its scope
+  (per-student &harr; per-family) gets messy &mdash; existing submissions don&rsquo;t move with the
+  setting. Pick the right scope at creation time, and only change it if there are
+  no real submissions yet.</p>
+</div>
+
+<div class="callout">
+  <p><strong>Next:</strong> Article 4 &mdash; <em>Field types in the form builder</em> &mdash; covers
+  every type of question you can add to a form.</p>
+</div>
+
+<p class="footer-note">Portal Forms Knowledge Base · Growth Suite</p>
+
+</body>
+</html>

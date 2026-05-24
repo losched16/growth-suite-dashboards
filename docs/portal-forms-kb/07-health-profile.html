@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Student Health Profile – Portal Forms Knowledge Base</title>
+<style>
+:root{--brand:#047857;--brand-soft:#ecfdf5;--brand-fg:#064e3b;--ink:#111827;--muted:#6b7280;--border:#e5e7eb;--warn-bg:#fef3c7}
+*{box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;color:var(--ink);background:#fff;line-height:1.65;max-width:760px;margin:0 auto;padding:2rem 1.5rem 4rem}
+h1{font-size:1.875rem;line-height:1.25;margin:0 0 .5rem}
+h2{font-size:1.25rem;margin:2rem 0 .75rem;color:var(--brand-fg);border-bottom:1px solid var(--border);padding-bottom:.4rem}
+h3{font-size:1.05rem;margin:1.25rem 0 .5rem}
+p,ul,ol{margin:0 0 1rem}
+ul,ol{padding-left:1.4rem}
+li{margin-bottom:.35rem}
+a{color:var(--brand)}
+code{background:#f3f4f6;padding:.1rem .35rem;border-radius:4px;font-size:.9em}
+.meta{color:var(--muted);font-size:.85rem;margin-bottom:2rem}
+.callout{background:var(--brand-soft);border-left:3px solid var(--brand);padding:.85rem 1rem;border-radius:4px;margin:1.25rem 0}
+.callout.warn{background:var(--warn-bg);border-left-color:#d97706}
+.callout p:last-child{margin-bottom:0}
+.footer-note{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--border);color:var(--muted);font-size:.85rem}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.95rem}
+th,td{text-align:left;padding:.55rem .7rem;border-bottom:1px solid var(--border);vertical-align:top}
+th{background:#f9fafb;font-weight:600;color:var(--brand-fg)}
+</style>
+</head>
+<body>
+
+<h1>The Student Health Profile</h1>
+<p class="meta">Article 7 of 12 · Portal Forms Knowledge Base</p>
+
+<p>
+The <strong>Student Health Profile</strong> is a small per-student record that sits behind every
+medical, trip, and permission form. It exists to solve a real problem: a typical
+school asks parents the same medical information across half a dozen different
+forms over the year. The Health Profile lets you ask once and reuse forever.
+</p>
+
+<h2>What it stores</h2>
+<p>The Health Profile holds these fields per student:</p>
+<ul>
+  <li>Emergency contact (name, relationship, phone)</li>
+  <li>Primary doctor (name, phone)</li>
+  <li>Preferred hospital</li>
+  <li>Health insurance provider and policy number</li>
+  <li>Allergies (free-form list)</li>
+  <li>Current medications (free-form list)</li>
+  <li>Medical conditions (free-form)</li>
+  <li>Standing permissions (OTC meds, sunscreen, insect repellent, transport)</li>
+  <li>Last-reviewed date and which parent reviewed it</li>
+</ul>
+
+<h2>How it integrates with forms</h2>
+<p>
+Each form field can have a <strong>pre-fill source</strong> (see <em>Article 5</em>).
+For health-related fields, the source is one of the <code>health.*</code> options
+&mdash; like <code>health.allergies</code> or <code>health.emergency_contact_name</code>.
+</p>
+<p>When a parent opens a form with these pre-fills:</p>
+<ol>
+  <li>The form pulls the latest value from the Health Profile and shows it pre-filled.</li>
+  <li>The parent reviews it and either leaves it as-is or updates it.</li>
+  <li>When they submit, the form&rsquo;s answer is stored on the submission as usual <em>and</em> writes back to the Health Profile so the next form sees the latest value.</li>
+</ol>
+
+<div class="callout">
+  <p>This is the key trick: <strong>the Health Profile is automatically maintained
+  through normal form submissions.</strong> Parents don&rsquo;t need to know it exists. They just fill
+  out the trip form, and the side-effect is that next month&rsquo;s field-trip form pre-fills
+  with the answers they gave today.</p>
+</div>
+
+<h2>A worked example</h2>
+<p>
+Imagine you have three forms over the school year:
+</p>
+<ol>
+  <li>September: <strong>Health Form / Medical Information</strong> &mdash; a parent fills out allergies, doctor, insurance.</li>
+  <li>October: <strong>Field Trip Permission &mdash; Pumpkin Patch</strong> &mdash; the form reads from the Health Profile and shows the September allergies pre-filled. The parent confirms or updates.</li>
+  <li>March: <strong>Field Trip Permission &mdash; Spring Adventure</strong> &mdash; the form pre-fills with whatever was in the Health Profile after the October submission.</li>
+</ol>
+<p>
+The parent never re-types &ldquo;peanut allergy&rdquo; three times. The information automatically
+stays current.
+</p>
+
+<h2>Who can see and edit the Profile</h2>
+<ul>
+  <li><strong>Parents:</strong> indirectly &mdash; through the form they&rsquo;re filling out. Whatever they type in a health-pre-filled field becomes the new Health Profile value.</li>
+  <li><strong>School staff:</strong> can view (and in a future release, directly edit) the Health Profile from the admin dashboard.</li>
+  <li><strong>The Health Profile is per-student.</strong> Sibling 1&rsquo;s profile is separate from sibling 2&rsquo;s.</li>
+</ul>
+
+<h2>Best practices</h2>
+<ul>
+  <li><strong>Use the same field key everywhere.</strong> If your Health Form calls the field <code>allergies</code> and your Field Trip Form also calls it <code>allergies</code>, the data shares the same Profile slot. If they have different field keys, they&rsquo;re separate fields and don&rsquo;t cross-pollinate.</li>
+  <li><strong>Use <code>health.*</code> pre-fills on every form that asks the same question.</strong> Even if the form&rsquo;s purpose is different, the medical questions should pre-fill from the Profile.</li>
+  <li><strong>Don&rsquo;t make Health Profile fields required on a form unless they need fresh confirmation.</strong> If a field is just for review, mark it optional and trust pre-fill.</li>
+</ul>
+
+<h2>What about families with no health information yet?</h2>
+<p>
+If a parent opens their first health-related form and the Health Profile is empty, the
+fields show up blank &mdash; just like a regular form. After they submit, the Profile is
+populated for next time. There&rsquo;s no setup step required.
+</p>
+
+<div class="callout">
+  <p><strong>Next:</strong> Article 8 &mdash; <em>Connecting form data back to Growth Suite</em> &mdash;
+  covers how submission answers flow into your contact records and trigger automations.</p>
+</div>
+
+<p class="footer-note">Portal Forms Knowledge Base · Growth Suite</p>
+
+</body>
+</html>

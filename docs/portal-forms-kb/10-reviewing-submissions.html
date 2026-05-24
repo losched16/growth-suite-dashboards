@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Reviewing submissions – Portal Forms Knowledge Base</title>
+<style>
+:root{--brand:#047857;--brand-soft:#ecfdf5;--brand-fg:#064e3b;--ink:#111827;--muted:#6b7280;--border:#e5e7eb;--warn-bg:#fef3c7}
+*{box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;color:var(--ink);background:#fff;line-height:1.65;max-width:760px;margin:0 auto;padding:2rem 1.5rem 4rem}
+h1{font-size:1.875rem;line-height:1.25;margin:0 0 .5rem}
+h2{font-size:1.25rem;margin:2rem 0 .75rem;color:var(--brand-fg);border-bottom:1px solid var(--border);padding-bottom:.4rem}
+h3{font-size:1.05rem;margin:1.25rem 0 .5rem}
+p,ul,ol{margin:0 0 1rem}
+ul,ol{padding-left:1.4rem}
+li{margin-bottom:.35rem}
+a{color:var(--brand)}
+code{background:#f3f4f6;padding:.1rem .35rem;border-radius:4px;font-size:.9em}
+.meta{color:var(--muted);font-size:.85rem;margin-bottom:2rem}
+.callout{background:var(--brand-soft);border-left:3px solid var(--brand);padding:.85rem 1rem;border-radius:4px;margin:1.25rem 0}
+.callout.warn{background:var(--warn-bg);border-left-color:#d97706}
+.callout p:last-child{margin-bottom:0}
+.footer-note{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--border);color:var(--muted);font-size:.85rem}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.95rem}
+th,td{text-align:left;padding:.55rem .7rem;border-bottom:1px solid var(--border);vertical-align:top}
+th{background:#f9fafb;font-weight:600;color:var(--brand-fg)}
+.pill{display:inline-block;border-radius:999px;padding:.1rem .55rem;font-size:.7rem;font-weight:600;letter-spacing:.04em;text-transform:uppercase}
+.pill.green{background:#d1fae5;color:#065f46}
+.pill.amber{background:#fef3c7;color:#92400e}
+.pill.red{background:#fee2e2;color:#991b1b}
+.pill.gray{background:#f3f4f6;color:#374151}
+</style>
+</head>
+<body>
+
+<h1>Reviewing submissions</h1>
+<p class="meta">Article 10 of 12 · Portal Forms Knowledge Base</p>
+
+<p>
+Once parents start submitting, you need a place to see what came in, who&rsquo;s missing
+what, and pull individual submissions for your records. There are three places this
+data lives in your admin dashboards.
+</p>
+
+<h2>1. Portal Forms Inbox</h2>
+<p>
+This is the live feed of submissions, newest first. Every row shows:
+</p>
+<ul>
+  <li>Form name and category</li>
+  <li>Status pill: <span class="pill green">Submitted</span>, <span class="pill amber">Pending payment</span>, <span class="pill red">Voided</span></li>
+  <li>Family name and the parent who submitted</li>
+  <li>For per-student forms, which student it&rsquo;s for</li>
+  <li>Submission timestamp</li>
+  <li>Growth Suite sync status: synced &middot; pending &middot; error</li>
+</ul>
+<p>
+The inbox is your &ldquo;new mail&rdquo; view. Use it for daily review &mdash; what came in
+overnight, who needs a follow-up.
+</p>
+
+<h2>2. Portal Forms Completion Grid</h2>
+<p>
+This is the &ldquo;who&rsquo;s missing what&rdquo; view. Rows are students, columns are forms,
+cells show completion status:
+</p>
+
+<table>
+  <tr><th>Cell icon</th><th>What it means</th></tr>
+  <tr><td>&#9989; (green check)</td><td>Submitted &mdash; on file for this year.</td></tr>
+  <tr><td>$ (amber)</td><td>Submitted but pending payment.</td></tr>
+  <tr><td>&#10006; (red)</td><td>Not yet submitted.</td></tr>
+  <tr><td>&#8856; (gray)</td><td>Voided.</td></tr>
+</table>
+
+<p>
+Hover any green check to see the date it was submitted. The widget header tells you
+your overall completion rate (e.g. &ldquo;47 of 52 students fully complete (90%)&rdquo;).
+</p>
+
+<p>
+Use this view to chase missing forms before deadlines. It updates in real time as
+submissions roll in.
+</p>
+
+<h2>3. The individual submission record</h2>
+<p>
+Click into any submission (from the inbox or from a parent&rsquo;s contact record) to see:
+</p>
+<ul>
+  <li>The full submission with every field and its answer</li>
+  <li>Drawn signature image (or typed name in italic, with the acknowledgement statement)</li>
+  <li>Any uploaded files (with download links)</li>
+  <li>Submission metadata: who submitted, when, IP address</li>
+  <li>Print or save-as-PDF option</li>
+</ul>
+
+<h2>What about voiding or correcting submissions?</h2>
+<p>
+Submissions are append-only by design &mdash; once submitted, they&rsquo;re part of the historical
+record. A few things you <em>can</em> do:
+</p>
+<ul>
+  <li><strong>Void a submission</strong> if it was filled out in error. Voided submissions show in history with a strikethrough; the family doesn&rsquo;t lose their place &mdash; they can re-submit.</li>
+  <li><strong>Allow re-submission.</strong> If a form&rsquo;s &ldquo;Resubmission allowed&rdquo; setting is on, parents can update their answers and a new submission supersedes the old one. Both are kept in the historical record.</li>
+  <li><strong>Trigger an admin re-sync</strong> if the original push to Growth Suite failed. (The system also retries automatically.)</li>
+</ul>
+
+<h2>Exporting</h2>
+<p>
+Two export formats are useful in different situations:
+</p>
+<ul>
+  <li><strong>Print as PDF</strong> &mdash; one submission at a time. Best for individual student files.</li>
+  <li><strong>CSV export of submissions</strong> &mdash; one row per submission with all fields as columns. Best for end-of-year audits or sharing with your accreditation reviewer.</li>
+</ul>
+
+<div class="callout">
+  <p><strong>Tip:</strong> The Portal Forms widgets are pre-installed on a dedicated <em>Portal Forms</em>
+  dashboard within your admin app. If you don&rsquo;t see them, contact your account manager
+  to provision them.</p>
+</div>
+
+<h2>Where parents see their own submissions</h2>
+<p>
+Parents have a <strong>Submission History</strong> page in their portal that shows every form
+they&rsquo;ve ever submitted &mdash; with a print/PDF option for each. They never lose access to
+their records.
+</p>
+
+<div class="callout">
+  <p><strong>Next:</strong> Article 11 &mdash; <em>Advanced settings</em> &mdash; covers fees, yearly
+  resets, draft mode, and the other knobs you can tune on a form.</p>
+</div>
+
+<p class="footer-note">Portal Forms Knowledge Base · Growth Suite</p>
+
+</body>
+</html>

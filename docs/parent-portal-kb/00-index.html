@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Parent Portal Knowledge Base</title>
+<style>
+:root{--brand:#047857;--brand-soft:#ecfdf5;--brand-fg:#064e3b;--ink:#111827;--muted:#6b7280;--border:#e5e7eb}
+*{box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;color:var(--ink);background:#fff;line-height:1.6;max-width:760px;margin:0 auto;padding:2rem 1.5rem 4rem}
+h1{font-size:2rem;line-height:1.2;margin:0 0 .25rem}
+.subtitle{color:var(--muted);font-size:1rem;margin:0 0 2rem}
+h2{font-size:1.1rem;margin:2rem 0 .75rem;color:var(--brand-fg);text-transform:uppercase;letter-spacing:.05em;font-weight:600}
+ol{list-style:none;padding:0;margin:0 0 1rem;counter-reset:article}
+li{counter-increment:article;background:#fff;border:1px solid var(--border);border-radius:8px;margin-bottom:.6rem;transition:border-color .15s,transform .15s}
+li:hover{border-color:var(--brand);transform:translateY(-1px)}
+li a{display:flex;align-items:flex-start;gap:.85rem;padding:.85rem 1rem;text-decoration:none;color:inherit}
+li a::before{content:counter(article,decimal-leading-zero);flex:0 0 1.7rem;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.75rem;color:var(--muted);background:var(--brand-soft);border-radius:4px;height:1.7rem;display:flex;align-items:center;justify-content:center;font-weight:600}
+.title{font-weight:600;color:var(--ink);margin-bottom:.15rem}
+.desc{font-size:.85rem;color:var(--muted)}
+.lead{background:var(--brand-soft);border-left:3px solid var(--brand);padding:1rem 1.2rem;border-radius:6px;margin:0 0 2rem;font-size:.95rem}
+.lead p:last-child{margin-bottom:0}
+.footer-note{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--border);color:var(--muted);font-size:.85rem;text-align:center}
+</style>
+</head>
+<body>
+
+<h1>Parent Portal Knowledge Base</h1>
+<p class="subtitle">Everything your school needs to know about the family-facing portal.</p>
+
+<div class="lead">
+  <p>The <strong>Parent Portal</strong> is your school&rsquo;s branded, family-facing site inside Growth Suite.
+  Every enrolled family logs in to check attendance, fill out forms, manage authorized pickup
+  people, see tuition, upload documents, and message the school &mdash; all in one place.</p>
+  <p>This knowledge base walks through what the portal does, how to brand it, how each section
+  works, and how to roll it out to your families. For deep coverage of the Forms feature
+  specifically, see the separate <em>Portal Forms Knowledge Base</em>.</p>
+</div>
+
+<h2>Getting oriented</h2>
+<ol>
+  <li><a href="01-what-is-the-parent-portal.html">
+    <span>
+      <div class="title">What is the Parent Portal?</div>
+      <div class="desc">An overview of what the portal does and why it matters for your school.</div>
+    </span>
+  </a></li>
+  <li><a href="02-how-parents-log-in.html">
+    <span>
+      <div class="title">How parents log in</div>
+      <div class="desc">The passwordless magic-link flow, why no passwords, and what to tell families on day one.</div>
+    </span>
+  </a></li>
+  <li><a href="03-tour-of-the-parent-portal.html">
+    <span>
+      <div class="title">A tour of the Parent Portal</div>
+      <div class="desc">Every section parents see &mdash; Home, Attendance, Family, Forms, Documents, Messages, Tuition, Financial Aid, Settings.</div>
+    </span>
+  </a></li>
+  <li><a href="04-branding-your-portal.html">
+    <span>
+      <div class="title">Branding your portal</div>
+      <div class="desc">Logo, colors, support contact, footer text &mdash; every customizable element.</div>
+    </span>
+  </a></li>
+</ol>
+
+<h2>Day-to-day features</h2>
+<ol start="5" style="counter-reset:article 4">
+  <li><a href="05-attendance.html">
+    <span>
+      <div class="title">Attendance: check-in &amp; check-out</div>
+      <div class="desc">The most-used feature daily. Sign-in / pick-up flows, notes for staff, and what gets captured per event.</div>
+    </span>
+  </a></li>
+  <li><a href="06-authorized-pickup-people.html">
+    <span>
+      <div class="title">Authorized pickup people</div>
+      <div class="desc">The per-family list of approved adults parents can hand off pick-up to.</div>
+    </span>
+  </a></li>
+  <li><a href="07-the-family-page.html">
+    <span>
+      <div class="title">The Family page</div>
+      <div class="desc">What parents can self-update about their household &mdash; and what stays read-only.</div>
+    </span>
+  </a></li>
+  <li><a href="08-documents-and-uploads.html">
+    <span>
+      <div class="title">Documents &amp; file uploads</div>
+      <div class="desc">The catch-all for files that don&rsquo;t belong to a specific form.</div>
+    </span>
+  </a></li>
+  <li><a href="09-messages.html">
+    <span>
+      <div class="title">Messages</div>
+      <div class="desc">The direct line between families and your school office, with full history preserved.</div>
+    </span>
+  </a></li>
+  <li><a href="10-tuition-and-financial-aid.html">
+    <span>
+      <div class="title">Tuition &amp; Financial Aid</div>
+      <div class="desc">What parents see about their balance, payment plan, and (if applicable) TuitionBridge financial aid applications.</div>
+    </span>
+  </a></li>
+</ol>
+
+<h2>Operations</h2>
+<ol start="11" style="counter-reset:article 10">
+  <li><a href="11-helping-a-stuck-parent.html">
+    <span>
+      <div class="title">Helping a parent who&rsquo;s stuck</div>
+      <div class="desc">Troubleshooting guide for the most common front-desk issues &mdash; bookmark this one.</div>
+    </span>
+  </a></li>
+  <li><a href="12-onboarding-your-families.html">
+    <span>
+      <div class="title">Onboarding your families to the portal</div>
+      <div class="desc">The rollout playbook &mdash; pre-launch checks, announcement emails, follow-ups, and common pitfalls.</div>
+    </span>
+  </a></li>
+</ol>
+
+<p class="footer-note">Parent Portal Knowledge Base · Growth Suite</p>
+
+</body>
+</html>

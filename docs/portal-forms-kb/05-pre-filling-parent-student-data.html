@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pre-filling parent &amp; student data – Portal Forms Knowledge Base</title>
+<style>
+:root{--brand:#047857;--brand-soft:#ecfdf5;--brand-fg:#064e3b;--ink:#111827;--muted:#6b7280;--border:#e5e7eb;--warn-bg:#fef3c7}
+*{box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;color:var(--ink);background:#fff;line-height:1.65;max-width:760px;margin:0 auto;padding:2rem 1.5rem 4rem}
+h1{font-size:1.875rem;line-height:1.25;margin:0 0 .5rem}
+h2{font-size:1.25rem;margin:2rem 0 .75rem;color:var(--brand-fg);border-bottom:1px solid var(--border);padding-bottom:.4rem}
+h3{font-size:1.05rem;margin:1.25rem 0 .5rem}
+p,ul,ol{margin:0 0 1rem}
+ul,ol{padding-left:1.4rem}
+li{margin-bottom:.35rem}
+a{color:var(--brand)}
+code{background:#f3f4f6;padding:.1rem .35rem;border-radius:4px;font-size:.9em}
+.meta{color:var(--muted);font-size:.85rem;margin-bottom:2rem}
+.callout{background:var(--brand-soft);border-left:3px solid var(--brand);padding:.85rem 1rem;border-radius:4px;margin:1.25rem 0}
+.callout.warn{background:var(--warn-bg);border-left-color:#d97706}
+.callout p:last-child{margin-bottom:0}
+.footer-note{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--border);color:var(--muted);font-size:.85rem}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.95rem}
+th,td{text-align:left;padding:.55rem .7rem;border-bottom:1px solid var(--border);vertical-align:top}
+th{background:#f9fafb;font-weight:600;color:var(--brand-fg)}
+.src{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:var(--brand-fg);font-weight:600;font-size:.85em}
+</style>
+</head>
+<body>
+
+<h1>Pre-filling parent &amp; student data</h1>
+<p class="meta">Article 5 of 12 · Portal Forms Knowledge Base</p>
+
+<p>
+Pre-fill is the small feature that does the most for parent satisfaction. Parents
+hate retyping the same information they already gave you &mdash; and we already have it
+sitting in our database. Pre-fill puts that information into the form fields
+automatically, so parents only fill out what&rsquo;s actually new.
+</p>
+
+<h2>How it works</h2>
+<p>
+When you build a form, every input field can have a <strong>pre-fill source</strong>.
+That&rsquo;s a small dropdown on the field that says &ldquo;fill this with the parent&rsquo;s first name&rdquo;
+or &ldquo;fill this with the selected student&rsquo;s date of birth.&rdquo;
+</p>
+<p>
+When a parent opens the form, those fields show up already filled in. Parents can still
+change the value &mdash; pre-fill is a default, not a lock.
+</p>
+
+<h2>Available pre-fill sources</h2>
+
+<h3>Parent (the logged-in user)</h3>
+<table>
+  <tr><th>Source</th><th>What it fills</th></tr>
+  <tr><td class="src">parent.first_name</td><td>The logged-in parent&rsquo;s first name.</td></tr>
+  <tr><td class="src">parent.last_name</td><td>Their last name.</td></tr>
+  <tr><td class="src">parent.full_name</td><td>First + last combined. Great for signature fields.</td></tr>
+  <tr><td class="src">parent.email</td><td>Their email address on file.</td></tr>
+  <tr><td class="src">parent.phone</td><td>Their phone number on file.</td></tr>
+</table>
+
+<h3>Student (only on per-student forms)</h3>
+<table>
+  <tr><th>Source</th><th>What it fills</th></tr>
+  <tr><td class="src">student.first_name</td><td>Selected student&rsquo;s first name.</td></tr>
+  <tr><td class="src">student.last_name</td><td>Selected student&rsquo;s last name.</td></tr>
+  <tr><td class="src">student.full_name</td><td>Preferred name (or first) + last name.</td></tr>
+  <tr><td class="src">student.date_of_birth</td><td>Their DOB in YYYY-MM-DD format.</td></tr>
+</table>
+
+<h3>Health profile (only on per-student forms)</h3>
+<p>
+These pull from the student&rsquo;s saved Health Profile (see <em>Article 7</em>).
+The first time a parent fills out one of these fields, the value is also saved back
+to the Health Profile &mdash; so the next form pre-fills with the latest answer.
+</p>
+<table>
+  <tr><th>Source</th><th>What it fills</th></tr>
+  <tr><td class="src">health.emergency_contact_name</td><td>Saved emergency contact name.</td></tr>
+  <tr><td class="src">health.emergency_contact_phone</td><td>Saved emergency contact phone.</td></tr>
+  <tr><td class="src">health.emergency_contact_relationship</td><td>Their relationship to the student.</td></tr>
+  <tr><td class="src">health.primary_doctor_name</td><td>Pediatrician or primary care doctor.</td></tr>
+  <tr><td class="src">health.primary_doctor_phone</td><td>Doctor&rsquo;s office phone number.</td></tr>
+  <tr><td class="src">health.preferred_hospital</td><td>Hospital the family prefers in an emergency.</td></tr>
+  <tr><td class="src">health.health_insurance_provider</td><td>Insurance company name.</td></tr>
+  <tr><td class="src">health.health_insurance_policy_number</td><td>Policy number.</td></tr>
+  <tr><td class="src">health.allergies</td><td>Free-form allergy list.</td></tr>
+  <tr><td class="src">health.current_medications</td><td>Current medications and dosages.</td></tr>
+  <tr><td class="src">health.medical_conditions</td><td>Other relevant medical conditions.</td></tr>
+</table>
+
+<h3>System</h3>
+<table>
+  <tr><th>Source</th><th>What it fills</th></tr>
+  <tr><td class="src">today</td><td>Today&rsquo;s date in YYYY-MM-DD format. Use this for &ldquo;Date signed&rdquo; fields.</td></tr>
+</table>
+
+<h2>How to use pre-fill effectively</h2>
+
+<h3>Always pre-fill what we know</h3>
+<p>
+On every form, the &ldquo;Date signed&rdquo; should pre-fill with <span class="src">today</span>.
+The &ldquo;Parent name&rdquo; should pre-fill with <span class="src">parent.full_name</span>.
+The student fields should pre-fill from the selected student. There&rsquo;s no reason to make
+parents type these.
+</p>
+
+<h3>Use the same field key across forms</h3>
+<p>
+If two different forms ask for the &ldquo;Emergency contact name&rdquo;, give them the same field
+key (e.g. <code>emergency_contact_name</code>) and pre-fill from the same Health Profile
+source. That way:
+</p>
+<ul>
+  <li>The first form populates the Health Profile.</li>
+  <li>Every subsequent form shows the latest answer pre-filled.</li>
+  <li>Parents only update what&rsquo;s changed.</li>
+</ul>
+
+<h3>Don&rsquo;t pre-fill things that should require active confirmation</h3>
+<p>
+Don&rsquo;t pre-fill checkboxes for liability acknowledgements. The whole point of those is
+that the parent makes a fresh decision each time.
+</p>
+
+<div class="callout warn">
+  <p><strong>Note:</strong> Pre-fill is a convenience, not a guarantee. If the parent doesn&rsquo;t
+  have an email on file (rare), the <span class="src">parent.email</span> pre-fill source
+  produces an empty field &mdash; not an error.</p>
+</div>
+
+<div class="callout">
+  <p><strong>Next:</strong> Article 6 &mdash; <em>Signatures: typed vs drawn</em> &mdash; covers when to
+  use each kind of signature and what makes a signature legally accepted.</p>
+</div>
+
+<p class="footer-note">Portal Forms Knowledge Base · Growth Suite</p>
+
+</body>
+</html>

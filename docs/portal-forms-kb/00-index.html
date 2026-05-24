@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Portal Forms Knowledge Base</title>
+<style>
+:root{--brand:#047857;--brand-soft:#ecfdf5;--brand-fg:#064e3b;--ink:#111827;--muted:#6b7280;--border:#e5e7eb}
+*{box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;color:var(--ink);background:#fff;line-height:1.6;max-width:760px;margin:0 auto;padding:2rem 1.5rem 4rem}
+h1{font-size:2rem;line-height:1.2;margin:0 0 .25rem}
+.subtitle{color:var(--muted);font-size:1rem;margin:0 0 2rem}
+h2{font-size:1.1rem;margin:2rem 0 .75rem;color:var(--brand-fg);text-transform:uppercase;letter-spacing:.05em;font-weight:600}
+ol{list-style:none;padding:0;margin:0 0 1rem;counter-reset:article}
+li{counter-increment:article;background:#fff;border:1px solid var(--border);border-radius:8px;margin-bottom:.6rem;transition:border-color .15s,transform .15s}
+li:hover{border-color:var(--brand);transform:translateY(-1px)}
+li a{display:flex;align-items:flex-start;gap:.85rem;padding:.85rem 1rem;text-decoration:none;color:inherit}
+li a::before{content:counter(article,decimal-leading-zero);flex:0 0 1.7rem;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.75rem;color:var(--muted);background:var(--brand-soft);border-radius:4px;height:1.7rem;display:flex;align-items:center;justify-content:center;font-weight:600}
+.title{font-weight:600;color:var(--ink);margin-bottom:.15rem}
+.desc{font-size:.85rem;color:var(--muted)}
+.lead{background:var(--brand-soft);border-left:3px solid var(--brand);padding:1rem 1.2rem;border-radius:6px;margin:0 0 2rem;font-size:.95rem}
+.lead p:last-child{margin-bottom:0}
+.footer-note{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--border);color:var(--muted);font-size:.85rem;text-align:center}
+</style>
+</head>
+<body>
+
+<h1>Portal Forms Knowledge Base</h1>
+<p class="subtitle">Everything your school needs to know about parent-portal forms.</p>
+
+<div class="lead">
+  <p><strong>Portal Forms</strong> are forms your families fill out inside their authenticated parent
+  portal. They&rsquo;re different from public lead-capture forms because they already know who the
+  parent is, which children belong to them, and what data is on file &mdash; so parents only fill
+  out what we don&rsquo;t already know.</p>
+  <p>This knowledge base walks through everything from the basics (what they are and why
+  to use them) to the practical details (per-student vs per-family, signatures, Growth Suite
+  writeback) to advanced settings.</p>
+</div>
+
+<h2>Getting started</h2>
+<ol>
+  <li><a href="01-what-are-portal-forms.html">
+    <span>
+      <div class="title">What are Portal Forms?</div>
+      <div class="desc">An overview, why they exist, and how they differ from standard public web forms.</div>
+    </span>
+  </a></li>
+  <li><a href="02-choosing-forms-for-your-school.html">
+    <span>
+      <div class="title">Choosing forms for your school</div>
+      <div class="desc">A simple audit method and a starter list of common school forms that work well in the portal.</div>
+    </span>
+  </a></li>
+  <li><a href="03-per-student-vs-per-family.html">
+    <span>
+      <div class="title">Per-student vs per-family forms</div>
+      <div class="desc">The single most important decision when setting up a new form &mdash; this article makes it easy.</div>
+    </span>
+  </a></li>
+</ol>
+
+<h2>Building a form</h2>
+<ol start="4" style="counter-reset:article 3">
+  <li><a href="04-field-types.html">
+    <span>
+      <div class="title">Field types in the form builder</div>
+      <div class="desc">Every input type available, when to use each, and what data you get back.</div>
+    </span>
+  </a></li>
+  <li><a href="05-pre-filling-parent-student-data.html">
+    <span>
+      <div class="title">Pre-filling parent &amp; student data</div>
+      <div class="desc">The single most-loved feature for parents &mdash; auto-filling fields with what we already know.</div>
+    </span>
+  </a></li>
+  <li><a href="06-signatures.html">
+    <span>
+      <div class="title">Signatures: typed vs drawn</div>
+      <div class="desc">Both work for almost every form. This article tells you which one to use when.</div>
+    </span>
+  </a></li>
+  <li><a href="07-health-profile.html">
+    <span>
+      <div class="title">The Student Health Profile</div>
+      <div class="desc">A shared per-student record so medical info is asked once and reused across every relevant form.</div>
+    </span>
+  </a></li>
+  <li><a href="08-growth-suite-writeback.html">
+    <span>
+      <div class="title">Connecting form data back to Growth Suite</div>
+      <div class="desc">How submission answers flow into contact records to power tags, automations, and segmentation.</div>
+    </span>
+  </a></li>
+</ol>
+
+<h2>Using the system</h2>
+<ol start="9" style="counter-reset:article 8">
+  <li><a href="09-parent-experience.html">
+    <span>
+      <div class="title">The parent experience</div>
+      <div class="desc">Step-by-step walkthrough of what your families see, from logging in to printing their submission.</div>
+    </span>
+  </a></li>
+  <li><a href="10-reviewing-submissions.html">
+    <span>
+      <div class="title">Reviewing submissions</div>
+      <div class="desc">The three places submission data lives in your admin dashboards &mdash; and how to use each.</div>
+    </span>
+  </a></li>
+  <li><a href="11-advanced-settings.html">
+    <span>
+      <div class="title">Advanced settings</div>
+      <div class="desc">Fees, yearly resets, draft mode, categories, and the other knobs you can tune on a form.</div>
+    </span>
+  </a></li>
+  <li><a href="12-requesting-a-new-form.html">
+    <span>
+      <div class="title">Requesting a new form</div>
+      <div class="desc">How to get a new form built today &mdash; and a preview of the self-service form builder coming soon.</div>
+    </span>
+  </a></li>
+</ol>
+
+<p class="footer-note">Portal Forms Knowledge Base · Growth Suite</p>
+
+</body>
+</html>
