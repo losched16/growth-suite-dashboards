@@ -50,6 +50,8 @@ export const STUDENT_FIELDS = {
 
   // Financial fields the Finance widget reads
   tuitionFee: 'tuition_fee',
+  totalTuitionCost: 'total_tuition_cost',  // DGM uses both — total_tuition_cost is the "all-in" annual figure
+  programTuition: 'program_tuition',       // base tuition just for the program
   extendedDayFee: 'extended_day_fee',
   lunchFee: 'lunch_fee',
   adminFee: 'admin_fee',

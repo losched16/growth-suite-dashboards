@@ -13,6 +13,7 @@ import type { NextRequest } from 'next/server';
 import { cookies } from 'next/headers';
 import { SESSION_COOKIE, verifySessionToken } from '@/lib/auth/operator';
 import { query } from '@/lib/db';
+import { writebackTuitionEnrollmentToGhl } from '@/lib/billing/tuition-ghl-writeback';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -64,6 +65,7 @@ export async function POST(_request: NextRequest, { params }: { params: Params }
 
   let inserted = 0, updated = 0, errored = 0;
   const errorDetails: Array<{ rowNumber: number; reason: string }> = [];
+  const enrollmentIdsForWriteback: string[] = [];
 
   for (const row of imp.row_log) {
     if (row.status !== 'matched') continue;
@@ -84,13 +86,10 @@ export async function POST(_request: NextRequest, { params }: { params: Params }
       );
 
       if (existing.rows.length > 0) {
-        // Update — keep any plan they may have picked, but refresh the
-        // tuition amount. If a new plan name is on this row and the
-        // parent hasn't picked yet, set it.
         await query(
           `UPDATE family_tuition_enrollments
               SET annual_tuition_cents = $1,
-                  total_annual_cents   = $1,  -- addons get re-applied when parent picks
+                  total_annual_cents   = $1,
                   payment_plan_id      = COALESCE(payment_plan_id, $2),
                   status               = CASE WHEN status = 'committed' THEN 'committed' ELSE 'draft' END,
                   internal_note        = COALESCE(internal_note, '') || E'\\n[' || now()::date::text || '] Updated from FACTS import',
@@ -99,8 +98,9 @@ export async function POST(_request: NextRequest, { params }: { params: Params }
           [row.annual_tuition_cents, row.matched_plan_id ?? null, existing.rows[0].id],
         );
         updated++;
+        enrollmentIdsForWriteback.push(existing.rows[0].id);
       } else {
-        await query(
+        const newRow = await query<{ id: string }>(
           `INSERT INTO family_tuition_enrollments
              (school_id, family_id, student_id, academic_year,
               annual_tuition_cents, total_annual_cents,
@@ -108,7 +108,8 @@ export async function POST(_request: NextRequest, { params }: { params: Params }
               addons, installment_count, schedule, status,
               created_by_email, internal_note)
            VALUES ($1, $2, $3, $4, $5, $5, $6, 0, '[]'::jsonb, 0, NULL,
-                   'draft', $7, $8)`,
+                   'draft', $7, $8)
+           RETURNING id`,
           [
             schoolId, row.family_id, row.student_id, imp.academic_year,
             row.annual_tuition_cents,
@@ -118,6 +119,7 @@ export async function POST(_request: NextRequest, { params }: { params: Params }
           ],
         );
         inserted++;
+        enrollmentIdsForWriteback.push(newRow.rows[0].id);
       }
     } catch (e) {
       errored++;
@@ -137,9 +139,24 @@ export async function POST(_request: NextRequest, { params }: { params: Params }
     [inserted, updated, errored, importId],
   );
 
+  // GHL writeback for every successfully-committed enrollment. Best-
+  // effort: failures don't roll back the import (the canonical data
+  // is now in our DB; GHL is the mirror that may need a manual resync).
+  let writebackOk = 0, writebackSkipped = 0, writebackFailed = 0;
+  for (const enrollmentId of enrollmentIdsForWriteback) {
+    try {
+      const r = await writebackTuitionEnrollmentToGhl(enrollmentId);
+      if (r.ok) writebackOk++; else writebackSkipped++;
+    } catch (err) {
+      writebackFailed++;
+      console.warn('[facts-commit] GHL writeback failed:', err instanceof Error ? err.message : String(err));
+    }
+  }
+
   return NextResponse.json({
     ok: true,
     inserted, updated, errored,
     error_details: errorDetails.slice(0, 50),
+    ghl_writeback: { ok: writebackOk, skipped: writebackSkipped, failed: writebackFailed },
   });
 }
