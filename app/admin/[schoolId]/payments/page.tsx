@@ -297,6 +297,25 @@ export default async function PaymentsPage({
           </form>
         </section>
 
+        {/* === QUICK NAV === */}
+        <section className="rounded-xl border border-black/10 bg-gradient-to-br from-emerald-50 to-white p-5">
+          <h2 className="text-lg font-semibold text-zinc-900 mb-3">Operations</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <Link href={`/admin/${schoolId}/payments/facts-import`} className="rounded-md border border-emerald-200 bg-white p-3 hover:border-emerald-400 hover:shadow-sm">
+              <div className="text-sm font-semibold text-zinc-900">FACTS import</div>
+              <div className="mt-0.5 text-xs text-zinc-600">Paste a FACTS CSV → create/update tuition enrollments in bulk.</div>
+            </Link>
+            <Link href={`/admin/${schoolId}/payments/products`} className="rounded-md border border-emerald-200 bg-white p-3 hover:border-emerald-400 hover:shadow-sm">
+              <div className="text-sm font-semibold text-zinc-900">Product catalog</div>
+              <div className="mt-0.5 text-xs text-zinc-600">Anything you charge for that isn&rsquo;t tuition. Events, donations, fundraisers.</div>
+            </Link>
+            <Link href={`/admin/${schoolId}/payments/purchases`} className="rounded-md border border-emerald-200 bg-white p-3 hover:border-emerald-400 hover:shadow-sm">
+              <div className="text-sm font-semibold text-zinc-900">Product purchases</div>
+              <div className="mt-0.5 text-xs text-zinc-600">Every charge from the product catalog. Refunds, drilldown, GHL link.</div>
+            </Link>
+          </div>
+        </section>
+
         {/* === PAYMENT PLANS === */}
         <section className="rounded-xl border border-black/10 bg-white p-5">
           <div className="flex items-baseline justify-between mb-3">
