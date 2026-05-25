@@ -38,9 +38,6 @@ interface FormDefRow {
   field_schema: unknown[];
 }
 
-const PARENT_PORTAL_BASE = process.env.PARENT_PORTAL_BASE_URL
-  ?? 'https://growth-suite-parent-portal.vercel.app';
-
 export default async function FormEditPageScoped({
   params, searchParams,
 }: { params: Params; searchParams: SearchParams }) {
@@ -85,14 +82,15 @@ export default async function FormEditPageScoped({
             >
               View submissions
             </Link>
-            <a
-              href={`${PARENT_PORTAL_BASE}/forms-v2/${form.slug}`}
+            <Link
+              href={`/school/${locationId}/forms/${formId}/preview`}
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+              title="Eyeball the form layout without logging in as a parent"
             >
-              <ExternalLink className="h-3 w-3" /> Preview as parent
-            </a>
+              <ExternalLink className="h-3 w-3" /> Preview layout
+            </Link>
           </div>
         </div>
 

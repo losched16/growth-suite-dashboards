@@ -192,7 +192,10 @@ function FormRow({
   eligibleFamilyCount: number;
 }) {
   void schoolId;
-  const portalUrl = `${PARENT_PORTAL_BASE}/forms-v2/${form.slug}`;
+  // Staff preview lives inside the school iframe — no parent login screen,
+  // no real submission. The parent-portal URL is kept around only as the
+  // "log in as test parent" route below for end-to-end testing.
+  const staffPreviewUrl = `/school/${locationId}/forms/${form.id}/preview`;
   const homeUrl = `${PARENT_PORTAL_BASE}/home`;
 
   // Email template that the operator drops into a Growth Suite email
@@ -317,26 +320,29 @@ ${schoolName}`;
             <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-600 mb-1">
               4️⃣ &nbsp; Preview / test as a parent
             </div>
-            <p className="text-xs text-slate-600 mb-2">
-              Open the form as Michelle (the seeded test parent for {schoolName}). Login: <code className="rounded bg-slate-100 px-1 font-mono text-[10px]">michellelynnpt@gmail.com</code> · <code className="rounded bg-slate-100 px-1 font-mono text-[10px]">dgm-demo-2026</code>.
-              Submitting will create a real submission row — clear it later from the submissions inbox.
+<p className="text-xs text-slate-600 mb-2">
+              Two options. <strong>Preview the layout</strong> stays inside this iframe with no login — fastest way
+              to eyeball the form before you push it to families. <strong>Submit as a test parent</strong> opens the
+              real parent portal so you can fill it out end-to-end; that creates a real submission row you can
+              clear later from the inbox.
             </p>
             <div className="flex items-center gap-2 flex-wrap">
-              <a
-                href={portalUrl}
+              <Link
+                href={staffPreviewUrl}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-1.5 rounded border border-blue-300 bg-white px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-50"
               >
-                <Eye className="h-3.5 w-3.5" /> Open form (logged-out preview)
-              </a>
+                <Eye className="h-3.5 w-3.5" /> Preview layout (no login)
+              </Link>
               <a
                 href={`${PARENT_PORTAL_BASE}/login?next=/forms-v2/${form.slug}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-1.5 rounded border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-800 hover:bg-emerald-100"
+                title={`Test parent login for ${schoolName}: michellelynnpt@gmail.com / dgm-demo-2026`}
               >
-                <ExternalLink className="h-3.5 w-3.5" /> Log in as test parent → fill form
+                <ExternalLink className="h-3.5 w-3.5" /> Submit as test parent
               </a>
             </div>
           </div>
