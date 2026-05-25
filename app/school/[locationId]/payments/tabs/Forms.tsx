@@ -193,9 +193,9 @@ function FormRow({
 }) {
   void schoolId;
   // Staff preview lives inside the school iframe — no parent login screen,
-  // no real submission. The parent-portal URL is kept around only as the
-  // "log in as test parent" route below for end-to-end testing.
-  const staffPreviewUrl = `/school/${locationId}/forms/${form.id}/preview`;
+  // no real submission. ?chrome=none keeps the dashboard sidebar from
+  // doubling up with the preview's own header banner.
+  const staffPreviewUrl = `/school/${locationId}/forms/${form.id}/preview?chrome=none`;
   const homeUrl = `${PARENT_PORTAL_BASE}/home`;
 
   // Email template that the operator drops into a Growth Suite email
@@ -321,28 +321,25 @@ ${schoolName}`;
               4️⃣ &nbsp; Preview / test as a parent
             </div>
 <p className="text-xs text-slate-600 mb-2">
-              Two options. <strong>Preview the layout</strong> stays inside this iframe with no login — fastest way
-              to eyeball the form before you push it to families. <strong>Submit as a test parent</strong> opens the
-              real parent portal so you can fill it out end-to-end; that creates a real submission row you can
-              clear later from the inbox.
+              <strong>Preview the layout</strong> below — it opens inside this iframe (no login, no submission)
+              so you can eyeball the form exactly as a parent sees it before pushing to families.
             </p>
             <div className="flex items-center gap-2 flex-wrap">
               <Link
                 href={staffPreviewUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 rounded border border-blue-300 bg-white px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-50"
+                className="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-700"
               >
-                <Eye className="h-3.5 w-3.5" /> Preview layout (no login)
+                <Eye className="h-3.5 w-3.5" /> Preview form layout
               </Link>
+              <span className="text-[11px] text-slate-400">·</span>
               <a
                 href={`${PARENT_PORTAL_BASE}/login?next=/forms-v2/${form.slug}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 rounded border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-800 hover:bg-emerald-100"
+                className="inline-flex items-center gap-1 text-[11px] text-slate-500 hover:text-slate-700 underline"
                 title={`Test parent login for ${schoolName}: michellelynnpt@gmail.com / dgm-demo-2026`}
               >
-                <ExternalLink className="h-3.5 w-3.5" /> Submit as test parent
+                <ExternalLink className="h-3 w-3" /> end-to-end test as a real parent (opens parent portal)
               </a>
             </div>
           </div>

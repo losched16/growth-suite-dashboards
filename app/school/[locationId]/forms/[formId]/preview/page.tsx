@@ -86,7 +86,7 @@ export default async function SchoolFormPreviewPage({
           </div>
           <div className="flex items-center gap-2">
             <Link
-              href={`/school/${locationId}/forms/${formId}`}
+              href={`/school/${locationId}/forms/${formId}?chrome=none`}
               className="inline-flex items-center gap-1 rounded border border-amber-400 bg-white px-2 py-1 text-amber-900 hover:bg-amber-100"
             >
               <Edit3 className="h-3 w-3" /> Back to editor

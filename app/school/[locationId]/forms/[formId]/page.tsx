@@ -12,7 +12,7 @@
 
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ArrowLeft, ExternalLink } from 'lucide-react';
+import { ArrowLeft, Eye } from 'lucide-react';
 import { query } from '@/lib/db';
 import { loadSchoolByLocationId } from '@/lib/dashboards/loader';
 import { FormEditor } from '@/app/admin/[schoolId]/forms/[formId]/FormEditor';
@@ -83,13 +83,11 @@ export default async function FormEditPageScoped({
               View submissions
             </Link>
             <Link
-              href={`/school/${locationId}/forms/${formId}/preview`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
-              title="Eyeball the form layout without logging in as a parent"
+              href={`/school/${locationId}/forms/${formId}/preview?chrome=none`}
+              className="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700"
+              title="Eyeball the form layout — opens inside this iframe, no login needed"
             >
-              <ExternalLink className="h-3 w-3" /> Preview layout
+              <Eye className="h-3 w-3" /> Preview layout
             </Link>
           </div>
         </div>
