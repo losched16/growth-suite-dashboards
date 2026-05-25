@@ -20,11 +20,14 @@
 //   - "View raw row in inbox" → /school/.../submissions?show_test=1
 //   - (Phase 3) "Send me the notification email" — separate commit
 
+import { cookies } from 'next/headers';
 import { notFound, redirect } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, ArrowRight, CheckCircle2, ExternalLink, FlaskConical, Inbox, Mail, Send, Sparkles, Wallet } from 'lucide-react';
+import { ArrowLeft, ArrowRight, CheckCircle2, ExternalLink, FlaskConical, Inbox, Mail, Send, Sparkles, Wallet, Webhook } from 'lucide-react';
 import { query } from '@/lib/db';
 import { loadSchoolByLocationId } from '@/lib/dashboards/loader';
+import { SCHOOL_SESSION_COOKIE, verifySchoolSession } from '@/lib/auth/school';
+import { SendTestEmailButton } from './SendTestEmailButton';
 
 export const dynamic = 'force-dynamic';
 
@@ -35,9 +38,11 @@ interface DefRow {
   id: string;
   slug: string;
   display_name: string;
+  category: string | null;
   confirmation_message: string | null;
   confirmation_redirect_url: string | null;
   notify_emails: string[] | null;
+  webhook_urls: string[] | null;
   field_schema: Array<Record<string, unknown>>;
   payment_config: Record<string, unknown> | null;
   fee_amount: string | null;
@@ -65,8 +70,10 @@ export default async function TestResultPage({
 
   const [{ rows: defRows }, { rows: subRows }] = await Promise.all([
     query<DefRow>(
-      `SELECT id, slug, display_name, confirmation_message, confirmation_redirect_url,
-              notify_emails, field_schema, payment_config, fee_amount, ghl_writeback
+      `SELECT id, slug, display_name, category,
+              confirmation_message, confirmation_redirect_url,
+              notify_emails, webhook_urls,
+              field_schema, payment_config, fee_amount, ghl_writeback
          FROM portal_form_definitions
         WHERE id = $1 AND school_id = $2`,
       [formId, school.id],
@@ -99,6 +106,34 @@ export default async function TestResultPage({
   const previewBackUrl = `/school/${locationId}/forms/${formId}/preview?chrome=none`;
   const testAgainUrl = `${previewBackUrl}&test=1`;
   const inboxUrl = `/school/${locationId}/forms/${formId}/submissions?show_test=1&chrome=none`;
+
+  // Default-fill the SendTestEmail input with the school session user's
+  // email when present (operator sessions don't have an email claim;
+  // they'll have to type it).
+  const ck = await cookies();
+  const session = await verifySchoolSession(ck.get(SCHOOL_SESSION_COOKIE)?.value);
+  const defaultStaffEmail = session?.user_email && session.user_email.includes('@') ? session.user_email : '';
+
+  // Compute the webhook payload the production fan-out WOULD have sent.
+  // Mirrors the shape in growth-suite-parent-portal/lib/forms/post-submit-effects.ts
+  const webhookPayloadPreview = {
+    event: 'form.submitted',
+    submission_id: sub.id,
+    form: {
+      id: form.id,
+      slug: form.slug,
+      display_name: form.display_name,
+      category: form.category,
+    },
+    school: {
+      id: school.id,
+      ghl_location_id: school.ghl_location_id,
+      name: school.name,
+    },
+    family: { id: '(test)', parent_id: '(test)', student_id: null },
+    responses: cleanResponses,
+    submitted_at: typeof sub.submitted_at === 'string' ? sub.submitted_at : new Date(sub.submitted_at).toISOString(),
+  };
 
   return (
     <main className="min-h-screen bg-zinc-100">
@@ -285,6 +320,44 @@ export default async function TestResultPage({
               )}
             </Block>
 
+            {/* WEBHOOKS / AUTOMATIONS */}
+            <Block
+              icon={<Webhook className="h-4 w-4 text-zinc-500" />}
+              title="Webhooks / automation triggers"
+              hint="HTTPS POSTs that would have fan-out fired to your downstream automation tools (Zapier, Make, GHL inbound, your own backend)."
+            >
+              {form.webhook_urls && form.webhook_urls.length > 0 ? (
+                <>
+                  <p className="text-xs text-emerald-700 mb-2">
+                    <strong>Suppressed</strong> in test mode. In production each URL below receives a JSON POST (5s timeout, fire-and-forget):
+                  </p>
+                  <ul className="space-y-1 mb-3">
+                    {form.webhook_urls.map((u) => (
+                      <li key={u} className="font-mono text-xs text-zinc-800 break-all flex items-start gap-2">
+                        <Send className="h-3 w-3 mt-0.5 text-emerald-600 shrink-0" />
+                        POST {u}
+                      </li>
+                    ))}
+                  </ul>
+                  <details>
+                    <summary className="cursor-pointer text-xs text-blue-700 hover:underline">
+                      Show payload preview (the exact JSON each URL would receive)
+                    </summary>
+                    <pre className="mt-2 rounded-md bg-zinc-900 text-zinc-100 px-3 py-2 text-[11px] font-mono overflow-x-auto whitespace-pre-wrap break-all">
+{JSON.stringify(webhookPayloadPreview, null, 2)}
+                    </pre>
+                  </details>
+                </>
+              ) : (
+                <p className="text-xs text-zinc-500 italic">
+                  No webhook URLs configured on this form.
+                  <Link href={`/school/${locationId}/forms/${formId}?chrome=none`} className="text-blue-600 ml-1 underline hover:text-blue-800">
+                    Add some in the form editor →
+                  </Link>
+                </p>
+              )}
+            </Block>
+
             {/* SKIPPED FILES */}
             {meta.skipped_files && meta.skipped_files.length > 0 ? (
               <Block
@@ -299,18 +372,29 @@ export default async function TestResultPage({
             ) : null}
           </div>
 
-          <div className="border-t border-zinc-200 bg-zinc-50 px-4 py-3 flex items-center justify-between flex-wrap gap-2">
-            <span className="text-[11px] text-zinc-500">
-              Test submission ID: <code className="font-mono">{sub.id.slice(0, 8)}…</code>
-            </span>
-            <div className="flex items-center gap-2">
-              <Link href={testAgainUrl} className="inline-flex items-center gap-1 rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700">
-                <FlaskConical className="h-3 w-3" /> Run another test
-              </Link>
-              <Link href={inboxUrl} className="inline-flex items-center gap-1 rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50">
-                <Inbox className="h-3 w-3" /> View raw submission in inbox
-              </Link>
+          <div className="border-t border-zinc-200 bg-zinc-50 px-4 py-3 space-y-2">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <span className="text-[11px] text-zinc-500">
+                Test submission ID: <code className="font-mono">{sub.id.slice(0, 8)}…</code>
+              </span>
+              <div className="flex items-center gap-2 flex-wrap">
+                <SendTestEmailButton
+                  schoolId={school.id}
+                  formId={form.id}
+                  submissionId={sub.id}
+                  defaultTo={defaultStaffEmail}
+                />
+                <Link href={testAgainUrl} className="inline-flex items-center gap-1 rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700">
+                  <FlaskConical className="h-3 w-3" /> Run another test
+                </Link>
+                <Link href={inboxUrl} className="inline-flex items-center gap-1 rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50">
+                  <Inbox className="h-3 w-3" /> View raw in inbox
+                </Link>
+              </div>
             </div>
+            <p className="text-[11px] text-zinc-500">
+              The <strong>Send notification email to me</strong> button fires the production email body to the address you enter, so you can verify the exact email your office team will get in their inbox.
+            </p>
           </div>
         </section>
       </div>

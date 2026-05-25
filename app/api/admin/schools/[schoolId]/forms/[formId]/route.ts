@@ -32,6 +32,8 @@ interface Body {
     confirmation_message?: unknown;
     confirmation_redirect_url?: unknown;
     notify_emails?: unknown;
+    // migration 042 — webhook fan-out (automation triggers)
+    webhook_urls?: unknown;
   };
   field_schema?: unknown;
 }
@@ -161,6 +163,15 @@ export async function PATCH(request: NextRequest, { params }: { params: Params }
         .filter((v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v));
       args.push(cleaned);
       sets.push(`notify_emails = $${args.length}::text[]`);
+    }
+    if (body.meta.webhook_urls !== undefined) {
+      const arr = Array.isArray(body.meta.webhook_urls) ? body.meta.webhook_urls : [];
+      // HTTPS only — reject http/ftp/javascript/data schemes.
+      const cleaned = arr
+        .map((v) => String(v ?? '').trim())
+        .filter((v) => /^https:\/\/[^\s]+$/i.test(v));
+      args.push(cleaned);
+      sets.push(`webhook_urls = $${args.length}::text[]`);
     }
   }
   if (body.field_schema !== undefined) {

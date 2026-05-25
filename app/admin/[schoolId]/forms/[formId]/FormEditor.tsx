@@ -77,6 +77,8 @@ interface InitialState {
   confirmation_message?: string | null;
   confirmation_redirect_url?: string | null;
   notify_emails?: string[];
+  // Migration 042 — webhook fan-out
+  webhook_urls?: string[];
 }
 
 const FIELD_TYPE_OPTIONS: Array<{ value: FieldType; label: string; group: string }> = [
@@ -125,6 +127,7 @@ export function FormEditor({
     confirmation_message: initial.confirmation_message ?? '',
     confirmation_redirect_url: initial.confirmation_redirect_url ?? '',
     notify_emails_raw: (initial.notify_emails ?? []).join(', '),
+    webhook_urls_raw: (initial.webhook_urls ?? []).join('\n'),
   });
 
   const [fields, setFields] = useState<FieldBlock[]>(
@@ -176,13 +179,18 @@ export function FormEditor({
         .split(/[\s,;]+/)
         .map((s) => s.trim().toLowerCase())
         .filter(Boolean);
-      const { notify_emails_raw, ...metaForApi } = meta;
-      void notify_emails_raw;
+      // Webhook URLs are one per line. API will reject non-https schemes.
+      const webhookUrls = meta.webhook_urls_raw
+        .split(/[\r\n]+/)
+        .map((s) => s.trim())
+        .filter(Boolean);
+      const { notify_emails_raw, webhook_urls_raw, ...metaForApi } = meta;
+      void notify_emails_raw; void webhook_urls_raw;
       const r = await fetch(`/api/admin/schools/${schoolId}/forms/${formId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          meta: { ...metaForApi, notify_emails: notifyEmails },
+          meta: { ...metaForApi, notify_emails: notifyEmails, webhook_urls: webhookUrls },
           field_schema: fields,
         }),
       });
@@ -293,6 +301,20 @@ export function FormEditor({
             />
             <p className="text-[11px] text-zinc-500 mt-1">
               These addresses get an email with the new submission summary. <strong>Test submissions never trigger real notifications</strong> — the dry-run report shows who would&rsquo;ve been emailed.
+            </p>
+          </Field>
+          <Field label="Webhook URLs / automation triggers (one per line, https only)">
+            <textarea
+              value={meta.webhook_urls_raw}
+              onChange={(e) => patchMeta('webhook_urls_raw', e.target.value)}
+              rows={3}
+              placeholder={'https://hooks.zapier.com/...\nhttps://services.leadconnectorhq.com/hooks/...\nhttps://your-backend.com/forms/webhook'}
+              className={inputCls + ' font-mono text-xs'}
+            />
+            <p className="text-[11px] text-zinc-500 mt-1">
+              On every real submission, a JSON POST is fan-out to every URL with the form id, submission id, family info, and answers.
+              Drop in Zapier / Make / GHL inbound webhooks / your own backend. Fire-and-forget with a 5s timeout per URL — a slow or
+              failing webhook won&rsquo;t block the submission. Non-https URLs are rejected.
             </p>
           </Field>
         </div>

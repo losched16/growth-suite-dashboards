@@ -33,6 +33,7 @@ interface FormDefRow {
   confirmation_message: string | null;
   confirmation_redirect_url: string | null;
   notify_emails: string[] | null;
+  webhook_urls: string[] | null;
 }
 
 const PARENT_PORTAL_BASE = process.env.PARENT_PORTAL_BASE_URL
@@ -48,7 +49,8 @@ export default async function FormEditPage({
     `SELECT id, slug, display_name, description, category, per_student,
             is_active, allow_addendum, needs_review, resubmission_allowed,
             one_submission_per_year, field_schema,
-            confirmation_message, confirmation_redirect_url, notify_emails
+            confirmation_message, confirmation_redirect_url, notify_emails,
+            webhook_urls
        FROM portal_form_definitions
       WHERE id = $1 AND school_id = $2`,
     [formId, schoolId],
@@ -115,6 +117,7 @@ export default async function FormEditPage({
             confirmation_message: form.confirmation_message,
             confirmation_redirect_url: form.confirmation_redirect_url,
             notify_emails: form.notify_emails ?? [],
+            webhook_urls: form.webhook_urls ?? [],
           }}
         />
       </div>

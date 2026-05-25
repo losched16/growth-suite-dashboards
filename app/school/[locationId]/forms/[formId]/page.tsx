@@ -39,6 +39,7 @@ interface FormDefRow {
   confirmation_message: string | null;
   confirmation_redirect_url: string | null;
   notify_emails: string[] | null;
+  webhook_urls: string[] | null;
 }
 
 export default async function FormEditPageScoped({
@@ -54,7 +55,8 @@ export default async function FormEditPageScoped({
     `SELECT id, slug, display_name, description, category, per_student,
             is_active, allow_addendum, needs_review, resubmission_allowed,
             one_submission_per_year, field_schema,
-            confirmation_message, confirmation_redirect_url, notify_emails
+            confirmation_message, confirmation_redirect_url, notify_emails,
+            webhook_urls
        FROM portal_form_definitions
       WHERE id = $1 AND school_id = $2`,
     [formId, school.id],
@@ -121,6 +123,7 @@ export default async function FormEditPageScoped({
             confirmation_message: form.confirmation_message,
             confirmation_redirect_url: form.confirmation_redirect_url,
             notify_emails: form.notify_emails ?? [],
+            webhook_urls: form.webhook_urls ?? [],
           }}
         />
       </div>
