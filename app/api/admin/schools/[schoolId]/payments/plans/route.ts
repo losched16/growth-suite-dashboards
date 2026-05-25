@@ -119,14 +119,55 @@ export async function POST(request: NextRequest, { params }: { params: Params })
       const discountPct = parseFloat(String(fd.get('discount_pct') ?? '0'));
       const discountBp = Math.round(Math.max(0, discountPct) * 100);
       const isActive = fd.get('is_active') === '1';
-      await query(
-        `UPDATE payment_plans
-            SET display_name = $1, description = $2,
-                discount_basis_points = $3, is_active = $4,
-                updated_at = now()
-          WHERE id = $5 AND school_id = $6`,
-        [displayName, description, discountBp, isActive, id, schoolId],
+
+      // installment_count is optional on update — when present we
+      // regenerate schedule_template from defaults so the downstream
+      // installment generator picks the right months. Existing family
+      // enrollments are NOT retroactively reshuffled; they keep their
+      // already-materialized invoices. Only NEW enrollments using this
+      // template will use the new schedule.
+      const installmentRaw = fd.get('installment_count');
+      const installmentCount = installmentRaw != null && String(installmentRaw).trim() !== ''
+        ? parseInt(String(installmentRaw), 10)
+        : null;
+
+      if (installmentCount != null && (!Number.isFinite(installmentCount) || installmentCount < 1 || installmentCount > 36)) {
+        return back(request, schoolId, { err: 'Installment count must be between 1 and 36.', returnTo });
+      }
+
+      // Load slug so defaultScheduleFor can use it (currently unused but
+      // kept stable for future per-slug overrides).
+      const { rows: existing } = await query<{ slug: string }>(
+        `SELECT slug FROM payment_plans WHERE id = $1 AND school_id = $2`,
+        [id, schoolId],
       );
+      if (existing.length === 0) {
+        return back(request, schoolId, { err: 'Plan template not found.', returnTo });
+      }
+
+      if (installmentCount != null) {
+        const sched = defaultScheduleFor(existing[0].slug, installmentCount);
+        await query(
+          `UPDATE payment_plans
+              SET display_name = $1, description = $2,
+                  discount_basis_points = $3, is_active = $4,
+                  installment_count = $5,
+                  schedule_template = $6::jsonb,
+                  updated_at = now()
+            WHERE id = $7 AND school_id = $8`,
+          [displayName, description, discountBp, isActive, installmentCount,
+           JSON.stringify(sched), id, schoolId],
+        );
+      } else {
+        await query(
+          `UPDATE payment_plans
+              SET display_name = $1, description = $2,
+                  discount_basis_points = $3, is_active = $4,
+                  updated_at = now()
+            WHERE id = $5 AND school_id = $6`,
+          [displayName, description, discountBp, isActive, id, schoolId],
+        );
+      }
       return back(request, schoolId, { msg: `Updated "${displayName}".`, returnTo });
     }
 

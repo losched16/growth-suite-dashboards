@@ -33,7 +33,7 @@ export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
 type Params = Promise<{ locationId: string }>;
-type SearchParams = Promise<{ tab?: string; msg?: string; err?: string }>;
+type SearchParams = Promise<{ tab?: string; msg?: string; err?: string; edit_template?: string }>;
 
 const TABS = [
   { value: 'overview',  label: 'Overview' },
@@ -124,7 +124,7 @@ export default async function PaymentsHubPage({
       <div className="px-6 py-5">
         {tab === 'overview'  ? <PaymentsHubOverview  schoolId={school.id} locationId={locationId} /> : null}
         {tab === 'invoices'  ? <PaymentsHubInvoices  schoolId={school.id} locationId={locationId} /> : null}
-        {tab === 'plans'     ? <PaymentsHubPlans     schoolId={school.id} locationId={locationId} /> : null}
+        {tab === 'plans'     ? <PaymentsHubPlans     schoolId={school.id} locationId={locationId} editTemplateId={sp.edit_template ?? null} /> : null}
         {tab === 'catalog'   ? <PaymentsHubCatalog   schoolId={school.id} locationId={locationId} /> : null}
         {tab === 'discounts' ? <PaymentsHubDiscounts schoolId={school.id} locationId={locationId} /> : null}
         {tab === 'forms'     ? <PaymentsHubForms     schoolId={school.id} locationId={locationId} /> : null}

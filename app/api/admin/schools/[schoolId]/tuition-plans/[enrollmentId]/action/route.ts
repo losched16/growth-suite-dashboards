@@ -24,6 +24,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { query, withTransaction } from '@/lib/db';
+import { authorizeOperatorOrSchool } from '@/lib/auth/dual';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -98,6 +99,9 @@ async function rewriteSingleLine(
 
 export async function POST(request: NextRequest, { params }: { params: Params }) {
   const { schoolId, enrollmentId } = await params;
+  const auth = await authorizeOperatorOrSchool(schoolId);
+  if (!auth.ok) return auth.response;
+
   const fd = await request.formData();
   const action = String(fd.get('action') ?? '').trim();
   const returnTo = String(fd.get('return_to') ?? '').trim() || null;

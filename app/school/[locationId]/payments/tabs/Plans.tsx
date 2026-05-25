@@ -13,7 +13,7 @@
 // hidden `return_to` so we land back here, not in the operator console.
 
 import Link from 'next/link';
-import { Plus, Trash2, Sparkles } from 'lucide-react';
+import { Plus, Trash2, Sparkles, Edit3, X, Pencil } from 'lucide-react';
 import { query } from '@/lib/db';
 import { HelpCallout } from '@/components/HelpCallout';
 
@@ -45,8 +45,8 @@ interface PlanTemplateRow {
 }
 
 export async function PaymentsHubPlans({
-  schoolId, locationId,
-}: { schoolId: string; locationId: string }) {
+  schoolId, locationId, editTemplateId = null,
+}: { schoolId: string; locationId: string; editTemplateId?: string | null }) {
   const [{ rows: enrollments }, { rows: planTemplates }] = await Promise.all([
     query<EnrollmentRow>(
       `SELECT e.id,
@@ -142,16 +142,18 @@ export async function PaymentsHubPlans({
                   <th className="px-3 py-2 font-medium text-right">Prompt-pay discount</th>
                   <th className="px-3 py-2 font-medium text-center">In use</th>
                   <th className="px-3 py-2 font-medium text-center">Active</th>
-                  <th className="px-3 py-2"></th>
+                  <th className="px-3 py-2 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {planTemplates.map((p) => (
-                  <PlanTemplateEditRow
+                  <PlanTemplateRow
                     key={p.id}
                     template={p}
                     apiBase={apiBase}
                     returnTo={returnTo}
+                    locationId={locationId}
+                    isEditing={editTemplateId === p.id}
                   />
                 ))}
               </tbody>
@@ -169,7 +171,9 @@ export async function PaymentsHubPlans({
           <div>
             <h2 className="text-xl font-semibold text-slate-900">Family enrollments</h2>
             <p className="text-sm text-slate-500">
-              Families currently on a plan. Click any row to view installments, mark payments, pause, or cancel.
+              <strong>Click any row</strong> to open the family&rsquo;s plan editor — change due dates, change amounts,
+              split a single payment into two, reschedule the remaining balance across more (or fewer) months,
+              pause / resume the plan, or add a one-off charge or credit.
             </p>
           </div>
           {activeTemplateCount > 0 ? (
@@ -279,77 +283,135 @@ function EmptyTemplatesPanel({ apiBase, returnTo }: { apiBase: string; returnTo:
   );
 }
 
-function PlanTemplateEditRow({
-  template, apiBase, returnTo,
+function PlanTemplateRow({
+  template, apiBase, returnTo, locationId, isEditing,
 }: {
-  template: PlanTemplateRow; apiBase: string; returnTo: string;
+  template: PlanTemplateRow;
+  apiBase: string;
+  returnTo: string;
+  locationId: string;
+  isEditing: boolean;
 }) {
-  return (
-    <tr className={template.is_active ? '' : 'opacity-60'}>
-      <td colSpan={7} className="p-0">
-        <form action={apiBase} method="POST" className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-center px-3 py-2">
-          <input type="hidden" name="op" value="update" />
-          <input type="hidden" name="id" value={template.id} />
-          <input type="hidden" name="return_to" value={returnTo} />
+  const editHref = `/school/${locationId}/payments?tab=plans&edit_template=${template.id}`;
+  const cancelHref = `/school/${locationId}/payments?tab=plans`;
 
-          <div className="sm:col-span-3">
-            <input
-              type="text" name="display_name" defaultValue={template.display_name}
-              className="w-full rounded border border-slate-300 px-2 py-1.5 text-sm font-medium text-slate-900"
-              required
-            />
-            <div className="text-[10px] text-slate-500 mt-0.5 font-mono">{template.slug}</div>
-          </div>
+  if (isEditing) {
+    return (
+      <tr className="bg-blue-50/40">
+        <td colSpan={7} className="p-0">
+          <form action={apiBase} method="POST" className="px-4 py-4 space-y-3">
+            <input type="hidden" name="op" value="update" />
+            <input type="hidden" name="id" value={template.id} />
+            <input type="hidden" name="return_to" value={returnTo} />
 
-          <div className="sm:col-span-4">
-            <input
-              type="text" name="description" defaultValue={template.description ?? ''}
-              placeholder="Description shown to parents (optional)"
-              className="w-full rounded border border-slate-300 px-2 py-1.5 text-xs text-slate-700"
-            />
-          </div>
-
-          <div className="sm:col-span-1 text-center text-sm tabular-nums text-slate-700">
-            {template.installment_count}
-          </div>
-
-          <div className="sm:col-span-2">
-            <div className="flex items-center justify-end gap-1">
-              <input
-                type="number" name="discount_pct" step="0.1" min="0" max="50"
-                defaultValue={(template.discount_basis_points / 100).toFixed(1)}
-                className="w-20 rounded border border-slate-300 px-2 py-1.5 text-sm text-right tabular-nums"
-                title="Discount applied if family picks this plan (basis points / 100)"
-              />
-              <span className="text-xs text-slate-500">%</span>
+            <div className="flex items-center gap-2 mb-2">
+              <Pencil className="h-4 w-4 text-blue-700" />
+              <span className="text-sm font-semibold text-blue-900">Editing: {template.display_name}</span>
+              <span className="text-[11px] text-blue-700 font-mono ml-1">{template.slug}</span>
             </div>
-          </div>
 
-          <div className="sm:col-span-1 text-center text-xs tabular-nums text-slate-600">
+            <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-start">
+              <Field className="sm:col-span-4" label="Display name" hint="Shown to parents in the plan picker.">
+                <input type="text" name="display_name" defaultValue={template.display_name} required className={inputCls} />
+              </Field>
+              <Field className="sm:col-span-2" label="Installments" hint="1, 2, 4, 10, 12 fill schedules automatically.">
+                <input type="number" name="installment_count" min="1" max="36" defaultValue={template.installment_count} required className={inputCls + ' text-right'} />
+              </Field>
+              <Field className="sm:col-span-2" label="Prompt-pay discount %" hint="Discount applied if this plan is chosen.">
+                <div className="flex items-center gap-1">
+                  <input type="number" step="0.1" min="0" max="50" name="discount_pct" defaultValue={(template.discount_basis_points / 100).toFixed(1)} className={inputCls + ' text-right'} />
+                  <span className="text-sm text-slate-500">%</span>
+                </div>
+              </Field>
+              <Field className="sm:col-span-4" label="Active" hint="Inactive templates are hidden from new enrollments.">
+                <label className="flex items-center gap-2 text-sm pt-2">
+                  <input type="checkbox" name="is_active" value="1" defaultChecked={template.is_active} className="h-4 w-4 rounded border-slate-300" />
+                  <span>Available for new enrollments</span>
+                </label>
+              </Field>
+              <Field className="sm:col-span-12" label="Description (optional)" hint="A one-liner shown to parents.">
+                <input type="text" name="description" defaultValue={template.description ?? ''} placeholder='e.g. "Equal monthly payments August through May"' className={inputCls} />
+              </Field>
+            </div>
+
+            {template.in_use_count > 0 ? (
+              <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                <strong>{template.in_use_count}</strong> family enrollment{template.in_use_count === 1 ? '' : 's'} use this template.
+                Changing the installment count or discount won&rsquo;t retroactively reshuffle their existing invoices —
+                only NEW enrollments will use the updated schedule. To adjust an existing family&rsquo;s plan, click their
+                row in the Family enrollments table below.
+              </div>
+            ) : null}
+
+            <div className="flex items-center justify-between border-t border-blue-100 pt-3">
+              <DeactivateButton
+                apiBase={apiBase}
+                returnTo={returnTo}
+                templateId={template.id}
+                templateName={template.display_name}
+                inUse={template.in_use_count > 0}
+                isActive={template.is_active}
+              />
+              <div className="flex gap-2">
+                <Link href={cancelHref} className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50">
+                  <X className="h-3.5 w-3.5" /> Cancel
+                </Link>
+                <button type="submit" className="rounded-md bg-blue-600 px-4 py-1.5 text-sm font-semibold text-white hover:bg-blue-700">
+                  Save changes
+                </button>
+              </div>
+            </div>
+          </form>
+        </td>
+      </tr>
+    );
+  }
+
+  // Read-only row
+  return (
+    <tr className={template.is_active ? 'hover:bg-slate-50' : 'opacity-60 hover:bg-slate-50'}>
+      <td className="px-3 py-2.5">
+        <div className="font-medium text-slate-900">{template.display_name}</div>
+        <div className="text-[10px] text-slate-500 mt-0.5 font-mono">{template.slug}</div>
+      </td>
+      <td className="px-3 py-2.5 text-xs text-slate-600">
+        {template.description ? template.description : <span className="italic text-slate-400">— none —</span>}
+      </td>
+      <td className="px-3 py-2.5 text-center tabular-nums text-sm text-slate-700">
+        {template.installment_count}
+      </td>
+      <td className="px-3 py-2.5 text-right tabular-nums text-sm text-slate-700">
+        {template.discount_basis_points > 0
+          ? `${(template.discount_basis_points / 100).toFixed(1)}%`
+          : <span className="text-slate-400">—</span>}
+      </td>
+      <td className="px-3 py-2.5 text-center tabular-nums text-xs">
+        {template.in_use_count > 0 ? (
+          <span className="inline-block rounded-full bg-blue-100 px-2 py-0.5 text-blue-800 font-semibold">
             {template.in_use_count}
-          </div>
-
-          <label className="sm:col-span-1 flex items-center justify-center text-xs">
-            <input type="checkbox" name="is_active" value="1" defaultChecked={template.is_active} className="h-4 w-4 rounded border-slate-300" />
-          </label>
-
-          <div className="sm:col-span-12 flex items-center justify-between border-t border-slate-100 pt-2 mt-1">
-            <DeactivateButton
-              apiBase={apiBase}
-              returnTo={returnTo}
-              templateId={template.id}
-              templateName={template.display_name}
-              inUse={template.in_use_count > 0}
-              isActive={template.is_active}
-            />
-            <button
-              type="submit"
-              className="rounded-md bg-blue-600 px-3 py-1 text-xs font-semibold text-white hover:bg-blue-700"
-            >
-              Save changes
-            </button>
-          </div>
-        </form>
+          </span>
+        ) : (
+          <span className="text-slate-400">0</span>
+        )}
+      </td>
+      <td className="px-3 py-2.5 text-center">
+        {template.is_active ? (
+          <span className="inline-block rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-800">
+            Active
+          </span>
+        ) : (
+          <span className="inline-block rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-600">
+            Inactive
+          </span>
+        )}
+      </td>
+      <td className="px-3 py-2.5 text-right">
+        <Link
+          href={editHref}
+          className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-blue-50 hover:border-blue-300 hover:text-blue-700"
+        >
+          <Edit3 className="h-3 w-3" /> Edit
+        </Link>
       </td>
     </tr>
   );
@@ -454,9 +516,9 @@ function AddTemplateForm({ apiBase, returnTo }: { apiBase: string; returnTo: str
 
 // ────────────────────────────────────────────────────────────────
 
-function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
+function Field({ label, hint, children, className }: { label: string; hint?: string; children: React.ReactNode; className?: string }) {
   return (
-    <label className="block">
+    <label className={`block ${className ?? ''}`}>
       <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-600">{label}</span>
       <div className="mt-1">{children}</div>
       {hint ? <div className="mt-0.5 text-[11px] text-slate-500">{hint}</div> : null}
