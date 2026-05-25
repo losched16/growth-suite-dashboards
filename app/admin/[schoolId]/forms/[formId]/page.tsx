@@ -64,14 +64,26 @@ export default async function FormEditPage({
             <h1 className="text-2xl font-semibold text-zinc-900">Edit form</h1>
             <div className="text-xs text-zinc-500 font-mono">{form.slug}</div>
           </div>
-          <a
-            href={`${PARENT_PORTAL_BASE}/forms-v2/${form.slug}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50"
-          >
-            <ExternalLink className="h-3 w-3" /> Preview as parent
-          </a>
+          <div className="flex items-center gap-2">
+            <Link
+              href={`/admin/${schoolId}/forms/${form.id}/preview`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 rounded-md border border-emerald-300 bg-white px-3 py-1.5 text-xs font-medium text-emerald-700 hover:bg-emerald-50"
+              title="Standalone preview — no parent login needed"
+            >
+              <ExternalLink className="h-3 w-3" /> Preview
+            </Link>
+            <a
+              href={`${PARENT_PORTAL_BASE}/forms-v2/${form.slug}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-[11px] text-zinc-500 hover:underline"
+              title="Open the live parent-portal URL (requires parent login)"
+            >
+              live ↗
+            </a>
+          </div>
         </div>
 
         {sp.msg ? (

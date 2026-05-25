@@ -5,7 +5,7 @@
 
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ArrowLeft, FileText, Eye, Edit3 } from 'lucide-react';
+import { ArrowLeft, FileText, Eye, Edit3, Plus } from 'lucide-react';
 import { query } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
@@ -74,6 +74,12 @@ export default async function FormsListPage({
               {school.name} · {active.length} active, {inactive.length} inactive
             </p>
           </div>
+          <Link
+            href={`/admin/${schoolId}/forms/new`}
+            className="inline-flex items-center gap-1.5 rounded-md bg-emerald-700 px-3 py-1.5 text-sm font-semibold text-white hover:bg-emerald-800"
+          >
+            <Plus className="h-4 w-4" /> New form
+          </Link>
         </div>
 
         {sp.msg ? (
@@ -147,13 +153,23 @@ function FormsTable({
                   >
                     <Edit3 className="h-3 w-3" /> Edit
                   </Link>
+                  <Link
+                    href={`/admin/${schoolId}/forms/${f.id}/preview`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 rounded border border-zinc-300 bg-white px-2 py-1 text-[11px] text-zinc-700 hover:bg-zinc-50"
+                    title="Standalone preview — no parent login needed"
+                  >
+                    <Eye className="h-3 w-3" /> Preview
+                  </Link>
                   <a
                     href={`${PARENT_PORTAL_BASE}/forms-v2/${f.slug}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 rounded border border-zinc-300 bg-white px-2 py-1 text-[11px] text-zinc-700 hover:bg-zinc-50"
+                    className="inline-flex items-center gap-1 rounded border border-zinc-200 bg-white px-2 py-1 text-[10px] text-zinc-500 hover:bg-zinc-50"
+                    title="Open the live parent-portal URL (requires parent login)"
                   >
-                    <Eye className="h-3 w-3" /> Preview
+                    live ↗
                   </a>
                 </div>
               </td>
