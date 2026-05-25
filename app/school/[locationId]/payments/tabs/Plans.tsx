@@ -39,6 +39,7 @@ interface PlanTemplateRow {
   description: string | null;
   installment_count: number;
   discount_basis_points: number;
+  first_due_month_day: string | null;
   is_active: boolean;
   position: number;
   in_use_count: number;
@@ -88,7 +89,7 @@ export async function PaymentsHubPlans({
     query<PlanTemplateRow>(
       `SELECT pl.id, pl.slug, pl.display_name, pl.description,
               pl.installment_count, pl.discount_basis_points,
-              pl.is_active, pl.position,
+              pl.first_due_month_day, pl.is_active, pl.position,
               (SELECT COUNT(*)::int FROM family_tuition_enrollments e
                  WHERE e.payment_plan_id = pl.id) AS in_use_count
          FROM payment_plans pl
@@ -101,6 +102,7 @@ export async function PaymentsHubPlans({
   const returnTo = `/school/${locationId}/payments?tab=plans`;
   const apiBase = `/api/admin/schools/${schoolId}/payments/plans`;
   const activeTemplateCount = planTemplates.filter((p) => p.is_active).length;
+  const missingStartCount = planTemplates.filter((p) => p.is_active && !p.first_due_month_day).length;
 
   return (
     <div className="space-y-6">
@@ -122,12 +124,20 @@ export async function PaymentsHubPlans({
           title="How payment plan templates work"
           defaultOpen={planTemplates.length === 0}
           steps={[
-            <>A <strong>template</strong> describes how a family pays: number of installments + optional prompt-pay discount. The actual amounts come from the family&apos;s tuition grid.</>,
+            <>A <strong>template</strong> describes how a family pays: number of installments, when the first payment is due, and an optional prompt-pay discount. The actual amounts come from the family&apos;s tuition grid.</>,
             <>Common setups: <em>Annual</em> (1 payment, small discount), <em>Semi-annual</em> (2 payments), <em>Quarterly</em> (4), <em>Monthly × 10</em> (Aug–May), <em>Monthly × 12</em>. Add as many as you want.</>,
+            <><strong>First payment due</strong> sets the anchor — e.g. &ldquo;Aug 1.&rdquo; The year is auto-derived from each family&rsquo;s academic year, so a template configured once works every year. Leave it blank to use the default (1st of each month for monthly schedules, Aug 15 for single annual).</>,
             <>The <strong>discount %</strong> is applied to the total tuition before installments are calculated. Use it to reward families who pay upfront.</>,
             <>You can&rsquo;t hard-delete a template that&rsquo;s already in use by enrolled families — deactivate it instead to hide it from future enrollments while preserving history.</>,
           ]}
         />
+
+        {missingStartCount > 0 ? (
+          <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 mb-2">
+            <strong>Heads up:</strong> {missingStartCount} active template{missingStartCount === 1 ? ' has' : 's have'} no &ldquo;first payment due&rdquo; date set, so they fall back to defaults (1st of each month for monthly, Aug 15 for annual).
+            Click <strong>Edit</strong> on any row below to set an explicit start date.
+          </div>
+        ) : null}
 
         {planTemplates.length === 0 ? (
           <EmptyTemplatesPanel apiBase={apiBase} returnTo={returnTo} />
@@ -139,6 +149,7 @@ export async function PaymentsHubPlans({
                   <th className="px-3 py-2 font-medium">Name</th>
                   <th className="px-3 py-2 font-medium">Description</th>
                   <th className="px-3 py-2 font-medium text-center">Installments</th>
+                  <th className="px-3 py-2 font-medium text-center">First payment due</th>
                   <th className="px-3 py-2 font-medium text-right">Prompt-pay discount</th>
                   <th className="px-3 py-2 font-medium text-center">In use</th>
                   <th className="px-3 py-2 font-medium text-center">Active</th>
@@ -298,7 +309,7 @@ function PlanTemplateRow({
   if (isEditing) {
     return (
       <tr className="bg-blue-50/40">
-        <td colSpan={7} className="p-0">
+        <td colSpan={8} className="p-0">
           <form action={apiBase} method="POST" className="px-4 py-4 space-y-3">
             <input type="hidden" name="op" value="update" />
             <input type="hidden" name="id" value={template.id} />
@@ -317,13 +328,21 @@ function PlanTemplateRow({
               <Field className="sm:col-span-2" label="Installments" hint="1, 2, 4, 10, 12 fill schedules automatically.">
                 <input type="number" name="installment_count" min="1" max="36" defaultValue={template.installment_count} required className={inputCls + ' text-right'} />
               </Field>
-              <Field className="sm:col-span-2" label="Prompt-pay discount %" hint="Discount applied if this plan is chosen.">
+              <Field className="sm:col-span-3" label="First payment due (optional)" hint="Anchor for the first installment. Year is auto-derived from each family's academic year — pick any year, only month + day matter.">
+                <input
+                  type="date"
+                  name="first_due_month_day"
+                  defaultValue={template.first_due_month_day ? `2026-${template.first_due_month_day}` : ''}
+                  className={inputCls}
+                />
+              </Field>
+              <Field className="sm:col-span-3" label="Prompt-pay discount %" hint="Discount applied if this plan is chosen.">
                 <div className="flex items-center gap-1">
                   <input type="number" step="0.1" min="0" max="50" name="discount_pct" defaultValue={(template.discount_basis_points / 100).toFixed(1)} className={inputCls + ' text-right'} />
                   <span className="text-sm text-slate-500">%</span>
                 </div>
               </Field>
-              <Field className="sm:col-span-4" label="Active" hint="Inactive templates are hidden from new enrollments.">
+              <Field className="sm:col-span-6" label="Active" hint="Inactive templates are hidden from new enrollments.">
                 <label className="flex items-center gap-2 text-sm pt-2">
                   <input type="checkbox" name="is_active" value="1" defaultChecked={template.is_active} className="h-4 w-4 rounded border-slate-300" />
                   <span>Available for new enrollments</span>
@@ -379,6 +398,11 @@ function PlanTemplateRow({
       </td>
       <td className="px-3 py-2.5 text-center tabular-nums text-sm text-slate-700">
         {template.installment_count}
+      </td>
+      <td className="px-3 py-2.5 text-center text-sm text-slate-700 whitespace-nowrap">
+        {template.first_due_month_day
+          ? formatMonthDay(template.first_due_month_day)
+          : <span className="text-slate-400 italic text-xs">default</span>}
       </td>
       <td className="px-3 py-2.5 text-right tabular-nums text-sm text-slate-700">
         {template.discount_basis_points > 0
@@ -489,6 +513,15 @@ function AddTemplateForm({ apiBase, returnTo }: { apiBase: string; returnTo: str
           </Field>
         </div>
 
+        <Field label="First payment due (optional)" hint="Anchor for the first installment. Year is auto-derived from each family's academic year — pick any year, only the month + day matter. Leave blank to default to the 1st of each month (or Aug 15 for single annual).">
+          <input
+            type="date"
+            name="first_due_month_day"
+            placeholder="e.g. Aug 1"
+            className={inputCls}
+          />
+        </Field>
+
         <Field label="Description (optional)" hint="A one-liner shown to parents in the plan picker.">
           <input
             type="text" name="description"
@@ -528,6 +561,17 @@ function Field({ label, hint, children, className }: { label: string; hint?: str
 
 const inputCls =
   'block w-full rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-200';
+
+// "08-01" → "Aug 1"
+function formatMonthDay(md: string): string {
+  const m = /^(\d{2})-(\d{2})$/.exec(md);
+  if (!m) return md;
+  const monthIdx = parseInt(m[1], 10) - 1;
+  const day = parseInt(m[2], 10);
+  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  if (monthIdx < 0 || monthIdx > 11) return md;
+  return `${monthNames[monthIdx]} ${day}`;
+}
 
 function StatusPill({ status }: { status: string }) {
   const map: Record<string, { bg: string; fg: string }> = {

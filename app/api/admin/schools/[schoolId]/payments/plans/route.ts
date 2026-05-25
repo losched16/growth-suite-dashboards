@@ -58,6 +58,23 @@ function defaultScheduleFor(slug: string, installmentCount: number): Record<stri
   return { kind: 'custom', installments: installmentCount };
 }
 
+// Normalize either a MM-DD string or a YYYY-MM-DD <input type="date">
+// value into the MM-DD storage format. Returns null for empty / invalid
+// input — the DB CHECK constraint will reject anything malformed
+// anyway, this is the friendly first line of defense.
+function normalizeMonthDay(raw: string | null): string | null {
+  if (!raw) return null;
+  const s = raw.trim();
+  if (!s) return null;
+  // 'YYYY-MM-DD' from <input type="date">
+  let m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
+  if (m) return `${m[2]}-${m[3]}`;
+  // Already 'MM-DD'
+  m = /^(\d{2})-(\d{2})$/.exec(s);
+  if (m) return s;
+  return null;
+}
+
 export async function POST(request: NextRequest, { params }: { params: Params }) {
   const { schoolId } = await params;
   const auth = await authorizeOperatorOrSchool(schoolId);
@@ -97,17 +114,20 @@ export async function POST(request: NextRequest, { params }: { params: Params })
       const installmentCount = parseInt(String(fd.get('installment_count') ?? '1'), 10);
       const discountPct = parseFloat(String(fd.get('discount_pct') ?? '0'));
       const discountBp = Math.round(Math.max(0, discountPct) * 100);
+      const firstDueMonthDay = normalizeMonthDay(String(fd.get('first_due_month_day') ?? '') || null);
       if (!slug || !displayName || !(installmentCount >= 1)) {
         return back(request, schoolId, { err: 'Slug, name, and installment count are required.', returnTo });
       }
       await query(
         `INSERT INTO payment_plans
            (school_id, slug, display_name, description, installment_count,
-            discount_basis_points, schedule_template, is_active, position)
-         VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, true,
+            discount_basis_points, schedule_template, first_due_month_day,
+            is_active, position)
+         VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8, true,
                  (SELECT COALESCE(MAX(position), 0) + 1 FROM payment_plans WHERE school_id = $1))`,
         [schoolId, slug, displayName, description, installmentCount, discountBp,
-         JSON.stringify(defaultScheduleFor(slug, installmentCount))],
+         JSON.stringify(defaultScheduleFor(slug, installmentCount)),
+         firstDueMonthDay],
       );
       return back(request, schoolId, { msg: `Added "${displayName}" payment plan.`, returnTo });
     }
@@ -119,6 +139,11 @@ export async function POST(request: NextRequest, { params }: { params: Params })
       const discountPct = parseFloat(String(fd.get('discount_pct') ?? '0'));
       const discountBp = Math.round(Math.max(0, discountPct) * 100);
       const isActive = fd.get('is_active') === '1';
+      // first_due_month_day uses an explicit '__clear__' sentinel to
+      // distinguish "user cleared the field" from "field not submitted".
+      // The form always submits the field, so empty string here means
+      // the user really did want NULL.
+      const firstDueMonthDay = normalizeMonthDay(String(fd.get('first_due_month_day') ?? '') || null);
 
       // installment_count is optional on update — when present we
       // regenerate schedule_template from defaults so the downstream
@@ -153,19 +178,21 @@ export async function POST(request: NextRequest, { params }: { params: Params })
                   discount_basis_points = $3, is_active = $4,
                   installment_count = $5,
                   schedule_template = $6::jsonb,
+                  first_due_month_day = $7,
                   updated_at = now()
-            WHERE id = $7 AND school_id = $8`,
+            WHERE id = $8 AND school_id = $9`,
           [displayName, description, discountBp, isActive, installmentCount,
-           JSON.stringify(sched), id, schoolId],
+           JSON.stringify(sched), firstDueMonthDay, id, schoolId],
         );
       } else {
         await query(
           `UPDATE payment_plans
               SET display_name = $1, description = $2,
                   discount_basis_points = $3, is_active = $4,
+                  first_due_month_day = $5,
                   updated_at = now()
-            WHERE id = $5 AND school_id = $6`,
-          [displayName, description, discountBp, isActive, id, schoolId],
+            WHERE id = $6 AND school_id = $7`,
+          [displayName, description, discountBp, isActive, firstDueMonthDay, id, schoolId],
         );
       }
       return back(request, schoolId, { msg: `Updated "${displayName}".`, returnTo });

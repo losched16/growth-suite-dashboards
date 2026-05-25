@@ -52,6 +52,11 @@ interface PlanRow {
   installment_count: number;
   discount_basis_points: number;
   schedule_template: ScheduleTemplate;
+  // Optional school-configured anchor: 'MM-DD'. When set, the first
+  // installment is due on this month-day of the appropriate academic
+  // year, and subsequent installments use this same day-of-month for
+  // each subsequent month in the schedule.
+  first_due_month_day: string | null;
 }
 type ScheduleTemplate =
   | { kind: 'single' }
@@ -71,7 +76,8 @@ export async function generateTuitionEnrollment(opts: GenerateOpts): Promise<Gen
   if (!grid) throw new Error('Tuition grid not found or inactive');
 
   const { rows: planRows } = await query<PlanRow>(
-    `SELECT slug, display_name, installment_count, discount_basis_points, schedule_template
+    `SELECT slug, display_name, installment_count, discount_basis_points,
+            schedule_template, first_due_month_day
        FROM payment_plans
       WHERE id = $1 AND school_id = $2 AND is_active = true`,
     [opts.paymentPlanId, opts.schoolId],
@@ -105,7 +111,7 @@ export async function generateTuitionEnrollment(opts: GenerateOpts): Promise<Gen
   }
 
   // ── 4. Compute the per-installment dates ─────────────────────────────
-  const dueDates = computeDueDates(plan.schedule_template, opts.academicYear, plan.installment_count);
+  const dueDates = computeDueDates(plan.schedule_template, opts.academicYear, plan.installment_count, plan.first_due_month_day);
   if (dueDates.length !== plan.installment_count) {
     throw new Error(`Plan installment_count (${plan.installment_count}) doesn't match generated schedule (${dueDates.length} dates).`);
   }
@@ -355,10 +361,17 @@ function buildInstallmentLines(opts: {
 // Given a payment_plans.schedule_template + academic year, return one
 // Date per installment, in chronological order. Academic year is encoded
 // like "2026-27" (Aug 2026 → May 2027 by convention).
+//
+// firstDueMonthDay (optional, 'MM-DD'): school-configured anchor for
+// the first installment. When supplied, the FIRST installment is due
+// on that month-day, and subsequent installments use the same
+// day-of-month for each subsequent month in the schedule template.
+// 'single' kind always uses the anchor as-is (or Aug 15 fallback).
 function computeDueDates(
   tpl: ScheduleTemplate,
   academicYear: string,
   installmentCount: number,
+  firstDueMonthDay: string | null = null,
 ): Date[] {
   const [startYearStr] = academicYear.split('-');
   const startYear = parseInt(startYearStr, 10);
@@ -366,25 +379,73 @@ function computeDueDates(
     throw new Error(`Invalid academic_year format: ${academicYear} (expected '2026-27')`);
   }
 
+  // Parse optional anchor. Pattern is enforced by the DB CHECK constraint
+  // (see migration 039) so we only re-validate format here defensively.
+  let anchorMonth: number | null = null; // 1-12
+  let anchorDay: number | null = null;   // 1-31
+  if (firstDueMonthDay) {
+    const m = /^(\d{2})-(\d{2})$/.exec(firstDueMonthDay);
+    if (m) {
+      anchorMonth = parseInt(m[1], 10);
+      anchorDay = parseInt(m[2], 10);
+      if (anchorMonth < 1 || anchorMonth > 12 || anchorDay < 1 || anchorDay > 31) {
+        anchorMonth = null;
+        anchorDay = null;
+      }
+    }
+  }
+
+  // Map a month number (1-12) to a calendar year inside the academic
+  // year: months 8-12 fall in the START year, months 1-7 in start+1.
+  const yearOf = (month: number) => month >= 8 ? startYear : startYear + 1;
+
+  // Clamp day to the actual length of the month (e.g. anchor day 31
+  // applied to February → 28/29). UTC noon to dodge DST edge cases.
+  const dateAt = (year: number, month: number, day: number) => {
+    const lastDayOfMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
+    const safeDay = Math.min(day, lastDayOfMonth);
+    return new Date(Date.UTC(year, month - 1, safeDay, 12, 0, 0));
+  };
+
   if (tpl.kind === 'single') {
-    // Single annual payment due Aug 15 of the start year.
-    return [new Date(Date.UTC(startYear, 7, 15))];
+    // Single annual payment: use anchor if provided, otherwise Aug 15.
+    const m = anchorMonth ?? 8;
+    const d = anchorDay ?? 15;
+    return [dateAt(yearOf(m), m, d)];
   }
 
   if (tpl.kind === 'monthly' || tpl.kind === 'semiannual') {
-    return tpl.months.map((mm) => {
+    // If an anchor is set we re-anchor the FIRST month to the anchor
+    // month and apply the anchor day across all months. Subsequent
+    // months stay as defined in the template — schools usually want
+    // "Aug 1, Sep 1, Oct 1..." not "Aug 1, Aug 1, Aug 1...".
+    const dayOfMonth = anchorDay ?? 1;
+    let months = tpl.months;
+
+    if (anchorMonth != null) {
+      // Find the anchor month in the template's months array. If
+      // present, rotate so it's first. If not present, prepend it and
+      // drop the original first month (keeps installment_count stable).
+      const idx = months.findIndex((mm) => parseInt(mm, 10) === anchorMonth);
+      if (idx > 0) {
+        months = [...months.slice(idx), ...months.slice(0, idx)];
+      } else if (idx === -1) {
+        const padded = String(anchorMonth).padStart(2, '0');
+        months = [padded, ...months.slice(0, months.length - 1)];
+      }
+    }
+
+    return months.map((mm) => {
       const m = parseInt(mm, 10);
       if (!Number.isFinite(m) || m < 1 || m > 12) {
         throw new Error(`Invalid month in schedule: ${mm}`);
       }
-      // Months 8–12 → start year; months 1–7 → start year + 1.
-      const y = m >= 8 ? startYear : startYear + 1;
-      // Due on the 1st of each month at noon UTC (avoids tz edge cases).
-      return new Date(Date.UTC(y, m - 1, 1, 12, 0, 0));
+      return dateAt(yearOf(m), m, dayOfMonth);
     });
   }
 
   if (tpl.kind === 'custom') {
+    // Custom-date schedules ignore the anchor — explicit dates win.
     return tpl.dates.map((s) => {
       const d = new Date(s);
       if (Number.isNaN(d.getTime())) throw new Error(`Invalid custom date: ${s}`);
