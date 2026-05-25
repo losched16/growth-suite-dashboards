@@ -30,6 +30,9 @@ interface FormDefRow {
   resubmission_allowed: boolean;
   one_submission_per_year: boolean;
   field_schema: unknown[];
+  confirmation_message: string | null;
+  confirmation_redirect_url: string | null;
+  notify_emails: string[] | null;
 }
 
 const PARENT_PORTAL_BASE = process.env.PARENT_PORTAL_BASE_URL
@@ -44,7 +47,8 @@ export default async function FormEditPage({
   const { rows } = await query<FormDefRow>(
     `SELECT id, slug, display_name, description, category, per_student,
             is_active, allow_addendum, needs_review, resubmission_allowed,
-            one_submission_per_year, field_schema
+            one_submission_per_year, field_schema,
+            confirmation_message, confirmation_redirect_url, notify_emails
        FROM portal_form_definitions
       WHERE id = $1 AND school_id = $2`,
     [formId, schoolId],
@@ -108,6 +112,9 @@ export default async function FormEditPage({
             resubmission_allowed: form.resubmission_allowed,
             one_submission_per_year: form.one_submission_per_year,
             field_schema: form.field_schema,
+            confirmation_message: form.confirmation_message,
+            confirmation_redirect_url: form.confirmation_redirect_url,
+            notify_emails: form.notify_emails ?? [],
           }}
         />
       </div>

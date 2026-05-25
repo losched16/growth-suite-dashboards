@@ -73,6 +73,10 @@ interface InitialState {
   resubmission_allowed: boolean;
   one_submission_per_year: boolean;
   field_schema: unknown[];
+  // Migration 040 — test-mode + post-submit behavior
+  confirmation_message?: string | null;
+  confirmation_redirect_url?: string | null;
+  notify_emails?: string[];
 }
 
 const FIELD_TYPE_OPTIONS: Array<{ value: FieldType; label: string; group: string }> = [
@@ -118,6 +122,9 @@ export function FormEditor({
     needs_review: initial.needs_review,
     resubmission_allowed: initial.resubmission_allowed,
     one_submission_per_year: initial.one_submission_per_year,
+    confirmation_message: initial.confirmation_message ?? '',
+    confirmation_redirect_url: initial.confirmation_redirect_url ?? '',
+    notify_emails_raw: (initial.notify_emails ?? []).join(', '),
   });
 
   const [fields, setFields] = useState<FieldBlock[]>(
@@ -163,10 +170,21 @@ export function FormEditor({
     setSaving(true);
     setErr(null);
     try {
+      // Split notify_emails_raw (comma/newline/space separated) into a
+      // clean array before sending — the API validates each entry too.
+      const notifyEmails = meta.notify_emails_raw
+        .split(/[\s,;]+/)
+        .map((s) => s.trim().toLowerCase())
+        .filter(Boolean);
+      const { notify_emails_raw, ...metaForApi } = meta;
+      void notify_emails_raw;
       const r = await fetch(`/api/admin/schools/${schoolId}/forms/${formId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ meta, field_schema: fields }),
+        body: JSON.stringify({
+          meta: { ...metaForApi, notify_emails: notifyEmails },
+          field_schema: fields,
+        }),
       });
       if (!r.ok) {
         const t = await r.text();
@@ -232,6 +250,51 @@ export function FormEditor({
           <ToggleField label="Needs review" checked={meta.needs_review}
             onChange={(v) => patchMeta('needs_review', v)}
             hint="Surfaces this form in the admin review queue." />
+        </div>
+      </section>
+
+      {/* ── After-submit behavior (migration 040) ─────────────── */}
+      <section className="rounded-xl border border-black/10 bg-white p-5 space-y-3">
+        <div>
+          <h2 className="text-sm font-semibold text-zinc-900">After a parent submits</h2>
+          <p className="text-[11px] text-zinc-500 mt-0.5">
+            Configure what parents see and who gets notified. Test all of this with the <strong>Preview layout</strong> button (Test mode → Submit) before pushing to families.
+          </p>
+        </div>
+        <div className="grid grid-cols-1 gap-3">
+          <Field label="Custom thank-you message (optional, plain text — line breaks preserved)">
+            <textarea
+              value={meta.confirmation_message}
+              onChange={(e) => patchMeta('confirmation_message', e.target.value)}
+              rows={3}
+              placeholder='e.g. "Thanks for completing this form! Our office will review and reach out within 2 business days."'
+              className={inputCls}
+            />
+          </Field>
+          <Field label="Redirect URL after submission (optional, must start with https://)">
+            <input
+              type="url"
+              value={meta.confirmation_redirect_url}
+              onChange={(e) => patchMeta('confirmation_redirect_url', e.target.value)}
+              placeholder="https://your-school.com/thanks"
+              className={inputCls}
+            />
+            <p className="text-[11px] text-zinc-500 mt-1">
+              If set, parents land here after their thank-you message. Useful for sending them to your school&rsquo;s own &ldquo;next steps&rdquo; page.
+            </p>
+          </Field>
+          <Field label="Notify these office emails when a submission arrives (comma-separated)">
+            <input
+              type="text"
+              value={meta.notify_emails_raw}
+              onChange={(e) => patchMeta('notify_emails_raw', e.target.value)}
+              placeholder="office@yourschool.com, admin@yourschool.com"
+              className={inputCls}
+            />
+            <p className="text-[11px] text-zinc-500 mt-1">
+              These addresses get an email with the new submission summary. <strong>Test submissions never trigger real notifications</strong> — the dry-run report shows who would&rsquo;ve been emailed.
+            </p>
+          </Field>
         </div>
       </section>
 

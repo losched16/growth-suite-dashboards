@@ -28,6 +28,10 @@ interface Body {
     needs_review?: unknown;
     resubmission_allowed?: unknown;
     one_submission_per_year?: unknown;
+    // migration 040 — test-mode + custom thank-you
+    confirmation_message?: unknown;
+    confirmation_redirect_url?: unknown;
+    notify_emails?: unknown;
   };
   field_schema?: unknown;
 }
@@ -140,6 +144,24 @@ export async function PATCH(request: NextRequest, { params }: { params: Params }
     if (body.meta.needs_review !== undefined)            set('needs_review',           asBool(body.meta.needs_review, false));
     if (body.meta.resubmission_allowed !== undefined)    set('resubmission_allowed',   asBool(body.meta.resubmission_allowed, true));
     if (body.meta.one_submission_per_year !== undefined) set('one_submission_per_year',asBool(body.meta.one_submission_per_year, false));
+    // Phase 1 test-mode additions (migration 040)
+    if (body.meta.confirmation_message !== undefined) {
+      set('confirmation_message', asStr(body.meta.confirmation_message, null));
+    }
+    if (body.meta.confirmation_redirect_url !== undefined) {
+      const raw = asStr(body.meta.confirmation_redirect_url, null);
+      // Allow only http(s) URLs to avoid javascript: / data: redirects.
+      const url = raw && /^https?:\/\//i.test(raw.trim()) ? raw.trim() : null;
+      set('confirmation_redirect_url', url);
+    }
+    if (body.meta.notify_emails !== undefined) {
+      const arr = Array.isArray(body.meta.notify_emails) ? body.meta.notify_emails : [];
+      const cleaned = arr
+        .map((v) => String(v ?? '').trim().toLowerCase())
+        .filter((v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v));
+      args.push(cleaned);
+      sets.push(`notify_emails = $${args.length}::text[]`);
+    }
   }
   if (body.field_schema !== undefined) {
     args.push(JSON.stringify(body.field_schema));

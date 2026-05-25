@@ -12,15 +12,19 @@
 
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ArrowLeft, Edit3, Eye } from 'lucide-react';
+import { ArrowLeft, Edit3, Eye, FlaskConical } from 'lucide-react';
 import { query } from '@/lib/db';
 import { loadSchoolByLocationId } from '@/lib/dashboards/loader';
 import { FormPreviewRenderer } from '@/app/admin/[schoolId]/forms/[formId]/preview/FormPreviewRenderer';
+import { TestSubmitForm } from './TestSubmitForm';
 
 export const dynamic = 'force-dynamic';
 
 type Params = Promise<{ locationId: string; formId: string }>;
-type SearchParams = Promise<{ per_student_view?: 'one' | 'multi' }>;
+type SearchParams = Promise<{
+  per_student_view?: 'one' | 'multi';
+  test?: string;
+}>;
 
 interface FormDefRow {
   id: string;
@@ -60,17 +64,29 @@ export default async function SchoolFormPreviewPage({
   const form = formRows[0];
 
   const showPerStudentPicker = form.per_student && sp.per_student_view !== 'one';
+  const testMode = sp.test === '1';
+  const hasPayment = !!form.payment_config;
+
+  const baseUrl = `/school/${locationId}/forms/${formId}/preview?chrome=none`;
+  const layoutPreviewUrl = baseUrl;
+  const testModeUrl = baseUrl + '&test=1';
 
   return (
     <main className="min-h-screen bg-zinc-100">
       {/* Sticky staff-only header — looks nothing like the real portal
-          so staff never confuse it for a live view. */}
-      <div className="sticky top-0 z-10 border-b border-amber-300 bg-amber-50 px-4 py-2 text-xs">
+          so staff never confuse it for a live view. Distinct color in
+          test mode (emerald) so they can't miss that a submit will
+          actually persist. */}
+      <div className={
+        testMode
+          ? 'sticky top-0 z-10 border-b border-emerald-400 bg-emerald-50 px-4 py-2 text-xs'
+          : 'sticky top-0 z-10 border-b border-amber-300 bg-amber-50 px-4 py-2 text-xs'
+      }>
         <div className="mx-auto flex max-w-5xl items-center justify-between gap-3 flex-wrap">
-          <div className="flex items-center gap-2 text-amber-900">
-            <Eye className="h-4 w-4" />
-            <strong>PREVIEW MODE</strong>
-            <span className="text-amber-800">
+          <div className={`flex items-center gap-2 ${testMode ? 'text-emerald-900' : 'text-amber-900'}`}>
+            {testMode ? <FlaskConical className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            <strong>{testMode ? 'TEST MODE' : 'PREVIEW MODE'}</strong>
+            <span className={testMode ? 'text-emerald-800' : 'text-amber-800'}>
               · {school.name} · {form.display_name} (slug: <code>{form.slug}</code>)
             </span>
             {!form.is_active ? (
@@ -85,15 +101,36 @@ export default async function SchoolFormPreviewPage({
             ) : null}
           </div>
           <div className="flex items-center gap-2">
+            {/* Toggle between read-only Preview and interactive Test mode */}
+            {testMode ? (
+              <Link
+                href={layoutPreviewUrl}
+                className="inline-flex items-center gap-1 rounded border border-emerald-500 bg-white px-2 py-1 text-emerald-900 hover:bg-emerald-100"
+              >
+                <Eye className="h-3 w-3" /> Switch to read-only preview
+              </Link>
+            ) : (
+              <Link
+                href={testModeUrl}
+                className="inline-flex items-center gap-1 rounded border border-emerald-500 bg-emerald-600 px-2 py-1 font-semibold text-white hover:bg-emerald-700"
+                title="Enable fields, submit a real (is_test=true) submission, see what the parent sees + a dry-run report of every downstream effect."
+              >
+                <FlaskConical className="h-3 w-3" /> Enter test mode
+              </Link>
+            )}
             <Link
               href={`/school/${locationId}/forms/${formId}?chrome=none`}
-              className="inline-flex items-center gap-1 rounded border border-amber-400 bg-white px-2 py-1 text-amber-900 hover:bg-amber-100"
+              className={
+                testMode
+                  ? 'inline-flex items-center gap-1 rounded border border-emerald-400 bg-white px-2 py-1 text-emerald-900 hover:bg-emerald-100'
+                  : 'inline-flex items-center gap-1 rounded border border-amber-400 bg-white px-2 py-1 text-amber-900 hover:bg-amber-100'
+              }
             >
               <Edit3 className="h-3 w-3" /> Back to editor
             </Link>
             <Link
               href={`/school/${locationId}/payments?tab=forms`}
-              className="inline-flex items-center gap-1 text-amber-800 hover:underline"
+              className={testMode ? 'inline-flex items-center gap-1 text-emerald-800 hover:underline' : 'inline-flex items-center gap-1 text-amber-800 hover:underline'}
             >
               <ArrowLeft className="h-3 w-3" /> All forms
             </Link>
@@ -127,22 +164,47 @@ export default async function SchoolFormPreviewPage({
           </div>
         ) : null}
 
-        <FormPreviewRenderer schema={form.field_schema} />
-
-        {/* Disabled submit — staff preview never submits */}
-        <div className="mt-6 flex items-center gap-3 border-t border-zinc-200 pt-4">
-          <button
-            type="button"
-            disabled
-            className="rounded-md px-4 py-2 text-sm font-semibold text-white opacity-60 cursor-not-allowed"
-            style={{ background: '#047857' }}
-          >
-            {form.payment_config ? 'Continue to payment' : 'Submit form'}
-          </button>
-          <span className="text-xs text-zinc-500">
-            Disabled in preview. Submissions only happen when a real parent fills this out.
-          </span>
-        </div>
+        {testMode ? (
+          <>
+            <div className="mb-4 rounded-md border border-emerald-200 bg-emerald-50/60 px-3 py-2 text-xs text-emerald-900">
+              Fields are <strong>live</strong>. Filling and submitting will store a test row
+              (marked <code>is_test=true</code>, hidden from the regular inbox) and show you the
+              real thank-you experience plus a dry-run report of everything that <em>would</em> have
+              fired in production.
+            </div>
+            <TestSubmitForm
+              schoolId={school.id}
+              formId={form.id}
+              schema={form.field_schema}
+              perStudent={form.per_student}
+              hasPayment={hasPayment}
+              returnTo={`/school/${locationId}/forms/${form.id}/preview/result`}
+            />
+          </>
+        ) : (
+          <>
+            <FormPreviewRenderer schema={form.field_schema} />
+            <div className="mt-6 flex items-center gap-3 border-t border-zinc-200 pt-4">
+              <button
+                type="button"
+                disabled
+                className="rounded-md px-4 py-2 text-sm font-semibold text-white opacity-60 cursor-not-allowed"
+                style={{ background: '#047857' }}
+              >
+                {hasPayment ? 'Continue to payment' : 'Submit form'}
+              </button>
+              <Link
+                href={testModeUrl}
+                className="inline-flex items-center gap-1.5 rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700"
+              >
+                <FlaskConical className="h-4 w-4" /> Switch to Test mode &mdash; actually submit
+              </Link>
+              <span className="text-xs text-zinc-500">
+                Read-only preview. Click &ldquo;Test mode&rdquo; to enable fields and fire a real test submission.
+              </span>
+            </div>
+          </>
+        )}
       </div>
     </main>
   );

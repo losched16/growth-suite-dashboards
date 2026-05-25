@@ -7,7 +7,7 @@
 
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ArrowLeft, ChevronDown, Mail, Phone, Inbox, Users } from 'lucide-react';
+import { ArrowLeft, ChevronDown, Mail, Phone, Inbox, Users, FlaskConical, Trash2 } from 'lucide-react';
 import { query } from '@/lib/db';
 import { loadSchoolByLocationId } from '@/lib/dashboards/loader';
 import { HelpCallout } from '@/components/HelpCallout';
@@ -16,7 +16,7 @@ export const dynamic = 'force-dynamic';
 export const maxDuration = 30;
 
 type Params = Promise<{ locationId: string; formId: string }>;
-type SearchParams = Promise<{ open?: string }>;
+type SearchParams = Promise<{ open?: string; show_test?: string }>;
 
 interface FormDef {
   id: string;
@@ -28,8 +28,8 @@ interface FormDef {
 
 interface Submission {
   id: string;
-  family_id: string;
-  parent_id: string;
+  family_id: string | null;
+  parent_id: string | null;
   student_id: string | null;
   status: string;
   submitted_at: string;
@@ -38,6 +38,7 @@ interface Submission {
   parent_email: string | null;
   parent_phone: string | null;
   student_label: string | null;
+  is_test: boolean;
 }
 
 interface MissingRecipient {
@@ -55,6 +56,7 @@ export default async function SubmissionsInboxScoped({
   const { locationId, formId } = await params;
   const sp = await searchParams;
   const openId = sp.open ?? null;
+  const showTest = sp.show_test === '1';
 
   const school = await loadSchoolByLocationId(locationId);
   if (!school) notFound();
@@ -69,26 +71,39 @@ export default async function SubmissionsInboxScoped({
   if (defRows.length === 0) notFound();
   const def = defRows[0];
 
+  // Test submissions have NULL family_id (migration 041) so we need a
+  // LEFT JOIN on families to include them when show_test=1. The
+  // is_test filter is appended conditionally.
   const { rows: subs } = await query<Submission>(
-    `SELECT s.id, s.family_id, s.parent_id, s.student_id, s.status, s.submitted_at, s.responses,
+    `SELECT s.id, s.family_id, s.parent_id, s.student_id, s.status,
+            s.submitted_at, s.responses, s.is_test,
             COALESCE(NULLIF(f.display_name, ''),
                      CONCAT_WS(' ', p.first_name, p.last_name),
-                     '(unnamed family)') AS family_label,
+                     CASE WHEN s.is_test THEN '(test submission)' ELSE '(unnamed family)' END) AS family_label,
             p.email AS parent_email,
             p.phone AS parent_phone,
             CASE WHEN st.id IS NOT NULL
                  THEN CONCAT_WS(' ', COALESCE(NULLIF(st.preferred_name, ''), st.first_name), st.last_name)
                  ELSE NULL END AS student_label
        FROM portal_form_submissions s
-       JOIN families f ON f.id = s.family_id
+       LEFT JOIN families f ON f.id = s.family_id
        LEFT JOIN parents p ON p.id = s.parent_id
        LEFT JOIN students st ON st.id = s.student_id
       WHERE s.form_definition_id = $1
         AND s.status IN ('submitted', 'paid', 'pending_payment', 'legacy_imported')
+        ${showTest ? '' : 'AND s.is_test = false'}
       ORDER BY s.submitted_at DESC
       LIMIT 500`,
     [formId],
   );
+
+  // Counter for the "Show test submissions" toggle. Cheap.
+  const { rows: testCountRows } = await query<{ n: number }>(
+    `SELECT COUNT(*)::int AS n FROM portal_form_submissions
+      WHERE form_definition_id = $1 AND is_test = true`,
+    [formId],
+  );
+  const testCount = testCountRows[0]?.n ?? 0;
 
   let missing: MissingRecipient[];
   if (def.per_student) {
@@ -159,9 +174,14 @@ export default async function SubmissionsInboxScoped({
     missing = rows;
   }
 
-  const completionPct = subs.length + missing.length > 0
-    ? Math.round((subs.length / (subs.length + missing.length)) * 100)
+  // Completion math: test rows should never inflate the real %.
+  const realSubs = subs.filter((s) => !s.is_test);
+  const completionPct = realSubs.length + missing.length > 0
+    ? Math.round((realSubs.length / (realSubs.length + missing.length)) * 100)
     : 0;
+
+  const baseUrl = `/school/${locationId}/forms/${formId}/submissions?chrome=none`;
+  const toggleTestUrl = baseUrl + (showTest ? '' : '&show_test=1');
 
   return (
     <main className="flex flex-1 flex-col bg-slate-50 p-6 min-h-screen">
@@ -179,12 +199,42 @@ export default async function SubmissionsInboxScoped({
               <span className="font-mono">{def.slug}</span> · {def.per_student ? 'per-student form' : 'per-family form'}
             </p>
           </div>
-          <Link
-            href={`/school/${locationId}/forms/${formId}`}
-            className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
-          >
-            Edit form
-          </Link>
+          <div className="flex items-center gap-2 flex-wrap">
+            <Link
+              href={toggleTestUrl}
+              className={
+                showTest
+                  ? 'inline-flex items-center gap-1 rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700'
+                  : 'inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50'
+              }
+              title={showTest ? 'Hide test submissions' : 'Show test submissions'}
+            >
+              <FlaskConical className="h-3 w-3" />
+              {showTest ? 'Hide tests' : `Show tests (${testCount})`}
+            </Link>
+            {showTest && testCount > 0 ? (
+              <form
+                action={`/api/admin/schools/${school.id}/forms/${formId}/test-submit/clear`}
+                method="POST"
+              >
+                <input type="hidden" name="return_to" value={`/school/${locationId}/forms/${formId}/submissions?show_test=1&chrome=none`} />
+                <button
+                  type="submit"
+                  className="inline-flex items-center gap-1 rounded-md border border-rose-300 bg-white px-3 py-1.5 text-xs font-medium text-rose-700 hover:bg-rose-50"
+                  title="Hard-delete every test submission for this form. Real submissions are NOT touched."
+                >
+                  <Trash2 className="h-3 w-3" />
+                  Clear all tests
+                </button>
+              </form>
+            ) : null}
+            <Link
+              href={`/school/${locationId}/forms/${formId}`}
+              className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+            >
+              Edit form
+            </Link>
+          </div>
         </div>
 
         <HelpCallout
@@ -324,10 +374,18 @@ function SubmissionRow({
       >
         <ChevronDown className={`h-4 w-4 text-slate-400 transition-transform ${isOpen ? 'rotate-0' : '-rotate-90'}`} />
         <div className="min-w-0 flex-1">
-          <div className="text-slate-900 font-medium">{s.family_label}</div>
+          <div className="text-slate-900 font-medium flex items-center gap-2">
+            {s.family_label}
+            {s.is_test ? (
+              <span className="inline-flex items-center gap-0.5 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-800">
+                <FlaskConical className="h-2.5 w-2.5" />
+                test
+              </span>
+            ) : null}
+          </div>
           <div className="text-[11px] text-slate-500">
             {s.student_label ? `${s.student_label} · ` : ''}
-            {s.parent_email ?? '(no email)'}
+            {s.is_test ? '(staff preview test — no real parent)' : (s.parent_email ?? '(no email)')}
           </div>
         </div>
         <StatusPill status={s.status} />
