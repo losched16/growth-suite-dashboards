@@ -10,15 +10,32 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { query } from '@/lib/db';
+import { authorizeOperatorOrSchool } from '@/lib/auth/dual';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 type Params = Promise<{ schoolId: string }>;
 
-function back(request: NextRequest, schoolId: string, q: { msg?: string; err?: string }) {
+// Where to send the user after the POST. Defaults to the operator
+// payments page; school-iframe callers pass a `return_to` form field
+// pointing at /school/{locationId}/payments?tab=plans so the operator
+// stays inside the GHL embed. We reject anything that isn't a path
+// rooted at /admin/ or /school/ to avoid open-redirects.
+function safeReturn(returnTo: string | null, schoolId: string): string {
+  if (returnTo && /^\/(admin|school)\//.test(returnTo) && !returnTo.includes('://')) {
+    return returnTo;
+  }
+  return `/admin/${schoolId}/payments`;
+}
+
+function back(
+  request: NextRequest,
+  schoolId: string,
+  q: { msg?: string; err?: string; returnTo?: string | null },
+) {
   const url = request.nextUrl.clone();
-  url.pathname = `/admin/${schoolId}/payments`;
+  url.pathname = safeReturn(q.returnTo ?? null, schoolId);
   url.search = '';
   if (q.msg) url.searchParams.set('msg', q.msg);
   if (q.err) url.searchParams.set('err', q.err);
@@ -43,8 +60,12 @@ function defaultScheduleFor(slug: string, installmentCount: number): Record<stri
 
 export async function POST(request: NextRequest, { params }: { params: Params }) {
   const { schoolId } = await params;
+  const auth = await authorizeOperatorOrSchool(schoolId);
+  if (!auth.ok) return auth.response;
+
   const fd = await request.formData();
   const op = String(fd.get('op') ?? '').trim();
+  const returnTo = String(fd.get('return_to') ?? '') || null;
 
   try {
     if (op === 'seed_defaults') {
@@ -66,7 +87,7 @@ export async function POST(request: NextRequest, { params }: { params: Params })
            JSON.stringify(defaultScheduleFor(d.slug, d.count)), i],
         );
       }
-      return back(request, schoolId, { msg: 'Seeded 4 default payment plans.' });
+      return back(request, schoolId, { msg: 'Seeded 4 default payment plans.', returnTo });
     }
 
     if (op === 'add') {
@@ -77,7 +98,7 @@ export async function POST(request: NextRequest, { params }: { params: Params })
       const discountPct = parseFloat(String(fd.get('discount_pct') ?? '0'));
       const discountBp = Math.round(Math.max(0, discountPct) * 100);
       if (!slug || !displayName || !(installmentCount >= 1)) {
-        return back(request, schoolId, { err: 'Slug, name, and installment count are required.' });
+        return back(request, schoolId, { err: 'Slug, name, and installment count are required.', returnTo });
       }
       await query(
         `INSERT INTO payment_plans
@@ -88,7 +109,7 @@ export async function POST(request: NextRequest, { params }: { params: Params })
         [schoolId, slug, displayName, description, installmentCount, discountBp,
          JSON.stringify(defaultScheduleFor(slug, installmentCount))],
       );
-      return back(request, schoolId, { msg: `Added "${displayName}" payment plan.` });
+      return back(request, schoolId, { msg: `Added "${displayName}" payment plan.`, returnTo });
     }
 
     if (op === 'update') {
@@ -106,7 +127,7 @@ export async function POST(request: NextRequest, { params }: { params: Params })
           WHERE id = $5 AND school_id = $6`,
         [displayName, description, discountBp, isActive, id, schoolId],
       );
-      return back(request, schoolId, { msg: `Updated "${displayName}".` });
+      return back(request, schoolId, { msg: `Updated "${displayName}".`, returnTo });
     }
 
     if (op === 'delete') {
@@ -115,12 +136,12 @@ export async function POST(request: NextRequest, { params }: { params: Params })
         `UPDATE payment_plans SET is_active = false, updated_at = now() WHERE id = $1 AND school_id = $2`,
         [id, schoolId],
       );
-      return back(request, schoolId, { msg: 'Deactivated plan.' });
+      return back(request, schoolId, { msg: 'Deactivated plan.', returnTo });
     }
 
-    return back(request, schoolId, { err: `Unknown op: ${op}` });
+    return back(request, schoolId, { err: `Unknown op: ${op}`, returnTo });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    return back(request, schoolId, { err: `Save failed: ${msg}` });
+    return back(request, schoolId, { err: `Save failed: ${msg}`, returnTo });
   }
 }

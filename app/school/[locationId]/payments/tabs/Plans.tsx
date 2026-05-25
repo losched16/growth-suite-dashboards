@@ -1,158 +1,471 @@
-// Tuition Plans tab — list of family_tuition_enrollments with progress.
+// Tuition Plans tab — TWO sections:
+//
+//   1. PLAN TEMPLATES — reusable payment schedules (e.g. "Monthly × 10",
+//      "Annual lump sum (3% discount)", "Semi-annual"). School staff
+//      create / edit / deactivate these here. Without at least one
+//      active template, no family can be put on a plan.
+//
+//   2. FAMILY ENROLLMENTS — families currently assigned to a template +
+//      grid. "Start an enrollment" sends the parent a magic link to
+//      pick their own plan via the portal.
+//
+// Templates POST to /api/admin/schools/{schoolId}/payments/plans with a
+// hidden `return_to` so we land back here, not in the operator console.
 
 import Link from 'next/link';
-import { Plus } from 'lucide-react';
+import { Plus, Trash2, Sparkles } from 'lucide-react';
 import { query } from '@/lib/db';
 import { HelpCallout } from '@/components/HelpCallout';
+
+interface EnrollmentRow {
+  id: string;
+  family_label: string;
+  student_label: string | null;
+  academic_year: string;
+  grid_label: string;
+  plan_label: string;
+  total_annual_cents: number;
+  installment_count: number;
+  status: string;
+  invoices_open: number;
+  invoices_paid: number;
+  amount_paid_cents: number;
+}
+
+interface PlanTemplateRow {
+  id: string;
+  slug: string;
+  display_name: string;
+  description: string | null;
+  installment_count: number;
+  discount_basis_points: number;
+  is_active: boolean;
+  position: number;
+  in_use_count: number;
+}
 
 export async function PaymentsHubPlans({
   schoolId, locationId,
 }: { schoolId: string; locationId: string }) {
-  const { rows: enrollments } = await query<{
-    id: string;
-    family_label: string;
-    student_label: string | null;
-    academic_year: string;
-    grid_label: string;
-    plan_label: string;
-    total_annual_cents: number;
-    installment_count: number;
-    status: string;
-    invoices_open: number;
-    invoices_paid: number;
-    amount_paid_cents: number;
-  }>(
-    `SELECT e.id,
-            COALESCE(NULLIF(f.display_name, ''),
-                     CONCAT_WS(' ', p.first_name, p.last_name),
-                     '(unnamed)') AS family_label,
-            CASE WHEN st.id IS NOT NULL
-                 THEN CONCAT_WS(' ', COALESCE(NULLIF(st.preferred_name, ''), st.first_name), st.last_name)
-                 ELSE NULL END AS student_label,
-            e.academic_year,
-            g.display_name AS grid_label,
-            pl.display_name AS plan_label,
-            e.total_annual_cents,
-            e.installment_count,
-            e.status,
-            (SELECT COUNT(*)::int FROM invoices WHERE source = 'tuition_plan'
-              AND source_ref->>'enrollment_id' = e.id::text
-              AND status IN ('open', 'partially_paid')) AS invoices_open,
-            (SELECT COUNT(*)::int FROM invoices WHERE source = 'tuition_plan'
-              AND source_ref->>'enrollment_id' = e.id::text
-              AND status = 'paid') AS invoices_paid,
-            (SELECT COALESCE(SUM(amount_paid_cents), 0)::int FROM invoices
-              WHERE source = 'tuition_plan'
-                AND source_ref->>'enrollment_id' = e.id::text) AS amount_paid_cents
-       FROM family_tuition_enrollments e
-       JOIN families f ON f.id = e.family_id
-       JOIN tuition_grids g ON g.id = e.tuition_grid_id
-       JOIN payment_plans pl ON pl.id = e.payment_plan_id
-       LEFT JOIN students st ON st.id = e.student_id
-       LEFT JOIN LATERAL (
-         SELECT first_name, last_name FROM parents
-          WHERE family_id = f.id AND is_primary = true LIMIT 1
-       ) p ON true
-      WHERE e.school_id = $1
-      ORDER BY e.status, e.academic_year DESC, family_label
-      LIMIT 200`,
-    [schoolId],
-  );
+  const [{ rows: enrollments }, { rows: planTemplates }] = await Promise.all([
+    query<EnrollmentRow>(
+      `SELECT e.id,
+              COALESCE(NULLIF(f.display_name, ''),
+                       CONCAT_WS(' ', p.first_name, p.last_name),
+                       '(unnamed)') AS family_label,
+              CASE WHEN st.id IS NOT NULL
+                   THEN CONCAT_WS(' ', COALESCE(NULLIF(st.preferred_name, ''), st.first_name), st.last_name)
+                   ELSE NULL END AS student_label,
+              e.academic_year,
+              g.display_name AS grid_label,
+              pl.display_name AS plan_label,
+              e.total_annual_cents,
+              e.installment_count,
+              e.status,
+              (SELECT COUNT(*)::int FROM invoices WHERE source = 'tuition_plan'
+                AND source_ref->>'enrollment_id' = e.id::text
+                AND status IN ('open', 'partially_paid')) AS invoices_open,
+              (SELECT COUNT(*)::int FROM invoices WHERE source = 'tuition_plan'
+                AND source_ref->>'enrollment_id' = e.id::text
+                AND status = 'paid') AS invoices_paid,
+              (SELECT COALESCE(SUM(amount_paid_cents), 0)::int FROM invoices
+                WHERE source = 'tuition_plan'
+                  AND source_ref->>'enrollment_id' = e.id::text) AS amount_paid_cents
+         FROM family_tuition_enrollments e
+         JOIN families f ON f.id = e.family_id
+         JOIN tuition_grids g ON g.id = e.tuition_grid_id
+         JOIN payment_plans pl ON pl.id = e.payment_plan_id
+         LEFT JOIN students st ON st.id = e.student_id
+         LEFT JOIN LATERAL (
+           SELECT first_name, last_name FROM parents
+            WHERE family_id = f.id AND is_primary = true LIMIT 1
+         ) p ON true
+        WHERE e.school_id = $1
+        ORDER BY e.status, e.academic_year DESC, family_label
+        LIMIT 200`,
+      [schoolId],
+    ),
+    query<PlanTemplateRow>(
+      `SELECT pl.id, pl.slug, pl.display_name, pl.description,
+              pl.installment_count, pl.discount_basis_points,
+              pl.is_active, pl.position,
+              (SELECT COUNT(*)::int FROM family_tuition_enrollments e
+                 WHERE e.payment_plan_id = pl.id) AS in_use_count
+         FROM payment_plans pl
+        WHERE pl.school_id = $1
+        ORDER BY pl.is_active DESC, pl.position ASC, pl.created_at ASC`,
+      [schoolId],
+    ),
+  ]);
+
+  const returnTo = `/school/${locationId}/payments?tab=plans`;
+  const apiBase = `/api/admin/schools/${schoolId}/payments/plans`;
+  const activeTemplateCount = planTemplates.filter((p) => p.is_active).length;
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-baseline justify-between gap-3 flex-wrap">
-        <div>
-          <h2 className="text-xl font-semibold text-slate-900">Tuition plans</h2>
-          <p className="text-sm text-slate-500">
-            Family enrollments. Each one generates monthly / semi-annual / annual installments automatically.
-          </p>
+    <div className="space-y-6">
+      {/* ─── SECTION 1: PLAN TEMPLATES ─── */}
+      <section>
+        <div className="flex items-baseline justify-between gap-3 flex-wrap mb-2">
+          <div>
+            <h2 className="text-xl font-semibold text-slate-900">Payment plan templates</h2>
+            <p className="text-sm text-slate-500">
+              Reusable payment schedules. Define them once; assign them to families when you enroll.
+            </p>
+          </div>
+          <div className="text-xs text-slate-500">
+            {activeTemplateCount} active · {planTemplates.length} total
+          </div>
         </div>
-        <Link
-          href={`/school/${locationId}/enrollments/start`}
-          className="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
-        >
-          <Plus className="h-4 w-4" /> Start an enrollment
-        </Link>
-      </div>
 
-      <HelpCallout
-        title="How tuition plans work"
-        defaultOpen={false}
-        steps={[
-          <>A <strong>tuition plan</strong> is one family + one program + one payment schedule (monthly, semi-annual, annual). Starting a plan generates all the installments automatically.</>,
-          <>Each green progress bar shows how much of the year&apos;s tuition has been paid. The <strong>3/12</strong>-style counter shows paid installments / total installments.</>,
-          <><strong>Click any row</strong> to open the plan detail page. From there you can edit individual installments, split a payment, reschedule the remaining balance across more (or fewer) months, pause / resume, or add a one-off charge.</>,
-          <>To start a new plan: click <strong>Start an enrollment</strong>. You&apos;ll pick the family, the program (grid), and the payment plan; invoices get generated for the whole year.</>,
-          <>Use the <strong>Status</strong> column to spot stalled plans: paused plans don&apos;t auto-charge; cancelled plans are archived.</>,
-        ]}
-      />
+        <HelpCallout
+          title="How payment plan templates work"
+          defaultOpen={planTemplates.length === 0}
+          steps={[
+            <>A <strong>template</strong> describes how a family pays: number of installments + optional prompt-pay discount. The actual amounts come from the family&apos;s tuition grid.</>,
+            <>Common setups: <em>Annual</em> (1 payment, small discount), <em>Semi-annual</em> (2 payments), <em>Quarterly</em> (4), <em>Monthly × 10</em> (Aug–May), <em>Monthly × 12</em>. Add as many as you want.</>,
+            <>The <strong>discount %</strong> is applied to the total tuition before installments are calculated. Use it to reward families who pay upfront.</>,
+            <>You can&rsquo;t hard-delete a template that&rsquo;s already in use by enrolled families — deactivate it instead to hide it from future enrollments while preserving history.</>,
+          ]}
+        />
 
-      <div className="rounded-lg border border-slate-200 bg-white overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="bg-slate-50 border-b border-slate-100 text-left text-[10px] uppercase tracking-wide text-slate-500">
-            <tr>
-              <th className="px-4 py-2.5 font-medium">Family</th>
-              <th className="px-4 py-2.5 font-medium">Program · Plan</th>
-              <th className="px-4 py-2.5 font-medium">Year</th>
-              <th className="px-4 py-2.5 font-medium text-right">Annual</th>
-              <th className="px-4 py-2.5 font-medium">Progress</th>
-              <th className="px-4 py-2.5 font-medium text-center">Status</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {enrollments.length === 0 ? (
-              <tr><td colSpan={6} className="p-10 text-center text-sm text-slate-500 italic">
-                No enrollments yet. Click <strong>Start an enrollment</strong> to set up the first family.
-              </td></tr>
-            ) : enrollments.map((e) => {
-              const pct = e.total_annual_cents > 0 ? Math.round((e.amount_paid_cents / e.total_annual_cents) * 100) : 0;
-              const planHref = `/school/${locationId}/payments/plans/${e.id}`;
-              return (
-                <tr key={e.id} className="hover:bg-slate-50 cursor-pointer group">
-                  <td className="px-4 py-2">
-                    <Link href={planHref} className="block">
-                      <div className="text-slate-900 group-hover:text-blue-700">{e.family_label}</div>
-                      {e.student_label ? <div className="text-[11px] text-slate-500">{e.student_label}</div> : null}
-                    </Link>
-                  </td>
-                  <td className="px-4 py-2 text-xs">
-                    <Link href={planHref} className="block">
-                      <div className="text-slate-900">{e.grid_label}</div>
-                      <div className="text-[11px] text-slate-500">{e.plan_label}</div>
-                    </Link>
-                  </td>
-                  <td className="px-4 py-2 text-xs font-mono">
-                    <Link href={planHref} className="block">{e.academic_year}</Link>
-                  </td>
-                  <td className="px-4 py-2 text-right font-mono">
-                    <Link href={planHref} className="block">${(e.total_annual_cents / 100).toFixed(2)}</Link>
-                  </td>
-                  <td className="px-4 py-2">
-                    <Link href={planHref} className="block">
-                      <div className="flex items-center gap-2">
-                        <div className="h-2 flex-1 rounded-full bg-slate-100 overflow-hidden min-w-[80px]">
-                          <div className="h-full bg-emerald-500" style={{ width: `${pct}%` }} />
-                        </div>
-                        <span className="text-[10px] text-slate-600 tabular-nums whitespace-nowrap">
-                          {e.invoices_paid}/{e.invoices_paid + e.invoices_open}
-                        </span>
-                      </div>
-                    </Link>
-                  </td>
-                  <td className="px-4 py-2 text-center">
-                    <Link href={planHref} className="block"><StatusPill status={e.status} /></Link>
-                  </td>
+        {planTemplates.length === 0 ? (
+          <EmptyTemplatesPanel apiBase={apiBase} returnTo={returnTo} />
+        ) : (
+          <div className="rounded-lg border border-slate-200 bg-white overflow-hidden">
+            <table className="w-full text-sm">
+              <thead className="bg-slate-50 border-b border-slate-100 text-left text-[10px] uppercase tracking-wide text-slate-500">
+                <tr>
+                  <th className="px-3 py-2 font-medium">Name</th>
+                  <th className="px-3 py-2 font-medium">Description</th>
+                  <th className="px-3 py-2 font-medium text-center">Installments</th>
+                  <th className="px-3 py-2 font-medium text-right">Prompt-pay discount</th>
+                  <th className="px-3 py-2 font-medium text-center">In use</th>
+                  <th className="px-3 py-2 font-medium text-center">Active</th>
+                  <th className="px-3 py-2"></th>
                 </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {planTemplates.map((p) => (
+                  <PlanTemplateEditRow
+                    key={p.id}
+                    template={p}
+                    apiBase={apiBase}
+                    returnTo={returnTo}
+                  />
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* Always-visible "Add new template" form */}
+        <AddTemplateForm apiBase={apiBase} returnTo={returnTo} />
+      </section>
+
+      {/* ─── SECTION 2: FAMILY ENROLLMENTS ─── */}
+      <section>
+        <div className="flex items-baseline justify-between gap-3 flex-wrap mb-2">
+          <div>
+            <h2 className="text-xl font-semibold text-slate-900">Family enrollments</h2>
+            <p className="text-sm text-slate-500">
+              Families currently on a plan. Click any row to view installments, mark payments, pause, or cancel.
+            </p>
+          </div>
+          {activeTemplateCount > 0 ? (
+            <Link
+              href={`/school/${locationId}/enrollments/start`}
+              className="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+            >
+              <Plus className="h-4 w-4" /> Start an enrollment
+            </Link>
+          ) : (
+            <span className="text-xs text-amber-700 italic">
+              Add at least one plan template above before enrolling families.
+            </span>
+          )}
+        </div>
+
+        <div className="rounded-lg border border-slate-200 bg-white overflow-hidden">
+          <table className="w-full text-sm">
+            <thead className="bg-slate-50 border-b border-slate-100 text-left text-[10px] uppercase tracking-wide text-slate-500">
+              <tr>
+                <th className="px-4 py-2.5 font-medium">Family</th>
+                <th className="px-4 py-2.5 font-medium">Program · Plan</th>
+                <th className="px-4 py-2.5 font-medium">Year</th>
+                <th className="px-4 py-2.5 font-medium text-right">Annual</th>
+                <th className="px-4 py-2.5 font-medium">Progress</th>
+                <th className="px-4 py-2.5 font-medium text-center">Status</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {enrollments.length === 0 ? (
+                <tr><td colSpan={6} className="p-10 text-center text-sm text-slate-500 italic">
+                  No enrollments yet. Click <strong>Start an enrollment</strong> to set up the first family.
+                </td></tr>
+              ) : enrollments.map((e) => {
+                const pct = e.total_annual_cents > 0 ? Math.round((e.amount_paid_cents / e.total_annual_cents) * 100) : 0;
+                const planHref = `/school/${locationId}/payments/plans/${e.id}`;
+                return (
+                  <tr key={e.id} className="hover:bg-slate-50 cursor-pointer group">
+                    <td className="px-4 py-2">
+                      <Link href={planHref} className="block">
+                        <div className="text-slate-900 group-hover:text-blue-700">{e.family_label}</div>
+                        {e.student_label ? <div className="text-[11px] text-slate-500">{e.student_label}</div> : null}
+                      </Link>
+                    </td>
+                    <td className="px-4 py-2 text-xs">
+                      <Link href={planHref} className="block">
+                        <div className="text-slate-900">{e.grid_label}</div>
+                        <div className="text-[11px] text-slate-500">{e.plan_label}</div>
+                      </Link>
+                    </td>
+                    <td className="px-4 py-2 text-xs font-mono">
+                      <Link href={planHref} className="block">{e.academic_year}</Link>
+                    </td>
+                    <td className="px-4 py-2 text-right font-mono">
+                      <Link href={planHref} className="block">${(e.total_annual_cents / 100).toFixed(2)}</Link>
+                    </td>
+                    <td className="px-4 py-2">
+                      <Link href={planHref} className="block">
+                        <div className="flex items-center gap-2">
+                          <div className="h-2 flex-1 rounded-full bg-slate-100 overflow-hidden min-w-[80px]">
+                            <div className="h-full bg-emerald-500" style={{ width: `${pct}%` }} />
+                          </div>
+                          <span className="text-[10px] text-slate-600 tabular-nums whitespace-nowrap">
+                            {e.invoices_paid}/{e.invoices_paid + e.invoices_open}
+                          </span>
+                        </div>
+                      </Link>
+                    </td>
+                    <td className="px-4 py-2 text-center">
+                      <Link href={planHref} className="block"><StatusPill status={e.status} /></Link>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </section>
       {void locationId}
     </div>
   );
 }
+
+// ────────────────────────────────────────────────────────────────
+// Plan template UI
+
+function EmptyTemplatesPanel({ apiBase, returnTo }: { apiBase: string; returnTo: string }) {
+  return (
+    <div className="rounded-lg border-2 border-dashed border-slate-300 bg-white p-8 text-center">
+      <Sparkles className="mx-auto h-8 w-8 text-amber-400" />
+      <p className="mt-3 text-sm font-semibold text-slate-700">No payment plan templates yet</p>
+      <p className="mt-1 text-xs text-slate-500 max-w-md mx-auto">
+        We can seed four common ones — Annual, Semi-annual, Quarterly, Monthly × 10 — so you can start enrolling families right away. You can edit or remove any of them after.
+      </p>
+      <form action={apiBase} method="POST" className="mt-4 inline-block">
+        <input type="hidden" name="op" value="seed_defaults" />
+        <input type="hidden" name="return_to" value={returnTo} />
+        <button
+          type="submit"
+          className="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-blue-700"
+        >
+          <Sparkles className="h-4 w-4" /> Seed 4 default plans
+        </button>
+      </form>
+      <p className="mt-2 text-[11px] text-slate-400">…or scroll down and build your own.</p>
+    </div>
+  );
+}
+
+function PlanTemplateEditRow({
+  template, apiBase, returnTo,
+}: {
+  template: PlanTemplateRow; apiBase: string; returnTo: string;
+}) {
+  return (
+    <tr className={template.is_active ? '' : 'opacity-60'}>
+      <td colSpan={7} className="p-0">
+        <form action={apiBase} method="POST" className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-center px-3 py-2">
+          <input type="hidden" name="op" value="update" />
+          <input type="hidden" name="id" value={template.id} />
+          <input type="hidden" name="return_to" value={returnTo} />
+
+          <div className="sm:col-span-3">
+            <input
+              type="text" name="display_name" defaultValue={template.display_name}
+              className="w-full rounded border border-slate-300 px-2 py-1.5 text-sm font-medium text-slate-900"
+              required
+            />
+            <div className="text-[10px] text-slate-500 mt-0.5 font-mono">{template.slug}</div>
+          </div>
+
+          <div className="sm:col-span-4">
+            <input
+              type="text" name="description" defaultValue={template.description ?? ''}
+              placeholder="Description shown to parents (optional)"
+              className="w-full rounded border border-slate-300 px-2 py-1.5 text-xs text-slate-700"
+            />
+          </div>
+
+          <div className="sm:col-span-1 text-center text-sm tabular-nums text-slate-700">
+            {template.installment_count}
+          </div>
+
+          <div className="sm:col-span-2">
+            <div className="flex items-center justify-end gap-1">
+              <input
+                type="number" name="discount_pct" step="0.1" min="0" max="50"
+                defaultValue={(template.discount_basis_points / 100).toFixed(1)}
+                className="w-20 rounded border border-slate-300 px-2 py-1.5 text-sm text-right tabular-nums"
+                title="Discount applied if family picks this plan (basis points / 100)"
+              />
+              <span className="text-xs text-slate-500">%</span>
+            </div>
+          </div>
+
+          <div className="sm:col-span-1 text-center text-xs tabular-nums text-slate-600">
+            {template.in_use_count}
+          </div>
+
+          <label className="sm:col-span-1 flex items-center justify-center text-xs">
+            <input type="checkbox" name="is_active" value="1" defaultChecked={template.is_active} className="h-4 w-4 rounded border-slate-300" />
+          </label>
+
+          <div className="sm:col-span-12 flex items-center justify-between border-t border-slate-100 pt-2 mt-1">
+            <DeactivateButton
+              apiBase={apiBase}
+              returnTo={returnTo}
+              templateId={template.id}
+              templateName={template.display_name}
+              inUse={template.in_use_count > 0}
+              isActive={template.is_active}
+            />
+            <button
+              type="submit"
+              className="rounded-md bg-blue-600 px-3 py-1 text-xs font-semibold text-white hover:bg-blue-700"
+            >
+              Save changes
+            </button>
+          </div>
+        </form>
+      </td>
+    </tr>
+  );
+}
+
+function DeactivateButton({
+  apiBase, returnTo, templateId, templateName, inUse, isActive,
+}: {
+  apiBase: string; returnTo: string;
+  templateId: string; templateName: string; inUse: boolean; isActive: boolean;
+}) {
+  if (!isActive) {
+    return <span className="text-[11px] text-slate-400 italic">Inactive — uncheck above + Save to reactivate</span>;
+  }
+  return (
+    <form action={apiBase} method="POST">
+      <input type="hidden" name="op" value="delete" />
+      <input type="hidden" name="id" value={templateId} />
+      <input type="hidden" name="return_to" value={returnTo} />
+      <button
+        type="submit"
+        className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2 py-1 text-[11px] text-slate-600 hover:bg-rose-50 hover:text-rose-700 hover:border-rose-300"
+        title={inUse
+          ? `${templateName} is in use by enrolled families — deactivating hides it from future enrollments without affecting existing ones.`
+          : `Deactivate "${templateName}" — it stops appearing in new enrollment flows but is preserved for history.`}
+      >
+        <Trash2 className="h-3 w-3" /> Deactivate
+      </button>
+    </form>
+  );
+}
+
+function AddTemplateForm({ apiBase, returnTo }: { apiBase: string; returnTo: string }) {
+  return (
+    <details className="mt-3 rounded-lg border border-blue-200 bg-blue-50/40 group">
+      <summary className="cursor-pointer list-none px-4 py-2.5 flex items-center gap-2 text-sm font-medium text-blue-800 hover:bg-blue-50">
+        <Plus className="h-4 w-4" />
+        Add a new payment plan template
+        <span className="text-[11px] font-normal text-blue-700 ml-1">— quarterly, custom installments, etc.</span>
+      </summary>
+      <form action={apiBase} method="POST" className="px-4 py-3 border-t border-blue-100 bg-white space-y-3">
+        <input type="hidden" name="op" value="add" />
+        <input type="hidden" name="return_to" value={returnTo} />
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <Field label="Display name" hint='What families see — e.g. "10 Monthly Payments"'>
+            <input
+              type="text" name="display_name" required
+              placeholder="10 Monthly Payments"
+              className={inputCls}
+            />
+          </Field>
+          <Field label="Slug" hint="Lowercase, hyphens. Used internally for API references.">
+            <input
+              type="text" name="slug" required
+              pattern="[a-z0-9\-]+"
+              placeholder="monthly-10"
+              className={inputCls + ' font-mono'}
+            />
+          </Field>
+          <Field label="Number of installments" hint="1 = annual, 2 = semi-annual, 4 = quarterly, 10 = Aug–May, 12 = full year.">
+            <input
+              type="number" name="installment_count" required min="1" max="36" defaultValue="10"
+              className={inputCls + ' w-32'}
+            />
+          </Field>
+          <Field label="Prompt-pay discount %" hint="Applied if a family chooses this plan. Leave 0 for no discount.">
+            <div className="flex items-center gap-1">
+              <input
+                type="number" name="discount_pct" step="0.1" min="0" max="50" defaultValue="0"
+                className={inputCls + ' w-24 text-right'}
+              />
+              <span className="text-sm text-slate-500">%</span>
+            </div>
+          </Field>
+        </div>
+
+        <Field label="Description (optional)" hint="A one-liner shown to parents in the plan picker.">
+          <input
+            type="text" name="description"
+            placeholder='e.g. "Equal payments due the 1st of each month, August through May."'
+            className={inputCls}
+          />
+        </Field>
+
+        <div className="flex items-center justify-end gap-2 pt-1">
+          <button
+            type="submit"
+            className="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-4 py-1.5 text-sm font-semibold text-white hover:bg-blue-700"
+          >
+            <Plus className="h-4 w-4" /> Create plan template
+          </button>
+        </div>
+        <p className="text-[11px] text-slate-500">
+          The installment schedule is filled in automatically based on the count you pick (e.g. 10 → Aug through May).
+          You can fine-tune the schedule later via the operator console if you need custom due dates.
+        </p>
+      </form>
+    </details>
+  );
+}
+
+// ────────────────────────────────────────────────────────────────
+
+function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
+  return (
+    <label className="block">
+      <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-600">{label}</span>
+      <div className="mt-1">{children}</div>
+      {hint ? <div className="mt-0.5 text-[11px] text-slate-500">{hint}</div> : null}
+    </label>
+  );
+}
+
+const inputCls =
+  'block w-full rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-200';
 
 function StatusPill({ status }: { status: string }) {
   const map: Record<string, { bg: string; fg: string }> = {
