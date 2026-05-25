@@ -25,10 +25,15 @@ export function FormPreviewRenderer({ schema }: { schema: unknown[] }) {
     );
   }
 
+  // Server component: cannot pass event handlers. The wrapping <form>
+  // has no action and every interactive child is disabled, so there's
+  // nothing for the browser to submit even without an onSubmit guard.
+  // Using a <div> avoids the "Event handlers cannot be passed to Client
+  // Component props" runtime error that an `onSubmit` would trigger.
   return (
-    <form className="space-y-5" onSubmit={(e) => e.preventDefault()}>
+    <div className="space-y-5">
       {blocks.map((block, i) => <BlockRender key={i} block={block} />)}
-    </form>
+    </div>
   );
 }
 
