@@ -8,8 +8,7 @@
 
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { cookies } from 'next/headers';
-import { SESSION_COOKIE, verifySessionToken } from '@/lib/auth/operator';
+import { authorizeOperatorOrSchool } from '@/lib/auth/dual';
 import { query } from '@/lib/db';
 
 export const runtime = 'nodejs';
@@ -18,11 +17,9 @@ export const dynamic = 'force-dynamic';
 type Params = Promise<{ schoolId: string; productId: string }>;
 
 export async function PATCH(request: NextRequest, { params }: { params: Params }) {
-  const ck = await cookies();
-  if (!verifySessionToken(ck.get(SESSION_COOKIE)?.value)) {
-    return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
-  }
   const { schoolId, productId } = await params;
+  const auth = await authorizeOperatorOrSchool(schoolId);
+  if (!auth.ok) return auth.response;
 
   let body: Record<string, unknown>;
   try {
@@ -93,11 +90,9 @@ export async function PATCH(request: NextRequest, { params }: { params: Params }
 }
 
 export async function DELETE(request: NextRequest, { params }: { params: Params }) {
-  const ck = await cookies();
-  if (!verifySessionToken(ck.get(SESSION_COOKIE)?.value)) {
-    return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
-  }
   const { schoolId, productId } = await params;
+  const auth = await authorizeOperatorOrSchool(schoolId);
+  if (!auth.ok) return auth.response;
   const hard = request.nextUrl.searchParams.get('hard') === '1';
 
   // Verify ownership

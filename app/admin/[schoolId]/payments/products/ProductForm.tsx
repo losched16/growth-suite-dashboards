@@ -41,9 +41,14 @@ interface Product {
 export function ProductForm({
   schoolId,
   product,
+  returnPathBase,
 }: {
   schoolId: string;
   product?: Product;
+  // Where to redirect on save/cancel. e.g. `/admin/<sid>/payments/products`
+  // for operator view, `/school/<lid>/payments/products` for embedded view.
+  // Falls back to /admin/ for back-compat.
+  returnPathBase?: string;
 }) {
   const router = useRouter();
   const isEdit = !!product;
@@ -126,7 +131,8 @@ export function ProductForm({
         }
         const body = await r.json();
         const id = (body as { id?: string }).id ?? product?.id;
-        router.push(`/admin/${schoolId}/payments/products?msg=${encodeURIComponent(isEdit ? 'Product updated' : 'Product created')}`);
+        const base = returnPathBase ?? `/admin/${schoolId}/payments/products`;
+        router.push(`${base}?msg=${encodeURIComponent(isEdit ? 'Product updated' : 'Product created')}`);
         router.refresh();
         void id;
       } catch (e) {
@@ -454,7 +460,7 @@ export function ProductForm({
         </button>
         <button
           type="button"
-          onClick={() => router.push(`/admin/${schoolId}/payments/products`)}
+          onClick={() => router.push(returnPathBase ?? `/admin/${schoolId}/payments/products`)}
           className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
         >
           Cancel

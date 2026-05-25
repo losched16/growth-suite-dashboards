@@ -72,12 +72,6 @@ export async function PaymentsHubSettings({
       <section className="rounded-lg border border-slate-200 bg-white p-5">
         <div className="flex items-baseline justify-between mb-3">
           <h3 className="text-base font-semibold text-slate-900">Billing configuration</h3>
-          <Link
-            href={`/admin/${schoolId}/payments`}
-            className="text-xs text-blue-600 hover:text-blue-800"
-          >
-            Open full editor →
-          </Link>
         </div>
         <form action={`/api/admin/schools/${schoolId}/payments/config`} method="POST" className="space-y-3">
           <SettingsGroup title="Payment methods accepted">
@@ -110,10 +104,36 @@ export async function PaymentsHubSettings({
         </form>
       </section>
 
-      <p className="text-xs text-slate-500 italic">
-        Need to edit tuition grids, payment plans, discounts, or family enrollments?
-        Open the <Link href={`/admin/${schoolId}/payments`} className="text-blue-600 hover:underline">full payments editor</Link>.
-      </p>
+      {/* Quick links into school-side editors (stay inside the iframe) */}
+      <section className="rounded-lg border border-slate-200 bg-white p-5">
+        <h3 className="text-base font-semibold text-slate-900 mb-2">Other places to edit</h3>
+        <p className="text-xs text-slate-500 mb-3">
+          Need to change tuition prices, payment plans, discounts, or enrollments?
+          Each lives in its own tab so the form stays small.
+        </p>
+        <ul className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
+          <li>
+            <Link href={`/school/${locationId}/payments?tab=plans`} className="text-blue-600 hover:underline">
+              Tuition plans &amp; enrollments →
+            </Link>
+          </li>
+          <li>
+            <Link href={`/school/${locationId}/payments?tab=catalog`} className="text-blue-600 hover:underline">
+              Product catalog →
+            </Link>
+          </li>
+          <li>
+            <Link href={`/school/${locationId}/payments?tab=discounts`} className="text-blue-600 hover:underline">
+              Discount policies →
+            </Link>
+          </li>
+          <li>
+            <Link href={`/school/${locationId}/payments?tab=invoices`} className="text-blue-600 hover:underline">
+              Invoices →
+            </Link>
+          </li>
+        </ul>
+      </section>
       {void locationId}
     </div>
   );
