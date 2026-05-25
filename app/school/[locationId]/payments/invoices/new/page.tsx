@@ -13,6 +13,7 @@ import { ArrowLeft } from 'lucide-react';
 import { query } from '@/lib/db';
 import { loadSchoolByLocationId } from '@/lib/dashboards/loader';
 import { LineItemsEditor } from '@/app/admin/[schoolId]/payments/invoices/new/LineItemsEditor';
+import { loadInvoiceCatalog } from '@/lib/billing/invoice-catalog';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 30;
@@ -60,6 +61,8 @@ export default async function NewInvoiceScoped({
     );
     setupFeePaid = !!fr[0]?.paid;
   }
+
+  const catalogItems = await loadInvoiceCatalog(schoolId);
 
   const dueDefault = (() => {
     const d = new Date();
@@ -130,7 +133,7 @@ export default async function NewInvoiceScoped({
 
           <div>
             <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-600 mb-1">Line items</h3>
-            <LineItemsEditor />
+            <LineItemsEditor catalogItems={catalogItems} />
           </div>
 
           <div className="rounded-md bg-slate-50 border border-slate-200 p-3 space-y-2">

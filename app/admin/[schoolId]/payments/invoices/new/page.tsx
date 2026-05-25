@@ -9,6 +9,7 @@ import { notFound } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
 import { query } from '@/lib/db';
 import { LineItemsEditor } from './LineItemsEditor';
+import { loadInvoiceCatalog } from '@/lib/billing/invoice-catalog';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 30;
@@ -60,6 +61,8 @@ export default async function NewInvoicePage({
     );
     setupFeePaid = !!fr[0]?.paid;
   }
+
+  const catalogItems = await loadInvoiceCatalog(schoolId);
 
   const dueDefault = (() => {
     const d = new Date();
@@ -120,7 +123,7 @@ export default async function NewInvoicePage({
 
           <div>
             <h3 className="text-xs font-semibold uppercase tracking-wide text-zinc-600 mb-1">Line items</h3>
-            <LineItemsEditor />
+            <LineItemsEditor catalogItems={catalogItems} />
           </div>
 
           <div className="rounded-md bg-zinc-50 border border-zinc-200 p-3 space-y-2">
