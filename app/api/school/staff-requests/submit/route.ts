@@ -71,6 +71,20 @@ export async function POST(request: NextRequest) {
       if (values.length > 0) responses[key] = values;
     } else if (type === 'checkbox') {
       responses[key] = fd.has(key);
+    } else if (type === 'quantity_grid') {
+      // Grid: rows live as separate FormData keys named
+      // `<groupKey>__<row_slug>` with quantity-string values. An empty
+      // string means "no quantity requested" — skip those so the
+      // stored object only contains items the teacher actually wants.
+      const rows = Array.isArray(block.rows) ? (block.rows as string[]) : [];
+      const grid: Record<string, string> = {};
+      for (const row of rows) {
+        const rowKey = String(row).toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 80);
+        const v = fd.get(`${key}__${rowKey}`);
+        const s = v == null ? '' : String(v).trim();
+        if (s) grid[row] = s; // store with the original label so the inbox can show it directly
+      }
+      if (Object.keys(grid).length > 0) responses[key] = grid;
     } else if (type !== 'file_upload') {
       const v = fd.get(key);
       if (v != null) responses[key] = typeof v === 'string' ? v : String(v);

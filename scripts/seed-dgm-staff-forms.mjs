@@ -188,51 +188,171 @@ function incidentReportForm() {
 }
 
 // ── Form 3: In-house Supplies Request ───────────────────────────────
+// Field structure provided by DGM verbatim — 3 quantity grids (item
+// rows × quantities 1-5) per category. Item lists below were deduped
+// from the source (had near-duplicates with case variations like
+// "10 Gal Trash Bag" vs "10 Gal Trash bag").
 function suppliesRequestForm() {
-  // Source form has 4 categories: Cleaning, Classroom Supplies,
-  // Diapers/Wipes. The exact item lists weren't in the captured page —
-  // we seed a sensible default per category and DGM edits via the
-  // form editor.
+  const cleaningItems = [
+    '10 Gal Trash Bag',
+    '13 Gal Trash Bag w/Tie',
+    '33 Gal Trash Bag',
+    '55 Gal Black Trash Bag',
+    'Tri-fold Paper Towels',
+    'Paper Towel Roll (max 2)',
+    'Empty Spray Bottle',
+    'Laundry Bags',
+    'Bleach',
+    'Vinegar',
+    'Windex',
+    'Comet',
+    'Clorox Wipes',
+    'Clorox Toilet Cleaner',
+    'Electronic Cleaning Wipes',
+    'Magic Erasers',
+    'Blue Sponges',
+    'Scotch Brite',
+    'White Rags',
+    'Broom',
+    'Mop Replacement Pads',
+    'Counter Hand Soap',
+    'Pink Cranberry Soap — Wall Refill',
+    'Purple/Clear Lavender Soap — Wall Refill',
+    'Dish Soap',
+    'Dishwashing Purple Rubber Gloves',
+    'Food Prep Gloves',
+    'Laundry Detergent',
+    'Dryer Sheets',
+    'Rectangular Tissues',
+    'Toilet Paper (with core — MYHS, 201 & 200)',
+    'Toilet Paper (no core)',
+    'Covers for Ear Thermometer',
+  ];
+
+  const classroomItems = [
+    // Office basics
+    'Black Pens', 'Blue Pens', 'Red Pens',
+    'Pencils', 'Pink Highlighter',
+    'Post-Its',
+    'Paper Clips', 'Binder Clips Medium', 'Large Binder Clips',
+    'Rubber Bands',
+    'Staples',
+    'Scotch Tape',
+    'Sheet Protectors',
+    'Printer Paper 8.5x11',
+    'Printer Paper 11x17',
+    'White Card Stock',
+    'Construction Paper',
+    'Adult Scissors',
+    'Kid Scissors',
+    'Liquid Glue',
+    'Glue Sticks',
+    'Markers',
+    'Colored Pencils',
+    'Crayons',
+    'Brother P-touch Label Tape — black print / white',
+    // Expo markers
+    'Expo Markers — Black',
+    'Expo Markers — Green',
+    'Expo Markers — Red',
+    'Thin Expo Markers — Black',
+    'Thin Expo Markers — Blue',
+    'Thin Expo Markers — Green',
+    'Thin Expo Markers — Red',
+    'Dry Erase Cleaner',
+    // Sharpies
+    'Sharpie Black',
+    'Sharpie Black Extra Fine',
+    'Sharpie Blue',
+    'Sharpie Blue Extra Fine',
+    'Sharpie Red',
+    'Sharpie Red Extra Fine',
+    // Batteries
+    'AA Batteries',
+    'AAA Batteries',
+    'C Batteries',
+    'D Batteries',
+    // Classroom / kitchen
+    'Napkins', 'Beverage Napkins', 'Tri-Fold Napkins',
+    'Metal Bowl',
+    'Metal Snack / Toddler Plate',
+    'Compost Bags',
+    'Laundry Bag',
+    'Bandaids',
+    'Ice Packs',
+    'Cabinet Child Lock',
+    'Outlet Covers',
+    // DGM-specific
+    'DGM Nap Bags',
+    'Nap Bag Tags',
+    'Laminating Sheets',
+  ];
+
+  const diaperItems = [
+    'Diapers Size 3',
+    'Diapers Size 4',
+    'Diapers Size 5',
+    'Diapers Size 6',
+    'Wipes',
+    'Diaper Changing Gloves',
+  ];
+
+  const quantityGrid = (key, label, rows, opts = {}) => ({
+    type: 'quantity_grid',
+    key,
+    label,
+    rows,
+    columns: [1, 2, 3, 4, 5],
+    help: 'Pick a quantity for each item you need. Leave items you don\'t need on "—".',
+    ...opts,
+  });
+
   return {
     slug: 'staff-supply-request',
-    display_name: 'In-house Supplies Request',
-    description: 'Request weekly classroom supplies. Use this for items DGM already stocks in-house — cleaning, classroom supplies, diapers/wipes. For anything else (new items), use a Purchase Request instead.',
+    display_name: 'In-House Supplies Request',
+    description:
+      'Request weekly classroom supplies (Cleaning, Classroom, Diapers/Wipes). ' +
+      'If an item isn\'t on this list it requires a Purchase Request — email Lexi instead.',
     category: 'staff_request',
     audience: 'staff',
     per_student: false,
-    confirmation_message: 'Thanks! Lexi will pull your supplies and have them ready. Check back here for status updates.',
+    confirmation_message:
+      'Thanks! Your bin will be ready for pick-up Friday morning between 7 AM and 12 PM from the resource room. ' +
+      'Please assign someone to pick up your bin and return it by end of day.',
     field_schema: [
-      blockHeader('In-house Supplies Request'),
+      blockHeader('In-House Supplies Request'),
+      blockParagraph('This form is to request weekly classroom supplies.'),
       blockParagraph(
-        'Weekly classroom supplies. 4 categories: Cleaning, Classroom Supplies, Diapers/Wipes. ' +
-        'If an item isn\'t on this list it requires a Purchase Request — talk to Lexi.',
+        'Timeline:\n' +
+        '• Tuesday by end of day — Teachers submit this form with everything needed for the next week.\n' +
+        '• Wednesday — Director of Operations orders anything that needs to be replenished.\n' +
+        '• Friday morning (7 AM – 12 PM) — Classroom bins ready for pick-up in the resource room. Please assign someone to pick up and return the bin by end of day.',
         'note',
       ),
-      selectF('classroom', 'Your classroom', ALL_CLASSROOMS, { required: true }),
+      blockParagraph(
+        'If an item is NOT on this list it requires a Purchase Request — email Lexi directly.',
+        'warning',
+      ),
 
-      blockSection('Cleaning supplies'),
-      multi('cleaning_items', 'Cleaning items needed',
-        ['Disinfecting wipes', 'Disinfectant spray', 'Paper towels', 'Toilet paper', 'Trash bags (small)', 'Trash bags (large)', 'Soap (hand)', 'Soap (dish)', 'Sponges', 'Mop heads', 'Other (specify below)'],
-        { required: false }),
-      area('cleaning_other', 'Cleaning — other items', { required: false }),
+      txt('staff_name', 'Name of staff filling out form', { required: false }),
+      selectF('classroom', 'Select your classroom', ALL_CLASSROOMS, { required: true }),
 
-      blockSection('Classroom supplies'),
-      multi('classroom_items', 'Classroom items needed',
-        ['Tissues', 'Hand sanitizer', 'Gloves (latex-free)', 'Bandaids', 'Construction paper', 'Markers', 'Crayons', 'Glue sticks', 'Scissors', 'Pencils', 'Erasers', 'Ziploc bags (sandwich)', 'Ziploc bags (gallon)', 'Other (specify below)'],
-        { required: false }),
-      area('classroom_other', 'Classroom — other items', { required: false }),
+      blockSection('Cleaning Supplies',
+        'Pick a quantity for each cleaning item you need this week.'),
+      quantityGrid('cleaning_supplies', 'Cleaning Supplies', cleaningItems),
 
-      blockSection('Diapers & wipes'),
-      multi('diapers_wipes', 'Diapers / wipes needed',
-        ['Diapers size 2', 'Diapers size 3', 'Diapers size 4', 'Diapers size 5', 'Diapers size 6', 'Pull-ups 2T–3T', 'Pull-ups 3T–4T', 'Wipes (case)', 'Wipes (single pack)', 'Changing pads', 'Other (specify below)'],
-        { required: false }),
-      area('diapers_wipes_other', 'Diapers/wipes — other items', { required: false }),
+      blockSection('Classroom Supplies',
+        'Pick a quantity for each classroom item you need this week.'),
+      quantityGrid('classroom_supplies', 'Classroom Supplies', classroomItems),
 
-      blockSection('Pickup'),
-      radioF('pickup_preference', 'How would you like to receive these?',
-        ['I\'ll come pick them up', 'Please deliver to my classroom', 'No preference'],
-        { required: false }),
-      area('notes', 'Anything else?', { required: false }),
+      blockSection('Diapers & Wipes',
+        'For Infant / Toddler / Primary classrooms.'),
+      quantityGrid('diapers_wipes', 'Diapers / Wipes', diaperItems),
+
+      blockSection('Anything else?'),
+      area('notes',
+        'Notes for Lexi (optional)',
+        { required: false, help: 'Anything that doesn\'t fit the grids above — special timing, allergies, broken bin, etc.' }),
     ],
     notify_emails: [LEXI_EMAIL],
   };

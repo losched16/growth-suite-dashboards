@@ -261,6 +261,37 @@ function FormIcon({ slug }: { slug: string }) {
 }
 
 function ResponseRow({ k, v }: { k: string; v: unknown }) {
+  // Grid responses serialize as plain objects { item_label: quantity }
+  // — render as a clean per-item list with quantity badges so Lexi can
+  // pull supplies without re-counting from raw JSON.
+  if (v && typeof v === 'object' && !Array.isArray(v)) {
+    const entries = Object.entries(v as Record<string, unknown>);
+    if (entries.length === 0) {
+      return (
+        <>
+          <dt className="font-mono text-slate-600 break-all">{k}</dt>
+          <dd className="text-slate-400 italic">(none requested)</dd>
+        </>
+      );
+    }
+    return (
+      <>
+        <dt className="font-mono text-slate-600 break-all">{k}</dt>
+        <dd>
+          <ul className="space-y-0.5">
+            {entries.map(([item, qty]) => (
+              <li key={item} className="flex items-baseline gap-2">
+                <span className="inline-block min-w-[1.75rem] rounded bg-blue-100 text-blue-800 px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-center">
+                  {String(qty)}
+                </span>
+                <span className="text-slate-800">{item}</span>
+              </li>
+            ))}
+          </ul>
+        </dd>
+      </>
+    );
+  }
   let display: string;
   if (v == null) display = '(empty)';
   else if (Array.isArray(v)) display = v.length === 0 ? '(none)' : v.map(String).join(', ');
