@@ -1,0 +1,1025 @@
+{
+  "client": "Desert Garden Montessori",
+  "target_platform": "MyGrowthSuite Parent Portal",
+  "last_updated": "2026-05-25",
+  "forms": [
+    {
+      "form_id": "authorization_to_pickup",
+      "title": "Authorization to Pick-Up Form",
+      "source": "Google Forms",
+      "source_url": "https://docs.google.com/forms/d/1QLbRqgTveAerB3f3GZE1oGLI_3e_CIP50it0VfRYeN0/viewform",
+      "description": "This form does not take the place of your student's emergency contact form. It is to be used as a form to allow an authorized individual to pick your student up from Desert Garden for a during a specific period of time.",
+      "sections": [
+        {
+          "section_title": "Parent & Student Info",
+          "section_helper_text": null,
+          "fields": [
+            {
+              "label": "Parent Name",
+              "type": "short_text",
+              "required": true,
+              "notes": null
+            },
+            {
+              "label": "Parent Email",
+              "type": "email",
+              "required": true,
+              "notes": null
+            },
+            {
+              "label": "Parent Home",
+              "type": "phone",
+              "required": true,
+              "notes": "Original label ambiguous; assumed to be home phone. Confirm with DGM."
+            },
+            {
+              "label": "Parent Cell",
+              "type": "phone",
+              "required": true,
+              "notes": null
+            },
+            {
+              "label": "Student Name",
+              "type": "short_text",
+              "required": true,
+              "notes": null
+            },
+            {
+              "label": "Pickup Start Date",
+              "type": "date",
+              "required": true,
+              "notes": "MM/DD/YYYY format"
+            },
+            {
+              "label": "Pickup End Date",
+              "type": "date",
+              "required": true,
+              "notes": "MM/DD/YYYY format"
+            }
+          ]
+        },
+        {
+          "section_title": "Authorized Pick-up Information",
+          "section_helper_text": "Identification MUST be provided upon pick-up.",
+          "fields": [
+            {
+              "label": "Name",
+              "type": "short_text",
+              "required": true,
+              "notes": "Name of authorized pick-up person"
+            },
+            {
+              "label": "Address",
+              "type": "short_text",
+              "required": true,
+              "notes": "Consider long_text if full street/city/state/zip needed"
+            },
+            {
+              "label": "Home Phone",
+              "type": "phone",
+              "required": true,
+              "notes": null
+            },
+            {
+              "label": "Cell Phone",
+              "type": "phone",
+              "required": true,
+              "notes": null
+            }
+          ]
+        },
+        {
+          "section_title": "Signature",
+          "section_helper_text": "I understand that once my child has been released to the above authorized individual, Desert Garden Montessori is no longer responsible. By typing my name below, I agree to conduct business with Desert Garden Montessori by electronic means. I intend, by typing my name below, to \"sign\" the preceding document and to be bound by its terms and conditions.",
+          "fields": [
+            {
+              "label": "Parent Name",
+              "type": "short_text",
+              "required": true,
+              "notes": "Acts as e-signature"
+            },
+            {
+              "label": "Date",
+              "type": "date",
+              "required": true,
+              "notes": "MM/DD/YYYY format"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "form_id": "le_campout_excursion",
+      "title": "Campout Participation and Excursion Form for LE",
+      "source": "Google Forms",
+      "source_url": "https://docs.google.com/forms/d/1_D_4XkEHOdDzCKEUFwyZ7L47NTTujbiXGfFO6flJBMA/viewform",
+      "description": "This form is to allow my student to participate in the LE Campout excursions and activities at Tonto Rim Christian Camp. I understand that every effort will be made to contact me in the event of an emergency. In the case of a medical emergency, I hereby authorize Desert Garden Montessori School to transport my child to the nearest hospital and/or medical treatment facility to secure the necessary medical treatment. I understand there will be staff traveling with my child who are current in their certification for basic first aid and CPR, and authorize them to give my child first aid where/when appropriate.",
+      "form_notes": "Trip dates (April 8th-10th) are hardcoded in a question label, meaning the form needs updating each year. Consider making the date a configurable/template variable in MyGrowthSuite.",
+      "sections": [
+        {
+          "section_title": null,
+          "section_helper_text": null,
+          "fields": [
+            {
+              "label": "My student has permission to travel with DGM adult chaperones to Tonto Rim Christian Camp from April 8th-10th and participate in campout related activities and excursions.",
+              "type": "dropdown",
+              "required": true,
+              "options": ["Yes", "No"],
+              "notes": "Dates in label change yearly"
+            },
+            {
+              "label": "Student's First Name",
+              "type": "short_text",
+              "required": true,
+              "notes": null
+            },
+            {
+              "label": "Student's Last Name",
+              "type": "short_text",
+              "required": true,
+              "notes": null
+            },
+            {
+              "label": "Gender",
+              "type": "radio",
+              "required": false,
+              "options": ["Female", "Male"],
+              "notes": "Original has 'Clear selection' option"
+            },
+            {
+              "label": "Date of Birth",
+              "type": "date",
+              "required": true,
+              "notes": "MM/DD/YYYY format"
+            }
+          ]
+        },
+        {
+          "section_title": "Parent Signature",
+          "section_helper_text": "By typing my name below I agree to conduct business with Desert Garden Montessori by electronic means. I intend by typing my name below to \"sign\" the preceding document and to be bound by its terms and conditions.",
+          "fields": [
+            {
+              "label": "Parent Name",
+              "type": "short_text",
+              "required": true,
+              "notes": "Acts as e-signature"
+            },
+            {
+              "label": "Parent Email",
+              "type": "email",
+              "required": false,
+              "notes": null
+            },
+            {
+              "label": "Date",
+              "type": "date",
+              "required": false,
+              "notes": "MM/DD/YYYY format"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "form_id": "myhs_otc_medication_consent",
+      "title": "MYHS - Consent for OTC Medication Administration Form",
+      "source": "Google Forms",
+      "source_url": "https://docs.google.com/forms/d/1YO2pmRsaeAVdT6jya_DboK2SX3MWz7AQWKJRyNUy44w/viewform",
+      "description": "Over-the-Counter (OTC) medication are drugs that do not require a prescription and are purchased \"over-the-counter.\" This form is required before over-the-counter medication can be administered at school.",
+      "description_bullets": [
+        "All Non-prescription over the counter (OTC) medications will be dispensed as needed to students upon the completion of the Consent for OTC Medication Administration form with parent/guardian signature. Medication will be given in accordance with package directions. Dosage must be weight and age appropriate per label (i.e. children specific formula).",
+        "If medication is to be administered for three (3) consecutive days, a licensed healthcare provider order must be submitted to the school health office for continuing administration of the medication beyond the three (3) days to ensure that use of this medication is not masking symptoms of a serious condition in the student.",
+        "In order to minimize the possibility of a drug overdose, non-prescribed medications will not be dispensed during the first and last hours of the school day.",
+        "This form is to be filled out optionally for students that may be taking overnight fieldtrips with DGM."
+      ],
+      "form_notes": "Two typos in source: 'Anti Naseau' should be 'Anti Nausea'; 'Hydrocortison Cream' should be 'Hydrocortisone Cream'. Recommend fixing on rebuild.",
+      "sections": [
+        {
+          "section_title": null,
+          "section_helper_text": null,
+          "fields": [
+            {
+              "label": "Student's First Name",
+              "type": "short_text",
+              "required": true,
+              "notes": null
+            },
+            {
+              "label": "Student's Last Name",
+              "type": "short_text",
+              "required": true,
+              "notes": null
+            },
+            {
+              "label": "Please select each medication you are giving permission to administer:",
+              "type": "checkbox_grid",
+              "required": true,
+              "rows": [
+                "Acetaminophen (Tylenol)",
+                "Ibuprofen (Advil)",
+                "Sunscreen",
+                "Anti Nausea Medications",
+                "Pepto Bismol",
+                "Antibiotic Cream (Neosporin)",
+                "Hydrocortisone Cream (Cortaid)",
+                "Burn Gels",
+                "Antihistamine (Benadryl, Zyrtec)",
+                "Cough Drops"
+              ],
+              "columns": ["Yes", "No"],
+              "notes": "Checkbox grid: parent selects Yes or No for each medication. If MyGrowthSuite doesn't support grids natively, implement as 10 separate Yes/No radio questions or a multi-select 'check all you approve' with the medication list."
+            }
+          ]
+        },
+        {
+          "section_title": "Medication History",
+          "section_helper_text": null,
+          "fields": [
+            {
+              "label": "Is your student allergic to any medication?",
+              "type": "short_text",
+              "required": true,
+              "notes": "Recommend converting to Yes/No radio with conditional text field for the follow-up. Currently a free-text answer expected."
+            },
+            {
+              "label": "If yes, please list medicine(s) and type of reaction.",
+              "type": "long_text",
+              "required": false,
+              "notes": "Conditional on previous answer being Yes"
+            },
+            {
+              "label": "Does your student take any medication (either over-the-counter or prescription) on a regular basis?",
+              "type": "radio",
+              "required": false,
+              "options": ["Yes", "No"],
+              "notes": "Original has 'Clear selection' option"
+            },
+            {
+              "label": "If yes, please list.",
+              "type": "long_text",
+              "required": false,
+              "notes": "Conditional on previous answer being Yes"
+            }
+          ]
+        },
+        {
+          "section_title": "Parent Signature and Consent",
+          "section_helper_text": "By typing my name below I agree to conduct business with Desert Garden Montessori by electronic means. I intend by typing my name below to \"sign\" the preceding document and to be bound by its terms and conditions. I understand that by signing this form I am allowing Desert Garden Montessori to administer the medications indicated above in accordance with the manufacturer's recommended dosage. I understand that I will be informed of any medications that are given to my child as soon as possible.",
+          "fields": [
+            {
+              "label": "Parent Signature",
+              "type": "short_text",
+              "required": true,
+              "notes": "Typed name acts as e-signature"
+            },
+            {
+              "label": "Parent Email",
+              "type": "email",
+              "required": true,
+              "notes": null
+            },
+            {
+              "label": "Date",
+              "type": "date",
+              "required": true,
+              "notes": "MM/DD/YYYY format"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "form_id": "cafe_worker_permission",
+      "title": "Cafe Worker Permission Form",
+      "source": "Google Forms",
+      "source_url": "https://docs.google.com/forms/d/1iggjVOJhHdBDlGSz_6-Z-QodBSa5CIJAkhAj5WDkeKQ/viewform",
+      "description": "Dear Parents, Your child has applied and been hired to work at the Desert Garden Cafe. This will require supporting your child with transportation as needed. Working at the cafe is a valuable training experience on work ethic for the future. Please sign below to allow your child to participate in this life skill activity. NOTE: Students will be receiving a share of the overall tips collected periodically. By typing my name below I agree to conduct business with Desert Garden Montessori by electronic means. I intend by typing my name below to \"sign\" the preceding document and to be bound by its terms and conditions.",
+      "sections": [
+        {
+          "section_title": null,
+          "section_helper_text": null,
+          "fields": [
+            {
+              "label": "Student Name",
+              "type": "short_text",
+              "required": true,
+              "notes": null
+            },
+            {
+              "label": "Parent/Guardian Signature",
+              "type": "short_text",
+              "required": true,
+              "notes": "Typed name acts as e-signature"
+            },
+            {
+              "label": "Date",
+              "type": "date",
+              "required": true,
+              "notes": "MM/DD/YYYY format"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "form_id": "childcare_registration",
+      "title": "Childcare Registration Form",
+      "source": "Google Forms",
+      "source_url": "https://docs.google.com/forms/d/111SXlpF0W4BOfALAXcLbVPLG8nJ-zjKNUWoAFZDQ3FY/viewform",
+      "status": "PARTIAL - description only; fields not accessible (form closed to responses at time of capture)",
+      "description": "Childcare Days are days the School is open but there is no class instruction. Childcare is made available to assist working parents. These dates are all listed on the DGM App 'HOLIDAYS AND IN-SERVICE CALENDAR' icon. Please fill out the form below for any childcare dates that you are interested in. It is imperative that you register your child/children (this includes Extended Day children) if you wish to have your child receive care. If you are not registered, we cannot extend childcare services to you since we base our staffing needs on the number of children who are registered. If you do not register your child during the registration period and miss the deadline; you may contact the front desk to add your child to the waitlist. On the Childcare Day, you may call the school at 9:00am to see if we can accommodate your child for that day. NOTE: Extended tuition rates include Childcare Days. All other tuition rates do not include Childcare Days and will be billed as follows: Half Day students: A flat rate of $67.00 per child; School Day Children: $120 per child. Please see the Parent Handbook under Financial Terms and Conditions. Hours of operation for ALL Childcare Days: 7:00am-4:00pm. No-show fee equals the daily flat rate; cancellations must be made up to 2 school days prior via email or written notice to the front desk. Please provide a non-perishable, nut free sack lunch at drop-off; organic kitchen is closed on Childcare Days. Arrive no later than 9:00am. Send cancellations to Ms. Lisa. No electronics allowed; devices will be confiscated.",
+      "form_notes": "Form was closed when captured. Fields need to be obtained via reopening, screenshot, or response spreadsheet headers. Recommend splitting policy text into a separate 'Childcare Policies' page in MyGrowthSuite (too dense for an inline form description).",
+      "sections": []
+    },
+    {
+      "form_id": "fall_enrichments",
+      "title": "Fall Enrichments",
+      "source": "Google Forms",
+      "source_url": "https://docs.google.com/forms/d/1NP_pa0aN9RNkwEJXqIW_MfLHUAV2WyTt0mmCqzpuLEk/viewform",
+      "status": "PARTIAL - description only; fields not accessible (form closed to responses at time of capture)",
+      "description": "Dear DGM Parents, Enrichments are back! Listed below are the classes that are being offered this semester. All classes are held right here on the DGM campus! (Please be aware of the required age group for each class when signing up.) All classes are scheduled to begin the week of Monday, September 8, 2025. The last day to sign up is Tuesday, September 2, 2025. All Classes will be 12 weeks long, with the exception of Friday Elementary classes which are 9 weeks long and the Chess Club which is 6 weeks long. The end date of classes offered may vary by class due to scheduled childcare, early releases, and holidays. Enrollments after the published start date will only be granted until the end of the first week of classes. All class schedules are final after this date. If the minimum number of students is not met the class will be cancelled. Any make-up classes due to provider absence are the responsibility of the Enrichment Provider. Administrative staff will contact parents regarding the scheduling of any necessary make-up sessions. All fees are managed by Desert Garden Montessori. A staff member will be present at all times. Classes will NOT be held on the following days: October 6-10 Fall Break; October 13 Conferences; November 11 Veteran's Day; November 26-28 Thanksgiving Break; Early Release Fridays (Elementary only): October 3, November 7, December. Please contact the Front Desk if you have any questions or concerns. ***All associated fees will be collected via your FACTS account. If you need to make other payment arrangements please contact DGM Finance at finance@desertgardenmontessori.org.",
+      "form_notes": "Seasonal/cyclical form. Recommend MyGrowthSuite template with configurable variables for: semester name, start week, signup deadline, class length defaults, no-class dates. Fields need to be obtained via reopening, screenshot, or response spreadsheet headers.",
+      "sections": []
+    },
+    {
+      "form_id": "field_study_excursion_student_specific",
+      "title": "Field Study Excursion Form (student specific)",
+      "source": "Google Forms",
+      "source_url": "https://docs.google.com/forms/d/1WCRQd_uW2as935uZJVIDmHdaMXPdnY2Hv9oofJSTVaQ/edit",
+      "status": "BLOCKED - 401 auth required; fields not yet captured",
+      "form_notes": "Form is locked to organization/sign-in. Need DGM to temporarily change sharing settings, provide a screenshot of the form in edit mode, or paste field list as text.",
+      "sections": []
+    },
+    {
+      "form_id": "unknown_locked_form_135ww",
+      "title": "Unknown Locked Form",
+      "source": "Google Forms",
+      "source_url": "https://docs.google.com/forms/d/135WW17twkpnyeoEljq6RDxcNcXkcha1rku4sj18ER6s/edit",
+      "status": "BLOCKED - 401 auth required; title and fields not yet captured",
+      "form_notes": "Originally sent before bulk batch; title unknown. Same access issue as Field Study Excursion.",
+      "sections": []
+    },
+    {
+      "form_id": "fieldtrip_childplay_theater",
+      "title": "Fieldtrip: Childplay's Theater Performance Permission Form",
+      "source": "Google Forms",
+      "source_url": "https://docs.google.com/forms/d/159dbUYukg5UCHXDkDOI4oiuO50AoQ7YkKmfHRmO0rK4/viewform",
+      "description_bullets": [
+        "Who: Lower Elementary",
+        "Venue: Herberger Theatre: 22 E Monroe St, Phoenix, AZ 85004",
+        "Date(s): Friday, May 1st",
+        "Time: 8:30am - 2:00pm"
+      ],
+      "description": "Info: This is a permission form to allow my child to attend the Child's Play Theater Performance and have lunch at Margaret T. Hance Park. I understand that my child will be escorted at all times by a staff member and chaperones.",
+      "form_notes": "Trip-specific form. Recommend a generic Fieldtrip Permission template in MyGrowthSuite with configurable variables for: who/audience, venue/address, date, time, trip name, transportation toggle, classroom options.",
+      "sections": [
+        {
+          "section_title": null,
+          "section_helper_text": null,
+          "fields": [
+            {"label": "Child's Name", "type": "short_text", "required": true, "notes": null},
+            {"label": "Child's Classroom", "type": "dropdown", "required": true, "options": ["CR11 (Ms. Denise & Ms. Rose)", "CR12 (Ms. Jill)"], "notes": "Classroom options should be a managed/configurable list in MyGrowthSuite"},
+            {"label": "Does your child have your permission to attend this field trip?", "type": "dropdown", "required": true, "options": ["Yes", "No"], "notes": null},
+            {"label": "Does your child have your permission to ride in the DGM provided transportation?", "type": "dropdown", "required": true, "options": ["Yes", "No"], "notes": null}
+          ]
+        },
+        {
+          "section_title": "Parent Signature",
+          "section_helper_text": "By typing my name below I agree to conduct business with Desert Garden Montessori by electronic means. I intend by typing my name below to \"sign\" the preceding document and to be bound by its terms and conditions.",
+          "fields": [
+            {"label": "Parent Signature", "type": "short_text", "required": true, "notes": "Typed name acts as e-signature"},
+            {"label": "Email", "type": "email", "required": true, "notes": null},
+            {"label": "Date", "type": "date", "required": false, "notes": "MM/DD/YYYY format"}
+          ]
+        }
+      ]
+    },
+    {
+      "form_id": "lower_e_staying_safe",
+      "title": "Lower E Staying Safe Permission Form",
+      "source": "Google Forms",
+      "source_url": "https://docs.google.com/forms/d/1pectX5BYKcHe9UZC3QAbZY2FeeoHMIRjefmefRpQ4cM/viewform",
+      "description_bullets": [
+        "Who: Lower Elementary Students",
+        "Venue: In respective classrooms",
+        "Date(s): Week of September 16th",
+        "Time: During the morning"
+      ],
+      "description": "Info: The Staying Safe presentation will include topics such as: Pool safety, Importance of helmets, Crossing the street, Safe adults, Stranger safety - What to do when a stranger approaches you, What to do if you are lost. This is a permission form to allow my child to participate in the Staying Safe presentation by the DGM iTeam staff.",
+      "form_notes": "Twin form to Primary Staying Safe (different classrooms/teachers). Recommend a shared 'Staying Safe Permission' template parameterized by program level (Primary/LE).",
+      "sections": [
+        {
+          "section_title": null,
+          "section_helper_text": null,
+          "fields": [
+            {"label": "Student's First Name", "type": "short_text", "required": true, "notes": null},
+            {"label": "Student's Last Name", "type": "short_text", "required": true, "notes": null},
+            {"label": "Current Grade", "type": "radio", "required": true, "options": ["Classroom 11", "Classroom 12"], "notes": "Source labels as 'Current Grade' but options are classrooms; likely a label error in original"},
+            {"label": "Current Teacher", "type": "dropdown", "required": true, "options": ["rjones@desertgardenmontessori.org, dhenryi@desertgardenmontessori.org", "jcarson@desertgardenmontessori.org"], "notes": "Options are teacher email addresses; recommend converting to a teacher-name picker tied to staff records in MyGrowthSuite"},
+            {"label": "Does your child have your permission to attend this presentation?", "type": "dropdown", "required": true, "options": ["Yes", "No"], "notes": null}
+          ]
+        },
+        {
+          "section_title": "Parent Signature",
+          "section_helper_text": "By typing my name below I agree to conduct business with Desert Garden Montessori by electronic means. I intend by typing my name below to \"sign\" the preceding document and to be bound by its terms and conditions.",
+          "fields": [
+            {"label": "Parent Signature", "type": "short_text", "required": true, "notes": "Typed name acts as e-signature"},
+            {"label": "Email", "type": "email", "required": true, "notes": null},
+            {"label": "Date", "type": "date", "required": false, "notes": "MM/DD/YYYY format"}
+          ]
+        }
+      ]
+    },
+    {
+      "form_id": "primary_staying_safe",
+      "title": "Primary Staying Safe Permission Form",
+      "source": "Google Forms",
+      "source_url": "https://docs.google.com/forms/d/1WT5QkulX2GGoBPp3xM3hUJ5dOnL4KZUs-Ej_xgM3qw0/viewform",
+      "description_bullets": [
+        "Who: Primary Students Ages 4-6 years",
+        "Venue: In respective classrooms",
+        "Date(s): Week of September 16th",
+        "Time: During the morning"
+      ],
+      "description": "Info: The Staying Safe presentation will include topics such as: Pool safety, Importance of helmets, Crossing the street, Safe adults, Stranger safety - What to do when a stranger approaches you, What to do if you are lost. This is a permission form to allow my child to participate in the Staying Safe presentation by the DGM iTeam staff.",
+      "form_notes": "Twin form to Lower E Staying Safe (different classrooms/teachers). Recommend a shared 'Staying Safe Permission' template parameterized by program level.",
+      "sections": [
+        {
+          "section_title": null,
+          "section_helper_text": null,
+          "fields": [
+            {"label": "Student's First Name", "type": "short_text", "required": true, "notes": null},
+            {"label": "Student's Last Name", "type": "short_text", "required": true, "notes": null},
+            {"label": "Current Grade", "type": "radio", "required": true, "options": ["Classroom 1", "Classroom 2", "Classroom 7", "Classroom 8"], "notes": "Source labels as 'Current Grade' but options are classrooms"},
+            {"label": "Current Teacher", "type": "dropdown", "required": true, "options": ["orobertson@desertgardenmontessori.org", "tmusel@desertgardenmontessori.org", "pshupp@desertgardenmontessori.org", "atamez@desertgardenmontessori.org"], "notes": "Options are teacher email addresses; recommend converting to teacher-name picker"},
+            {"label": "Does your child have your permission to attend this presentation?", "type": "dropdown", "required": true, "options": ["Yes", "No"], "notes": null}
+          ]
+        },
+        {
+          "section_title": "Parent Signature",
+          "section_helper_text": "By typing my name below I agree to conduct business with Desert Garden Montessori by electronic means. I intend by typing my name below to \"sign\" the preceding document and to be bound by its terms and conditions.",
+          "fields": [
+            {"label": "Parent Signature", "type": "short_text", "required": true, "notes": "Typed name acts as e-signature"},
+            {"label": "Email", "type": "email", "required": true, "notes": null},
+            {"label": "Date", "type": "date", "required": false, "notes": "MM/DD/YYYY format"}
+          ]
+        }
+      ]
+    },
+    {
+      "form_id": "mosquito_repellent_permission",
+      "title": "Mosquito Repellent Permission Form",
+      "source": "Google Forms",
+      "source_url": "https://docs.google.com/forms/d/1IV7pAqy0a_FmTLRYJMLjDsLTK8NzUPSdb2_phKQHT-o/viewform",
+      "description": "Dear Parent/Guardian, To help protect students from mosquito bites during outdoor activities, Desert Garden Montessori will be applying a non-toxic, DEET-free mosquito repellent spray that is free of common allergens. This product (California Baby - Natural bug repellent) is safe for children 6 months and older. Please complete the form below to permit the DGM staff to apply mosquito repellent to your child as needed. If you have any questions or concerns about the mosquito repellent or its ingredients, please contact support@desertgardenmontessori.org. Thank you for helping us keep our students safe and comfortable during outdoor time!",
+      "sections": [
+        {
+          "section_title": null,
+          "section_helper_text": null,
+          "fields": [
+            {"label": "Student Name", "type": "short_text", "required": true, "notes": null},
+            {"label": "Classroom", "type": "radio", "required": true, "options": ["Classroom 1", "Classroom 2", "Classroom 7", "Classroom 8"], "notes": "Currently only lists Primary classrooms; may need expansion if used schoolwide"}
+          ]
+        },
+        {
+          "section_title": "Parent/Guardian Consent",
+          "section_helper_text": null,
+          "fields": [
+            {"label": "Parent/Guardian Consent", "type": "radio", "required": true, "options": ["I GIVE PERMISSION for staff to apply the non-toxic, allergen-free mosquito spray to my child as needed during outdoor activities.", "I DO NOT GIVE PERMISSION for staff to apply mosquito spray to my child. I understand that my child may be more exposed to mosquito bites while outdoors."], "notes": "Explicit consent/no-consent radio"}
+          ]
+        },
+        {
+          "section_title": "Parent Signature Section",
+          "section_helper_text": "By typing my name below I agree to conduct business with Desert Garden Montessori by electronic means. I intend by typing my name below to \"sign\" the preceding document and to be bound by its terms and conditions.",
+          "fields": [
+            {"label": "Parent Signature", "type": "short_text", "required": true, "notes": "Typed name acts as e-signature"},
+            {"label": "Email", "type": "email", "required": true, "notes": null},
+            {"label": "Phone Number", "type": "phone", "required": true, "notes": null},
+            {"label": "Date", "type": "date", "required": true, "notes": "MM/DD/YYYY format"}
+          ]
+        }
+      ]
+    },
+    {
+      "form_id": "request_administering_medication",
+      "title": "Request For Administering Medication Form",
+      "source": "Google Forms",
+      "source_url": "https://docs.google.com/forms/d/1zczqIsd63AvDKf3MADl9QWuDjXB6gNg589aLkiherJA/viewform",
+      "description": "This form is to allow the front desk or field trip chaperone to administer medication as described below. Prescription medication must be in the original container as dispensed by the pharmacist. The label must include the student's name, name of medication, dosage and have current date. Over-the-counter or non-prescription medications must be in the original packaging with all directions, dosages, contents, and proportions clearly indicated. Please provide a doctor's note with instructions and dosage. All medications, including refills, must be brought to school by the parents and left with authorized school personnel. Students are not to have medications in pockets, lunch boxes or backpacks at school.",
+      "form_notes": "DGM-internal counterpart to the AZDHS State Medication Consent Form. Some fields overlap; consider whether MyGrowthSuite should merge them or keep parallel for compliance.",
+      "sections": [
+        {
+          "section_title": null,
+          "section_helper_text": null,
+          "fields": [
+            {"label": "Child's Name", "type": "short_text", "required": true, "notes": null},
+            {"label": "Child's Classroom", "type": "dropdown", "required": true, "options": ["CR1", "CR2", "CR3", "CR4", "CR5", "CR6", "CR7", "CR8", "UE CR10", "LE CR11", "LE CR12", "UE Tower", "MS 7 & 8", "HS 9, 10, 11 & 12"], "notes": "Full DGM classroom list - use as master reference for other forms"},
+            {"label": "Name of Medication", "type": "short_text", "required": false, "notes": null},
+            {"label": "Type of Medication", "type": "dropdown", "required": true, "options": ["Over the Counter", "Prescription Medication"], "notes": null},
+            {"label": "Prescription RX#", "type": "short_text", "required": true, "notes": "Helper text: 'Please make sure to put the prescription number here if you have a prescription medication. If you do not have prescription medication please just put N/A (Not Applicable)'"},
+            {"label": "Dosage", "type": "short_text", "required": true, "notes": "Helper text: 'Please specify the amount of medication to be given.'"},
+            {"label": "Route (method of administration)", "type": "short_text", "required": false, "notes": null},
+            {"label": "Please list all/any possible side effects.", "type": "long_text", "required": false, "notes": null},
+            {"label": "Administration Start Date", "type": "date", "required": true, "notes": "MM/DD/YYYY format"},
+            {"label": "Administration End Date", "type": "date", "required": true, "notes": "MM/DD/YYYY format"},
+            {"label": "Time and Frequency", "type": "dropdown", "required": true, "options": ["As Needed", "1x daily", "2x daily", "3x daily", "Morning", "Afternoon", "Evening", "Every 4-6 Hours", "Other - Please specify below"], "notes": null},
+            {"label": "If you answered \"Other\" in the question above, please explain the time and frequency needed for the administration of this medication.", "type": "long_text", "required": false, "notes": "Conditional on previous = 'Other'"},
+            {"label": "Reason for Medication", "type": "short_text", "required": true, "notes": null}
+          ]
+        },
+        {
+          "section_title": "Parent Information and Signature",
+          "section_helper_text": "I have read and understand that these procedures are intended to help assure the safety of my child as well as other students attending Desert Garden Montessori. I understand that I will be required to physically complete and sign a medication form by the Arizona Department of Health Services at the front desk. By typing my name below I agree to conduct business with Desert Garden Montessori by electronic means. I intend by typing my name below to \"sign\" the preceding document and to be bound by its terms and conditions.",
+          "fields": [
+            {"label": "Parent Signature", "type": "short_text", "required": true, "notes": "Helper text: 'I give permission for the administration of the medication, according to the instructions listed, to the child listed above.' Typed name acts as e-signature."},
+            {"label": "Parent Email", "type": "email", "required": true, "notes": null},
+            {"label": "Date", "type": "date", "required": false, "notes": "MM/DD/YYYY format"}
+          ]
+        }
+      ]
+    },
+    {
+      "form_id": "dgm_flag_football_registration",
+      "title": "DGM Flag Football Registration Form",
+      "source": "Google Forms",
+      "source_url": "https://docs.google.com/forms/d/1M0f5iKCscyV6ieR3DjxdkbW-cfyqluAMQThyFhvstsg/viewform",
+      "category": "Athletics Registration (with fee)",
+      "description": "This form is to gather parent and student information for participation in DGM's Coed Flag Football team. Fall Sport - Flag Football: Coed for UE & MYHS (4th-8th); Season Sept 9th-Nov 14th; Tryouts Wed Sept 3rd 3:30-5pm; Cost $250 per athlete (includes AZ Premier League registration, jersey, training); Practice T/Th 3:30-5pm at DGM; Games Saturdays at Tempe Sports Complex. Spring Sport - Flag Football: Same age range; Tentative March 17th-May 12th; Tryouts Wed Feb 18th 3:30-5pm; Cost $250; Same practice schedule. Contact Coach Bala at athletics@desertgardenmontessori.org. GO GILA MONSTERS!",
+      "fee": {"amount": 250, "currency": "USD", "payment_method": "FACTS account", "refundable": false, "inclusions": "AZ Premier League registration, jersey, training"},
+      "form_notes": "Athletics template candidate - shares core structure with Golf, Pickleball, Spartan. Recommend a unified 'Sport Registration' template in MyGrowthSuite with configurable: sport name, season, cost, gear inclusions, age range, classroom options, shirt size set.",
+      "sections": [
+        {
+          "section_title": null,
+          "section_helper_text": null,
+          "fields": [
+            {"label": "Student Name", "type": "short_text", "required": true, "notes": null},
+            {"label": "Student Classroom", "type": "dropdown", "required": true, "options": ["Upper Elementary CR10", "Upper Elementary Tower", "Middle School"], "notes": "Athletics-specific subset of classrooms"},
+            {"label": "What season are you registering for?", "type": "radio", "required": true, "options": ["Fall 2025", "Spring 2026"], "notes": "Season options will need yearly updates - good candidate for dynamic options"},
+            {"label": "Jersey Shirt Size", "type": "radio", "required": true, "options": ["XS", "S", "M", "L", "XL", "XXL"], "notes": null}
+          ]
+        },
+        {
+          "section_title": "Parent Signature",
+          "section_helper_text": "By typing my name below I agree to conduct business with Desert Garden Montessori by electronic means. I intend by typing my name below to \"sign\" the preceding document and to be bound by its terms and conditions.",
+          "fields": [
+            {"label": "Parent Signature", "type": "short_text", "required": true, "notes": "Typed name acts as e-signature"},
+            {"label": "Parent Email", "type": "email", "required": true, "notes": null}
+          ]
+        }
+      ]
+    },
+    {
+      "form_id": "dgm_golf_registration",
+      "title": "DGM Golf Registration Form",
+      "source": "Google Forms",
+      "source_url": "https://docs.google.com/forms/d/1r7C1v-3WxEA3pPBaGKZAj5z-JY1ohIsXpsgVKIQqKI8/viewform",
+      "category": "Athletics Registration (with fee)",
+      "description": "This form is to gather parent and student information for participation in DGM's Golf season. This opportunity is available to UE and MYHS. Spring Sport - Golf: Upper Elementary and MYHS Coed (4th-12th); Season Mar 23rd-May 13th; Cost $220 per athlete (includes Gila Monster Golf Polo, Hat, training); Practice M/W 3:30-5pm alternating DGM Campus and Ken McDonald Golf Course; DGM provides transportation to course, parents pickup from DGM; Tournament Top Golf May 13th 2:30-5:15pm. Contact Coach Bala at athletics@desertgardenmontessori.org. GO GILA MONSTERS!",
+      "fee": {"amount": 220, "currency": "USD", "payment_method": "FACTS account", "refundable": false, "inclusions": "Gila Monster Golf Polo, Hat, training"},
+      "form_notes": "Athletics template candidate.",
+      "sections": [
+        {
+          "section_title": null,
+          "section_helper_text": null,
+          "fields": [
+            {"label": "Student Name", "type": "short_text", "required": true, "notes": null},
+            {"label": "Student Classroom", "type": "dropdown", "required": true, "options": ["Upper Elementary CR10", "Upper Elementary Tower", "Middle School", "High"], "notes": "Inconsistent option label: 'High' should likely be 'High School'"},
+            {"label": "Jersey Shirt Size", "type": "radio", "required": true, "options": ["XS", "S", "M", "L", "XL", "XXL"], "notes": null}
+          ]
+        },
+        {
+          "section_title": "Parent Signature",
+          "section_helper_text": "By typing my name below I agree to conduct business with Desert Garden Montessori by electronic means. I intend by typing my name below to \"sign\" the preceding document and to be bound by its terms and conditions.",
+          "fields": [
+            {"label": "Parent Signature", "type": "short_text", "required": true, "notes": "Typed name acts as e-signature"},
+            {"label": "Parent Email", "type": "email", "required": true, "notes": null}
+          ]
+        }
+      ]
+    },
+    {
+      "form_id": "dgm_pickle_ball_registration",
+      "title": "DGM Pickle Ball Registration Form",
+      "source": "Google Forms",
+      "source_url": "https://docs.google.com/forms/d/1GXqwmeHJNoewXXadJtB1Jxpe9R3YPd6r5-bqSW3r48Q/viewform",
+      "category": "Athletics Registration (with fee)",
+      "description": "NOTE: This is an *OPTIONAL* signup form for our athletics program for Pickle Ball. This form is to register your student for the Pickle Ball Sport. All associated fees will be collected via your FACTS account. All associated fees are *Nonrefundable*. By submitting this form you are accepting Desert Garden Montessori Finance Team to charge your FACTS above with the pricing listed below. Fall Sport - Pickle Ball: Coed Elementary and MYHS (1st-12th); Season Sept 8th-Nov 5th; Cost $220 per athlete (includes pickleball jersey, training); Athletes purchase their own paddle; Practice M/W LE 3-4:10pm, UE & MYHS 4-5:30pm at DGM; Bring a Ringer Doubles Tournament Sat Nov 8th 8am-12pm. Contact Coach Bala at athletics@desertgardenmontessori.org.",
+      "fee": {"amount": 220, "currency": "USD", "payment_method": "FACTS account", "refundable": false, "inclusions": "Pickleball jersey, training"},
+      "form_notes": "Athletics template candidate. Missing fields vs other sport forms (no classroom, no email beyond what e-sig captures) - flag for DGM to confirm intentional or oversight.",
+      "sections": [
+        {
+          "section_title": null,
+          "section_helper_text": null,
+          "fields": [
+            {"label": "Student Name", "type": "short_text", "required": true, "notes": null},
+            {"label": "Student Shirt Size", "type": "radio", "required": true, "options": ["Youth S", "Youth M", "Youth L", "Youth XL", "Adult S", "Adult M", "Adult L", "Adult XL"], "notes": "More granular than other sport forms - uses Youth/Adult split"},
+            {"label": "Parent Signature", "type": "short_text", "required": true, "notes": "Helper text: 'By typing my name below I agree to conduct business with Desert Garden Montessori by electronic means. I intend by typing my name below to \"sign\" the preceding document and to be bound by its terms and conditions.' Typed name acts as e-signature."}
+          ]
+        }
+      ]
+    },
+    {
+      "form_id": "spartan_registration",
+      "title": "Spartan Registration Form",
+      "source": "Google Forms",
+      "source_url": "https://docs.google.com/forms/d/147TEL7XK52MzAWN_SYWCyYTV5I02q9qf-zlMz7XH6pE/viewform",
+      "category": "Athletics Registration (with fee)",
+      "description": "The Spartan Race is a series of obstacle races of varying distance and difficulty ranging from the half mile to marathon distances. As a classic obstacle course racing experience, the race combines relatively easy trail running with a series of obstacles, held on off-road terrain featuring water and mud. Climb walls, crawl under wire, monkey bars, aim a spear throw, and more! This form is to register for the Spartan Race. All associated race fees will be collected via your FACTS account. By submitting this form you are allowing Desert Garden Montessori Finance Team to charge your FACTS account with the pricing indicated below. Race fees will be billed to your FACTS account. If you have an alumni student and do not have a FACTS account, you may pay by cash or check at the front desk. The fee for DGM alumni and non-DGM siblings of current students will be $250. Winter Sport - Spartan: Coed Primary, Elementary, & MYHS (Ages 5+); Season Dec 1-Feb 11; Cost $220 per athlete (includes registration, Mud Monster gear, training); Spartan Trial during school day Nov 17th for 3rd Primary, Elementary and MYHS; Practice ONLY Mondays in December, M/W in Jan-Feb (Primary 2:30-3:10pm, LE 3:15-4pm, UE & MYHS 4-5pm) at DGM; Pre-Race Parent Meeting Feb 11th 5pm; Race Date Feb 15th, Location TBD. Contact Coach Bala at athletics@desertgardenmontessori.org.",
+      "fee": {"amount_options": [{"amount": 220, "audience": "Primary/LE/UE/MYHS Spartan Kids"}, {"amount": 250, "audience": "Alumni or Non-DGM Sibling"}], "currency": "USD", "payment_method": "FACTS account (or cash/check at front desk for alumni without FACTS)", "refundable": "Not specified", "inclusions": "Registration fee, Mud Monster gear, training"},
+      "form_notes": "Most detailed athletics form - captures parent contact info and pricing tier. Could serve as master athletics template. Note: no parent signature/e-sig field in this form despite collecting payment authorization - flag for DGM.",
+      "sections": [
+        {
+          "section_title": null,
+          "section_helper_text": null,
+          "fields": [
+            {"label": "Please select your training option:", "type": "dropdown", "required": true, "options": ["$220 for Spartan Kids (Primary) must be 5yrs+", "$220 for LE Spartan Kids", "$220 for UE and MYHS Spartan Kids", "$250 for Alumni or Non-DGM Sibling"], "notes": "Combines pricing tier and age group selection"},
+            {"label": "Parent #1 Email", "type": "email", "required": true, "notes": null},
+            {"label": "Parent #1 Phone", "type": "phone", "required": true, "notes": null},
+            {"label": "Parent #2 Email", "type": "email", "required": false, "notes": null},
+            {"label": "Parent #2 Phone", "type": "phone", "required": false, "notes": null},
+            {"label": "Student Name", "type": "short_text", "required": true, "notes": null},
+            {"label": "Student Birthdate", "type": "date", "required": true, "notes": "MM/DD/YYYY format"},
+            {"label": "Student Classroom", "type": "dropdown", "required": true, "options": ["Primary CR1", "Primary CR2", "Primary CR7", "Primary CR8", "LE CR11", "LE CR12", "UE Tower", "UE CR10", "MYHS", "Other"], "notes": null},
+            {"label": "Student Phone (If applicable)", "type": "phone", "required": false, "notes": null},
+            {"label": "Student Email (If applicable)", "type": "email", "required": false, "notes": null},
+            {"label": "Shirt Size", "type": "dropdown", "required": true, "options": ["Adult XS", "Adult S", "Adult M", "Adult L", "Adult XL", "Youth XS", "Youth S", "Youth M", "Youth L", "Youth XL"], "notes": null},
+            {"label": "Pant/Short Size", "type": "dropdown", "required": true, "options": ["Adult XS", "Adult S", "Adult M", "Adult L", "Adult XL", "Youth XS", "Youth S", "Youth M", "Youth L", "Youth XL"], "notes": null}
+          ]
+        }
+      ]
+    },
+    {
+      "form_id": "authorization_for_release_of_information",
+      "title": "Authorization For Release Of Information",
+      "source": "Google Forms",
+      "source_url": "https://docs.google.com/forms/d/1Ud7hOYcq6OmesUXk3TEtrHXd6sBJsc7XXIULcXTwgi8/viewform",
+      "description": null,
+      "form_notes": "Records-request form used during enrollment from prior schools/providers. Captures FERPA-compliant authorization.",
+      "sections": [
+        {
+          "section_title": "Student Information",
+          "section_helper_text": null,
+          "fields": [
+            {"label": "Student's Full Name", "type": "short_text", "required": false, "notes": "Original does not mark required, but should be"},
+            {"label": "Date Of Birth", "type": "date", "required": false, "notes": "MM/DD/YYYY format"},
+            {"label": "Grade Entering", "type": "short_text", "required": false, "notes": null},
+            {"label": "Address", "type": "short_text", "required": false, "notes": "Consider long_text for full street/city/state/zip"},
+            {"label": "Phone", "type": "phone", "required": false, "notes": null},
+            {"label": "Email", "type": "email", "required": false, "notes": null}
+          ]
+        },
+        {
+          "section_title": "Current/Previous School Information",
+          "section_helper_text": null,
+          "fields": [
+            {"label": "Name of School, Service Provider or Evaluator", "type": "short_text", "required": false, "notes": null},
+            {"label": "Address", "type": "short_text", "required": false, "notes": null},
+            {"label": "Registrar Email", "type": "email", "required": false, "notes": null},
+            {"label": "Phone", "type": "phone", "required": false, "notes": null},
+            {"label": "Fax", "type": "phone", "required": false, "notes": null},
+            {"label": "Please check all the information requested:", "type": "checkboxes", "required": false, "options": ["Complete Education File", "Special Education Files (If applicable)", "Permission to make/receive phone calls from above listed professional", "Other:"], "notes": "Multi-select; 'Other:' option suggests follow-up text field"},
+            {"label": "Please specify additional information:", "type": "long_text", "required": false, "notes": "Conditional on 'Other:' being checked"}
+          ]
+        },
+        {
+          "section_title": "Signature",
+          "section_helper_text": "In order to assist in the provision of an appropriate education program for my Child, and in accordance with the Family Educational Rights and Privacy Act of 1974 and Arizona State Law, I hereby authorize the release to Desert Garden Montessori any student records, including grades, health records, as well as psychological, social, educational, developmental, etc., for the above student. By typing my name below, I agree to conduct business with Desert Garden Montessori by electronic means. I intend, by typing my name below, to \"sign\" the preceding document and to be bound by its terms and conditions.",
+          "fields": [
+            {"label": "Parent Signature", "type": "short_text", "required": false, "notes": "Typed name acts as e-signature - should be required"},
+            {"label": "Date", "type": "date", "required": false, "notes": "MM/DD/YYYY format - should be required"}
+          ]
+        }
+      ],
+      "footer_text": "Please send all school records to: Desert Garden Montessori, 5130 E. Warner Road, Phoenix, AZ 85044. Phone: 480-496-9833. Fax: 480-705-8579. Attention: Karen Hurlbert - karen@desertgardenmontessori.org"
+    },
+    {
+      "form_id": "state_emergency_info_immunization_card",
+      "title": "Arizona State Emergency, Information and Immunization Record Card",
+      "source": "PDF (Arizona Department of Health Services - Bureau of Child Care Licensing)",
+      "source_url": "https://www.azdhs.gov/documents/licensing/childcare-facilities/providers/forms/emergency-info-immunization-card.pdf",
+      "category": "State-mandated form (needs multiple signatures)",
+      "description": "Arizona Department of Health Services Bureau of Child Care Licensing - Emergency, Information and Immunization Record Card. State-required for childcare-licensed facilities. Pursuant to R9-5-304.B, at least two contact persons are required.",
+      "form_notes": "State-mandated form for licensed childcare. Has paper-specific elements (CDC/SGH#, staff-only fields, dated update tracking) that may not fit a digital parent portal. Recommend digitizing only the parent-facing portion and keeping immunization record as a file upload. PDF attachment of immunization record or exemption affidavit is required.",
+      "sections": [
+        {
+          "section_title": "Header / Identifiers",
+          "section_helper_text": null,
+          "fields": [
+            {"label": "CDC/SGH# or name", "type": "short_text", "required": false, "notes": "Facility-internal identifier"},
+            {"label": "Date Enrolled", "type": "date", "required": false, "notes": null},
+            {"label": "Updated", "type": "date", "required": false, "notes": "Staff field"},
+            {"label": "Date Disenrolled", "type": "date", "required": false, "notes": "Staff field"}
+          ]
+        },
+        {
+          "section_title": "Child Information",
+          "section_helper_text": null,
+          "fields": [
+            {"label": "Child's Name", "type": "short_text", "required": true, "notes": null},
+            {"label": "Home Address (#, Street, City, State, Zip Code)", "type": "long_text", "required": true, "notes": null},
+            {"label": "Home Phone", "type": "phone", "required": true, "notes": null},
+            {"label": "Date of Birth", "type": "date", "required": true, "notes": null},
+            {"label": "Sex", "type": "radio", "required": true, "options": ["male", "female"], "notes": "Source uses 'Sex' not 'Gender'"}
+          ]
+        },
+        {
+          "section_title": "Parent/Guardian #1",
+          "section_helper_text": null,
+          "fields": [
+            {"label": "Parent or Guardian Name", "type": "short_text", "required": true, "notes": null},
+            {"label": "Home Address (#, Street, City, State, Zip Code)", "type": "long_text", "required": true, "notes": null},
+            {"label": "Cell Phone (optional)", "type": "phone", "required": false, "notes": null},
+            {"label": "Contact Telephone Number", "type": "phone", "required": true, "notes": null}
+          ]
+        },
+        {
+          "section_title": "Parent/Guardian #2",
+          "section_helper_text": null,
+          "fields": [
+            {"label": "Parent or Guardian Name", "type": "short_text", "required": false, "notes": null},
+            {"label": "Home Address (#, Street, City, State, Zip Code)", "type": "long_text", "required": false, "notes": null},
+            {"label": "Cell Phone (optional)", "type": "phone", "required": false, "notes": null},
+            {"label": "Contact Telephone Number", "type": "phone", "required": false, "notes": null}
+          ]
+        },
+        {
+          "section_title": "Authorized Emergency Pick-Up Contacts",
+          "section_helper_text": "I authorize the following individuals to collect my child from the facility in case of emergency or if I cannot be contacted. Pursuant to R9-5-304.B, at least two contact persons are required.",
+          "fields": [
+            {"label": "Contact 1 - Name", "type": "short_text", "required": true, "notes": null},
+            {"label": "Contact 1 - Telephone Number", "type": "phone", "required": true, "notes": null},
+            {"label": "Contact 2 - Name", "type": "short_text", "required": true, "notes": null},
+            {"label": "Contact 2 - Telephone Number", "type": "phone", "required": true, "notes": null},
+            {"label": "Contact 3 - Name", "type": "short_text", "required": false, "notes": null},
+            {"label": "Contact 3 - Telephone Number", "type": "phone", "required": false, "notes": null},
+            {"label": "Contact 4 - Name", "type": "short_text", "required": false, "notes": null},
+            {"label": "Contact 4 - Telephone Number", "type": "phone", "required": false, "notes": null}
+          ]
+        },
+        {
+          "section_title": "Medical Care",
+          "section_helper_text": "If Medical care is necessary, call:",
+          "fields": [
+            {"label": "Health Care Provider Name", "type": "short_text", "required": true, "notes": "Helper text: 'A Health Care Provider is a physician, physician assistant or registered nurse practitioner.'"},
+            {"label": "Health Care Provider Contact Telephone Number", "type": "phone", "required": true, "notes": null},
+            {"label": "In case of injury or sudden illness, I request that this individual be called first", "type": "short_text", "required": false, "notes": null}
+          ]
+        },
+        {
+          "section_title": "Restricted Pick-Up / Custody",
+          "section_helper_text": null,
+          "fields": [
+            {"label": "The following individual(s) may NOT remove my child from the facility - Name(s)", "type": "long_text", "required": false, "notes": null},
+            {"label": "Custody papers have been provided and are on file at the facility", "type": "radio", "required": false, "options": ["yes", "no"], "notes": null},
+            {"label": "Telephone Authorization Code (optional)", "type": "short_text", "required": false, "notes": null}
+          ]
+        },
+        {
+          "section_title": "Emergency Medical Authorization",
+          "section_helper_text": "I hereby give authority to any hospital or doctor to render immediate aid as might be required at the time for his/her health and safety.",
+          "fields": []
+        },
+        {
+          "section_title": "Immunization Information",
+          "section_helper_text": "A licensee shall attach an enrolled child's written immunization record or exemption affidavit to the enrolled child's Emergency, Information and Immunization Record card. For information regarding current immunization requirements go to: www.azdhs.gov/phs/immun/index.htm or contact the Arizona Immunization Program Office at (602)364-3630.",
+          "fields": [
+            {"label": "Immunization documentation type (one must be attached)", "type": "radio", "required": true, "options": ["Copy of current official documented immunization record attached", "Religious Beliefs exemption form signed by parent/guardian attached", "Medical Exemption form signed by physician and parent/guardian attached", "Signed Laboratory Proof of Immunity form attached"], "notes": null},
+            {"label": "Immunization documentation file upload", "type": "file_upload", "required": true, "notes": "Must accompany the EIIR card at all times"},
+            {"label": "Notification of immunizations needed sent to Parent(s) or Guardian(s) - Date 1", "type": "date", "required": false, "notes": "Staff tracking field"},
+            {"label": "Notification of immunizations needed sent to Parent(s) or Guardian(s) - Date 2", "type": "date", "required": false, "notes": "Staff tracking field"},
+            {"label": "Notification of immunizations needed sent to Parent(s) or Guardian(s) - Date 3", "type": "date", "required": false, "notes": "Staff tracking field"},
+            {"label": "Updated immunizations received and attached - Date 1", "type": "date", "required": false, "notes": "Staff tracking field"},
+            {"label": "Updated immunizations received and attached - Date 2", "type": "date", "required": false, "notes": "Staff tracking field"},
+            {"label": "Updated immunizations received and attached - Date 3", "type": "date", "required": false, "notes": "Staff tracking field"}
+          ]
+        },
+        {
+          "section_title": "Medical Information",
+          "section_helper_text": null,
+          "fields": [
+            {"label": "Is child allergic to food or other substances?", "type": "radio", "required": true, "options": ["No", "Yes"], "notes": null},
+            {"label": "If yes, describe symptoms, name foods or substances to be avoided, and the procedure to follow if reaction occurs", "type": "long_text", "required": false, "notes": "Conditional on previous = Yes"},
+            {"label": "Is child usually susceptible to infections and if so, what precautions need to be taken?", "type": "radio", "required": true, "options": ["No", "Yes"], "notes": null},
+            {"label": "If yes, list precautions", "type": "long_text", "required": false, "notes": "Conditional on previous = Yes"},
+            {"label": "Is child subject to convulsions and what should be our procedure if one occurs?", "type": "radio", "required": true, "options": ["No", "Yes"], "notes": null},
+            {"label": "If yes, specify procedure", "type": "long_text", "required": false, "notes": "Conditional on previous = Yes"},
+            {"label": "Is there any physical condition that we should be aware of and what precautions should be taken (heart trouble, foot problem, hearing impairment, hernia, etc.)?", "type": "radio", "required": true, "options": ["No", "Yes"], "notes": null},
+            {"label": "If yes, list precautions", "type": "long_text", "required": false, "notes": "Conditional on previous = Yes"},
+            {"label": "Additional comments", "type": "long_text", "required": false, "notes": null},
+            {"label": "Other special instructions", "type": "long_text", "required": false, "notes": null}
+          ]
+        },
+        {
+          "section_title": "Certification",
+          "section_helper_text": "This Emergency Information and Immunization Record Card is accurate and complete, front and back, and was provided by:",
+          "fields": [
+            {"label": "Parent/Guardian PRINTED Name", "type": "short_text", "required": true, "notes": null},
+            {"label": "Parent/Guardian SIGNED Name", "type": "short_text", "required": true, "notes": "Typed name acts as e-signature"},
+            {"label": "Date", "type": "date", "required": true, "notes": null}
+          ]
+        }
+      ]
+    },
+    {
+      "form_id": "state_medication_consent",
+      "title": "Arizona State Medication Consent Form",
+      "source": "PDF (Arizona Department of Health Services - Bureau of Child Care Licensing, CCL form 302)",
+      "source_url": "https://www.azdhs.gov/documents/licensing/childcare-facilities/providers/forms/medical_consent_form.pdf",
+      "category": "State-mandated form (needs signature)",
+      "description": "Arizona Department of Health Services Bureau of Child Care Licensing - Medication Consent Form (CCL form 302). State-required for medication administration in licensed childcare facilities.",
+      "form_notes": "State-mandated counterpart to the DGM 'Request for Administering Medication' form. The form has a staff-review checklist and a multi-row administration log that should NOT appear on the parent-facing portal - those are operational/internal. Parent-facing portal should only render the consent and medication details sections.",
+      "sections": [
+        {
+          "section_title": "Child & Medication Information",
+          "section_helper_text": null,
+          "fields": [
+            {"label": "First & Last Name of CHILD", "type": "short_text", "required": true, "notes": null},
+            {"label": "Type/Name of Medication", "type": "short_text", "required": true, "notes": null},
+            {"label": "Prescription #", "type": "short_text", "required": false, "notes": "Required for prescription meds"},
+            {"label": "Dosage", "type": "short_text", "required": true, "notes": null},
+            {"label": "Route (method)", "type": "short_text", "required": true, "notes": "Footnote: 'Injections: Attach health care provider's written authorization.'"},
+            {"label": "Start date", "type": "date", "required": true, "notes": null},
+            {"label": "End Date", "type": "date", "required": true, "notes": null},
+            {"label": "Times & frequency", "type": "short_text", "required": true, "notes": null},
+            {"label": "REASON", "type": "long_text", "required": true, "notes": null},
+            {"label": "POSSIBLE SIDE EFFECTS TO WATCH FOR WITH THIS MEDICATION", "type": "long_text", "required": false, "notes": null},
+            {"label": "Health care provider written authorization (for injections only)", "type": "file_upload", "required": false, "notes": "Conditional on Route involving injection"}
+          ]
+        },
+        {
+          "section_title": "Parent/Guardian Authorization",
+          "section_helper_text": "I give permission for the administration of the medication, according to the instructions listed, to the child listed above.",
+          "fields": [
+            {"label": "Date of authorization", "type": "date", "required": true, "notes": null},
+            {"label": "Signature (parent/guardian)", "type": "short_text", "required": true, "notes": "Typed name acts as e-signature"}
+          ]
+        },
+        {
+          "section_title": "STAFF-ONLY (do not render in parent portal)",
+          "section_helper_text": "FOR STAFF REVIEW PRIOR TO ADMINISTERING MEDICATION. Internal pre-administration checklist - keep on the admin side, not parent-facing.",
+          "fields": [
+            {"label": "Is the medication consent form complete?", "type": "radio", "required": false, "options": ["YES", "NO"], "notes": "Staff field"},
+            {"label": "Is the original prescription label on the medication container or prepackaged and labeled for use by manufacturer?", "type": "radio", "required": false, "options": ["YES", "NO"], "notes": "Staff field"},
+            {"label": "Is the full name of the child on the container?", "type": "radio", "required": false, "options": ["YES", "NO"], "notes": "Staff field"},
+            {"label": "Is the prescription or over-the-counter medication current?", "type": "radio", "required": false, "options": ["YES", "NO"], "notes": "Staff field"},
+            {"label": "Is the dose, name of drug, frequency of administration given on label consistent with instructions above?", "type": "radio", "required": false, "options": ["YES", "NO"], "notes": "Staff field"},
+            {"label": "Staff initials", "type": "short_text", "required": false, "notes": "Staff field"}
+          ]
+        },
+        {
+          "section_title": "STAFF-ONLY Administration Log (page 2 of PDF)",
+          "section_helper_text": "Repeatable log entries - multiple rows. Staff-side only; not parent-facing.",
+          "fields": [
+            {"label": "Administration Log (repeatable rows: Date, Name of Medication, RX#, Dose, Time, Full Signature of Authorized Staff Person)", "type": "repeatable_table", "required": false, "notes": "Internal med-admin log; implement as a separate staff admin module, not on the parent form"}
+          ]
+        }
+      ]
+    },
+    {
+      "form_id": "summer_registration_itp_2026",
+      "title": "Summer Registration - Infant, Toddler, Primary 2026",
+      "source": "PDF upload",
+      "source_url": null,
+      "category": "Seasonal Registration (with fee)",
+      "description": "Summer registration form for Infant, Toddler, and Primary programs. Offers monthly enrollment (Infant and Toddler/Primary) and weekly enrollment (Primary ONLY).",
+      "fee": {
+        "monthly_infant": {"school_day": 1900, "extended_day": 2382, "currency": "USD", "billing": "per month"},
+        "monthly_toddler_primary": {"half_day": 1270, "school_day": 1583, "extended_day": 2065, "currency": "USD", "billing": "per month"},
+        "weekly_primary_only": {"half_day": 350, "school_day": 435, "extended_day": 565, "currency": "USD", "billing": "per week", "notes": "Prorated for Juneteenth and July 4th holiday"},
+        "payment_method": "FACTS account",
+        "refundable": false,
+        "due_date": "May 1",
+        "policy": "Summer tuition is NON-REFUNDABLE and DUE IN FULL on May 1. NO REFUNDS WILL BE ISSUED FOR ABSENCES OR WITHDRAWALS AFTER MAY 1."
+      },
+      "form_notes": "PDF export shows question labels but NOT the answer options for several selects (Summer Lunch Selection, Summer Lunch Restrictions, Allergies, Summer Daily Schedule). Need DGM to provide the source options. Two source typos: 'preceeding' should be 'preceding'. Seasonal form - good candidate for an annually-templated Summer Registration in MyGrowthSuite with year, dates, and rates as variables. The Monthly Option (Q1, Q2) and Weekly Option sections appear to be mutually exclusive paths - recommend implementing conditional logic so parents see one or the other based on program.",
+      "sections": [
+        {
+          "section_title": "Summer Session Selection - Monthly Option",
+          "section_helper_text": "Monthly rates for Infant for the June and July sessions are: School Day $1,900; Extended Day $2,382 per month. Monthly rates for Toddler and Primary for the June and July sessions are: Half Day $1,270 per month; School Day $1,583 per month; Extended Day $2,065 per month. If you are registering for the Monthly Option, please select the desired summer session(s) below.",
+          "fields": [
+            {"label": "Would you like to enroll for the month of June? Session 1 (June 1 - June 30)", "type": "radio", "required": true, "options": ["Yes", "No"], "notes": "Options inferred - PDF did not show explicit options"},
+            {"label": "Would you like to enroll for the month of July? Session 2 (July 1 - July 31)", "type": "radio", "required": true, "options": ["Yes", "No"], "notes": "Options inferred - PDF did not show explicit options"}
+          ]
+        },
+        {
+          "section_title": "Weekly Option",
+          "section_helper_text": "Weekly rates offered for Primary ONLY are: Half Day $350 per week; School Day $435 per week; Extended Day $565 per week, prorated for the Juneteenth and July 4th holiday. If you are registering for the Weekly Option, please select the desired summer week(s) below.",
+          "fields": [
+            {"label": "Select weeks of attendance", "type": "checkboxes", "required": false, "options": ["Week 1: June 1 - June 5", "Week 2: June 8 - June 12", "Week 3: June 15 - June 18", "Week 4: June 22 - June 26", "Week 5: June 29 - July 2", "Week 6: July 6 - July 10", "Week 7: July 13 - July 17", "Week 8: July 20 - July 24"], "notes": "Multi-select; Primary program only"}
+          ]
+        },
+        {
+          "section_title": "Summer Lunch",
+          "section_helper_text": "Lunch is included the Summer tuition price. Please select the desired lunch option for the summer program.",
+          "fields": [
+            {"label": "Summer Lunch Selection", "type": "dropdown", "required": true, "options": null, "notes": "Options not visible in PDF - need DGM to provide"}
+          ]
+        },
+        {
+          "section_title": "Summer Lunch Restriction",
+          "section_helper_text": "Please indicate if your child has any lunch restrictions.",
+          "fields": [
+            {"label": "Summer Lunch Restrictions", "type": "dropdown_or_checkboxes", "required": true, "options": null, "notes": "Options not visible in PDF - need DGM to provide. Likely checkboxes (vegetarian, vegan, gluten-free, dairy-free, etc.) or text input."}
+          ]
+        },
+        {
+          "section_title": "Summer Allergies",
+          "section_helper_text": null,
+          "fields": [
+            {"label": "Allergies", "type": "long_text", "required": true, "options": null, "notes": "Field type inferred (likely free-text); PDF did not show explicit type"}
+          ]
+        },
+        {
+          "section_title": "Summer Daily Schedule",
+          "section_helper_text": "Please select the desired daily schedule for the summer program. NOTE: Summer half day is available only to Toddler and Primary programs.",
+          "fields": [
+            {"label": "Please select the desired summer schedule.", "type": "dropdown", "required": true, "options": null, "notes": "Options not visible in PDF - likely Half Day, School Day, Extended Day (with Half Day restricted to Toddler/Primary)"}
+          ]
+        },
+        {
+          "section_title": "Summer Billing",
+          "section_helper_text": null,
+          "fields": [
+            {"label": "Summer Billing acknowledgment", "type": "acknowledgment_checkbox", "required": true, "notes": "Display text: 'Summer tuition will be billed through FACTS based on your selections herein. Summer tuition is NON-REFUNDABLE and DUE IN FULL on May 1. NO REFUNDS WILL BE ISSUED FOR ABSENCES OR WITHDRAWALS AFTER MAY 1.'"}
+          ]
+        },
+        {
+          "section_title": "Electronic Signature Summer",
+          "section_helper_text": null,
+          "fields": [
+            {"label": "I have read and understand the preceding document and I intend by typing my name below to \"sign\" the preceding document and to be bound by its terms and conditions.", "type": "acknowledgment_checkbox", "required": true, "notes": "E-signature consent. Source typo: 'preceeding' should be 'preceding'."},
+            {"label": "Please print/type your name.", "type": "short_text", "required": true, "notes": "Typed name acts as e-signature"}
+          ]
+        }
+      ]
+    },
+    {
+      "form_id": "summer_registration_elementary_2026",
+      "title": "Summer Registration - Elementary 2026",
+      "source": "PDF upload",
+      "source_url": null,
+      "category": "Seasonal Registration (with fee)",
+      "description": "Summer registration form for Elementary students. Weekly summer rate of $400 INCLUDES organic lunch, prorated for Juneteenth and July 4th holidays. Brochure (referenced in form) details summer plans.",
+      "fee": {
+        "weekly_elementary": {"weekly_rate": 400, "currency": "USD", "billing": "per week", "inclusions": "Organic lunch", "notes": "Prorated for Juneteenth and July 4th holidays. Extended Day pricing available at request."},
+        "payment_method": "FACTS account",
+        "refundable": false,
+        "due_date": "May 1",
+        "policy": "Summer tuition is NON-REFUNDABLE and DUE IN FULL on May 1st. NO REFUNDS WILL BE ISSUED FOR ABSENCES OR WITHDRAWALS AFTER MAY 1st."
+      },
+      "form_notes": "Companion form to ITP Summer Registration. PDF export shows question labels but NOT options for: Summer Daily Schedule, Summer Lunch Selection, Summer Lunch Restrictions, Allergies. Need DGM to provide. Two source typos: 'preceeding' should be 'preceding'; 'ABSENSES' should be 'ABSENCES'. Recommend merging logic with ITP Summer form under a single 'Summer Registration' template parameterized by program level (Infant/Toddler/Primary/Elementary) - they share most fields and only differ on rate structure and program-specific options.",
+      "sections": [
+        {
+          "section_title": "Registration Options - Summer Session Selection",
+          "section_helper_text": "Elementary Summer is HERE! Please check out the brochure included for the amazing summer plans we have for our Elementary students! The weekly summer rate is only $400 INCLUDING ORGANIC LUNCH (prorated for the Juneteenth and July 4th holidays).",
+          "fields": [
+            {"label": "Select weeks of attendance", "type": "checkboxes", "required": true, "options": ["Week 1: June 1 - June 5", "Week 2: June 8 - June 12", "Week 3: June 15 - June 18", "Week 4: June 22 - June 26", "Week 5: June 29 - July 2", "Week 6: July 6 - July 10", "Week 7: July 13 - July 17", "Week 8: July 20 - July 24"], "notes": "Multi-select"}
+          ]
+        },
+        {
+          "section_title": "Summer Daily Schedule",
+          "section_helper_text": "Please select the desired daily schedule for the summer program. Extended Day pricing is available at request!",
+          "fields": [
+            {"label": "Summer Daily Schedule", "type": "dropdown", "required": true, "options": null, "notes": "Options not visible in PDF - likely School Day, Extended Day (no Half Day for Elementary)"}
+          ]
+        },
+        {
+          "section_title": "Summer Organic Lunch - Elementary Lunch Selection",
+          "section_helper_text": "Please select the desired lunch option for the summer program. Organic Lunch is INCLUDED in the weekly summer rate!",
+          "fields": [
+            {"label": "Summer Lunch Selection", "type": "dropdown", "required": true, "options": null, "notes": "Options not visible in PDF - need DGM to provide"}
+          ]
+        },
+        {
+          "section_title": "Summer Lunch Restrictions",
+          "section_helper_text": "Please indicate if your child has any lunch restrictions",
+          "fields": [
+            {"label": "Summer Lunch Restrictions", "type": "dropdown_or_checkboxes", "required": false, "options": null, "notes": "Options not visible in PDF - need DGM to provide"}
+          ]
+        },
+        {
+          "section_title": "Allergies",
+          "section_helper_text": null,
+          "fields": [
+            {"label": "Allergies", "type": "long_text", "required": false, "notes": "Field type inferred (likely free-text)"}
+          ]
+        },
+        {
+          "section_title": "Summer Billing",
+          "section_helper_text": null,
+          "fields": [
+            {"label": "Summer Billing acknowledgment", "type": "acknowledgment_checkbox", "required": true, "notes": "Display text: 'Summer tuition will be billed through FACTS based on your selections herein. Summer tuition is NON-REFUNDABLE and DUE IN FULL on May 1st. NO REFUNDS WILL BE ISSUED FOR ABSENCES OR WITHDRAWALS AFTER MAY 1st.' Source typo: 'ABSENSES' should be 'ABSENCES'."}
+          ]
+        },
+        {
+          "section_title": "Electronic Signature",
+          "section_helper_text": "I have read and understand the preceding document and I intend by typing my name here to \"sign\" the preceding document and to be bound by its terms and conditions.",
+          "fields": [
+            {"label": "Signature", "type": "short_text", "required": true, "notes": "Typed name acts as e-signature"},
+            {"label": "Print Name", "type": "short_text", "required": true, "notes": null}
+          ]
+        }
+      ]
+    }
+  ]
+}
