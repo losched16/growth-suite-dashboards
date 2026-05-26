@@ -1,0 +1,72 @@
+// /school/[locationId]/staff-requests/[slug]
+//
+// Renders one staff form (Labor / Incident / Supplies) with live
+// interactive inputs. Submit POSTs to /api/school/staff-requests/submit
+// which inserts the row + emails Lexi.
+//
+// We reuse the TestSubmitForm renderer from the form preview — it
+// already handles every field type, validation, and submission UX.
+// The endpoint URL is the only thing that differs.
+
+import Link from 'next/link';
+import { notFound } from 'next/navigation';
+import { ArrowLeft } from 'lucide-react';
+import { query } from '@/lib/db';
+import { loadSchoolByLocationId } from '@/lib/dashboards/loader';
+import { StaffSubmitForm } from './StaffSubmitForm';
+
+export const dynamic = 'force-dynamic';
+
+type Params = Promise<{ locationId: string; slug: string }>;
+
+interface FormRow {
+  id: string;
+  slug: string;
+  display_name: string;
+  description: string | null;
+  field_schema: unknown[];
+  audience: string;
+}
+
+export default async function StaffFormFillPage({ params }: { params: Params }) {
+  const { locationId, slug } = await params;
+  const school = await loadSchoolByLocationId(locationId);
+  if (!school) notFound();
+
+  const { rows } = await query<FormRow>(
+    `SELECT id, slug, display_name, description, field_schema, audience
+       FROM portal_form_definitions
+      WHERE school_id = $1 AND slug = $2 AND is_active = true`,
+    [school.id, slug],
+  );
+  if (rows.length === 0 || rows[0].audience !== 'staff') notFound();
+  const form = rows[0];
+
+  return (
+    <main className="min-h-screen bg-zinc-50">
+      <div className="max-w-2xl mx-auto px-6 py-6">
+        <Link
+          href={`/school/${locationId}/staff-requests?chrome=none`}
+          className="inline-flex items-center gap-1 text-xs text-zinc-500 hover:text-zinc-700 mb-3"
+        >
+          <ArrowLeft className="h-3 w-3" /> All staff requests
+        </Link>
+
+        <div className="rounded-xl border border-zinc-200 bg-white p-6 space-y-4">
+          <div>
+            <h1 className="text-xl font-semibold text-zinc-900">{form.display_name}</h1>
+            {form.description ? (
+              <p className="text-sm text-zinc-600 mt-1 whitespace-pre-wrap">{form.description}</p>
+            ) : null}
+          </div>
+
+          <StaffSubmitForm
+            formId={form.id}
+            schema={form.field_schema}
+            returnTo={`/school/${locationId}/staff-requests/mine?chrome=none&submitted=${form.slug}`}
+          />
+        </div>
+      </div>
+    </main>
+  );
+}
