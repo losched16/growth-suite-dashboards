@@ -121,6 +121,21 @@ function emergencyContactForm() {
         'note',
       ),
 
+      blockSection('Periodic Review',
+        'PA Code requires this form to be refreshed every 6 months OR whenever your information changes. ' +
+        'If you\'re submitting for the first time, pick "First submission." If you already have a form on file, ' +
+        'pick "No changes" to confirm everything is still accurate, or "Update with changes" to edit any field below.'),
+      radioF('review_mode',
+        'Submission type',
+        [
+          { value: 'first_submission', label: 'First submission — no prior form on file for this child' },
+          { value: 'no_changes',       label: 'Periodic review — everything on file is still accurate, no changes to make' },
+          { value: 'has_changes',      label: 'Update with changes — I have updates to make to fields below' },
+        ],
+        { required: true,
+          help: 'If you pick "Periodic review — no changes," scroll to the bottom and sign. ' +
+                'If you pick "Update with changes," edit any field below; the office will be notified about exactly which fields changed.' }),
+
       blockSection('Child Information'),
       txt('child_name', 'Child\'s name', { required: true, placeholder: 'Type n/a if not applicable' }),
       dateF('child_birthdate', 'Birthdate', { required: true }),
