@@ -12,7 +12,7 @@
 
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ArrowLeft, Inbox, CheckCircle2, Clock, CalendarCheck, XCircle, AlertCircle, Filter, Wrench, Package } from 'lucide-react';
+import { ArrowLeft, Inbox, CheckCircle2, Clock, CalendarCheck, XCircle, AlertCircle, Filter, Wrench, Package, CalendarDays } from 'lucide-react';
 import { query } from '@/lib/db';
 import { loadSchoolByLocationId } from '@/lib/dashboards/loader';
 
@@ -109,10 +109,16 @@ export default async function StaffRequestsInboxPage({
             </h1>
             <p className="text-sm text-slate-500 mt-0.5">Labor, Incident, and Supplies requests submitted by teachers.</p>
           </div>
-          <Link href={`/school/${locationId}/staff-requests?chrome=none`}
-            className="text-xs text-slate-500 hover:text-slate-700 inline-flex items-center gap-1">
-            <ArrowLeft className="h-3 w-3" /> View as a teacher
-          </Link>
+          <div className="flex items-center gap-2 flex-wrap">
+            <Link href={`/school/${locationId}/staff-requests/calendar?chrome=none&mode=all`}
+              className="inline-flex items-center gap-1 rounded-md border border-blue-300 bg-blue-50 text-blue-700 px-3 py-1.5 text-xs font-semibold hover:bg-blue-100">
+              <CalendarDays className="h-3.5 w-3.5" /> Calendar view
+            </Link>
+            <Link href={`/school/${locationId}/staff-requests?chrome=none`}
+              className="text-xs text-slate-500 hover:text-slate-700 inline-flex items-center gap-1">
+              <ArrowLeft className="h-3 w-3" /> View as a teacher
+            </Link>
+          </div>
         </div>
 
         {sp.msg ? (

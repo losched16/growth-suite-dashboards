@@ -10,7 +10,7 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { cookies } from 'next/headers';
-import { CheckCircle2, Clock, CalendarCheck, XCircle, AlertCircle, Plus } from 'lucide-react';
+import { CheckCircle2, Clock, CalendarCheck, XCircle, AlertCircle, Plus, CalendarDays } from 'lucide-react';
 import { query } from '@/lib/db';
 import { loadSchoolByLocationId } from '@/lib/dashboards/loader';
 import { SCHOOL_SESSION_COOKIE, verifySchoolSession } from '@/lib/auth/school';
@@ -110,6 +110,12 @@ export default async function MyStaffRequestsPage({
             {teacher ? (
               <IdentityIndicator email={teacher.email} name={teacher.name} returnTo={thisUrl} />
             ) : null}
+            <Link
+              href={`/school/${locationId}/staff-requests/calendar?chrome=none${fromParam}`}
+              className="inline-flex items-center gap-1 rounded-md border border-blue-300 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-100"
+            >
+              <CalendarDays className="h-3.5 w-3.5" /> Calendar view
+            </Link>
             <Link
               href={`/school/${locationId}/staff-requests?chrome=none${fromParam}`}
               className="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-blue-700"
