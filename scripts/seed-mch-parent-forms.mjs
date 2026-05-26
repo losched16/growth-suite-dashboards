@@ -199,7 +199,13 @@ function emergencyContactForm() {
       txt('consent_emergency_medical', 'Obtaining emergency medical care — typed signature', { required: true }),
       txt('consent_first_aid',          'Administration of minor first-aid procedures — typed signature', { required: true }),
       txt('consent_walks_trips',        'Walks and trips — typed signature'),
-      txt('consent_swimming',           'Swimming — typed signature'),
+      // MCH does not offer swimming, but PA Code 3270.124(b)(5) lists it
+      // as a required consent line item — pre-fill with "N/A" so parents
+      // don't have to (and can't accidentally) sign for an activity that
+      // never happens. They can edit if MCH ever adds swimming.
+      txt('consent_swimming',           'Swimming — typed signature',
+        { default: 'N/A',
+          help: 'Media Children\'s House does not offer swimming. This field is pre-filled with "N/A" — no signature needed.' }),
       txt('consent_transportation',     'Transportation by the facility — typed signature'),
       txt('consent_wading',             'Wading — typed signature'),
 
