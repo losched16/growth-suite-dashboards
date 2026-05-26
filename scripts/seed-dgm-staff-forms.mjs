@@ -291,17 +291,19 @@ function incidentReportForm() {
         { required: false, help: 'Pick the closest match. Leave blank if behavioral / non-physical.' }),
 
       blockSection('Photo'),
-      radioF('photo_attached',
-        'Is there any associated photo?',
-        ['Yes', 'No'],
-        { required: false,
-          help: 'Required for Accidents. Optional for Incidents.' }),
-      // Native file upload comes once we wire storage. For now teachers
-      // can text the photo directly to Lexi — note that in the body.
-      blockParagraph(
-        'Photo upload is rolling out — for now, text the photo directly to Lexi and reference this report ID in the message.',
-        'note',
-      ),
+      // Native upload — stored in portal_form_submission_files. The
+      // submit endpoint enforces `required_unless` server-side: a
+      // photo is required when event_type is anything other than
+      // "Incident" (so Accident, Injury, etc. all demand one).
+      {
+        type: 'file_upload',
+        key: 'photo',
+        label: 'Attach photo',
+        required: false,
+        accept: 'image/*,.heic,.heif',
+        help: 'Required for Accidents. Optional for Incidents. Use your phone\'s camera or pick from your gallery.',
+        required_unless: { field: 'event_type', value: 'Incident' },
+      },
 
       blockSection('Incident details'),
       area('incident_description',

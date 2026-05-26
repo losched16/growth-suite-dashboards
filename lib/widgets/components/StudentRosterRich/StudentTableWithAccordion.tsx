@@ -341,6 +341,43 @@ function renderCell(
         </span>
       );
     }
+    case 'attendance_notes': {
+      // Substantive notes left during today's check-in. Surfaces things
+      // like "ate breakfast late" / "needs nap by 10:30" without making
+      // the teacher click into the attendance dashboard.
+      const n = s.attendance_notes;
+      if (!n) return <span className="text-gray-400">—</span>;
+      return (
+        <span
+          className="inline-block rounded bg-amber-50 border border-amber-200 px-2 py-1 text-[11px] text-amber-900 whitespace-pre-wrap"
+          title={n}
+        >
+          {n.length > 80 ? `${n.slice(0, 80).trim()}…` : n}
+        </span>
+      );
+    }
+    case 'pickup_restrictions': {
+      // People who are NOT authorized to pick up this kid. Loud red
+      // styling — a teacher at the door scanning this column needs to
+      // see it instantly. Each restricted person becomes a chip; the
+      // reason is shown as a tooltip so the column doesn't get cramped.
+      const list = s.pickup_restrictions;
+      if (!list || list.length === 0) return <span className="text-gray-400">—</span>;
+      return (
+        <div className="flex flex-wrap gap-1">
+          {list.map((r, idx) => (
+            <span
+              key={idx}
+              className="inline-flex items-center gap-1 rounded-full border border-rose-300 bg-rose-50 px-1.5 py-0.5 text-[10px] font-semibold text-rose-900"
+              title={r.reason ? `Reason: ${r.reason}` : 'No reason on file'}
+            >
+              <ShieldAlert className="h-2.5 w-2.5" />
+              {r.name}
+            </span>
+          ))}
+        </div>
+      );
+    }
     case 'attendance': {
       // Today's attendance status with color coding. Time shown
       // underneath when checked in / out. Curbside flag rendered as a

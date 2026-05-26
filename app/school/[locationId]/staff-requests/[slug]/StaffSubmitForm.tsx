@@ -180,7 +180,24 @@ function Block({ block }: { block: Block }) {
     case 'file_upload':
       return (
         <Shell block={block}>
-          <p className="text-[11px] text-zinc-500 italic">File uploads are coming soon — describe the issue in text for now and reach out to Lexi directly if a photo is needed.</p>
+          {/* Real upload — the file is read in the submit endpoint
+              and stored in portal_form_submission_files (bytea). The
+              `required` attribute is set by the schema; conditional
+              "required when event_type=accident" enforcement happens
+              server-side because cross-field client validation gets
+              messy fast. */}
+          <input
+            type="file"
+            name={key}
+            required={!!block.required}
+            accept={String(block.accept ?? 'image/*,application/pdf')}
+            className="mt-1 block w-full text-sm text-zinc-700 file:mr-3 file:rounded-md file:border-0 file:bg-blue-50 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-blue-700 hover:file:bg-blue-100"
+          />
+          {block.required_unless ? (
+            <p className="mt-1 text-[11px] text-amber-700">
+              <strong>Required</strong> unless the event type is &ldquo;{String((block.required_unless as Record<string, unknown>).value ?? '')}&rdquo;.
+            </p>
+          ) : null}
         </Shell>
       );
     case 'quantity_grid':

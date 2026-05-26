@@ -83,7 +83,9 @@ const TEACHER_ROSTER_COLUMNS = [
   'iep_504',
   'lunch',
   'attendance',
-  'documents',  // inline cell — click chip to view IEP/504/health docs for that student
+  'attendance_notes',     // today's check-in notes inline so teachers see "rough morning" w/o opening attendance
+  'pickup_restrictions',  // people NOT authorized to pick up this kid — red chips, scannable at the door
+  'documents',            // inline cell — click chip to view IEP/504/health docs for that student
   'family',
 ];
 

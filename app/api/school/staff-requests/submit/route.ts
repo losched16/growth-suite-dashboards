@@ -162,9 +162,39 @@ export async function POST(request: NextRequest) {
       };
       linkedStudentId = student.id;
       if (student.family_id) linkedFamilyId = student.family_id;
-    } else if (type !== 'file_upload') {
+    } else if (type === 'file_upload') {
+      // Files are handled in a second pass below — we just need to
+      // record the field's presence here so the inbox can show the
+      // attachment chip alongside the rest of the responses.
+      // Stamp a placeholder; the file insert loop overwrites with
+      // the file's display name + reference.
+    } else {
       const v = fd.get(key);
       if (v != null) responses[key] = typeof v === 'string' ? v : String(v);
+    }
+  }
+
+  // Conditional-required validation for file_upload fields. The schema
+  // can opt out of `required` and instead set `required_unless: { field,
+  // value }` — the upload is required UNLESS that field equals that
+  // value. Used by the incident form so accidents demand a photo but
+  // plain incidents don't.
+  for (const block of blocks) {
+    if (String(block.type ?? '') !== 'file_upload') continue;
+    const key = String(block.key ?? '').trim();
+    if (!key) continue;
+    const ru = (block as Record<string, unknown>).required_unless as { field?: string; value?: string } | undefined;
+    if (!ru?.field) continue;
+    const sibling = String(fd.get(String(ru.field)) ?? '').trim();
+    const isRequired = sibling !== String(ru.value ?? '');
+    if (!isRequired) continue;
+    const file = fd.get(key);
+    const hasFile = file instanceof File && file.size > 0;
+    if (!hasFile) {
+      return NextResponse.json({
+        error: 'photo_required',
+        detail: `A photo is required when ${ru.field} is not "${ru.value}". Please attach a file and resubmit.`,
+      }, { status: 400 });
     }
   }
 
@@ -188,6 +218,65 @@ export async function POST(request: NextRequest) {
     [session.school_id, formDefId, JSON.stringify(responses), teacherEmail, assignedTo, linkedFamilyId, linkedStudentId],
   );
   const submissionId = ins.rows[0].id;
+
+  // Second pass: persist any uploaded files. Storage is the shared
+  // portal_form_submission_files table (bytea) — same table the
+  // parent-portal repo uses, so the inbox can show parent uploads and
+  // staff uploads the same way. Reference is stamped back into the
+  // responses JSON via an UPDATE so the inbox can render an attachment
+  // chip without joining at read-time.
+  const fileRefs: Record<string, { id: string; filename: string; mime_type: string; size_bytes: number }> = {};
+  for (const block of blocks) {
+    if (String(block.type ?? '') !== 'file_upload') continue;
+    const key = String(block.key ?? '').trim();
+    if (!key) continue;
+    const file = fd.get(key);
+    if (!(file instanceof File) || file.size === 0) continue;
+    // Reject pathological sizes early. 10MB covers any phone photo;
+    // beyond that the bytea round-trip + Postgres TOAST overhead gets
+    // unhappy. Bump later if DGM needs PDFs or longer videos.
+    const MAX_BYTES = 10 * 1024 * 1024;
+    if (file.size > MAX_BYTES) {
+      return NextResponse.json({
+        error: 'file_too_large',
+        detail: `${file.name} is ${(file.size / 1024 / 1024).toFixed(1)}MB; max is 10MB.`,
+      }, { status: 400 });
+    }
+    const buf = Buffer.from(await file.arrayBuffer());
+    const displayName = String(block.label ?? key);
+    const fileRow = await query<{ id: string }>(
+      `INSERT INTO portal_form_submission_files
+         (submission_id, school_id, field_key, display_name, original_filename,
+          mime_type, size_bytes, contents)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       RETURNING id`,
+      [submissionId, session.school_id, key, displayName, file.name,
+       file.type || 'application/octet-stream', file.size, buf],
+    );
+    fileRefs[key] = {
+      id: fileRow.rows[0].id,
+      filename: file.name,
+      mime_type: file.type || 'application/octet-stream',
+      size_bytes: file.size,
+    };
+  }
+
+  // If we wrote any files, fold their references into responses so
+  // the inbox can render attachment chips without a second query.
+  // Mark with _type: 'file_upload' so the renderer recognizes it.
+  if (Object.keys(fileRefs).length > 0) {
+    const updatedResponses = { ...responses };
+    for (const [k, ref] of Object.entries(fileRefs)) {
+      updatedResponses[k] = { _type: 'file_upload', ...ref };
+    }
+    await query(
+      `UPDATE portal_form_submissions SET responses = $1::jsonb WHERE id = $2`,
+      [JSON.stringify(updatedResponses), submissionId],
+    );
+    // Local in-memory copy gets the same updates so the notification
+    // email below sees the attachment refs too.
+    Object.assign(responses, updatedResponses);
+  }
 
   // Pull the student_picker card (if present) so the notification
   // email can surface the kid + first-parent contact in the header.

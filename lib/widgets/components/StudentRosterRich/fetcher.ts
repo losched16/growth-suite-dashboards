@@ -91,6 +91,15 @@ export interface RosterStudent {
   // most recent check_out event with curbside=true.
   curbside_today: boolean;
   curbside_slot: string | null;
+  // Notes left during today's most recent check_in event. Surface as
+  // a column so teachers can see "had a rough morning" / "needs nap
+  // by 10:30" without opening the attendance dashboard.
+  attendance_notes: string | null;
+  // People who are NOT authorized to pick up this kid (custody
+  // arrangements, no-contact orders). Surfaced as a column so the
+  // teacher at the door doesn't have to open the family accordion to
+  // know who to refuse. Empty array = no restrictions.
+  pickup_restrictions: Array<{ name: string; reason: string | null }>;
   search_haystack: string;
 }
 
@@ -147,6 +156,12 @@ interface DbRow {
   // longest meaningful text.
   hp_allergies: string | null;
   hp_medical_conditions: string | null;
+  // Latest check-in notes from today (school-tz). Null if no check-in
+  // happened yet OR if the check-in had no notes.
+  attendance_notes_today: string | null;
+  // JSON array of { name, reason } for everyone on this student's
+  // pickup_restrictions list (active rows only).
+  pickup_restrictions_json: Array<{ name: string; reason: string | null }> | null;
 }
 
 export async function fetcher(
@@ -175,7 +190,9 @@ export async function fetcher(
        da.curbside_pickup     AS attendance_curbside,
        cs.curbside_slot       AS curbside_slot,
        shp.allergies          AS hp_allergies,
-       shp.medical_conditions AS hp_medical_conditions
+       shp.medical_conditions AS hp_medical_conditions,
+       an.notes               AS attendance_notes_today,
+       pr.restrictions_json   AS pickup_restrictions_json
      FROM students s
      JOIN families f ON f.id = s.family_id
      LEFT JOIN LATERAL (
@@ -205,6 +222,32 @@ export async function fetcher(
      ) cs ON true
      LEFT JOIN student_health_profiles shp
        ON shp.student_id = s.id AND shp.school_id = s.school_id
+     LEFT JOIN LATERAL (
+       -- Most recent check-in event TODAY (school tz) with non-empty
+       -- notes. Skips the auto-generated "Admin manual check-in" sentinel
+       -- since that's noise — teachers care about substantive notes
+       -- (mood, illness, drop-off changes).
+       SELECT notes
+         FROM attendance_events
+        WHERE student_id = s.id
+          AND school_id  = s.school_id
+          AND event_type = 'check_in'
+          AND notes IS NOT NULL AND btrim(notes) <> ''
+          AND lower(btrim(notes)) <> 'admin manual check-in'
+          AND (performed_at AT TIME ZONE $2)::date = ((now() AT TIME ZONE $2)::date)
+        ORDER BY performed_at DESC LIMIT 1
+     ) an ON true
+     LEFT JOIN LATERAL (
+       -- All active pickup restrictions for this student. Aggregated
+       -- as a JSON array so the column renderer can show one chip per
+       -- person without a join at render time. Empty = NULL → []
+       SELECT jsonb_agg(jsonb_build_object('name', person_name, 'reason', reason)
+                        ORDER BY person_name) AS restrictions_json
+         FROM student_pickup_restrictions
+        WHERE student_id = s.id
+          AND school_id  = s.school_id
+          AND active     = true
+     ) pr ON true
      WHERE s.school_id = $1 AND s.status = 'active'
      ORDER BY s.first_name`,
     // Hardcoded DG timezone for now. If a future widget needs to do
@@ -277,6 +320,8 @@ export async function fetcher(
       attendance_check_out_at: r.attendance_last_check_out_at,
       curbside_today: !!r.attendance_curbside,
       curbside_slot: r.curbside_slot,
+      attendance_notes: r.attendance_notes_today,
+      pickup_restrictions: Array.isArray(r.pickup_restrictions_json) ? r.pickup_restrictions_json : [],
       search_haystack: haystack,
     };
   });

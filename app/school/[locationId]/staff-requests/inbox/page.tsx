@@ -267,6 +267,48 @@ function FormIcon({ slug }: { slug: string }) {
 }
 
 function ResponseRow({ k, v }: { k: string; v: unknown }) {
+  // file_upload: render an inline image preview for image MIME types,
+  // a "Download" link for everything else. The file content comes from
+  // /api/school/staff-requests/files/<id> which requires the same
+  // school session — embedded views work without extra auth.
+  if (v && typeof v === 'object' && !Array.isArray(v) && (v as Record<string, unknown>)._type === 'file_upload') {
+    const f = v as { id?: string; filename?: string; mime_type?: string; size_bytes?: number };
+    if (!f.id) {
+      return (
+        <>
+          <dt className="font-mono text-slate-600 break-all">{k}</dt>
+          <dd className="text-slate-400 italic">(empty)</dd>
+        </>
+      );
+    }
+    const isImage = (f.mime_type ?? '').startsWith('image/');
+    const href = `/api/school/staff-requests/files/${encodeURIComponent(f.id)}`;
+    return (
+      <>
+        <dt className="font-mono text-slate-600 break-all">{k}</dt>
+        <dd>
+          {isImage ? (
+            <a href={href} target="_blank" rel="noreferrer" className="block max-w-xs">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={href}
+                alt={f.filename ?? 'Attachment'}
+                className="rounded-md border border-slate-200 max-h-64 object-contain bg-slate-50"
+              />
+              <div className="mt-1 text-[11px] text-slate-500">
+                {f.filename} · {fmtBytes(f.size_bytes ?? 0)} · click to open
+              </div>
+            </a>
+          ) : (
+            <a href={href} target="_blank" rel="noreferrer"
+              className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2 py-1 text-xs font-medium text-blue-700 hover:bg-blue-50">
+              📎 {f.filename} · {fmtBytes(f.size_bytes ?? 0)}
+            </a>
+          )}
+        </dd>
+      </>
+    );
+  }
   // student_picker: render as a contact card with parents + click-to-call
   // / click-to-email links. Marked with _type so we recognize it
   // regardless of what key the schema used.
@@ -349,6 +391,12 @@ function ResponseRow({ k, v }: { k: string; v: unknown }) {
       <dd className="text-slate-900 break-words whitespace-pre-wrap">{display}</dd>
     </>
   );
+}
+
+function fmtBytes(n: number): string {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(0)} KB`;
+  return `${(n / 1024 / 1024).toFixed(1)} MB`;
 }
 
 function fmtDate(s: string | Date): string {
