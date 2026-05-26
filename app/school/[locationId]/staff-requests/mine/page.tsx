@@ -2,7 +2,10 @@
 //
 // Teacher-facing view: every request THIS TEACHER submitted, with
 // current status + scheduled date + Lexi's notes (read-only). Filtered
-// by submitter_email = the school session's user_email.
+// by submitter_email — pulled from the gsd_teacher_email cookie set
+// via the IdentityPicker on the landing page, with a fallback to the
+// school session's user_email for the (future) case where GHL passes
+// a real teacher email via the login JWT.
 
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
@@ -12,6 +15,9 @@ import { query } from '@/lib/db';
 import { loadSchoolByLocationId } from '@/lib/dashboards/loader';
 import { SCHOOL_SESSION_COOKIE, verifySchoolSession } from '@/lib/auth/school';
 import { ClassroomTopNav } from '@/components/ClassroomTopNav';
+import { getTeacherIdentity, isValidEmail, DGM_STAFF_DIRECTORY } from '@/lib/auth/teacher-identity';
+import { IdentityPicker } from '../IdentityPicker';
+import { IdentityIndicator } from '../IdentityIndicator';
 
 export const dynamic = 'force-dynamic';
 
@@ -55,16 +61,29 @@ export default async function MyStaffRequestsPage({
   const session = await verifySchoolSession(ck.get(SCHOOL_SESSION_COOKIE)?.value);
   if (!session) notFound(); // proxy auto-mints; if it failed somehow we'd 404
 
-  const { rows } = await query<SubmissionRow>(
-    `SELECT s.id, d.display_name, d.slug, s.submitted_at, s.resolved_status,
-            s.scheduled_date, s.admin_notes, s.assigned_to_email
-       FROM portal_form_submissions s
-       JOIN portal_form_definitions d ON d.id = s.form_definition_id
-      WHERE s.school_id = $1 AND s.submitter_email = $2
-      ORDER BY s.submitted_at DESC
-      LIMIT 100`,
-    [session.school_id, session.user_email],
-  );
+  // Resolve who "me" is. Cookie wins; fall back to the session email
+  // only when it's a real address (skip the embed@iframe placeholder).
+  const teacher = await getTeacherIdentity();
+  const meEmail = teacher?.email
+    ?? (isValidEmail(session.user_email) && session.user_email !== 'embed@iframe' ? session.user_email : null);
+
+  const thisUrl = `/school/${locationId}/staff-requests/mine?chrome=none${fromParam}`;
+
+  // Only query the table when we know who's asking — otherwise we'd
+  // either leak someone else's submissions or, more likely, just match
+  // the placeholder identity that nothing was actually submitted under.
+  const rows: SubmissionRow[] = meEmail
+    ? (await query<SubmissionRow>(
+        `SELECT s.id, d.display_name, d.slug, s.submitted_at, s.resolved_status,
+                s.scheduled_date, s.admin_notes, s.assigned_to_email
+           FROM portal_form_submissions s
+           JOIN portal_form_definitions d ON d.id = s.form_definition_id
+          WHERE s.school_id = $1 AND s.submitter_email = $2
+          ORDER BY s.submitted_at DESC
+          LIMIT 100`,
+        [session.school_id, meEmail],
+      )).rows
+    : [];
 
   return (
     <main className="min-h-screen bg-slate-50">
@@ -80,15 +99,24 @@ export default async function MyStaffRequestsPage({
           <div>
             <h1 className="text-2xl font-semibold text-slate-900">My recent requests</h1>
             <p className="text-sm text-slate-500 mt-0.5">
-              Requests submitted by <span className="font-mono">{session.user_email}</span>. Status updates auto-refresh.
+              {meEmail ? (
+                <>Requests submitted by <span className="font-mono">{meEmail}</span>. Status updates auto-refresh.</>
+              ) : (
+                <>Pick your name below to see the requests you&rsquo;ve submitted.</>
+              )}
             </p>
           </div>
-          <Link
-            href={`/school/${locationId}/staff-requests?chrome=none${fromParam}`}
-            className="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-blue-700"
-          >
-            <Plus className="h-4 w-4" /> Submit a new request
-          </Link>
+          <div className="flex items-center gap-2 flex-wrap">
+            {teacher ? (
+              <IdentityIndicator email={teacher.email} name={teacher.name} returnTo={thisUrl} />
+            ) : null}
+            <Link
+              href={`/school/${locationId}/staff-requests?chrome=none${fromParam}`}
+              className="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-blue-700"
+            >
+              <Plus className="h-4 w-4" /> Submit a new request
+            </Link>
+          </div>
         </div>
 
         {sp.submitted ? (
@@ -97,7 +125,13 @@ export default async function MyStaffRequestsPage({
           </div>
         ) : null}
 
-        {rows.length === 0 ? (
+        {!teacher && !meEmail ? (
+          <div className="mb-4">
+            <IdentityPicker staff={DGM_STAFF_DIRECTORY} returnTo={thisUrl} />
+          </div>
+        ) : null}
+
+        {!meEmail ? null : rows.length === 0 ? (
           <div className="rounded-lg border-2 border-dashed border-slate-300 bg-white p-8 text-center">
             <p className="text-sm text-slate-700 font-medium">No requests yet</p>
             <p className="mt-1 text-xs text-slate-500">

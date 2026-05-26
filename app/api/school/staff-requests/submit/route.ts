@@ -11,6 +11,7 @@ import type { NextRequest } from 'next/server';
 import { cookies } from 'next/headers';
 import { query } from '@/lib/db';
 import { SCHOOL_SESSION_COOKIE, verifySchoolSession } from '@/lib/auth/school';
+import { getTeacherIdentity, isValidEmail } from '@/lib/auth/teacher-identity';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -20,6 +21,22 @@ export async function POST(request: NextRequest) {
   const session = await verifySchoolSession(ck.get(SCHOOL_SESSION_COOKIE)?.value);
   if (!session) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+  }
+
+  // Identify the submitting teacher. Prefer the explicit
+  // teacher-identity cookie (set via /identify) — it's what the
+  // teacher self-selected. Fall back to the school session's
+  // user_email when GHL has been wired to pass real user info via
+  // the login JWT exchange (today that's a placeholder for auto-
+  // minted sessions, so the cookie is the real source of truth).
+  const teacher = await getTeacherIdentity();
+  const teacherEmail = teacher?.email
+    ?? (isValidEmail(session.user_email) && session.user_email !== 'embed@iframe' ? session.user_email : null);
+  if (!teacherEmail) {
+    return NextResponse.json({
+      error: 'identify_first',
+      detail: 'Please identify yourself first via /staff-requests so we know who submitted the request.',
+    }, { status: 403 });
   }
 
   let fd: FormData;
@@ -105,7 +122,7 @@ export async function POST(request: NextRequest) {
              $3::jsonb, 'submitted', now(), false,
              $4, $5, 'pending')
      RETURNING id`,
-    [session.school_id, formDefId, JSON.stringify(responses), session.user_email, assignedTo],
+    [session.school_id, formDefId, JSON.stringify(responses), teacherEmail, assignedTo],
   );
   const submissionId = ins.rows[0].id;
 
@@ -119,7 +136,7 @@ export async function POST(request: NextRequest) {
           formDisplayName: def.display_name,
           schoolName: 'Desert Garden Montessori', // could resolve via schools table; cheap shortcut
           submissionId,
-          familyLabel: `STAFF REQUEST · ${session.user_email}`,
+          familyLabel: `STAFF REQUEST · ${teacher?.name ? `${teacher.name} (${teacherEmail})` : teacherEmail}`,
           studentLabel: null,
           parentEmail: null,
           parentPhone: null,

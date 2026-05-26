@@ -9,11 +9,13 @@
 // The endpoint URL is the only thing that differs.
 
 import Link from 'next/link';
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
 import { query } from '@/lib/db';
 import { loadSchoolByLocationId } from '@/lib/dashboards/loader';
 import { ClassroomTopNav } from '@/components/ClassroomTopNav';
+import { getTeacherIdentity } from '@/lib/auth/teacher-identity';
+import { IdentityIndicator } from '../IdentityIndicator';
 import { StaffSubmitForm } from './StaffSubmitForm';
 
 export const dynamic = 'force-dynamic';
@@ -60,7 +62,19 @@ export default async function StaffFormFillPage({
   if (rows.length === 0 || rows[0].audience !== 'staff') notFound();
   const form = rows[0];
 
+  // Submissions require an identified teacher (cookie is the source of
+  // truth). If they bookmarked the form URL or hit it before picking
+  // their name, bounce them to the landing page where the picker lives
+  // — the landing remembers the `from=` classroom so they don't lose
+  // their context.
+  const teacher = await getTeacherIdentity();
+  if (!teacher) {
+    const fromQs = classroomSlug ? `&from=${classroomSlug}` : '';
+    redirect(`/school/${locationId}/staff-requests?chrome=none${fromQs}`);
+  }
+
   const returnTo = `/school/${locationId}/staff-requests/mine?chrome=none${classroomSlug ? `&from=${classroomSlug}` : ''}&submitted=${form.slug}`;
+  const thisUrl = `/school/${locationId}/staff-requests/${form.slug}?chrome=none${classroomSlug ? `&from=${classroomSlug}` : ''}`;
 
   return (
     <main className="min-h-screen bg-zinc-50">
@@ -71,12 +85,15 @@ export default async function StaffFormFillPage({
           classroomLabel={classroomLabel}
           active="submit"
         />
-        <Link
-          href={`/school/${locationId}/staff-requests?chrome=none${classroomSlug ? `&from=${classroomSlug}` : ''}`}
-          className="inline-flex items-center gap-1 text-xs text-zinc-500 hover:text-zinc-700 mb-3"
-        >
-          <ArrowLeft className="h-3 w-3" /> All staff requests
-        </Link>
+        <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
+          <Link
+            href={`/school/${locationId}/staff-requests?chrome=none${classroomSlug ? `&from=${classroomSlug}` : ''}`}
+            className="inline-flex items-center gap-1 text-xs text-zinc-500 hover:text-zinc-700"
+          >
+            <ArrowLeft className="h-3 w-3" /> All staff requests
+          </Link>
+          <IdentityIndicator email={teacher.email} name={teacher.name} returnTo={thisUrl} />
+        </div>
 
         <div className="rounded-xl border border-zinc-200 bg-white p-6 space-y-4">
           <div>
