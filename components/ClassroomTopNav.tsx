@@ -69,7 +69,7 @@ export function ClassroomTopNav({
           href={submitHref}
           active={active === 'submit'}
           icon={<Plus className="h-3.5 w-3.5" />}
-          label="Submit a Request"
+          label="Requests + Forms"
         />
         <Tab
           href={mineHref}

@@ -124,14 +124,18 @@ export default async function StaffRequestsCalendarPage({
   const firstOfNext = new Date(Date.UTC(year, month + 1, 1));
   const monthLabel = firstOfMonth.toLocaleDateString(undefined, { month: 'long', year: 'numeric', timeZone: 'UTC' });
 
-  // Form types for the filter chip row — staff forms only. Pulled once
-  // per render; cheap.
+  // Form types for the filter chip row. Calendar is for the *scheduled*
+  // request types Lexi manages (Labor + Supplies). Incident reports are
+  // a separate workflow — they aren't fulfilled on a calendar date, so
+  // we exclude them from this view entirely.
+  const CALENDAR_EXCLUDED_SLUGS = ['staff-incident-report'];
   const { rows: forms } = await query<SlugCount>(
     `SELECT slug, display_name
        FROM portal_form_definitions
       WHERE school_id = $1 AND audience='staff' AND is_active = true
+        AND slug <> ALL($2::text[])
       ORDER BY display_name`,
-    [school.id],
+    [school.id, CALENDAR_EXCLUDED_SLUGS],
   );
 
   // Pull every staff request that has a scheduled_date inside the
@@ -149,13 +153,14 @@ export default async function StaffRequestsCalendarPage({
        JOIN portal_form_definitions d ON d.id = s.form_definition_id
       WHERE s.school_id = $1
         AND d.audience = 'staff'
+        AND d.slug <> ALL($6::text[])   -- exclude incident reports from the calendar
         AND s.scheduled_date IS NOT NULL
         AND s.scheduled_date >= $2::date
         AND s.scheduled_date <  $3::date
         AND ($4 = '' OR d.slug = $4)
         AND ($5::text IS NULL OR s.submitter_email = $5)
       ORDER BY s.scheduled_date, s.submitted_at`,
-    [school.id, ymd(firstOfMonth), ymd(firstOfNext), slugFilter, mode === 'mine' ? teacherEmail : null],
+    [school.id, ymd(firstOfMonth), ymd(firstOfNext), slugFilter, mode === 'mine' ? teacherEmail : null, CALENDAR_EXCLUDED_SLUGS],
   )).rows;
 
   // Bucket rows per YYYY-MM-DD for fast lookup when rendering the
@@ -242,8 +247,8 @@ export default async function StaffRequestsCalendarPage({
             </h1>
             <p className="text-sm text-slate-500 mt-0.5">
               {mode === 'mine'
-                ? <>Your requests by the day they&rsquo;re scheduled. {teacherEmail ? <>Showing for <span className="font-mono">{teacherEmail}</span>.</> : null}</>
-                : <>All staff requests by their scheduled fulfillment date.</>}
+                ? <>Your Labor &amp; Supplies requests by the day they&rsquo;re scheduled. {teacherEmail ? <>Showing for <span className="font-mono">{teacherEmail}</span>.</> : null}</>
+                : <>Labor &amp; Supplies requests by their scheduled fulfillment date. Incident reports live in the inbox.</>}
             </p>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
