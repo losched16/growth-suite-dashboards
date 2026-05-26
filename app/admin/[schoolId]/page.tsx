@@ -182,12 +182,18 @@ export default async function SchoolAdmin({
               location {school.ghl_location_id}
             </p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
             <Link
               href={`/admin/${schoolId}/payments`}
               className="rounded-md border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-sm font-medium text-emerald-900 hover:bg-emerald-100"
             >
               Payments →
+            </Link>
+            <Link
+              href={`/admin/${schoolId}/menu-editors`}
+              className="rounded-md border border-blue-300 bg-blue-50 px-3 py-1.5 text-sm font-medium text-blue-900 hover:bg-blue-100"
+            >
+              Menu editors →
             </Link>
             <Link
               href={`/school/${school.ghl_location_id}${

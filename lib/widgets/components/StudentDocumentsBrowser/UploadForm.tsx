@@ -10,14 +10,51 @@ import type { StudentOption } from './fetcher';
 
 export function UploadForm({
   students,
-  categories,
+  categories: initialCategories,
 }: {
   students: StudentOption[];
-  categories: string[];
+  categories: Array<{ key: string; label: string }>;
 }) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  // Categories the user sees in the dropdown. We mutate this when they
+  // create a new one inline so the next upload they do in the same
+  // session picks it up without a page reload.
+  const [categories, setCategories] = useState(initialCategories);
+  const [category, setCategory] = useState<string>(initialCategories[0]?.key ?? '');
+  const [creatingCat, setCreatingCat] = useState(false);
+  const [newCatLabel, setNewCatLabel] = useState('');
+  const [catBusy, setCatBusy] = useState(false);
+
+  async function createCategory() {
+    const lbl = newCatLabel.trim();
+    if (!lbl) return;
+    setCatBusy(true); setErr(null);
+    try {
+      const r = await fetch('/api/school/document-categories', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ label: lbl }),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || !j.category) {
+        setErr(j.detail || j.error || `Failed (${r.status})`);
+        return;
+      }
+      const cat = j.category as { key: string; label: string };
+      // Merge into local list (avoid dup on re-create) and select it.
+      setCategories((prev) => {
+        const without = prev.filter((c) => c.key !== cat.key);
+        return [...without, cat].sort((a, b) => a.label.localeCompare(b.label));
+      });
+      setCategory(cat.key);
+      setCreatingCat(false);
+      setNewCatLabel('');
+    } finally {
+      setCatBusy(false);
+    }
+  }
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -80,11 +117,50 @@ export function UploadForm({
 
         <label className="block text-sm">
           <span className="block text-[11px] font-medium uppercase tracking-wide text-slate-700">Category *</span>
-          <select name="category" required className={inputCls}>
-            {categories.map((c) => (
-              <option key={c} value={c}>{c}</option>
-            ))}
-          </select>
+          {creatingCat ? (
+            <div className="mt-0.5 flex items-center gap-1">
+              <input
+                type="text"
+                value={newCatLabel}
+                onChange={(e) => setNewCatLabel(e.target.value)}
+                placeholder="e.g. Custody order"
+                autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') { e.preventDefault(); createCategory(); }
+                  if (e.key === 'Escape') { setCreatingCat(false); setNewCatLabel(''); }
+                }}
+                className={`${inputCls} flex-1`}
+              />
+              <button type="button" onClick={createCategory} disabled={catBusy || !newCatLabel.trim()}
+                className="rounded bg-blue-600 px-2 py-1 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50">
+                {catBusy ? 'Saving…' : 'Save'}
+              </button>
+              <button type="button" onClick={() => { setCreatingCat(false); setNewCatLabel(''); }}
+                className="text-[11px] text-slate-500 hover:text-slate-800 underline">
+                cancel
+              </button>
+            </div>
+          ) : (
+            <select
+              name="category"
+              required
+              value={category}
+              onChange={(e) => {
+                if (e.target.value === '__create__') {
+                  setCreatingCat(true);
+                } else {
+                  setCategory(e.target.value);
+                }
+              }}
+              className={inputCls}
+            >
+              <option value="" disabled>— pick a category —</option>
+              {categories.map((c) => (
+                <option key={c.key} value={c.key}>{c.label}</option>
+              ))}
+              <option value="__create__">+ Create new category…</option>
+            </select>
+          )}
         </label>
 
         <label className="block text-sm sm:col-span-2">

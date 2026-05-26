@@ -9,7 +9,13 @@
 // for the wrapper around DGM's external lunch-roster iframe.
 
 import { notFound } from 'next/navigation';
+import Link from 'next/link';
+import { cookies } from 'next/headers';
+import { Pencil } from 'lucide-react';
 import { loadSchoolByLocationId } from '@/lib/dashboards/loader';
+import { SCHOOL_SESSION_COOKIE, verifySchoolSession } from '@/lib/auth/school';
+import { getTeacherIdentity } from '@/lib/auth/teacher-identity';
+import { getMenuAssetIndex, isMenuEditor } from '@/lib/menus';
 import { ClassroomTopNav } from '@/components/ClassroomTopNav';
 import { DgmMenusView } from '@/components/DgmMenusView';
 
@@ -35,9 +41,17 @@ export default async function MenusPage({
   const sp = await searchParams;
   const classroomSlug = isClassroomSlug(sp.from) ? sp.from! : null;
   const classroomLabel = classroomSlug ? prettyClassroom(classroomSlug) : null;
+  const fromQs = classroomSlug ? `&from=${classroomSlug}` : '';
 
   const school = await loadSchoolByLocationId(locationId);
   if (!school) notFound();
+  const ck = await cookies();
+  const session = await verifySchoolSession(ck.get(SCHOOL_SESSION_COOKIE)?.value);
+  if (!session) notFound();
+
+  const teacher = await getTeacherIdentity();
+  const editor = teacher ? await isMenuEditor(school.id, teacher.email) : false;
+  const assets = await getMenuAssetIndex(school.id);
 
   return (
     <main className="min-h-screen bg-slate-50 print:bg-white">
@@ -48,7 +62,17 @@ export default async function MenusPage({
           classroomLabel={classroomLabel}
           active="menus"
         />
-        <DgmMenusView />
+        {editor ? (
+          <div className="flex justify-end mb-2 print:hidden">
+            <Link
+              href={`/school/${locationId}/menus/edit?chrome=none${fromQs}`}
+              className="inline-flex items-center gap-1 rounded-md border border-blue-300 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-100"
+            >
+              <Pencil className="h-3.5 w-3.5" /> Edit menus
+            </Link>
+          </div>
+        ) : null}
+        <DgmMenusView assets={assets} />
       </div>
     </main>
   );

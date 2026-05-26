@@ -39,11 +39,19 @@ export interface StudentDocumentsBrowserData {
   page_count: number;
   // Dropdown options
   students: StudentOption[];
-  categories: string[];      // distinct categories present in this school
+  // Categories the operator may pick from. Tuples so the upload form
+  // can show the friendly label (e.g. "IEP Goals") while still
+  // submitting the slug (e.g. "iep_goals") as the value. Schools
+  // without a custom list see the legacy hardcoded names.
+  categories: Array<{ key: string; label: string }>;
   total_size_bytes: number;  // sum across visible/filtered rows
 }
 
-const CATEGORIES = ['health', 'enrollment', 'iep', 'transcript', 'other'];
+// Legacy hardcoded categories — only used for schools that haven't
+// seeded school_document_categories yet. Drop "other" from the
+// default offering (schools that want a specific list shouldn't get
+// a meaningless catch-all bucket).
+const LEGACY_CATEGORIES = ['health', 'enrollment', 'iep', 'transcript'];
 
 export async function fetcher(
   school: SchoolContext,
@@ -95,6 +103,22 @@ export async function fetcher(
      ORDER BY d.uploaded_at DESC`,
     [school.schoolId],
   );
+
+  // Per-school category list. When the table has rows for this school
+  // we use it; otherwise we serve the legacy hardcoded list so older
+  // tenants don't see an empty dropdown until they migrate.
+  const { rows: schoolCats } = await query<{ key: string; label: string }>(
+    `SELECT key, label FROM school_document_categories WHERE school_id = $1 ORDER BY sort_order, label`,
+    [school.schoolId],
+  );
+  const resolvedCategories: Array<{ key: string; label: string }> = schoolCats.length > 0
+    ? schoolCats
+    : LEGACY_CATEGORIES.map((k) => ({
+        key: k,
+        // Title-case the legacy key for display: 'iep' → 'IEP', others
+        // get their first letter uppercased.
+        label: k === 'iep' ? 'IEP' : k.charAt(0).toUpperCase() + k.slice(1),
+      }));
 
   const allRows: DocumentRow[] = rawDocs.map((r) => {
     const displayFirst = (r.student_preferred?.trim() || r.student_first || '').trim();
@@ -192,7 +216,7 @@ export async function fetcher(
     per_page: perPage,
     page_count: pageCount,
     students: studentOptions,
-    categories: CATEGORIES,
+    categories: resolvedCategories,
     total_size_bytes: filtered.reduce((s, r) => s + r.size_bytes, 0),
   };
 }

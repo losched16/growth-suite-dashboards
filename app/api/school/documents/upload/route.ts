@@ -19,7 +19,12 @@ export const dynamic = 'force-dynamic';
 export const maxDuration = 30;
 
 const MAX_BYTES = 10 * 1024 * 1024;        // 10MB — matches table CHECK
-const ALLOWED_CATEGORIES = ['health', 'enrollment', 'iep', 'transcript', 'other'];
+// Legacy hardcoded categories — used as a fallback when a school has
+// no custom category list yet. Once school_document_categories has
+// rows for this school, we validate against that list instead.
+// "other" intentionally dropped — schools that want a specific list
+// won't get a meaningless catch-all bucket.
+const LEGACY_CATEGORIES = ['health', 'enrollment', 'iep', 'transcript'];
 
 export async function POST(request: NextRequest) {
   const ck = await cookies();
@@ -47,7 +52,25 @@ export async function POST(request: NextRequest) {
   if (file.size > MAX_BYTES) {
     return NextResponse.json({ ok: false, error: `file too large (max ${MAX_BYTES} bytes)` }, { status: 413 });
   }
-  const category = ALLOWED_CATEGORIES.includes(categoryRaw) ? categoryRaw : 'other';
+  // Resolve allowed categories for this school. School-specific list
+  // (managed via /api/school/document-categories) wins; legacy
+  // hardcoded list is the fallback for schools that haven't seeded
+  // their own list yet.
+  const { rows: schoolCats } = await query<{ key: string }>(
+    `SELECT key FROM school_document_categories WHERE school_id = $1`,
+    [session.school_id],
+  );
+  const allowedKeys = schoolCats.length > 0
+    ? schoolCats.map((c) => c.key)
+    : LEGACY_CATEGORIES;
+  if (!allowedKeys.includes(categoryRaw)) {
+    return NextResponse.json({
+      ok: false,
+      error: 'invalid_category',
+      detail: `"${categoryRaw}" is not a recognized category for this school. Available: ${allowedKeys.join(', ')}.`,
+    }, { status: 400 });
+  }
+  const category = categoryRaw;
   const expiresAt = /^\d{4}-\d{2}-\d{2}$/.test(expiresAtRaw) ? expiresAtRaw : null;
 
   // Verify the student belongs to this school. Prevents cross-school

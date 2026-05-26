@@ -18,8 +18,11 @@
 
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
+import { cookies } from 'next/headers';
 import { ClipboardList, Image as ImageIcon } from 'lucide-react';
 import { loadSchoolByLocationId } from '@/lib/dashboards/loader';
+import { SCHOOL_SESSION_COOKIE, verifySchoolSession } from '@/lib/auth/school';
+import { getMenuAssetIndex } from '@/lib/menus';
 import { ClassroomTopNav } from '@/components/ClassroomTopNav';
 import { DgmMenusView } from '@/components/DgmMenusView';
 
@@ -50,6 +53,10 @@ export default async function LunchRosterPage({
 
   const school = await loadSchoolByLocationId(locationId);
   if (!school) notFound();
+  const ck = await cookies();
+  const session = await verifySchoolSession(ck.get(SCHOOL_SESSION_COOKIE)?.value);
+  if (!session) notFound();
+  const assets = await getMenuAssetIndex(school.id);
 
   // DGM's existing external dashboard. Env var so the embed token
   // stays out of git; falls back to the known URL so a missing env
@@ -114,7 +121,7 @@ export default async function LunchRosterPage({
             </div>
           )
         ) : (
-          <DgmMenusView />
+          <DgmMenusView assets={assets} />
         )}
       </div>
     </main>

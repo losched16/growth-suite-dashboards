@@ -97,7 +97,7 @@ function Component({
           <span className="block text-[10px] uppercase tracking-wide text-slate-500 mb-0.5">Category</span>
           <select name="category" defaultValue={sp.category ?? ''} className="rounded border border-slate-300 bg-white px-2 py-1 text-sm">
             <option value="">All categories</option>
-            {data.categories.map((c) => <option key={c} value={c}>{c}</option>)}
+            {data.categories.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
           </select>
         </label>
         <label className="flex items-center gap-1.5 text-xs ml-2">
