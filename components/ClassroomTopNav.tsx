@@ -8,9 +8,9 @@
 // they land back on classroom-3 (not the default).
 
 import Link from 'next/link';
-import { ClipboardList, Plus, Inbox, ArrowLeft } from 'lucide-react';
+import { ClipboardList, Plus, Inbox, ArrowLeft, FolderOpen } from 'lucide-react';
 
-export type ActiveTab = 'roster' | 'submit' | 'mine' | 'inbox';
+export type ActiveTab = 'roster' | 'submit' | 'mine' | 'inbox' | 'documents';
 
 export function ClassroomTopNav({
   locationId,
@@ -40,6 +40,17 @@ export function ClassroomTopNav({
   const submitHref = `/school/${locationId}/staff-requests?chrome=none${fromParam}`;
   const mineHref   = `/school/${locationId}/staff-requests/mine?chrome=none${fromParam}`;
 
+  // Documents tab → the existing "documents" dashboard (StudentDocumentsBrowser)
+  // with the classroom name pre-filtered + audience=teacher so admin-only
+  // files are hidden. The widget already accepts both as URL filters.
+  const docsClassroomLabel = classroomSlug?.startsWith('classroom-')
+    ? `Classroom ${classroomSlug.slice('classroom-'.length)}`
+    : null;
+  const docsParams = new URLSearchParams({ chrome: 'none', audience: 'teacher' });
+  if (docsClassroomLabel) docsParams.set('classroom', docsClassroomLabel);
+  if (classroomSlug)      docsParams.set('from', classroomSlug);
+  const docsHref = `/school/${locationId}/documents?${docsParams.toString()}`;
+
   return (
     <nav className="print:hidden border-b border-slate-200 bg-white -mx-4 sm:-mx-6 px-4 sm:px-6 mb-3">
       <div className="flex items-center gap-1 overflow-x-auto">
@@ -60,6 +71,12 @@ export function ClassroomTopNav({
           active={active === 'mine'}
           icon={<Inbox className="h-3.5 w-3.5" />}
           label="My Requests"
+        />
+        <Tab
+          href={docsHref}
+          active={active === 'documents'}
+          icon={<FolderOpen className="h-3.5 w-3.5" />}
+          label="Documents"
         />
       </div>
     </nav>

@@ -41,6 +41,15 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ ok: false, error: 'student_id required' }, { status: 400 });
   }
 
+  // `audience=teacher` filters out admin-only documents
+  // (visible_to_teacher=false). The default behavior shows everything —
+  // operators viewing the StudentDocumentsBrowser dashboard need the
+  // full list. The DocumentsCell on the teacher classroom hub roster
+  // passes audience=teacher so admin-only files (e.g. internal HR
+  // notes) don't leak to teachers.
+  const audience = (request.nextUrl.searchParams.get('audience') ?? '').trim();
+  const teacherOnly = audience === 'teacher';
+
   // school_id check is applied in the WHERE, so a cross-school
   // student_id returns an empty list (not a leak).
   const { rows } = await query<DocRow>(
@@ -49,8 +58,9 @@ export async function GET(request: NextRequest) {
             visible_to_teacher, visible_to_parent
        FROM student_documents
       WHERE school_id = $1 AND student_id = $2
+        AND ($3 = false OR visible_to_teacher = true)
       ORDER BY uploaded_at DESC`,
-    [session.school_id, studentId],
+    [session.school_id, studentId, teacherOnly],
   );
 
   return NextResponse.json({ ok: true, documents: rows });

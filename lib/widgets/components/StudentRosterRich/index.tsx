@@ -372,7 +372,12 @@ function Component({
       </div>
 
       {view === 'list' ? (
-        <StudentTableWithAccordion rows={data.page_rows} columns={columns} locationId={school.locationId} />
+        <StudentTableWithAccordion
+          rows={data.page_rows}
+          columns={columns}
+          locationId={school.locationId}
+          documentsAudience={config.documents_audience ?? 'all'}
+        />
       ) : view === 'grid' ? (
         <GridView rows={data.page_rows} locationId={school.locationId} drilldownDashboard={drilldown} />
       ) : (

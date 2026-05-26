@@ -119,15 +119,30 @@ export async function fetcher(
   });
 
   // ── Filters ────────────────────────────────────────────────────────
+  // Standard filters:
+  //   q              free-text across title/file/desc/student/classroom
+  //   student        narrow to a single student_id
+  //   category       narrow by category (health/iep/transcript/...)
+  //   parent_visible only show docs the parent can see
+  // Teacher-hub filters (so the same widget can serve both audiences):
+  //   classroom      filter by the student's enrollment classroom name
+  //                  (used by the "Documents" tab on classroom hubs)
+  //   audience       'teacher' hides docs with visible_to_teacher=false
+  //                  so admin-only files (HR notes, sensitive drafts)
+  //                  never leak to a teacher view
   const q = (sp.q ?? '').trim().toLowerCase();
   const studentFilter = (sp.student ?? '').trim();
   const categoryFilter = (sp.category ?? '').trim().toLowerCase();
   const parentVisibleOnly = sp.parent_visible === '1';
+  const classroomFilter = (sp.classroom ?? '').trim();
+  const teacherAudience = (sp.audience ?? '').trim().toLowerCase() === 'teacher';
 
   const filtered = allRows.filter((d) => {
     if (studentFilter && d.student_id !== studentFilter) return false;
     if (categoryFilter && (d.category ?? '') !== categoryFilter) return false;
     if (parentVisibleOnly && !d.visible_to_parent) return false;
+    if (teacherAudience && !d.visible_to_teacher) return false;
+    if (classroomFilter && (d.classroom_name ?? '') !== classroomFilter) return false;
     if (q) {
       const hay = [d.title, d.file_name, d.description ?? '', d.student_display, d.classroom_name ?? ''].join(' ').toLowerCase();
       if (!hay.includes(q)) return false;

@@ -80,6 +80,7 @@ const TEACHER_ROSTER_COLUMNS = [
   'iep_504',
   'lunch',
   'attendance',
+  'documents',  // inline cell — click chip to view IEP/504/health docs for that student
   'family',
 ];
 
@@ -124,6 +125,7 @@ function buildLayout(slug, filter) {
         shown_filters: TEACHER_ROSTER_FILTERS,
         ...rosterDefaults,
         drilldown_dashboard_slug: 'family-hub',
+        documents_audience: 'teacher',  // hide admin-only docs
       },
     },
   ];

@@ -48,16 +48,37 @@ export default async function DashboardPage({
     locationId: school.ghl_location_id,
   };
 
-  const showClassroomNav = isClassroomHub(dashboardSlug);
+  // When the slug IS a classroom hub, show the nav with Roster active.
+  // When the slug is 'documents' AND we have a ?from=classroom-N
+  // context (teacher clicked the Documents tab from their classroom
+  // hub), show the same nav with Documents active so they can navigate
+  // back without losing context.
+  const isHub = isClassroomHub(dashboardSlug);
+  const fromParam = typeof sp.from === 'string' && /^(classroom-|program-)[a-z0-9-]+$/.test(sp.from) ? sp.from : null;
+  const showDocsNav = dashboardSlug === 'documents' && fromParam !== null;
+
+  // Pretty label for the Roster tab when we're on the docs page.
+  const fromLabel = fromParam?.startsWith('classroom-')
+    ? `Classroom ${fromParam.slice('classroom-'.length)}`
+    : fromParam?.startsWith('program-')
+      ? fromParam.slice('program-'.length).toUpperCase().replace(/-/g, ' ')
+      : null;
 
   return (
     <div className="space-y-4">
-      {showClassroomNav ? (
+      {isHub ? (
         <ClassroomTopNav
           locationId={locationId}
           classroomSlug={dashboardSlug}
           classroomLabel={dashboard.display_name}
           active="roster"
+        />
+      ) : showDocsNav ? (
+        <ClassroomTopNav
+          locationId={locationId}
+          classroomSlug={fromParam}
+          classroomLabel={fromLabel}
+          active="documents"
         />
       ) : null}
 

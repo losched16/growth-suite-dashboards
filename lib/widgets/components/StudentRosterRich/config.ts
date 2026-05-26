@@ -57,6 +57,13 @@ export interface StudentRosterConfig {
   // multi-classroom teacher groups where students share a program but
   // not a single homeroom. URL `?program=...` still wins.
   default_program_filter?: string;
+  // Audience for the documents inline cell:
+  //   'teacher' → hide documents flagged visible_to_teacher=false
+  //   'all'     → show every document (operator view, default)
+  // Set per-dashboard via the provisioner — classroom hubs get
+  // 'teacher' so admin-only files (HR notes, sensitive IEP drafts,
+  // etc.) don't leak.
+  documents_audience?: 'teacher' | 'all';
 }
 
 export const studentRosterDefaults: StudentRosterConfig = {

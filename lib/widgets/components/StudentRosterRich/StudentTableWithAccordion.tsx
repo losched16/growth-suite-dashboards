@@ -123,11 +123,12 @@ interface FamilyDetail {
 }
 
 export function StudentTableWithAccordion({
-  rows, columns, locationId,
+  rows, columns, locationId, documentsAudience = 'all',
 }: {
   rows: RosterStudent[];
   columns: ColumnKey[];
   locationId: string;
+  documentsAudience?: 'teacher' | 'all';
 }) {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [details, setDetails] = useState<Record<string, FamilyDetail | 'loading' | { err: string }>>({});
@@ -197,6 +198,7 @@ export function StudentTableWithAccordion({
                 s={s}
                 columns={columns}
                 locationId={locationId}
+                documentsAudience={documentsAudience}
                 isOpen={isOpen}
                 detail={isOpen ? details[s.family_id] : undefined}
                 onToggle={() => setExpanded(isOpen ? null : s.family_id)}
@@ -210,11 +212,12 @@ export function StudentTableWithAccordion({
 }
 
 function RowGroup({
-  s, columns, locationId, isOpen, detail, onToggle,
+  s, columns, locationId, documentsAudience, isOpen, detail, onToggle,
 }: {
   s: RosterStudent;
   columns: ColumnKey[];
   locationId: string;
+  documentsAudience: 'teacher' | 'all';
   isOpen: boolean;
   detail: FamilyDetail | 'loading' | { err: string } | undefined;
   onToggle: () => void;
@@ -224,7 +227,7 @@ function RowGroup({
       <tr className={`hover:bg-gray-50 ${isOpen ? 'bg-emerald-50/30' : ''}`}>
         {columns.map((c) => (
           <td key={c} className="px-3 py-2 align-top">
-            {renderCell(s, c, locationId, isOpen, onToggle)}
+            {renderCell(s, c, locationId, isOpen, onToggle, documentsAudience)}
           </td>
         ))}
       </tr>
@@ -259,6 +262,7 @@ function renderCell(
   locationId: string,
   isOpen: boolean,
   onToggleFamily: () => void,
+  documentsAudience: 'teacher' | 'all' = 'all',
 ): React.ReactNode {
   switch (col) {
     case 'student':
@@ -308,6 +312,7 @@ function renderCell(
           studentId={s.student_id}
           studentDisplay={`${s.preferred_name || s.first_name} ${s.last_name}`}
           initialCount={s.documents_count}
+          audience={documentsAudience}
         />
       );
     case 'lunch': {

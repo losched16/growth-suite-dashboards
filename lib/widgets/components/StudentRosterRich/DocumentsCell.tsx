@@ -40,10 +40,14 @@ export function DocumentsCell({
   studentId,
   studentDisplay,
   initialCount,
+  audience = 'all',
 }: {
   studentId: string;
   studentDisplay: string;
   initialCount: number;
+  // 'teacher' → API filters out documents flagged visible_to_teacher=false.
+  // 'all' (default) → operator view, shows everything.
+  audience?: 'teacher' | 'all';
 }) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -77,7 +81,9 @@ export function DocumentsCell({
     setErr(null);
     (async () => {
       try {
-        const r = await fetch(`/api/school/documents/list?student_id=${encodeURIComponent(studentId)}`);
+        const url = `/api/school/documents/list?student_id=${encodeURIComponent(studentId)}` +
+          (audience === 'teacher' ? '&audience=teacher' : '');
+        const r = await fetch(url);
         const data = await r.json();
         if (cancelled) return;
         if (!r.ok || !data.ok) {
@@ -94,7 +100,7 @@ export function DocumentsCell({
       }
     })();
     return () => { cancelled = true; };
-  }, [open, docs, studentId]);
+  }, [open, docs, studentId, audience]);
 
   return (
     <div className="relative inline-block">
