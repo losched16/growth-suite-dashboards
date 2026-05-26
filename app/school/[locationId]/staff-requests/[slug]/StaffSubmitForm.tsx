@@ -123,6 +123,8 @@ function Block({ block }: { block: Block }) {
       return <Shell block={block}><input type="number" name={key} required={!!block.required} className={inputCls} /></Shell>;
     case 'date':
       return <Shell block={block}><input type="date" name={key} required={!!block.required} className={inputCls} /></Shell>;
+    case 'time':
+      return <Shell block={block}><input type="time" name={key} required={!!block.required} className={inputCls} /></Shell>;
     case 'select': {
       const options = (block.options as Array<{value: string; label: string}>) ?? [];
       return (

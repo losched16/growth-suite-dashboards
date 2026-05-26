@@ -68,6 +68,7 @@ const txt = (key, label, opts = {}) => ({ type: 'text', key, label, ...opts });
 const area = (key, label, opts = {}) => ({ type: 'textarea', key, label, rows: 3, ...opts });
 const tel = (key, label, opts = {}) => ({ type: 'tel', key, label, ...opts });
 const dateF = (key, label, opts = {}) => ({ type: 'date', key, label, ...opts });
+const timeF = (key, label, opts = {}) => ({ type: 'time', key, label, ...opts });
 const numF = (key, label, opts = {}) => ({ type: 'number', key, label, ...opts });
 const fileF = (key, label, opts = {}) => ({ type: 'file_upload', key, label, max_size_mb: 10, ...opts });
 const radioF = (key, label, options, opts = {}) => ({
@@ -123,65 +124,195 @@ function laborRequestForm() {
 }
 
 // ── Form 2: Incident / Accident Report ──────────────────────────────
+// Replicates DGM's "SST: Accident - Incident Form (NEW)" Google Form.
+// Field order + labels mirror the source. Admin/SST always notified;
+// teacher can also list specific parent + staff emails per submission.
 function incidentReportForm() {
+  // DGM teacher email roster pre-populated as choices so the teacher
+  // doesn't have to remember addresses. Source: the staff email list
+  // that was pre-populated in the live form.
+  const DGM_STAFF_EMAILS = [
+    'abovis@desertgardenmontessori.org',
+    'chelm@desertgardenmontessori.org',
+    'dwestermann@desertgardenmontessori.org',
+    'dhenry@desertgardenmontessori.org',
+    'hstewart@desertgardenmontessori.org',
+    'jmedders@desertgardenmontessori.org',
+    'jkhatinha@desertgardenmontessori.org',
+    'jcarson@desertgardenmontessori.org',
+    'kpandya@desertgardenmontessori.org',
+    'mwhite@desertgardenmontessori.org',
+    'mgamez@desertgardenmontessori.org',
+    'nkenney@desertgardenmontessori.org',
+    'ndull@desertgardenmontessori.org',
+    'orobertson@desertgardenmontessori.org',
+    'pshupp@desertgardenmontessori.org',
+    'rjones@desertgardenmontessori.org',
+    'sfrey@desertgardenmontessori.org',
+    'srobertson@desertgardenmontessori.org',
+    'tmusel@desertgardenmontessori.org',
+    'vfettig@desertgardenmontessori.org',
+  ];
+
+  const ADMIN_CONTACTED_OPTIONS = [
+    'Shetal Walters',
+    'Lexi Henderson',
+    'Gautham Bala',
+    'Crystal Lindquist',
+    'Classroom Lead Teacher',
+    'Other',
+  ];
+
+  const INCIDENT_TYPE_OPTIONS = ['Accident', 'Incident', 'Injury', 'Existing Injury'];
+
+  // Combined "type of accident / injury" list — from the source
+  // dropdown. DGM may extend; staff can add to this via the form
+  // editor later.
+  const INJURY_SUBTYPE_OPTIONS = [
+    'Abrasion',
+    'Bump',
+    'Bruise',
+    'Teeth marks',
+    'Open Cut w/Blood',
+    'No Visible Markings at Present Time',
+    'Heat Related Injury',
+  ];
+
   return {
     slug: 'staff-incident-report',
-    display_name: 'Incident / Accident Report',
-    description: 'Report any student injury or incident. Submitted to Lexi immediately. Required for any visible mark, bump, scrape, or behavioral incident that needs documenting.',
+    display_name: 'SST: Accident / Incident Form',
+    description:
+      'Notify caregivers and admin when a child has an accident, incident, or injury during the school day. ' +
+      'Call the front desk first if anything is happening RIGHT NOW — admin will come to support you. ' +
+      'This form is the record after the fact.',
     category: 'staff_request',
     audience: 'staff',
     per_student: false,
-    confirmation_message: 'Thanks. The incident has been logged and Lexi has been notified. If this is an emergency, also call the front desk now.',
+    confirmation_message:
+      'Thanks — the report has been logged and Lexi + SST have been notified. ' +
+      'If this is an emergency and you haven\'t already called the front desk, please do so now.',
     field_schema: [
-      blockHeader('Incident / Accident Report'),
+      blockHeader('SST: Accident / Incident Form'),
       blockParagraph(
-        'Document any injury or incident as soon as it happens. Lexi gets an email instantly. ' +
-        'If this is an emergency call the front desk first — this report is for the record.',
+        'This form is to notify caregivers and appropriate school staff when a child has an accident, incident, or injury during the school day.\n\n' +
+        'When an incident/accident occurs, please call the front desk and one of us from admin will come to support you to discuss what occurred, help with decisions for next steps, and support the children as needed.',
+      ),
+      blockParagraph(
+        'NOTE: Accidents require a photo but Incidents do not.',
         'warning',
       ),
 
-      blockSection('Student & timing'),
-      txt('student_name', 'Student first & last name', { required: true }),
-      selectF('classroom', 'Classroom', ALL_CLASSROOMS, { required: true }),
-      dateF('incident_date', 'Date of incident', { required: true }),
-      txt('incident_time', 'Time of incident', { required: true,
-        help: 'e.g. "2:35pm" — use a 12- or 24-hour clock; whatever\'s fastest.' }),
-      selectF('location', 'Location of incident',
-        ['Classroom', 'Playground', 'Bathroom', 'Hallway', 'Cafeteria / kitchen', 'Field / outdoor', 'Field trip', 'Other'],
-        { required: true }),
-
-      blockSection('What happened'),
-      area('incident_description', 'Describe what happened',
-        { required: true, help: 'Use the student\'s words where possible. Include what they were doing, what caused the incident, and the sequence of events.' }),
-      area('witnesses', 'Witnesses (staff and/or other students present)',
-        { required: false }),
-
-      blockSection('Injury / outcome'),
-      radioF('injury_type', 'Type of injury',
-        ['No injury — behavioral incident only', 'Scrape / abrasion', 'Bump / bruise', 'Cut (no stitches needed)', 'Cut (may need stitches)', 'Possible sprain / break', 'Head injury', 'Tooth / mouth', 'Other (describe below)'],
-        { required: true }),
-      area('injury_details', 'Injury details / body part affected',
-        { required: false,
-          help: 'Required if injury_type is "Other". Describe location on body, severity, what you observed.' }),
-      multi('first_aid_given', 'First aid administered (check all that apply)',
-        ['Ice pack', 'Bandage', 'Antiseptic', 'Pressure / rest', 'Comforted, no first aid needed', 'EpiPen', 'Inhaler', 'Other (describe below)'],
-        { required: false }),
-      area('first_aid_details', 'First aid notes', { required: false }),
-      radioF('medical_attention_needed', 'Was outside medical attention needed?',
-        ['No', 'Yes — parent took student', 'Yes — 911 called', 'Yes — sent to nurse / referred to ER'],
-        { required: true }),
+      blockSection('Child'),
+      txt('child_full_name', 'Child full name', { required: false }),
+      txt('child_age', 'Child age', { required: false }),
 
       blockSection('Notifications'),
-      radioF('parent_notified', 'Has the parent been notified?',
-        ['Yes — by me', 'Yes — by front desk', 'No, not yet', 'No, will be at pickup'],
-        { required: true }),
-      txt('parent_notification_method', 'How was the parent notified?',
-        { required: false, help: 'Phone / email / in person / text' }),
-      dateF('parent_notified_at_date', 'Date parent was notified', { required: false }),
+      area('parent_emails',
+        'List parent emails',
+        { required: true, help: 'Comma-separate the parent / guardian email addresses to copy on this report.' }),
+      multi('staff_emails_to_notify',
+        'List staff emails to notify',
+        DGM_STAFF_EMAILS,
+        { required: false,
+          help: 'Pick any specific teachers who should know. Admin + iTeam are notified automatically.' }),
+
+      blockSection('Classroom & timing'),
+      selectF('classroom', 'Classroom', ALL_CLASSROOMS, { required: false }),
+      txt('classroom_lead_teacher', 'Classroom lead teacher', { required: false }),
+      dateF('incident_date', 'Date of incident', { required: true }),
+      timeF('incident_time', 'Time of incident', { required: true }),
+      txt('location_of_incident', 'Location of incident', { required: false }),
 
       blockSection('Reporter'),
-      area('follow_up_needed', 'Follow-up needed (optional)',
-        { required: false, help: 'Anything that needs to happen next: medical follow-up, parent conference, environmental fix, behavior plan, etc.' }),
+      txt('staff_writing_report_name', 'Name of staff writing report', { required: false }),
+      txt('staff_writing_report_email',
+        'Staff member email',
+        { required: true, help: 'Email for the staff writing this report. Double-check spelling.' }),
+      txt('other_staff_present', 'Other staff present or involved', { required: false }),
+
+      blockSection('Type of event'),
+      selectF('event_type',
+        'Select the type of accident or incident that occurred',
+        INCIDENT_TYPE_OPTIONS,
+        { required: true }),
+      selectF('injury_subtype',
+        'Select type of accident, injury, or existing injury',
+        INJURY_SUBTYPE_OPTIONS,
+        { required: false, help: 'Pick the closest match. Leave blank if behavioral / non-physical.' }),
+
+      blockSection('Photo'),
+      radioF('photo_attached',
+        'Is there any associated photo?',
+        ['Yes', 'No'],
+        { required: false,
+          help: 'Required for Accidents. Optional for Incidents.' }),
+      // Native file upload comes once we wire storage. For now teachers
+      // can text the photo directly to Lexi — note that in the body.
+      blockParagraph(
+        'Photo upload is rolling out — for now, text the photo directly to Lexi and reference this report ID in the message.',
+        'note',
+      ),
+
+      blockSection('Incident details'),
+      area('incident_description',
+        'Please describe the incident',
+        { required: true, rows: 5,
+          help: 'Include what led up to the incident, what caused it, and any injuries that resulted.' }),
+      radioF('physical_altercation',
+        'Did this incident involve a physical altercation that requires deeper investigation?',
+        ['Yes', 'No'],
+        { required: true }),
+
+      blockSection('Witnesses'),
+      radioF('teacher_or_adult_witnessed',
+        'Did a teacher or another adult see this incident occur?',
+        ['Yes', 'No'],
+        { required: true }),
+      radioF('student_witnessed',
+        'Did another student see this incident occur?',
+        ['Yes', 'No'],
+        { required: true }),
+
+      blockSection('Admin contacted'),
+      multi('staff_contacted',
+        'What staff members were contacted?',
+        ADMIN_CONTACTED_OPTIONS,
+        { required: true,
+          help: 'Check everyone you spoke with about this incident.' }),
+      txt('staff_contacted_other',
+        'If "Other", specify who',
+        { required: false }),
+      radioF('consensus_established',
+        'Was there a consensus established by all parties involved?',
+        ['Yes', 'No'],
+        { required: true }),
+      radioF('reset_day_decided',
+        'Was there a decision made to send the child home for a "reset" day?',
+        ['Yes', 'No'],
+        { required: true }),
+
+      blockSection('First aid + intervention'),
+      area('first_aid_administered',
+        'Describe the first aid administered and specify the physical location of the injury on the child',
+        { required: true, help: 'If not applicable, put N/A.' }),
+      area('social_emotional_intervention',
+        'Please specify the social and emotional intervention utilized',
+        { required: true, help: 'If not applicable, put N/A.' }),
+
+      blockSection('Distribution + follow-up'),
+      multi('report_recipients',
+        'Persons receiving copy of report',
+        ['Parent', "Child's Teacher"],
+        { required: true,
+          help: 'Admin and SST automatically receive all reports — these are the additional copies.' }),
+      radioF('parent_meeting_required',
+        'Is a parent meeting required?',
+        ['Yes', 'No'],
+        { required: true }),
+      radioF('reset_day_required',
+        'Is a Reset Day required?',
+        ['Yes', 'No'],
+        { required: true }),
     ],
     notify_emails: [LEXI_EMAIL],
   };
