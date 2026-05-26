@@ -2,8 +2,9 @@
 // All filters live in the URL.
 
 import Link from 'next/link';
-import { LayoutGrid, List as ListIcon, AlertTriangle, Printer } from 'lucide-react';
+import { LayoutGrid, List as ListIcon, AlertTriangle } from 'lucide-react';
 import { DocumentsCell } from './DocumentsCell';
+import { PrintButton } from '@/lib/widgets/components/_shared/PrintButton';
 import { StudentTableWithAccordion } from './StudentTableWithAccordion';
 import type { WidgetDefinition, SchoolContext, WidgetSearchParams } from '@/lib/widgets/types';
 import {
@@ -329,24 +330,18 @@ function Component({
             {data.filtered.length !== data.total_students ? ` (filtered from ${data.total_students})` : ''}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 print:hidden">
           <ViewToggle view={view} current={sp} />
-          {view === 'allergies' ? (
-            <button
-              type="button"
-              onClick={undefined}
-              className="hidden sm:inline-flex items-center gap-1 rounded border border-gray-300 bg-white px-2 py-1 text-xs hover:bg-gray-50"
-              // Fallback for SSR (server-component): wraps as a print-link with the standard browser dialog
-              // Operators see this in the iframe; clicks the browser's print dialog via the parent.
-              // In the iframe context the button will fall through to the surrounding window.
-            >
-              <Printer className="h-3 w-3" /> Print
-            </button>
-          ) : null}
+          <PrintButton
+            label={view === 'allergies' ? 'Print allergies' : view === 'grid' ? 'Print grid' : 'Print roster'}
+            title="Print the current view (list / grid / allergies)"
+          />
         </div>
       </div>
 
-      <FilterRow filterKeys={filters} options={data.options} current={sp} view={view} />
+      <div className="print:hidden">
+        <FilterRow filterKeys={filters} options={data.options} current={sp} view={view} />
+      </div>
 
       {view === 'list' ? (
         <StudentTableWithAccordion rows={data.page_rows} columns={columns} locationId={school.locationId} />

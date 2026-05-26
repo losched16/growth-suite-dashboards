@@ -7,7 +7,8 @@
 import { query } from '@/lib/db';
 import type { WidgetDefinition, SchoolContext } from '@/lib/widgets/types';
 import type { ConfigSchema } from '@/lib/widgets/types';
-import { Phone, Mail, Users } from 'lucide-react';
+import { Phone, Mail, Users, AlertTriangle } from 'lucide-react';
+import { PrintButton } from '../_shared/PrintButton';
 
 export interface ClassroomParentContactsConfig {
   classroom_filter: string;
@@ -30,7 +31,16 @@ interface StudentRow {
   student_last: string;
   student_preferred: string | null;
   homeroom: string | null;
+  allergy: string | null;
   parents: ParentRow[];
+}
+
+// Free-text allergy field is "real" when non-blank and not no/none/etc.
+function isRealAllergy(v: string | null): boolean {
+  if (!v) return false;
+  const lower = v.trim().toLowerCase();
+  if (!lower) return false;
+  return !['no', 'none', 'n/a', 'na', 'no.', 'none.'].includes(lower);
 }
 
 interface Data {
@@ -47,7 +57,7 @@ async function fetcher(school: SchoolContext, config: ClassroomParentContactsCon
   const { rows } = await query<{
     student_id: string; family_id: string;
     student_first: string; student_last: string; student_preferred: string | null;
-    homeroom: string | null;
+    homeroom: string | null; allergy: string | null;
     parent_id: string | null;
     parent_first: string | null; parent_last: string | null;
     email: string | null; phone: string | null; is_primary: boolean | null;
@@ -59,6 +69,7 @@ async function fetcher(school: SchoolContext, config: ClassroomParentContactsCon
        s.last_name   AS student_last,
        s.preferred_name AS student_preferred,
        COALESCE(s.metadata->>'homeroom', s.metadata->>'classroom_name') AS homeroom,
+       s.metadata->>'allergy' AS allergy,
        p.id          AS parent_id,
        p.first_name  AS parent_first,
        p.last_name   AS parent_last,
@@ -90,6 +101,7 @@ async function fetcher(school: SchoolContext, config: ClassroomParentContactsCon
         student_last: r.student_last,
         student_preferred: r.student_preferred,
         homeroom: r.homeroom,
+        allergy: r.allergy,
         parents: [],
       };
       byStudent.set(r.student_id, bucket);
@@ -116,14 +128,17 @@ async function fetcher(school: SchoolContext, config: ClassroomParentContactsCon
 
 function Component({ data }: { school: SchoolContext; config: ClassroomParentContactsConfig; data: Data }) {
   return (
-    <div className="space-y-3">
-      <div>
-        <h2 className="text-base font-semibold text-slate-900 flex items-center gap-2">
-          <Users className="h-4 w-4 text-blue-600" /> Parent Contacts
-        </h2>
-        <p className="text-xs text-slate-500">
-          {data.classroom_filter || 'all classrooms'} · {data.rows.length} student{data.rows.length === 1 ? '' : 's'} · {data.parent_count} parent{data.parent_count === 1 ? '' : 's'} on file
-        </p>
+    <div className="space-y-3 print:space-y-2">
+      <div className="flex items-baseline justify-between flex-wrap gap-2">
+        <div>
+          <h2 className="text-base font-semibold text-slate-900 flex items-center gap-2 print:text-lg">
+            <Users className="h-4 w-4 text-blue-600 print:hidden" /> Parent Contacts &middot; {data.classroom_filter || 'all classrooms'}
+          </h2>
+          <p className="text-xs text-slate-500 print:text-[11px]">
+            {data.rows.length} student{data.rows.length === 1 ? '' : 's'} · {data.parent_count} parent{data.parent_count === 1 ? '' : 's'} on file
+          </p>
+        </div>
+        <PrintButton label="Print contacts" title="Print this classroom's parent-contact roster" />
       </div>
       <div className="rounded-lg border border-slate-200 bg-white overflow-hidden">
         <table className="w-full text-sm">
@@ -137,9 +152,17 @@ function Component({ data }: { school: SchoolContext; config: ClassroomParentCon
             {data.rows.length === 0 ? (
               <tr><td colSpan={2} className="p-6 text-center text-sm text-slate-500 italic">No students in this classroom.</td></tr>
             ) : data.rows.map((r) => (
-              <tr key={r.student_id} className="hover:bg-slate-50">
-                <td className="px-3 py-2 align-top font-medium text-slate-900">
-                  {r.student_preferred || r.student_first} {r.student_last}
+              <tr key={r.student_id} className="hover:bg-slate-50 print:hover:bg-transparent break-inside-avoid">
+                <td className="px-3 py-2 align-top">
+                  <div className="font-medium text-slate-900 flex items-center gap-1.5">
+                    {r.student_preferred || r.student_first} {r.student_last}
+                    {isRealAllergy(r.allergy) ? <AlertTriangle className="h-3.5 w-3.5 text-rose-600 shrink-0" /> : null}
+                  </div>
+                  {isRealAllergy(r.allergy) ? (
+                    <div className="text-[11px] text-rose-700 mt-0.5 font-medium">
+                      Allergy: {r.allergy}
+                    </div>
+                  ) : null}
                 </td>
                 <td className="px-3 py-2 align-top">
                   {r.parents.length === 0 ? (

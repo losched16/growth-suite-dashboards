@@ -11,6 +11,7 @@ import { query } from '@/lib/db';
 import type { WidgetDefinition, SchoolContext } from '@/lib/widgets/types';
 import type { ConfigSchema } from '@/lib/widgets/types';
 import { ShieldAlert, UserX } from 'lucide-react';
+import { PrintButton } from '../_shared/PrintButton';
 
 export interface ClassroomPickupRestrictionsConfig {
   classroom_filter: string;
@@ -117,14 +118,19 @@ function Component({ data }: { school: SchoolContext; config: ClassroomPickupRes
   const withRestrictions = data.rows.filter((r) => r.restrictions.length > 0);
 
   return (
-    <div className="space-y-3">
-      <div>
-        <h2 className="text-base font-semibold text-slate-900 flex items-center gap-2">
-          <ShieldAlert className="h-4 w-4 text-rose-600" /> Unauthorized for Pickup
-        </h2>
-        <p className="text-xs text-slate-500">
-          {data.classroom_filter || 'all classrooms'} · {data.students_with_restrictions} of {data.rows.length} student{data.rows.length === 1 ? '' : 's'} flagged
-        </p>
+    <div className="space-y-3 print:space-y-2">
+      <div className="flex items-baseline justify-between flex-wrap gap-2">
+        <div>
+          <h2 className="text-base font-semibold text-slate-900 flex items-center gap-2 print:text-lg">
+            <ShieldAlert className="h-4 w-4 text-rose-600 print:hidden" /> Unauthorized for Pickup &middot; {data.classroom_filter || 'all classrooms'}
+          </h2>
+          <p className="text-xs text-slate-500 print:text-[11px]">
+            {data.students_with_restrictions} of {data.rows.length} student{data.rows.length === 1 ? '' : 's'} flagged
+          </p>
+        </div>
+        {withRestrictions.length > 0 ? (
+          <PrintButton label="Print list" title="Print this classroom's pickup-restriction list" />
+        ) : null}
       </div>
 
       {withRestrictions.length === 0 ? (
