@@ -36,6 +36,13 @@ export interface StudentRecord {
   schedule: string | null;
   enrolled_at: string | null;
   has_allergy: boolean;
+  // Best free-text allergy + special-instructions across sources
+  // (students.metadata first, student_health_profiles fallback).
+  // Null when no source has meaningful prose — caller distinguishes
+  // "no allergy" (has_allergy=false, allergy_text=null) from "flagged
+  // but no detail" (has_allergy=true, allergy_text=null).
+  allergy_text: string | null;
+  special_instructions_text: string | null;
   metadata: Record<string, unknown>;
 }
 
@@ -129,6 +136,28 @@ export async function fetcher(
             AND lower(s.metadata->>'allergy') NOT IN ('no','none','n/a','na')
            THEN true ELSE false
          END AS has_allergy,
+         -- Best allergy + special-instructions text across sources.
+         -- Prefer metadata when it has REAL prose (>3 chars, not yes/no
+         -- filler); fall back to student_health_profiles which is
+         -- populated by the parent-portal forms + the yearly DGM
+         -- allergies import.
+         CASE
+           WHEN s.metadata->>'allergy' IS NOT NULL
+            AND length(s.metadata->>'allergy') > 3
+            AND lower(s.metadata->>'allergy') NOT IN ('no','none','n/a','na','yes','yes.','no.','none.')
+           THEN s.metadata->>'allergy'
+           WHEN shp.allergies IS NOT NULL AND length(shp.allergies) > 0
+           THEN shp.allergies
+           ELSE NULL
+         END AS allergy_text,
+         CASE
+           WHEN s.metadata->>'special_instructions' IS NOT NULL
+            AND length(s.metadata->>'special_instructions') > 0
+           THEN s.metadata->>'special_instructions'
+           WHEN shp.medical_conditions IS NOT NULL AND length(shp.medical_conditions) > 0
+           THEN shp.medical_conditions
+           ELSE NULL
+         END AS special_instructions_text,
          COALESCE(NULLIF(s.metadata->>'tuition_fee', '')::numeric, 0)
            + COALESCE(NULLIF(s.metadata->>'extended_day_fee', '')::numeric, 0)
            + COALESCE(NULLIF(s.metadata->>'lunch_fee', '')::numeric, 0)
@@ -140,6 +169,8 @@ export async function fetcher(
          ORDER BY e2.created_at DESC LIMIT 1
        ) e ON true
        LEFT JOIN classrooms c ON c.id = e.classroom_id
+       LEFT JOIN student_health_profiles shp
+         ON shp.student_id = s.id AND shp.school_id = s.school_id
        WHERE s.school_id = $1 AND s.status = 'active'
      )
      SELECT
@@ -196,6 +227,8 @@ export async function fetcher(
               'schedule', ps.metadata->>'daily_schedule',
               'enrolled_at', ps.metadata->>'current_year_enrollment_start_date',
               'has_allergy', ps.has_allergy,
+              'allergy_text', ps.allergy_text,
+              'special_instructions_text', ps.special_instructions_text,
               'metadata', ps.metadata
             )
             ORDER BY COALESCE((ps.metadata->>'ghl_slot')::int, 99), ps.id

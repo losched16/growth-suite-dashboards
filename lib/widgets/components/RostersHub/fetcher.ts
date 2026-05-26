@@ -29,6 +29,9 @@ export interface RosterStudentRow {
   iep: string | null;
   five04_plan: string | null;
   allergy: string | null;
+  // Free-text special-instructions (metadata.special_instructions or
+  // student_health_profiles.medical_conditions fallback).
+  special_instructions: string | null;
   ghl_slot: number;
   // Wish-list-additional fields (read leniently from metadata)
   sst_status: string | null;
@@ -98,6 +101,8 @@ interface DbRow {
   academic_year: string | null;
   enrolled_at: string | null;
   metadata: Record<string, unknown> | null;
+  hp_allergies: string | null;
+  hp_medical_conditions: string | null;
   family_student_count: string;
 }
 
@@ -107,6 +112,30 @@ function md(s: Record<string, unknown> | null, key: string): string | null {
   if (v === null || v === undefined) return null;
   const str = typeof v === 'string' ? v : String(v);
   return str.trim() || null;
+}
+
+// Pick the longest meaningful text across sources. Treats bare
+// "Yes"/"No"/"None" as no-detail so a real description from
+// student_health_profiles wins. If nothing has prose, returns the
+// first non-empty value (so the legacy "Yes" still surfaces).
+function bestText(...candidates: Array<string | null | undefined>): string | null {
+  const nullish = new Set(['', 'no', 'none', 'n/a', 'na', 'no.', 'none.', 'yes', 'yes.']);
+  let best: string | null = null;
+  for (const c of candidates) {
+    if (!c) continue;
+    const t = c.trim();
+    if (!t || nullish.has(t.toLowerCase())) continue;
+    if (!best || t.length > best.length) best = t;
+  }
+  if (best) return best;
+  for (const c of candidates) {
+    if (!c) continue;
+    const t = c.trim();
+    if (!t) continue;
+    if (['no', 'none', 'n/a', 'na', 'no.', 'none.'].includes(t.toLowerCase())) continue;
+    return t;
+  }
+  return null;
 }
 
 function mdNum(s: Record<string, unknown> | null, key: string): number {
@@ -159,6 +188,8 @@ export async function fetcher(
        e.schedule,
        e.enrolled_at,
        s.metadata,
+       shp.allergies          AS hp_allergies,
+       shp.medical_conditions AS hp_medical_conditions,
        (SELECT count(*) FROM students s2 WHERE s2.family_id = f.id AND s2.status = 'active')::int AS family_student_count
      FROM students s
      JOIN families f ON f.id = s.family_id
@@ -166,6 +197,8 @@ export async function fetcher(
        SELECT * FROM enrollments e2 WHERE e2.student_id = s.id ORDER BY e2.created_at DESC LIMIT 1
      ) e ON true
      LEFT JOIN classrooms c ON c.id = e.classroom_id
+     LEFT JOIN student_health_profiles shp
+       ON shp.student_id = s.id AND shp.school_id = s.school_id
      WHERE s.school_id = $1 AND s.status = 'active'
      ORDER BY s.first_name`,
     [school.schoolId],
@@ -195,7 +228,8 @@ export async function fetcher(
       homeroom: md(m, 'homeroom'),
       iep: md(m, 'iep'),
       five04_plan: md(m, 'five04_plan'),
-      allergy: md(m, 'allergy'),
+      allergy: bestText(md(m, 'allergy'), r.hp_allergies),
+      special_instructions: bestText(md(m, 'special_instructions'), r.hp_medical_conditions),
       ghl_slot: typeof m?.ghl_slot === 'number' ? (m.ghl_slot as number) : Number(m?.ghl_slot ?? 1) || 1,
       sst_status: md(m, 'sst_status'),
       sst_start_date: md(m, 'sst_start_date'),

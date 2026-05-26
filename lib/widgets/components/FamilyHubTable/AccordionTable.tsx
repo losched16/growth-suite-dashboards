@@ -401,8 +401,16 @@ function bucketMetadata(md: Record<string, unknown>, st: StudentRecord): Section
     ['Financial aid', money('financial_aid')],
   ].filter(([, v]) => !!v) as Array<[string, string]>;
 
+  // Allergy + special-instructions display prefers the best-text fields
+  // computed by the fetcher (which unions students.metadata with
+  // student_health_profiles). Fall back to the raw metadata key when
+  // those aren't set — so OLD families with the legacy "Yes" flag still
+  // show "Yes" instead of nothing.
+  const allergyText = st.allergy_text || get('allergy');
+  const specialText = st.special_instructions_text || '';
   const health: Array<[string, string]> = [
-    ['Allergy', get('allergy')],
+    ['Allergy', allergyText],
+    ['Special instructions', specialText],
     ['IEP', get('iep')],
     ['504 plan', get('504_plan')],
     ['H/V fall', get('hearing_and_vision_fall')],
