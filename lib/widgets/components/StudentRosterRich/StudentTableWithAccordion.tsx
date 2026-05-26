@@ -239,6 +239,20 @@ function RowGroup({
   );
 }
 
+// Render an allergy cell that's smart about three states:
+//   - Has real prose ("Eggs, milk and Almonds") — show in red
+//   - Legacy "Yes" flag with no detail — show in amber "flagged · no detail"
+//   - No allergy or "No"/"None" — show em-dash
+function renderAllergyCell(s: RosterStudent): React.ReactNode {
+  if (s.allergy) {
+    return <span className="text-rose-700 text-xs whitespace-pre-wrap">{s.allergy}</span>;
+  }
+  if (s.has_allergy) {
+    return <span className="text-amber-700 text-xs italic" title="A flag was set in GHL but no descriptive allergy text is on file. Ask the parent to fill out the OTC Medication or Emergency form.">flagged · no detail</span>;
+  }
+  return <span className="text-gray-400">—</span>;
+}
+
 function renderCell(
   s: RosterStudent,
   col: ColumnKey,
@@ -265,7 +279,10 @@ function renderCell(
           {s.status.replace(/_/g, ' ')}
         </span>
       ) : <span className="text-gray-400">—</span>;
-    case 'allergy': return s.has_allergy ? <span className="text-rose-700 text-xs">{s.allergy}</span> : <span className="text-gray-400">—</span>;
+    case 'allergy': return renderAllergyCell(s);
+    case 'special_instructions': return s.special_instructions
+      ? <span className="text-slate-800 text-xs whitespace-pre-wrap">{s.special_instructions}</span>
+      : <span className="text-gray-400">—</span>;
     case 'iep_504': {
       const tags = [];
       if (s.iep && s.iep.toLowerCase() !== 'no') tags.push('IEP');

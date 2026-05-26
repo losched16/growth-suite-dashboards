@@ -163,6 +163,21 @@ function StudentTable({
   );
 }
 
+// Render an allergy cell that's smart about three states:
+//   - Has real prose ("Eggs, milk and Almonds") — show in red, full text
+//   - Legacy "Yes" flag with no detail — show in amber "(no detail on file)"
+//   - No allergy or "No"/"None" — show em-dash
+function renderAllergyCell(s: RosterStudent): React.ReactNode {
+  if (s.allergy) {
+    return <span className="text-rose-700 text-xs whitespace-pre-wrap">{s.allergy}</span>;
+  }
+  if (s.has_allergy) {
+    // Flag is on (legacy "Yes") but no descriptive text in any source.
+    return <span className="text-amber-700 text-xs italic" title="A flag was set in GHL but no descriptive allergy text is on file. Ask the parent to fill out the OTC Medication or Emergency form.">flagged · no detail</span>;
+  }
+  return <span className="text-gray-400">—</span>;
+}
+
 function renderCell(s: RosterStudent, col: ColumnKey, drilldownDashboard: string, locationId: string): React.ReactNode {
   switch (col) {
     case 'student':
@@ -183,7 +198,10 @@ function renderCell(s: RosterStudent, col: ColumnKey, drilldownDashboard: string
           {s.status.replace(/_/g, ' ')}
         </span>
       ) : <span className="text-gray-400">—</span>;
-    case 'allergy': return s.has_allergy ? <span className="text-rose-700 text-xs">{s.allergy}</span> : <span className="text-gray-400">—</span>;
+    case 'allergy': return renderAllergyCell(s);
+    case 'special_instructions': return s.special_instructions
+      ? <span className="text-slate-800 text-xs whitespace-pre-wrap">{s.special_instructions}</span>
+      : <span className="text-gray-400">—</span>;
     case 'iep_504': {
       const tags = [];
       if (s.iep && s.iep.toLowerCase() !== 'no') tags.push('IEP');
@@ -277,19 +295,29 @@ function AllergiesView({ groups }: { groups: StudentRosterData['allergies_by_hom
           <table className="w-full text-sm">
             <thead className="border-b border-gray-100 bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-500">
               <tr>
-                <th className="px-3 py-2 font-medium">Student</th>
-                <th className="px-3 py-2 font-medium">Allergy notes</th>
-                <th className="px-3 py-2 font-medium">Health flag</th>
+                <th className="px-3 py-2 font-medium w-[20%]">Student</th>
+                <th className="px-3 py-2 font-medium w-[30%]">Allergy / dietary</th>
+                <th className="px-3 py-2 font-medium w-[40%]">Special instructions</th>
+                <th className="px-3 py-2 font-medium">Other flags</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {g.students.map((s) => (
-                <tr key={s.student_id}>
+                <tr key={s.student_id} className="break-inside-avoid align-top">
                   <td className="px-3 py-2 font-medium text-gray-900">
                     {s.preferred_name ?? s.first_name} {s.last_name}
                   </td>
-                  <td className="px-3 py-2 text-rose-700">{s.allergy}</td>
-                  <td className="px-3 py-2 text-gray-700">{s.has_iep_or_504 ? 'IEP/504' : ''}</td>
+                  <td className="px-3 py-2">
+                    {s.allergy
+                      ? <span className="text-rose-700 whitespace-pre-wrap">{s.allergy}</span>
+                      : s.has_allergy
+                        ? <span className="text-amber-700 italic text-xs">flagged · no detail</span>
+                        : <span className="text-gray-400">—</span>}
+                  </td>
+                  <td className="px-3 py-2 text-gray-800 text-xs whitespace-pre-wrap">
+                    {s.special_instructions ?? <span className="text-gray-400">—</span>}
+                  </td>
+                  <td className="px-3 py-2 text-gray-700 text-xs">{s.has_iep_or_504 ? 'IEP/504' : ''}</td>
                 </tr>
               ))}
             </tbody>

@@ -6,6 +6,49 @@ import { query } from '@/lib/db';
 import type { SchoolContext, WidgetSearchParams } from '@/lib/widgets/types';
 import type { StudentRosterConfig } from './config';
 
+// Filler / no-detail values teachers commonly see in legacy GHL data.
+// Treat these as "no useful prose" — when the field is just "Yes" or
+// "No" we'd rather pick a real description from a fallback source.
+const NULLISH_TEXT = new Set(['', 'no', 'none', 'n/a', 'na', 'no.', 'none.', 'yes', 'yes.']);
+
+// Pick the most informative text out of any number of candidates.
+// Priority: longest non-nullish string wins. Falls back to the bare
+// "Yes" / "No" flag if NOTHING has prose, so the caller can still tell
+// "there is no detail" from "this kid genuinely has no allergy".
+function bestText(...candidates: Array<string | null | undefined>): string | null {
+  let best: string | null = null;
+  for (const c of candidates) {
+    if (!c) continue;
+    const t = c.trim();
+    if (!t) continue;
+    if (NULLISH_TEXT.has(t.toLowerCase())) continue;
+    if (!best || t.length > best.length) best = t;
+  }
+  if (best) return best;
+  // No prose found — return the first non-empty raw value if any, so
+  // the column can still show the legacy "Yes" flag instead of "—".
+  for (const c of candidates) {
+    if (!c) continue;
+    const t = c.trim();
+    if (!t) continue;
+    if (t.toLowerCase() === 'no' || t.toLowerCase() === 'none' || t.toLowerCase() === 'n/a' || t.toLowerCase() === 'na') {
+      continue;
+    }
+    return t;
+  }
+  return null;
+}
+
+// True when the value indicates "yes there's something here" — used to
+// flip the has_allergy badge on. "Yes" with no prose still flips it,
+// so teachers see a flag and chase down the detail.
+function isMeaningfulFlag(v: string | null | undefined): boolean {
+  if (!v) return false;
+  const t = v.trim().toLowerCase();
+  if (!t) return false;
+  return !['no', 'none', 'n/a', 'na', 'no.', 'none.'].includes(t);
+}
+
 export interface RosterStudent {
   student_id: string;
   family_id: string;
@@ -24,6 +67,7 @@ export interface RosterStudent {
   program: string | null;
   homeroom: string | null;
   allergy: string | null;
+  special_instructions: string | null;
   iep: string | null;
   five04_plan: string | null;
   has_allergy: boolean;
@@ -96,6 +140,13 @@ interface DbRow {
   attendance_last_check_out_at: string | null;
   attendance_curbside: boolean | null;
   curbside_slot: string | null;
+  // Fallback sources for allergy + special-needs text — populated by
+  // the parent-portal AZ State Emergency / OTC Medication forms and the
+  // yearly scripts/import-dgm-allergies.mjs run. We union these with
+  // students.metadata so the roster picks up whichever source has the
+  // longest meaningful text.
+  hp_allergies: string | null;
+  hp_medical_conditions: string | null;
 }
 
 export async function fetcher(
@@ -122,7 +173,9 @@ export async function fetcher(
        da.first_check_in_at   AS attendance_first_check_in_at,
        da.last_check_out_at   AS attendance_last_check_out_at,
        da.curbside_pickup     AS attendance_curbside,
-       cs.curbside_slot       AS curbside_slot
+       cs.curbside_slot       AS curbside_slot,
+       shp.allergies          AS hp_allergies,
+       shp.medical_conditions AS hp_medical_conditions
      FROM students s
      JOIN families f ON f.id = s.family_id
      LEFT JOIN LATERAL (
@@ -150,6 +203,8 @@ export async function fetcher(
           AND (performed_at AT TIME ZONE $2)::date = ((now() AT TIME ZONE $2)::date)
         ORDER BY performed_at DESC LIMIT 1
      ) cs ON true
+     LEFT JOIN student_health_profiles shp
+       ON shp.student_id = s.id AND shp.school_id = s.school_id
      WHERE s.school_id = $1 AND s.status = 'active'
      ORDER BY s.first_name`,
     // Hardcoded DG timezone for now. If a future widget needs to do
@@ -159,7 +214,13 @@ export async function fetcher(
 
   const all: RosterStudent[] = rows.map((r) => {
     const md = r.metadata ?? {};
-    const allergy = typeof md.allergy === 'string' ? md.allergy : null;
+    const metadataAllergy = typeof md.allergy === 'string' ? md.allergy : null;
+    const metadataSpecial = typeof md.special_instructions === 'string' ? md.special_instructions : null;
+    // Pick whichever source has the longest meaningful TEXT, falling
+    // back from the more-authoritative metadata.allergy → health_profiles.
+    // A bare "Yes" / "No" / "None" is treated as no detail.
+    const allergy = bestText(metadataAllergy, r.hp_allergies);
+    const special_instructions = bestText(metadataSpecial, r.hp_medical_conditions);
     const iep = typeof md.iep === 'string' ? md.iep : null;
     const five04 = typeof md.five04_plan === 'string' ? md.five04_plan : null;
     const program = typeof md.program === 'string' ? md.program : null;
@@ -171,7 +232,11 @@ export async function fetcher(
     // bare "declined" string for robustness.
     const has_lunch = !!lunch && !lunchLower.includes('decline');
     const primary = `${r.primary_first ?? ''} ${r.primary_last ?? ''}`.trim();
-    const has_allergy = !!allergy && !['no', 'none', 'n/a', 'na', ''].includes(allergy.toLowerCase());
+    // has_allergy considers EITHER source — the legacy "Yes" metadata
+    // flag (no detail) AND any non-empty health-profile allergy both
+    // light up the badge, even if the rendered text is "(no detail
+    // on file)". Teachers need the flag even when prose isn't there.
+    const has_allergy = isMeaningfulFlag(metadataAllergy) || isMeaningfulFlag(r.hp_allergies);
     const has_iep_or_504 = (!!iep && iep.toLowerCase() !== 'no') || (!!five04 && five04.toLowerCase() !== 'no');
     const haystack = [r.first_name, r.last_name, r.preferred_name ?? '', primary, r.family_display_name ?? '']
       .join(' ').toLowerCase();
@@ -199,6 +264,7 @@ export async function fetcher(
       program,
       homeroom,
       allergy,
+      special_instructions,
       iep,
       five04_plan: five04,
       has_allergy,
