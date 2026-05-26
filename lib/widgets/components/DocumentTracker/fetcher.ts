@@ -113,8 +113,9 @@ export async function fetcher(
   _config: DocumentTrackerConfig,
   _searchParams?: WidgetSearchParams,
 ): Promise<DocumentTrackerData> {
-  // 1. School's configured forms
-  const { rows: forms } = await query<DbForm>(
+  // 1. School's configured forms (legacy school_forms table — populated
+  // for schools using the GHL-webhook flow).
+  const { rows: legacyForms } = await query<DbForm>(
     `SELECT id, completion_field_key, display_name, description, per_student, position
      FROM school_forms
      WHERE school_id = $1 AND is_active = true
@@ -122,12 +123,98 @@ export async function fetcher(
     [school.schoolId],
   );
 
+  // 1b. Native parent-portal forms (audience='parents'). When school_forms
+  // is empty we derive the tracker columns from these so brand-new schools
+  // get a working tracker the moment their forms are seeded — no extra
+  // configuration step. When school_forms is also populated, the native
+  // forms append after the legacy ones.
+  const { rows: nativeFormDefs } = await query<{
+    id: string;
+    slug: string;
+    display_name: string;
+    description: string | null;
+    per_student: boolean;
+  }>(
+    `SELECT id, slug, display_name, description, per_student
+     FROM portal_form_definitions
+     WHERE school_id = $1 AND audience = 'parents' AND is_active = true
+     ORDER BY display_name`,
+    [school.schoolId],
+  );
+
+  // Build the unified `forms` list. Each form may have either:
+  //   - A legacy metadata key (completion read from students.metadata.form_completion[key])
+  //   - A native portal_form_definition_id (completion read from portal_form_submissions)
+  // Disambiguated by the nativeFormDefId field below.
+  type UnifiedForm = DbForm & { nativeFormDefId: string | null };
+  const legacyKeysAlreadyMatched = new Set<string>();
+  const forms: UnifiedForm[] = [];
+
+  for (const lf of legacyForms) {
+    // If a legacy school_forms row's completion_field_key happens to
+    // match a native portal form's slug, prefer the native source (so
+    // admins can migrate by just renaming the key — no double-counting).
+    const matchedNative = nativeFormDefs.find((nf) => nf.slug === lf.completion_field_key);
+    if (matchedNative) legacyKeysAlreadyMatched.add(lf.completion_field_key);
+    forms.push({ ...lf, nativeFormDefId: matchedNative?.id ?? null });
+  }
+  // Append native forms that weren't already matched as a legacy row.
+  let nextPos = (legacyForms[legacyForms.length - 1]?.position ?? 0) + 1;
+  for (const nf of nativeFormDefs) {
+    if (legacyKeysAlreadyMatched.has(nf.slug)) continue;
+    forms.push({
+      id: nf.id,
+      completion_field_key: nf.slug,
+      display_name: nf.display_name,
+      description: nf.description,
+      per_student: nf.per_student,
+      position: nextPos++,
+      nativeFormDefId: nf.id,
+    });
+  }
+
   if (forms.length === 0) {
     return {
       forms: [],
       rows: [],
       stats: { enrolled_families: 0, total_students: 0, fully_complete: 0, in_progress: 0, not_started: 0 },
     };
+  }
+
+  // 1c. Pull native submissions for ALL the native forms in one query.
+  // Build lookup: nativeFormDefId -> Set<student_id|family_id>
+  // student_id is used for per_student forms, family_id for per-family forms.
+  const nativeFormDefIds = forms.map((f) => f.nativeFormDefId).filter(Boolean) as string[];
+  const studentSubmissions = new Map<string, Set<string>>(); // form_def_id -> student_ids
+  const familySubmissions  = new Map<string, Set<string>>(); // form_def_id -> family_ids
+  if (nativeFormDefIds.length > 0) {
+    const { rows: subRows } = await query<{
+      form_definition_id: string;
+      student_id: string | null;
+      family_id: string | null;
+      status: string;
+    }>(
+      `SELECT form_definition_id, student_id, family_id, status
+         FROM portal_form_submissions
+        WHERE school_id = $1
+          AND form_definition_id = ANY($2::uuid[])
+          AND status IN ('submitted', 'paid')
+          AND (is_test IS NULL OR is_test = false)
+          AND voided_at IS NULL`,
+      [school.schoolId, nativeFormDefIds],
+    );
+    for (const sub of subRows) {
+      if (sub.student_id) {
+        const set = studentSubmissions.get(sub.form_definition_id) ?? new Set();
+        set.add(sub.student_id);
+        studentSubmissions.set(sub.form_definition_id, set);
+      }
+      if (sub.family_id) {
+        const set = familySubmissions.get(sub.form_definition_id) ?? new Set();
+        set.add(sub.family_id);
+        familySubmissions.set(sub.form_definition_id, set);
+      }
+    }
   }
 
   // 2. Family metadata (one row per family with primary parent)
@@ -192,12 +279,36 @@ export async function fetcher(
     let applicable = 0;
     let complete = 0;
     for (const form of forms) {
+      // For native forms, completion comes from portal_form_submissions
+      // (student-keyed for per_student=true, family-keyed otherwise).
+      // For legacy forms, fall back to students.metadata.form_completion[key].
+      const nativeStudentSet = form.nativeFormDefId ? studentSubmissions.get(form.nativeFormDefId) : null;
+      const familySubmitted  = form.nativeFormDefId
+        ? (familySubmissions.get(form.nativeFormDefId)?.has(fam.family_id) ?? false)
+        : false;
+
       const row: StudentChip[] = enrolled.map((s, i) => {
         const applies = isApplicable(form as FormDef, s);
-        const completion = s.metadata?.form_completion as Record<string, unknown> | undefined;
-        const value = completion?.[form.completion_field_key];
-        const valueStr = typeof value === 'string' ? value.trim() : '';
-        const done = applies && !!valueStr;
+        let done = false;
+        let valueStr: string | null = null;
+
+        if (form.nativeFormDefId) {
+          // Native portal form completion path
+          if (form.per_student) {
+            done = applies && (nativeStudentSet?.has(s.student_id) ?? false);
+          } else {
+            // Per-family form: every child in the family shares the family-level completion
+            done = applies && familySubmitted;
+          }
+          if (done) valueStr = 'submitted';
+        } else {
+          // Legacy GHL-metadata completion path
+          const completion = s.metadata?.form_completion as Record<string, unknown> | undefined;
+          const value = completion?.[form.completion_field_key];
+          valueStr = typeof value === 'string' ? value.trim() : '';
+          done = applies && !!valueStr;
+        }
+
         if (applies) {
           applicable++;
           if (done) complete++;
