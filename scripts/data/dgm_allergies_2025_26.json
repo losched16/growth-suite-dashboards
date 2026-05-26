@@ -1,0 +1,560 @@
+[
+  {
+    "classroom": "Classroom 4",
+    "name": "Jamie Arnote",
+    "food_allergy": "",
+    "special_instructions": "Torticolllis - he favors turning his head to the right - going to physical therapy. Jamie does have very heavy breathing that revolves around his acid reflux per our doctor. I am working with the doctor to figure out what it may be as she did not diagnose it. I am currently not concerned as this is normal."
+  },
+  {
+    "classroom": "Classroom 4",
+    "name": "Elliott (Ellie) Schmidt",
+    "food_allergy": "",
+    "special_instructions": "Has ASD (hole in the heart) monitored by cardiologist"
+  },
+  {
+    "classroom": "Classroom 4",
+    "name": "Elowyn Hensel",
+    "food_allergy": "",
+    "special_instructions": "Tounge Tie"
+  },
+  {
+    "classroom": "Classroom 4",
+    "name": "Aria Valenzuela Barcelo",
+    "food_allergy": "",
+    "special_instructions": "Developmental dysplasia of the hip, need to wear at all times harness, wearing the brace for her hips"
+  },
+  {
+    "classroom": "Classroom 4",
+    "name": "Victoria Medina",
+    "food_allergy": "",
+    "special_instructions": "Given her history of ear and respiratory infections, it's important to feed her in an upright position and ensure a clean environment - this includes disinfecting toys, sanitizing tables and maintaining overall hygiene. Down Syndrome. She may require special feeding accommodations, which will be communicated to the teacher as her feeding therapy progresses. If she's spending tummy time, make sure to place her on her own sheets."
+  },
+  {
+    "classroom": "Classroom 3",
+    "name": "Maxwell Marshall",
+    "food_allergy": "Eggs, milk and Almonds",
+    "special_instructions": "Allergic to eggs and milk and almonds. Contact reactive also so will get localized hives if their allergen touches their skin. Allergic to all forms (ie: in baked items as well as the raw form). If known ingestion then Epi Pen and calling 911. Refer to the FARE allergy protocol: If large widespread hives, excessive coughing, vomiting, lethargy, OR breathing issues then EPI and 911 immediately. If 2 minor symptoms occur together then EPI + 911 (ie: localized hives + itchy mouth; nausea + sneezing, etc). Has past experience with swelling of lips with exposure. Anaphylactic."
+  },
+  {
+    "classroom": "Classroom 3",
+    "name": "Lennox Marshall",
+    "food_allergy": "Egg and milk",
+    "special_instructions": "Allergic to eggs and milk. Contact reactive also so will get localized hives if their allergen touches their skin. Allergic to all forms (ie: in baked items as well as the raw form). If known ingestion then Epi Pen and calling 911. Refer to the FARE allergy protocol: If large widespread hives, excessive coughing, vomiting, lethargy, OR breathing issues then EPI and 911 immediately. If 2 minor symptoms occur together then EPI + 911 (ie: localized hives + itchy mouth; nausea + sneezing, etc). Anaphylactic."
+  },
+  {
+    "classroom": "Classroom 3",
+    "name": "Isla Dunton",
+    "food_allergy": "Pineapple makes her a little itchy but it is not life threatening",
+    "special_instructions": ""
+  },
+  {
+    "classroom": "Classroom 3",
+    "name": "Liam Lett",
+    "food_allergy": "Vegetarian Lunch",
+    "special_instructions": ""
+  },
+  {
+    "classroom": "Classroom 5",
+    "name": "Advika Singhvi",
+    "food_allergy": "Vegetarian Lunch",
+    "special_instructions": ""
+  },
+  {
+    "classroom": "Classroom 5",
+    "name": "Johnny O'Callaghan",
+    "food_allergy": "If he has too much lactose, his tummy gets upset, but it's not serious. We just give him lactose free milk, but he eats cheese and other lactose items",
+    "special_instructions": ""
+  },
+  {
+    "classroom": "Classroom 5",
+    "name": "Arya Sicardi Lastra",
+    "food_allergy": "",
+    "special_instructions": "We are unsure of the source of her allergy, but the symptoms are: 1. Running nose, 2. Angioedema (swallen eye), 3. Hives, 4. Coughing/sneezing. She takes daily medicine, but if she presents allergic reactioin symptoms she can take 5ml of Benadryl"
+  },
+  {
+    "classroom": "Classroom 5",
+    "name": "Jaylani Boxill",
+    "food_allergy": "Walnut and Pegan Allergy",
+    "special_instructions": ""
+  },
+  {
+    "classroom": "Classroom 5",
+    "name": "Lainey Wujek",
+    "food_allergy": "",
+    "special_instructions": "**DO NOT REMOVE** BLAZE WUJEK"
+  },
+  {
+    "classroom": "Classroom 5",
+    "name": "Zhuri Watford",
+    "food_allergy": "Vegetarian Lunch",
+    "special_instructions": ""
+  },
+  {
+    "classroom": "Classroom 5",
+    "name": "Emery Benezra",
+    "food_allergy": "",
+    "special_instructions": "Extra care given to Emery's ears; she is susceptible to ear infections"
+  },
+  {
+    "classroom": "Classroom 5",
+    "name": "Isabella Chong",
+    "food_allergy": "",
+    "special_instructions": "Administer Fever medication. Refer to document provided"
+  },
+  {
+    "classroom": "Classroom 6",
+    "name": "Hezekiah Jones",
+    "food_allergy": "Vegan Lunch.",
+    "special_instructions": ""
+  },
+  {
+    "classroom": "Classroom 1",
+    "name": "Emma Nelson",
+    "food_allergy": "Gluten Free Lunch",
+    "special_instructions": "Gluteal Gluten- vomiting and skin Gluten - vomiting and skin rash"
+  },
+  {
+    "classroom": "Classroom 1",
+    "name": "Hadley Fuss",
+    "food_allergy": "",
+    "special_instructions": "Hadley so Algeria to mosquito bites so we put mosquito repellent on every day"
+  },
+  {
+    "classroom": "Classroom 1",
+    "name": "Anay (Sandy) Tripathi",
+    "food_allergy": "Vegetarian lunch.",
+    "special_instructions": "Please do not give him any kind of meat. Chicken & Eggs he can eat."
+  },
+  {
+    "classroom": "Classroom 1",
+    "name": "Golden Marasigan",
+    "food_allergy": "Vegan Lunch. No dairy or meat & frequent hand washing",
+    "special_instructions": "Short Gut Syndrome organic vegan diet only"
+  },
+  {
+    "classroom": "Classroom 1",
+    "name": "Rosie King",
+    "food_allergy": "No shrimp, no raspberries",
+    "special_instructions": ""
+  },
+  {
+    "classroom": "Classroom 1",
+    "name": "Lynixx Ellis Williams",
+    "food_allergy": "Can only eat chicken",
+    "special_instructions": ""
+  },
+  {
+    "classroom": "Classroom 1",
+    "name": "Nathan Benezra",
+    "food_allergy": "",
+    "special_instructions": "Please follow the IEP for goals in support of Nathan's progress"
+  },
+  {
+    "classroom": "Classroom 1",
+    "name": "Lucas Houellemont",
+    "food_allergy": "PeaPeanuttss, tree nuts, eggs (BAKED OK)",
+    "special_instructions": "In case of ingestion of peanuts, tree nuts or eggs he has an epi pen if needed but usually Zyrtec or beidryl will do it"
+  },
+  {
+    "classroom": "Classroom 1",
+    "name": "Arjun Kuthunur",
+    "food_allergy": "Vegetarian Lunch",
+    "special_instructions": ""
+  },
+  {
+    "classroom": "Classroom 2",
+    "name": "Aditi Kamdar",
+    "food_allergy": "Vegetarian Lunch",
+    "special_instructions": ""
+  },
+  {
+    "classroom": "Classroom 2",
+    "name": "Koa White",
+    "food_allergy": "",
+    "special_instructions": "History of febrile seizures as a toddler. Has not had one in over 2 years. Usually if he reaches 101/103 he will being to seize. Lay him on his side and begin a timer. Call 911. They will ask how long he has been seizing. Comfort with a soft voice until he comes to. If his eyes are rolling or he cannot answer he could still be seizing. Follow 911 instructions and call us parents"
+  },
+  {
+    "classroom": "Classroom 2",
+    "name": "Ian Lett",
+    "food_allergy": "Vegetarian Lunch",
+    "special_instructions": ""
+  },
+  {
+    "classroom": "Classroom 2",
+    "name": "Smarika Botcha Nandwana",
+    "food_allergy": "Dairy/Gluten/Grapefruit/Peas/Edamame/ Lentils/Legumes",
+    "special_instructions": "\"She to ADPKS Type 1, is prone to UTI's, please inform mother if she is dehydrated or over-urinating, if Smarika appears swollen along her eyelids, the dorsal hands, feet and or genitals, is unwell with fever, painful and or frequent urination she should be seen urgently. In the interim, her kidneys remain healthy longer with adequate plain water intake, minimizing salt intake, and assuring she is not in stressful situations like outdoors in over 100’F for over 5 minutes at a time.\""
+  },
+  {
+    "classroom": "Classroom 2",
+    "name": "Dylan Turner",
+    "food_allergy": "Eggs (dairy is now ok)",
+    "special_instructions": ""
+  },
+  {
+    "classroom": "Classroom 7",
+    "name": "Skandh Srinivasan",
+    "food_allergy": "Vegetarian Lunch",
+    "special_instructions": ""
+  },
+  {
+    "classroom": "Classroom 7",
+    "name": "Phoenix Bates",
+    "food_allergy": "Gluten Free/Dairy Free Lunch",
+    "special_instructions": "Phoenix does not have anaphylaxis after gluten or dairy but she does have sensitivity to both and will have a delayed immune response resulting in rashes, stomach aches and other symptoms caused by the inflammatory response. She is currently in a protocol provided by her physical to repair the gut biome and then we will reintroduce both glute and dairy in about 3 months. For now, please abstain from both; notify mom if she consumes either."
+  },
+  {
+    "classroom": "Classroom 7",
+    "name": "Jaxon Boxill",
+    "food_allergy": "Cashew Allergy",
+    "special_instructions": "Throat itchiness and pain"
+  },
+  {
+    "classroom": "Classroom 7",
+    "name": "Charlotte (Charlie) Jack",
+    "food_allergy": "",
+    "special_instructions": "**DO NOT REMOVE** GEANINE JONESM LAUREN QUIROZ-GIBBS, RYAN GIBBS, MICHAEL GIBBS"
+  },
+  {
+    "classroom": "Classroom 7",
+    "name": "Oak Greengard",
+    "food_allergy": "We would prefer Oak does not drink milk with his meals/snacks. Water only",
+    "special_instructions": ""
+  },
+  {
+    "classroom": "Classroom 7",
+    "name": "Shelby Chong",
+    "food_allergy": "",
+    "special_instructions": "Administer Fever medication. Refer to document provided"
+  },
+  {
+    "classroom": "Classroom 7",
+    "name": "Leon Jimenez",
+    "food_allergy": "Cashews",
+    "special_instructions": ""
+  },
+  {
+    "classroom": "Classroom 7",
+    "name": "Arlo Johnson",
+    "food_allergy": "Gluten avoid. Gluten Fee/Dairy Free Lunch",
+    "special_instructions": "Increased mucus and GI irritaton"
+  },
+  {
+    "classroom": "Classroom 8",
+    "name": "Quinn Schmidt",
+    "food_allergy": "",
+    "special_instructions": "Bactrimbactrim antibiotic"
+  },
+  {
+    "classroom": "Classroom 8",
+    "name": "Ellie Drake",
+    "food_allergy": "",
+    "special_instructions": "Seizures - Procedures are with the school."
+  },
+  {
+    "classroom": "Classroom 8",
+    "name": "Kaaviya Srivastava",
+    "food_allergy": "Vegetarian Lunch",
+    "special_instructions": ""
+  },
+  {
+    "classroom": "Classroom 8",
+    "name": "Ada O'Donoghue",
+    "food_allergy": "",
+    "special_instructions": "sensitive skin-sent sunscreen, asthma-inhaler as needed"
+  },
+  {
+    "classroom": "Classroom 8",
+    "name": "Elias Kheir",
+    "food_allergy": "Vegetarian Lunch",
+    "special_instructions": ""
+  },
+  {
+    "classroom": "Classroom 8",
+    "name": "Dhruva Kothamgangalam",
+    "food_allergy": "Vegetarian Lunch",
+    "special_instructions": ""
+  },
+  {
+    "classroom": "Classroom 8",
+    "name": "Rudra Rajagopal",
+    "food_allergy": "Vegetarian lunch. Cashews and Pistachios",
+    "special_instructions": "Asthma after a respiratory infection . Contact parent if rapid breathing is observed"
+  },
+  {
+    "classroom": "Classroom 11",
+    "name": "Daniel Rubio",
+    "food_allergy": "Dairy Free lunch",
+    "special_instructions": "Autism Diagnosis"
+  },
+  {
+    "classroom": "Classroom 11",
+    "name": "Ly-ricc Ellis Williams",
+    "food_allergy": "Can only eat chicken",
+    "special_instructions": ""
+  },
+  {
+    "classroom": "Classroom 11",
+    "name": "Auri Cline",
+    "food_allergy": "No Grapefruit",
+    "special_instructions": ""
+  },
+  {
+    "classroom": "Classroom 11",
+    "name": "Aitana Mata",
+    "food_allergy": "",
+    "special_instructions": "**DO NOT REMOVE** JOSE CARREON OR JORGE SANTOS"
+  },
+  {
+    "classroom": "Classroom 11",
+    "name": "Isabelle Darling",
+    "food_allergy": "Gluten Free Lunch",
+    "special_instructions": ""
+  },
+  {
+    "classroom": "Classroom 11",
+    "name": "Eleni Lucas",
+    "food_allergy": "",
+    "special_instructions": "Amoxycillin - Rash"
+  },
+  {
+    "classroom": "Classroom 11",
+    "name": "Harlan Johnson",
+    "food_allergy": "Gluten Free lunch",
+    "special_instructions": "GI Upset"
+  },
+  {
+    "classroom": "Classroom 12",
+    "name": "Koston White",
+    "food_allergy": "",
+    "special_instructions": "Gets bloody noses. He can care for himself most of the time but if it is more than 5 minutes long or a large amount he needs care"
+  },
+  {
+    "classroom": "Classroom 12",
+    "name": "Kameryn Patrick",
+    "food_allergy": "",
+    "special_instructions": "Moderate Hearing Loss (left ear). Hearing Aid. **DO NOT REMOVE** RYAN BAUMGARTNER"
+  },
+  {
+    "classroom": "Classroom 12",
+    "name": "Melany Correa",
+    "food_allergy": "Hazelnuts",
+    "special_instructions": ""
+  },
+  {
+    "classroom": "Classroom 12",
+    "name": "Autumn Gellis",
+    "food_allergy": "Vegetarian Lunch",
+    "special_instructions": ""
+  },
+  {
+    "classroom": "Classroom 12",
+    "name": "Ezra Ruiz Mendez",
+    "food_allergy": "Ezra consumes all dairy products except No Cow's milk",
+    "special_instructions": ""
+  },
+  {
+    "classroom": "Classroom 10",
+    "name": "Freya Sowards",
+    "food_allergy": "",
+    "special_instructions": "penicillin products (including amoxicillin) - she gets an intense rash similar to shingles, breathing becomes slightly labored"
+  },
+  {
+    "classroom": "Classroom 10",
+    "name": "Sebastian Rosales",
+    "food_allergy": "Pineapple",
+    "special_instructions": ""
+  },
+  {
+    "classroom": "Classroom 10",
+    "name": "Mavis Pelton",
+    "food_allergy": "Dairy and Avacado",
+    "special_instructions": "Call parents if there's an accidental ingestion"
+  },
+  {
+    "classroom": "Classroom 10",
+    "name": "Elijah (Judah) Jenkins",
+    "food_allergy": "No Pork",
+    "special_instructions": "Chronic Pain - Needs ibuprofen and/or Motrin as needed. Medication upon request every 6 hours. He may want/need to sit down as needed.**DO NOT REMOVE TROY JENKINS**"
+  },
+  {
+    "classroom": "Classroom 10",
+    "name": "Corbin Johnson",
+    "food_allergy": "Gluten Free lunch. Gluten intolerant",
+    "special_instructions": "GI Upset"
+  },
+  {
+    "classroom": "Classroom 10",
+    "name": "Anaiyah Al-Amin",
+    "food_allergy": "Anaiyah should not have any pork or pork products including porcine gelatine, bacon, ham or lard. Thank you!",
+    "special_instructions": ""
+  },
+  {
+    "classroom": "Tower",
+    "name": "Kjor Montano",
+    "food_allergy": "no pork based products",
+    "special_instructions": ""
+  },
+  {
+    "classroom": "Tower",
+    "name": "Madalynn Arriaga",
+    "food_allergy": "",
+    "special_instructions": "**DO NOT REMOVE** HENRY ARRIAGA/HANK ARRIAGA, ROSIE MILLIGAN OR ANY MILLIGAN SURNAME"
+  },
+  {
+    "classroom": "Tower",
+    "name": "Kiki Teeling",
+    "food_allergy": "",
+    "special_instructions": "**DO NOT REMOVE** BRANDON KOCIK, ANYONE NAMED KOCIK"
+  },
+  {
+    "classroom": "Tower",
+    "name": "Manny Sanchez-Gomez",
+    "food_allergy": "",
+    "special_instructions": "Strong aversion to cheese smells, specially indoors. Keep him away from these foods in a well ventilated area."
+  },
+  {
+    "classroom": "Tower",
+    "name": "Kennedi Patrick",
+    "food_allergy": "",
+    "special_instructions": "**DO NOT REMOVE** RYAN BAUMGARTNER"
+  },
+  {
+    "classroom": "Tower",
+    "name": "Atlas Lucas",
+    "food_allergy": "",
+    "special_instructions": "amoxicillin"
+  },
+  {
+    "classroom": "Tower",
+    "name": "Scarlett Coronoa",
+    "food_allergy": "",
+    "special_instructions": "**DO NOT REMOVE - FATHER** JOSHUA CORONA"
+  },
+  {
+    "classroom": "Tower",
+    "name": "Blu Clements",
+    "food_allergy": "",
+    "special_instructions": "Seasonal Allergies"
+  },
+  {
+    "classroom": "Tower",
+    "name": "Cecellia Labak",
+    "food_allergy": "",
+    "special_instructions": "She has heightened anxiety when being treated by medical professionals. She might need sedation or restraint. She will have a panic attack if being treated and her parents are not there."
+  },
+  {
+    "classroom": "MYHS",
+    "name": "Jiyu Montano",
+    "food_allergy": "no pork based products",
+    "special_instructions": ""
+  },
+  {
+    "classroom": "MYHS",
+    "name": "Braden Gutierrez",
+    "food_allergy": "",
+    "special_instructions": "Grass. Allergy medicine like Zyrtec, Benadryl, Claritin **DO NOT REMOVE JASON GUTIERREZ**"
+  },
+  {
+    "classroom": "MYHS",
+    "name": "Zack Desmangles",
+    "food_allergy": "",
+    "special_instructions": "Hiatal Hernia - notification to emergency medical team"
+  },
+  {
+    "classroom": "MYHS",
+    "name": "Sky Albero",
+    "food_allergy": "",
+    "special_instructions": "Ehlers-Danlos, pots, MCAS, fibromyalgia. In case of episodes, please contact parents sky requires electrolytes, salt foods with sodium also place to rest and calm down quiet time"
+  },
+  {
+    "classroom": "MYHS",
+    "name": "Bryce Phillips",
+    "food_allergy": "Severe allergy to dairy and egg. Please give EPI pen provided in case of reaction, contact Aimee Rolan or Andrew Phillips immediately.",
+    "special_instructions": "Athsma. If Bryce is wheezing, he will aks for his Albuterol, please provide as needed."
+  },
+  {
+    "classroom": "MYHS",
+    "name": "Isabelle Haskovec",
+    "food_allergy": "",
+    "special_instructions": "Penicillin Allergy. Rash Develops**DO NOT REMOVE** MICHAEL HASKOVEC AND GABRIEL HASKOVEC"
+  },
+  {
+    "classroom": "MYHS",
+    "name": "Troy Jenkins",
+    "food_allergy": "Pork and Shellfish",
+    "special_instructions": "Type 1 Diabetic. Please see ISP - need regular glucose monitoring with corrections as needed Insulin or snacks) **DO NOT REMOVE** TROY JENKINS"
+  },
+  {
+    "classroom": "MYHS",
+    "name": "Dheana Patel",
+    "food_allergy": "Walnuts and Pecans",
+    "special_instructions": "Tounge itching, rashes. Give her Benadryl asap, call parents"
+  },
+  {
+    "classroom": "MYHS",
+    "name": "London Medders",
+    "food_allergy": "",
+    "special_instructions": "Environmental Allergies. Please call mother to administer Benadryl for moderate reaction"
+  },
+  {
+    "classroom": "MYHS",
+    "name": "Teodor Stankovic",
+    "food_allergy": "wheat, nuts, dairy",
+    "special_instructions": ""
+  },
+  {
+    "classroom": "MYHS",
+    "name": "Hudson Zimbleman",
+    "food_allergy": "WHEAT, EGGS, PEANUTS",
+    "special_instructions": "When any of these are ingested or hives present, give benadryl 25 mg and call parent. If breathing difficulty call 911 and give epi pen before or after benadryl."
+  },
+  {
+    "classroom": "MYHS",
+    "name": "Aden Miller",
+    "food_allergy": "Tree nut allergy",
+    "special_instructions": "Give Benadryl if reaction or epi-pen. Autism"
+  },
+  {
+    "classroom": "MYHS",
+    "name": "Miranda Arriaga",
+    "food_allergy": "",
+    "special_instructions": "Allergy - Penicillin-Hives and Respirato. n/a **DO NOT REMOVE** HENRY ARRIAGA/HANK ARRIAGA, ROSIE MILLIGAN OR ANY MILLIGAN SURNAME"
+  },
+  {
+    "classroom": "MYHS",
+    "name": "Danny Smith",
+    "food_allergy": "Gluten and dairy intolerance",
+    "special_instructions": "Danny may experience any of the following symptoms after ingesting gluten or dairy; stomach pain, headache, or bowel movement issues. Notify mom or dad"
+  },
+  {
+    "classroom": "MYHS",
+    "name": "Julian Romen",
+    "food_allergy": "",
+    "special_instructions": "hay fever and environmental allergies. Call me"
+  },
+  {
+    "classroom": "MYHS",
+    "name": "Jordan Morley",
+    "food_allergy": "RAW TOMATOTES. Jojo has a mouth allergy to raw tomatoes",
+    "special_instructions": "Please have Benadryl available if she complains about throat or mouth itching"
+  },
+  {
+    "classroom": "MYHS",
+    "name": "Eden Nunez",
+    "food_allergy": "",
+    "special_instructions": "Scoliosis"
+  },
+  {
+    "classroom": "MYHS",
+    "name": "Dean Smith",
+    "food_allergy": "Gluten and dairy intolerance",
+    "special_instructions": "Dean may experience any of the following symptoms after ingesting gluten or dairy; stomach pain, headache, or bowel movement issues. Notify mom or dad"
+  },
+  {
+    "classroom": "MYHS",
+    "name": "Eli Johnson",
+    "food_allergy": "Gluten Free lunch. Gluten intolerant",
+    "special_instructions": "GI upset"
+  }
+]
