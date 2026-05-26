@@ -88,36 +88,80 @@ const multi = (key, label, options, opts = {}) => ({
 });
 
 // ── Form 1: Labor Request ───────────────────────────────────────────
+// Mirrors DGM's Smartsheet labor request form verbatim. Labor Type
+// dropdown options are the alphabetical list from the live form;
+// "Landscaping" is a best-guess for the one between "General Labor"
+// and "Moving" that was cut off in the screenshot — DGM can edit
+// the option list via the form editor in seconds if it should be
+// something else.
 function laborRequestForm() {
+  const LABOR_TYPES = [
+    'Cleaning',
+    'Contractor / Outside Vendor',
+    'Electrical',
+    'Filters',
+    'General Labor',
+    'Landscaping',  // best-guess; cut off in the source screenshot
+    'Moving',
+    'Plumbing',
+    'Rugs',
+    'Storage',
+    'Windows',
+  ];
+
   return {
     slug: 'staff-labor-request',
     display_name: 'Labor Request',
-    description: 'Request a maintenance / repair / setup task. Lexi reviews, assigns a scheduled date, and you\'ll see the status update right here once it\'s on the calendar.',
+    description:
+      'Submit maintenance, repair, moving, cleaning, electrical, plumbing, or any other facilities work. ' +
+      'Lexi reviews and assigns a scheduled date — you\'ll see the status update on your hub once it\'s on the calendar.',
     category: 'staff_request',
     audience: 'staff',
     per_student: false,
-    confirmation_message: 'Thanks! Your labor request was submitted. Lexi will review and schedule a date — you\'ll see the status update on your classroom hub once it\'s scheduled.',
+    confirmation_message:
+      'Thanks! Your labor request was submitted. Lexi will review and schedule it — check the "My Requests" tab on your classroom hub to see the scheduled date once it\'s set.',
     field_schema: [
       blockHeader('Labor Request'),
       blockParagraph(
-        'Use this for maintenance, repairs, setup help, room rearrangements, anything that needs Lexi or the facilities team. ' +
-        'You\'ll get a scheduled date back once Lexi has put it on the calendar.',
+        'Fields marked * are required.',
         'note',
       ),
-      selectF('classroom_or_location', 'Classroom / location', ALL_CLASSROOMS, { required: true }),
-      radioF('request_type', 'Type of request',
-        ['Maintenance / repair', 'Setup / move furniture', 'Cleaning (deep clean)', 'Tech / AV help', 'Other'],
-        { required: true }),
-      radioF('urgency', 'Urgency',
-        ['Routine (within 2 weeks)', 'This week', 'ASAP — blocking my class'],
-        { required: true }),
-      area('description', 'Describe what you need', {
-        required: true,
-        help: 'Be specific — what\'s broken / what needs to move / what you need built, plus any constraints on timing.',
-      }),
-      dateF('preferred_date', 'Preferred completion date (optional)',
-        { required: false, help: 'Lexi will work with you if the date doesn\'t fit the schedule.' }),
-      tel('reachable_at', 'Best number to reach you', { required: false }),
+
+      txt('staff_contact_person',
+        'Staff contact person',
+        { required: true,
+          help: 'Name of the person who has details on the work being requested. Usually you, but list someone else if they\'re the one to ask follow-up questions.' }),
+
+      selectF('classroom_or_location',
+        'Classroom / location',
+        ALL_CLASSROOMS,
+        { required: false,
+          help: 'Where the work needs to happen.' }),
+
+      selectF('labor_type',
+        'Labor type',
+        LABOR_TYPES,
+        { required: true,
+          help: 'Pick the category that best fits — Lexi routes by labor type.' }),
+
+      area('description',
+        'DETAILED labor need description',
+        { required: true, rows: 5,
+          help: 'Be specific. What is broken / needs moving / needs built? Include any constraints on timing.' }),
+
+      // Native photo upload is deferred — note to text Lexi for now.
+      blockParagraph(
+        'Have a photo? Photo upload is rolling out. For now, text Lexi the picture and reference your name + classroom in the message — she\'ll match it to this request.',
+        'note',
+      ),
+
+      numF('quantity', 'Quantity',
+        { required: false, help: 'How many of the item? (e.g. 4 chairs, 1 lock).' }),
+
+      dateF('completion_date',
+        'When does this fix need to be completed by?',
+        { required: false,
+          help: 'Lexi will work with you if the date doesn\'t fit the schedule. Leave blank if there\'s no hard deadline.' }),
     ],
     notify_emails: [LEXI_EMAIL],
   };
