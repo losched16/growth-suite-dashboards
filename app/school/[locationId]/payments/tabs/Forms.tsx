@@ -24,6 +24,7 @@ import { FileText, Edit3, Eye, Send, Inbox, ExternalLink } from 'lucide-react';
 import { query } from '@/lib/db';
 import { HelpCallout } from '@/components/HelpCallout';
 import { CopyButton } from '@/components/CopyButton';
+import { FormRowActions } from './FormRowActions';
 
 const PARENT_PORTAL_BASE = process.env.PARENT_PORTAL_BASE_URL
   ?? 'https://growth-suite-parent-portal.vercel.app';
@@ -56,8 +57,11 @@ export async function PaymentsHubForms({
            WHERE s.form_definition_id = d.id
              AND s.submitted_at >= date_trunc('year', now())) AS submission_count_this_year
        FROM portal_form_definitions d
-       WHERE d.school_id = $1 AND d.is_active = true
+       WHERE d.school_id = $1
+         AND COALESCE(d.audience, 'parents') = 'parents'   -- staff forms have their own UI under /staff-requests
        ORDER BY
+         d.is_active DESC,                                 -- published first, drafts below
+
          CASE d.category
            WHEN 'registration' THEN 1
            WHEN 'medical' THEN 2
@@ -94,6 +98,8 @@ export async function PaymentsHubForms({
   // Count of forms tagged as registration/enrollment — those are the
   // ones the demo audience cares about.
   const enrollmentForms = forms.filter((f) => f.category === 'registration' || /enroll/i.test(f.display_name));
+  const published = forms.filter((f) => f.is_active);
+  const drafts    = forms.filter((f) => !f.is_active);
 
   return (
     <div className="space-y-4">
@@ -139,27 +145,27 @@ export async function PaymentsHubForms({
 
       {/* Stat strip */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <StatCard label="Active forms" value={String(forms.length)} />
+        <StatCard label="Published forms" value={String(published.length)} sublabel={drafts.length > 0 ? `+ ${drafts.length} draft${drafts.length === 1 ? '' : 's'}` : undefined} />
         <StatCard label="Enrollment forms" value={String(enrollmentForms.length)} />
         <StatCard label="Eligible families" value={String(eligibleFamilyCount)} sublabel="active students" />
         <StatCard label="Submissions YTD" value={String(totalSubmissionsThisYear)} />
       </div>
 
-      {/* Form rows */}
+      {/* Published forms — visible to parents */}
       <section className="rounded-lg border border-slate-200 bg-white overflow-hidden">
         <div className="border-b border-slate-100 px-4 py-2.5 text-sm font-semibold text-slate-900 flex items-center justify-between">
-          <span>Active forms ({forms.length})</span>
-          {forms.length === 0 ? null : (
+          <span>Published — visible to parents ({published.length})</span>
+          {published.length === 0 ? null : (
             <span className="text-xs font-normal text-slate-500">Click <strong>Send to families</strong> to get a copy-pasteable email template</span>
           )}
         </div>
-        {forms.length === 0 ? (
+        {published.length === 0 ? (
           <div className="p-10 text-center text-sm text-slate-500 italic">
-            No active forms yet. Talk to your Growth Suite contact to seed your enrollment forms.
+            No published forms. Flip a draft below to Published, or talk to your Growth Suite contact to seed new forms.
           </div>
         ) : (
           <ul className="divide-y divide-slate-100">
-            {forms.map((f) => (
+            {published.map((f) => (
               <FormRow
                 key={f.id}
                 form={f}
@@ -172,13 +178,36 @@ export async function PaymentsHubForms({
           </ul>
         )}
       </section>
+
+      {/* Drafts — hidden from parents */}
+      {drafts.length > 0 ? (
+        <section className="rounded-lg border border-amber-200 bg-amber-50/30 overflow-hidden">
+          <div className="border-b border-amber-100 px-4 py-2.5 text-sm font-semibold text-amber-900 flex items-center justify-between">
+            <span>Drafts — hidden from parents ({drafts.length})</span>
+            <span className="text-xs font-normal text-amber-800">Flip Published on to make them visible.</span>
+          </div>
+          <ul className="divide-y divide-amber-100">
+            {drafts.map((f) => (
+              <FormRow
+                key={f.id}
+                form={f}
+                schoolId={schoolId}
+                locationId={locationId}
+                schoolName={schoolName}
+                eligibleFamilyCount={eligibleFamilyCount}
+                draft
+              />
+            ))}
+          </ul>
+        </section>
+      ) : null}
       {void locationId}
     </div>
   );
 }
 
 function FormRow({
-  form, schoolId, locationId, schoolName, eligibleFamilyCount,
+  form, schoolId, locationId, schoolName, eligibleFamilyCount, draft,
 }: {
   form: {
     id: string; slug: string; display_name: string; description: string | null;
@@ -190,8 +219,8 @@ function FormRow({
   locationId: string;
   schoolName: string;
   eligibleFamilyCount: number;
+  draft?: boolean;
 }) {
-  void schoolId;
   // Staff preview lives inside the school iframe — no parent login screen,
   // no real submission. ?chrome=none keeps the dashboard sidebar from
   // doubling up with the preview's own header banner.
@@ -218,12 +247,13 @@ ${schoolName}`;
   const smsBody = `${schoolName}: please complete ${form.display_name} in your parent portal: ${homeUrl}`;
 
   return (
-    <li className="px-4 py-3 hover:bg-slate-50">
+    <li className={`px-4 py-3 hover:bg-slate-50 ${draft ? 'opacity-90' : ''}`}>
       <div className="flex items-start gap-3">
-        <FileText className="h-4 w-4 text-slate-400 shrink-0 mt-0.5" />
+        <FileText className={`h-4 w-4 shrink-0 mt-0.5 ${draft ? 'text-amber-500' : 'text-slate-400'}`} />
         <div className="min-w-0 flex-1">
           <div className="flex items-baseline gap-2 flex-wrap">
             <span className="text-sm font-medium text-slate-900">{form.display_name}</span>
+            {draft ? <Pill bg="bg-amber-100" fg="text-amber-900">Draft</Pill> : null}
             {form.has_payment ? <Pill bg="bg-emerald-100" fg="text-emerald-800">$ Payment</Pill> : null}
             {form.per_student ? <Pill bg="bg-blue-100" fg="text-blue-800">Per student</Pill> : null}
             {form.category ? <Pill bg="bg-slate-100" fg="text-slate-600">{form.category}</Pill> : null}
@@ -236,7 +266,7 @@ ${schoolName}`;
             {' · '}{form.field_count} field{form.field_count === 1 ? '' : 's'}
           </div>
         </div>
-        <div className="flex items-center gap-1.5 shrink-0">
+        <div className="flex items-center gap-1.5 shrink-0 flex-wrap justify-end">
           <Link
             href={`/school/${locationId}/forms/${form.id}/submissions`}
             className="inline-flex items-center gap-1 rounded border border-slate-300 bg-white px-2 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-50"
@@ -250,6 +280,14 @@ ${schoolName}`;
           >
             <Edit3 className="h-3 w-3" /> Edit
           </Link>
+          <FormRowActions
+            schoolId={schoolId}
+            formId={form.id}
+            displayName={form.display_name}
+            slug={form.slug}
+            isPublished={form.is_active}
+            submissionCount={form.submission_count}
+          />
         </div>
       </div>
 

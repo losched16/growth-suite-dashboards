@@ -13,6 +13,23 @@ import type { NextRequest } from 'next/server';
 import { cookies } from 'next/headers';
 import { query } from '@/lib/db';
 import { SESSION_COOKIE, verifySessionToken } from '@/lib/auth/operator';
+import { SCHOOL_SESSION_COOKIE, verifySchoolSession } from '@/lib/auth/school';
+
+// Authorize a DELETE for `schoolId`. Accepts EITHER:
+//   - operator session (back-office /admin pages), or
+//   - a school session for the SAME school (embedded /school pages
+//     under GHL). Anything else → 401/403.
+async function authorizeFormMutation(schoolId: string): Promise<{ ok: true } | { ok: false; status: 401 | 403 }> {
+  const ck = await cookies();
+  if (verifySessionToken(ck.get(SESSION_COOKIE)?.value)) {
+    return { ok: true };
+  }
+  const ss = await verifySchoolSession(ck.get(SCHOOL_SESSION_COOKIE)?.value);
+  if (ss && ss.school_id === schoolId) {
+    return { ok: true };
+  }
+  return { ok: false, status: ss ? 403 : 401 };
+}
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -217,11 +234,9 @@ export async function PATCH(request: NextRequest, { params }: { params: Params }
 //     where they really do want it gone (typo'd form, abandoned
 //     draft, etc.).
 export async function DELETE(request: NextRequest, { params }: { params: Params }) {
-  const ck = await cookies();
-  if (!verifySessionToken(ck.get(SESSION_COOKIE)?.value)) {
-    return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
-  }
   const { schoolId, formId } = await params;
+  const auth = await authorizeFormMutation(schoolId);
+  if (!auth.ok) return NextResponse.json({ error: 'unauthorized' }, { status: auth.status });
 
   const expectedCountRaw = new URL(request.url).searchParams.get('confirm_count');
   const expectedCount = expectedCountRaw != null && /^\d+$/.test(expectedCountRaw)
