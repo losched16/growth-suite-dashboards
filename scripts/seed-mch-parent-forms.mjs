@@ -81,6 +81,11 @@ const radioF = (key, label, options, opts = {}) => ({
   ...opts,
 });
 const checkboxF = (key, label, opts = {}) => ({ type: 'checkbox', key, label, ...opts });
+// Display-only pre-signed signature block. Renders in script font at
+// the bottom of a form so every parent sees a consistent operator
+// signature without the school having to wet-sign each copy.
+const signatureStamp = (signer_name, signer_title, signed_date) =>
+  ({ type: 'signature_stamp', signer_name, signer_title, signed_date });
 
 const keyify = (s) =>
   String(s).toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 60);
@@ -213,6 +218,10 @@ function emergencyContactForm() {
       blockParagraph(MCH_ESIG_CONSENT, 'note'),
       txt('parent_signature', 'Parent / Guardian — type your full legal name to sign', { required: true }),
       dateF('signature_date', 'Date signed', { required: true }),
+
+      blockSection('School Operator Signature',
+        'Pre-signed by the Head of School on behalf of Media Children\'s House. No action needed from you.'),
+      signatureStamp('Victoria Whitby', 'Head of School, Media Children\'s House', '2026-06-01'),
     ],
     notify_emails: [MCH_NOTIFY_EMAIL],
   };
