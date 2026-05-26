@@ -1,17 +1,14 @@
-// Provision the full teacher widget set on every DGM classroom +
-// program dashboard. Each hub gets the same 5-widget layout so a
-// teacher (or sub) opening their iframe sees the same structure:
+// Provision DGM classroom + program dashboards with ONE widget: the
+// rich Student Roster. Teachers slice via the filter row (allergies-
+// only, IEP/504-only, lunch-only, today's-attendance, etc.) and click
+// any row to expand the family accordion — which surfaces parents,
+// per-student health (allergy + special instructions + IEP/504),
+// medical notes, and pickup info inline. One single page, one set of
+// filters, no scrolling past sections you don't care about.
 //
-//   1. ClassroomAllergies            — printable safety-critical list
-//   2. StudentRosterRich             — full roster with allergy +
-//                                       special-instructions columns
-//   3. ClassroomHotLunch             — lunch selections + allergy column
-//   4. ClassroomParentContacts       — parents with allergy badges
-//   5. ClassroomPickupRestrictions   — "do not release to" list
-//
-// Filtering:
-//   classroom-N hubs    → classroom_filter = "Classroom N"
-//   program-NN hubs     → program_filter   = "<program label>"
+// Filtering pre-narrow:
+//   classroom-N hubs    → default_homeroom_filter = "Classroom N"
+//   program-NN hubs     → default_program_filter  = "<program label>"
 //
 // Idempotent. Re-running overwrites the layout — pass --dry-run to
 // preview without writing.
@@ -67,10 +64,10 @@ const HUB_FILTERS = {
   'program-06-my-hs':    { program_filter: '06 MY/HS' },
 };
 
-// All columns the Student Roster should show on a teacher hub. The
-// new special_instructions column is added between allergy + iep_504
-// so they appear together. We keep family/documents off the teacher
-// view to reduce noise (those live on the family-hub drill-down).
+// Columns visible on a teacher's roster by default. Allergy +
+// special-instructions sit next to each other for at-a-glance scanning.
+// Family + documents stay enabled — opening the accordion is the way
+// to get every detail without leaving the page.
 const TEACHER_ROSTER_COLUMNS = [
   'student',
   'gender_age',
@@ -83,8 +80,11 @@ const TEACHER_ROSTER_COLUMNS = [
   'iep_504',
   'lunch',
   'attendance',
+  'family',
 ];
 
+// Filter row available to the teacher. Allergies/IEP/lunch toggles
+// give them one-click slicing without leaving the roster.
 const TEACHER_ROSTER_FILTERS = [
   'program',
   'schedule',
@@ -97,16 +97,13 @@ const TEACHER_ROSTER_FILTERS = [
 
 function buildLayout(slug, filter) {
   const isProgramHub = !!filter.program_filter;
-  const filterField = isProgramHub
-    ? { program_filter: filter.program_filter, classroom_filter: '' }
-    : { classroom_filter: filter.classroom_filter, program_filter: '' };
 
-  // Stable instance ids so re-running doesn't churn ids for unchanged
-  // widgets. Hash of (slug, widget_id) keeps them deterministic.
+  // Stable instance id so re-running doesn't churn the id for the
+  // unchanged single widget.
   const id = (widgetId) =>
     crypto.createHash('sha1').update(`${slug}|${widgetId}`).digest('hex').slice(0, 32);
 
-  // For the StudentRosterRich, populate the "default" filter that
+  // For the StudentRosterRich, populate the default filter that
   // pre-narrows the roster without the operator picking a filter.
   // The widget honors `default_homeroom_filter` for classroom hubs
   // and `default_program_filter` for program hubs.
@@ -114,23 +111,12 @@ function buildLayout(slug, filter) {
     ? { default_program_filter: filter.program_filter }
     : { default_homeroom_filter: filter.classroom_filter };
 
-  // Vertical stacking layout: each widget gets full width (w:12) and
-  // a sensible row count. y positions accumulate so the grid editor
-  // can re-arrange later without re-running this.
   return [
-    {
-      widget_id: 'classroom_allergies',
-      instance_id: id('classroom_allergies'),
-      position: { x: 0, y: 0, w: 12, h: 10 },
-      config: {
-        ...filterField,
-        hide_students_without_concerns: false,
-      },
-    },
     {
       widget_id: 'student_roster_rich',
       instance_id: id('student_roster_rich'),
-      position: { x: 0, y: 10, w: 12, h: 24 },
+      // Full page — the roster + its accordion expand to fill the iframe.
+      position: { x: 0, y: 0, w: 12, h: 32 },
       config: {
         page_size: 100,
         enable_views: ['list', 'grid', 'allergies'],
@@ -139,24 +125,6 @@ function buildLayout(slug, filter) {
         ...rosterDefaults,
         drilldown_dashboard_slug: 'family-hub',
       },
-    },
-    {
-      widget_id: 'classroom_hot_lunch',
-      instance_id: id('classroom_hot_lunch'),
-      position: { x: 0, y: 34, w: 12, h: 10 },
-      config: filterField,
-    },
-    {
-      widget_id: 'classroom_parent_contacts',
-      instance_id: id('classroom_parent_contacts'),
-      position: { x: 0, y: 44, w: 12, h: 12 },
-      config: filterField,
-    },
-    {
-      widget_id: 'classroom_pickup_restrictions',
-      instance_id: id('classroom_pickup_restrictions'),
-      position: { x: 0, y: 56, w: 12, h: 8 },
-      config: filterField,
     },
   ];
 }
