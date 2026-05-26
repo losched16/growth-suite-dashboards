@@ -1,14 +1,24 @@
-// Seed 17 portal-form definitions for Desert Garden Montessori (DG).
+// ⚠️ DEPRECATED — DO NOT RE-RUN AGAINST DGM.
 //
-// Two forms are fully detailed (from confirmed Google Forms):
-//   - Cafe Worker Permission Form (Student-specific)
-//   - Authorization for Release / Pickup Authorization (per-family)
+// This was the original 2026-05-14 placeholder seed: 2 real forms +
+// 15 stub placeholders with generic 3-field schemas. We replaced it
+// with `scripts/seed-dgm-forms-from-brief.mjs` (driven by the real
+// DGM_FORMS_BUILD_BRIEF + dgm_forms_inventory.json) on 2026-05-25.
 //
-// The remaining 15 are placeholders with `needs_review = true` — operator
-// (Clint) will replace the field_schema after gathering each form's
-// content from DG. Each placeholder has a plausible category +
-// per_student flag inferred from the form's name so the FormCompletionGrid
-// in the dashboard immediately shows reasonable columns.
+// On 2026-05-26 we audited and DELETED the 16 placeholder slugs
+// that this script created (concussion, sunscreen, photography release,
+// internet use, etc.) — DGM never collected those, and they were
+// just visual noise on the parent portal.
+//
+// Re-running this script against DGM would re-create those 16
+// placeholders, undoing the cleanup. The guard below refuses to
+// touch DGM's school_id (`cfa9030d-...`). Remove the guard only if
+// DGM specifically asks to bring those forms back AND you've added
+// real field schemas.
+//
+// For a NEW school: copy this file, drop the guard, customize the
+// form list. Or better — write a brief like dgm_forms_inventory.json
+// and use the brief-driven seeder instead.
 //
 // Idempotent: ON CONFLICT (school_id, slug) DO UPDATE only refreshes
 // the columns we own. Existing field_schemas are preserved when they
@@ -17,6 +27,18 @@
 // Usage:
 //   DATABASE_URL=... node scripts/seed-dg-portal-forms.mjs --school-id <uuid>
 //   add --refresh to force-overwrite existing definitions (for re-seed).
+
+// Guard — refuse to seed the DGM school_id, which has been cleaned of
+// these placeholders.
+const DGM_SCHOOL_ID_BLOCKED = 'cfa9030d-c8fe-49ae-a9e7-f1003844ec07';
+if (process.argv.includes('--school-id')) {
+  const idx = process.argv.indexOf('--school-id');
+  if (process.argv[idx + 1] === DGM_SCHOOL_ID_BLOCKED) {
+    console.error('⚠️  This script is deprecated for DGM. 16 placeholder forms were intentionally removed on 2026-05-26.');
+    console.error('    See header comment for the full reason. Aborting.');
+    process.exit(2);
+  }
+}
 
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
