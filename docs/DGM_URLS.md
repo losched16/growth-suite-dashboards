@@ -93,7 +93,9 @@ External lunch app (unwrapped — keep as fallback):
 |---|---|
 | Submit a request (form picker) | `/school/wy1qNRECEgy8lg8pKqm0/staff-requests?chrome=none` |
 | My recent requests (per teacher) | `/school/wy1qNRECEgy8lg8pKqm0/staff-requests/mine?chrome=none` |
+| **Calendar — my requests** | `/school/wy1qNRECEgy8lg8pKqm0/staff-requests/calendar?chrome=none` |
 | Lexi's inbox (triage queue) | `/school/wy1qNRECEgy8lg8pKqm0/staff-requests/inbox?chrome=none` |
+| **Calendar — all requests (Lexi)** | `/school/wy1qNRECEgy8lg8pKqm0/staff-requests/calendar?chrome=none&mode=all` |
 | Labor Request form | `/school/wy1qNRECEgy8lg8pKqm0/staff-requests/staff-labor-request?chrome=none` |
 | Incident / Accident Report | `/school/wy1qNRECEgy8lg8pKqm0/staff-requests/staff-incident-report?chrome=none` |
 | In-House Supplies Request | `/school/wy1qNRECEgy8lg8pKqm0/staff-requests/staff-supply-request?chrome=none` |
