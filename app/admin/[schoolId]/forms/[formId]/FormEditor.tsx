@@ -240,9 +240,14 @@ export function FormEditor({
           </Field>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-2 pt-2 border-t border-zinc-100">
-          <ToggleField label="Active" checked={meta.is_active}
+          <ToggleField
+            label={meta.is_active ? 'Published' : 'Draft'}
+            checked={meta.is_active}
             onChange={(v) => patchMeta('is_active', v)}
-            hint="When off, parents can't fill the form." />
+            hint={meta.is_active
+              ? 'Visible in the parent portal. Toggle off to unpublish (Draft) — parents won\'t see it.'
+              : 'Hidden from the parent portal. Toggle on to publish.'}
+          />
           <ToggleField label="Per-student" checked={meta.per_student}
             onChange={(v) => patchMeta('per_student', v)}
             hint="Parent picks which child this is for." />

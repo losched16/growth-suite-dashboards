@@ -73,8 +73,8 @@ export default async function FormPreviewPage({ params, searchParams }: { params
               · {school.name} · {form.display_name} (slug: <code>{form.slug}</code>)
             </span>
             {!form.is_active ? (
-              <span className="rounded bg-zinc-200 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-zinc-700">
-                inactive
+              <span className="rounded bg-amber-200 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-amber-900">
+                draft · hidden from parents
               </span>
             ) : null}
             {form.needs_review ? (

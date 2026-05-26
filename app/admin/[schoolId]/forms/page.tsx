@@ -5,8 +5,9 @@
 
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ArrowLeft, FileText, Eye, Edit3, Plus } from 'lucide-react';
+import { FileText, Eye, Edit3, Plus } from 'lucide-react';
 import { query } from '@/lib/db';
+import { DeleteFormButton } from './DeleteFormButton';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 30;
@@ -58,8 +59,11 @@ export default async function FormsListPage({
     [schoolId],
   );
 
-  const active = forms.filter((f) => f.is_active);
-  const inactive = forms.filter((f) => !f.is_active);
+  // Published vs Draft buckets — labels for operator clarity.
+  // `is_active` is the underlying column; the parent portal hides any
+  // form where it's false, so flipping the toggle here = unpublishing.
+  const published = forms.filter((f) => f.is_active);
+  const drafts = forms.filter((f) => !f.is_active);
 
   return (
     <main className="flex flex-1 flex-col items-center bg-zinc-50 p-6 dark:bg-black">
@@ -71,7 +75,7 @@ export default async function FormsListPage({
           <div>
             <h1 className="text-2xl font-semibold text-zinc-900">Forms</h1>
             <p className="text-xs text-zinc-500">
-              {school.name} · {active.length} active, {inactive.length} inactive
+              {school.name} · {published.length} published, {drafts.length} draft
             </p>
           </div>
           <Link
@@ -89,9 +93,9 @@ export default async function FormsListPage({
           <div className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{sp.err}</div>
         ) : null}
 
-        <FormsTable schoolId={schoolId} title="Active forms" forms={active} />
-        {inactive.length > 0 ? (
-          <FormsTable schoolId={schoolId} title="Inactive forms" forms={inactive} muted />
+        <FormsTable schoolId={schoolId} title="Published — visible to parents" forms={published} />
+        {drafts.length > 0 ? (
+          <FormsTable schoolId={schoolId} title="Drafts — hidden from parents" forms={drafts} muted />
         ) : null}
       </div>
     </main>
@@ -171,6 +175,13 @@ function FormsTable({
                   >
                     live ↗
                   </a>
+                  <DeleteFormButton
+                    schoolId={schoolId}
+                    formId={f.id}
+                    displayName={f.display_name}
+                    slug={f.slug}
+                    submissionCount={f.submission_count}
+                  />
                 </div>
               </td>
             </tr>

@@ -10,7 +10,9 @@
 
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { cookies } from 'next/headers';
 import { query } from '@/lib/db';
+import { SESSION_COOKIE, verifySessionToken } from '@/lib/auth/operator';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -192,4 +194,80 @@ export async function PATCH(request: NextRequest, { params }: { params: Params }
   );
 
   return NextResponse.json({ ok: true });
+}
+
+// DELETE /api/admin/schools/{schoolId}/forms/{formId}[?confirm_count=N]
+//
+// Hard-deletes a portal form definition. The FK from
+// portal_form_submissions → portal_form_definitions cascades, so
+// submissions/migration_flags/enrollment_invites are wiped together.
+//
+// Defense in depth:
+//   - Requires the operator session cookie (back-office only — the
+//     plain PATCH endpoint above is unauthenticated by legacy, but
+//     deletion is destructive enough to warrant the gate).
+//   - `confirm_count` URL param must equal the current submission
+//     count. Stops the obvious TOCTOU: operator opens the list when
+//     N=0, a parent submits while they're deciding, the operator
+//     clicks delete and silently destroys that submission. Mismatch
+//     returns 409 so the caller can refresh and re-confirm.
+//   - Soft delete (set is_active=false) is the kinder option for
+//     forms with submissions — staff should usually flip "Published"
+//     off rather than delete. This endpoint exists for the cases
+//     where they really do want it gone (typo'd form, abandoned
+//     draft, etc.).
+export async function DELETE(request: NextRequest, { params }: { params: Params }) {
+  const ck = await cookies();
+  if (!verifySessionToken(ck.get(SESSION_COOKIE)?.value)) {
+    return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+  }
+  const { schoolId, formId } = await params;
+
+  const expectedCountRaw = new URL(request.url).searchParams.get('confirm_count');
+  const expectedCount = expectedCountRaw != null && /^\d+$/.test(expectedCountRaw)
+    ? Number(expectedCountRaw)
+    : null;
+  if (expectedCount == null) {
+    return NextResponse.json({
+      error: 'missing_confirm_count',
+      detail: 'Pass ?confirm_count=N where N is the current submission count, fetched immediately before delete.',
+    }, { status: 400 });
+  }
+
+  // Lock the row so a concurrent submission can't slip in between the
+  // count read and the delete. Single-statement DELETE is atomic, so
+  // technically the FOR UPDATE is belt-and-suspenders — but for a
+  // destructive op the extra round trip is cheap insurance.
+  const def = await query<{ id: string; display_name: string; slug: string }>(
+    `SELECT id, display_name, slug FROM portal_form_definitions
+      WHERE id = $1 AND school_id = $2 FOR UPDATE`,
+    [formId, schoolId],
+  );
+  if (def.rows.length === 0) {
+    return NextResponse.json({ error: 'not_found' }, { status: 404 });
+  }
+
+  const cnt = await query<{ n: string }>(
+    `SELECT COUNT(*)::text AS n FROM portal_form_submissions WHERE form_definition_id = $1`,
+    [formId],
+  );
+  const actualCount = Number(cnt.rows[0]?.n ?? 0);
+  if (actualCount !== expectedCount) {
+    return NextResponse.json({
+      error: 'submission_count_mismatch',
+      detail: `Expected ${expectedCount} submissions, found ${actualCount}. Refresh the page and re-confirm.`,
+      actual: actualCount,
+    }, { status: 409 });
+  }
+
+  await query(
+    `DELETE FROM portal_form_definitions WHERE id = $1 AND school_id = $2`,
+    [formId, schoolId],
+  );
+
+  return NextResponse.json({
+    ok: true,
+    deleted: { id: formId, slug: def.rows[0].slug, display_name: def.rows[0].display_name },
+    cascaded_submissions: actualCount,
+  });
 }
