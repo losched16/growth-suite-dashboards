@@ -68,13 +68,16 @@ const HUB_FILTERS = {
 // special-instructions sit next to each other for at-a-glance scanning.
 // Family + documents stay enabled — opening the accordion is the way
 // to get every detail without leaving the page.
+//
+// `status` is intentionally OFF: every kid on a classroom roster is
+// enrolled by definition (the roster query already filters), so the
+// pill was just visual noise that ate a column of width.
 const TEACHER_ROSTER_COLUMNS = [
   'student',
   'gender_age',
   'program',
   'homeroom',
   'schedule',
-  'status',
   'allergy',
   'special_instructions',
   'iep_504',
