@@ -68,7 +68,13 @@ export function DocumentsCell({
   useEffect(() => {
     if (!open || docs !== null) return;
     let cancelled = false;
-    setBusy(true); setErr(null);
+    // Intentional sync setState — we want to show the busy spinner the
+    // instant the popover opens, before the async fetch runs. The
+    // single extra render here is negligible vs the UX win.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setBusy(true);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setErr(null);
     (async () => {
       try {
         const r = await fetch(`/api/school/documents/list?student_id=${encodeURIComponent(studentId)}`);

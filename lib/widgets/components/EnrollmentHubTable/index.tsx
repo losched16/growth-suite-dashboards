@@ -37,7 +37,7 @@ function ageFrom(dob: string | null): string {
   const now = new Date();
   let yrs = now.getFullYear() - d.getFullYear();
   let mos = now.getMonth() - d.getMonth();
-  let days = now.getDate() - d.getDate();
+  const days = now.getDate() - d.getDate();
   if (days < 0) { mos--; }
   if (mos < 0) { yrs--; mos += 12; }
   if (yrs >= 1) return `${yrs} YR ${Math.max(0, mos)} MO`;

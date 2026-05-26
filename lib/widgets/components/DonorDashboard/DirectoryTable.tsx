@@ -499,7 +499,7 @@ function GhlNotesPanel({ ghlContactId }: { ghlContactId: string }) {
         <div className="text-[11px] uppercase tracking-wide text-violet-900 font-semibold">
           Notes from CRM
           <span className="ml-2 text-[10px] font-normal normal-case text-violet-700">
-            (live — anything added to this contact's Notes shows here)
+            (live — anything added to this contact&rsquo;s Notes shows here)
           </span>
         </div>
         {state.kind === 'ok' ? (

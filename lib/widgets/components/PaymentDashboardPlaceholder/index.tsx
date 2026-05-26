@@ -2,8 +2,10 @@ import { CreditCard } from 'lucide-react';
 import type { WidgetDefinition } from '@/lib/widgets/types';
 import type { ConfigSchema } from '@/lib/widgets/types';
 
-interface Config {}
-interface Data {}
+// Placeholder widget — no config, no data. Use Record<string, never>
+// instead of an empty-interface to satisfy lint (no-empty-object-type).
+type Config = Record<string, never>;
+type Data = Record<string, never>;
 
 const schema: ConfigSchema = { fields: [] };
 

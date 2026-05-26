@@ -56,7 +56,7 @@ export async function findOrCreateAssociation(
   // "Both object labels can not be same"). For symmetric relationships
   // like co_parent we differentiate by appending " (linked)" to the
   // second side so the underlying meaning is preserved but GHL is happy.
-  let firstLabel = params.firstLabel;
+  const firstLabel = params.firstLabel;
   let secondLabel = params.secondLabel ?? params.firstLabel;
   if (firstLabel === secondLabel) {
     secondLabel = `${firstLabel} (linked)`;
