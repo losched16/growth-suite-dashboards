@@ -267,6 +267,46 @@ function FormIcon({ slug }: { slug: string }) {
 }
 
 function ResponseRow({ k, v }: { k: string; v: unknown }) {
+  // student_picker: render as a contact card with parents + click-to-call
+  // / click-to-email links. Marked with _type so we recognize it
+  // regardless of what key the schema used.
+  if (v && typeof v === 'object' && !Array.isArray(v) && (v as Record<string, unknown>)._type === 'student_picker') {
+    const card = v as { full_name?: string; name?: string; homeroom?: string | null; parents?: Array<{ name: string; email: string | null; phone: string | null; role: string | null; is_primary: boolean }> };
+    const parents = card.parents ?? [];
+    return (
+      <>
+        <dt className="font-mono text-slate-600 break-all">{k}</dt>
+        <dd>
+          <div className="rounded-md border border-emerald-200 bg-emerald-50/40 p-2 space-y-1.5">
+            <div className="text-sm font-semibold text-slate-900">
+              {card.full_name ?? card.name ?? 'Student'}
+              {card.homeroom ? <span className="ml-2 text-[11px] font-normal text-slate-500">({card.homeroom})</span> : null}
+            </div>
+            {parents.length === 0 ? (
+              <div className="text-[11px] italic text-slate-500">No parent contacts on file.</div>
+            ) : (
+              <ul className="space-y-1">
+                {parents.map((p, idx) => (
+                  <li key={idx} className="rounded border border-emerald-100 bg-white px-2 py-1.5 text-xs">
+                    <div className="font-medium text-slate-900">
+                      {p.name}
+                      {p.is_primary ? <span className="ml-1.5 rounded bg-emerald-100 px-1 py-0 text-[9px] font-bold uppercase text-emerald-800">primary</span> : null}
+                      {p.role ? <span className="ml-1.5 text-[10px] font-normal text-slate-500">({p.role})</span> : null}
+                    </div>
+                    <div className="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5">
+                      {p.email ? <a href={`mailto:${p.email}`} className="text-blue-600 hover:underline">{p.email}</a> : null}
+                      {p.phone ? <a href={`tel:${p.phone}`} className="text-blue-600 hover:underline">{p.phone}</a> : null}
+                      {!p.email && !p.phone ? <span className="text-slate-400 italic">no contact info on file</span> : null}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </dd>
+      </>
+    );
+  }
   // Grid responses serialize as plain objects { item_label: quantity }
   // — render as a clean per-item list with quantity badges so Lexi can
   // pull supplies without re-counting from raw JSON.

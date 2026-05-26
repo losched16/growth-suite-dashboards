@@ -8,6 +8,7 @@
 import { useRouter } from 'next/navigation';
 import { useState, type FormEvent } from 'react';
 import { AlertCircle, Loader2 } from 'lucide-react';
+import { StudentIncidentPicker } from './StudentIncidentPicker';
 
 type Block = Record<string, unknown>;
 
@@ -184,6 +185,15 @@ function Block({ block }: { block: Block }) {
       );
     case 'quantity_grid':
       return <QuantityGrid block={block} />;
+    case 'student_picker':
+      return (
+        <StudentIncidentPicker
+          name={key}
+          label={String(block.label ?? 'Student')}
+          required={!!block.required}
+          help={block.help ? String(block.help) : null}
+        />
+      );
     default:
       return null;
   }

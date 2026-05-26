@@ -77,7 +77,14 @@ export async function POST(request: NextRequest) {
   }
 
   // Build the responses JSON from the schema keys we know about.
+  // Two things accumulate alongside `responses`:
+  //   - linkedStudentId: when a student_picker field resolves, we
+  //     persist the student id on the submission row so the inbox can
+  //     join back to the student/family records.
+  //   - linkedFamilyId: same, for family-scoped notifications.
   const responses: Record<string, unknown> = {};
+  let linkedStudentId: string | null = null;
+  let linkedFamilyId: string | null = null;
   const blocks = Array.isArray(def.field_schema) ? def.field_schema : [];
   for (const block of blocks) {
     const key = String(block.key ?? '').trim();
@@ -102,6 +109,59 @@ export async function POST(request: NextRequest) {
         if (s) grid[row] = s; // store with the original label so the inbox can show it directly
       }
       if (Object.keys(grid).length > 0) responses[key] = grid;
+    } else if (type === 'student_picker') {
+      // Field value is the student id chosen in the searchable picker.
+      // We look up the student + their parents server-side so the
+      // submission stores a clean, structured contact card the inbox
+      // can render without joining at read-time. Parent contact info
+      // is *not* exposed by the public /api/school/students endpoint;
+      // it only materializes here, after a teacher has explicitly
+      // picked a kid as part of submitting an incident report.
+      const studentId = String(fd.get(key) ?? '').trim();
+      if (!studentId) continue;
+      const sRes = await query<{
+        id: string; first_name: string; last_name: string; preferred_name: string | null;
+        family_id: string | null; homeroom: string | null;
+      }>(
+        `SELECT id, first_name, last_name, preferred_name, family_id,
+                COALESCE(metadata->>'homeroom', metadata->>'classroom_name') AS homeroom
+           FROM students WHERE id = $1 AND school_id = $2`,
+        [studentId, session.school_id],
+      );
+      if (sRes.rows.length === 0) continue; // ignore garbage id
+      const student = sRes.rows[0];
+      let parents: Array<{ id: string; first_name: string; last_name: string; email: string | null; phone: string | null; role: string | null; is_primary: boolean }> = [];
+      if (student.family_id) {
+        const pRes = await query<{ id: string; first_name: string; last_name: string; email: string | null; phone: string | null; role: string | null; is_primary: boolean }>(
+          `SELECT id, first_name, last_name, email, phone, role, is_primary
+             FROM parents
+            WHERE family_id = $1 AND school_id = $2
+            ORDER BY is_primary DESC, last_name, first_name`,
+          [student.family_id, session.school_id],
+        );
+        parents = pRes.rows;
+      }
+      // Stamp the structured card into responses + remember the ids
+      // for the row-level columns.
+      responses[key] = {
+        _type: 'student_picker',     // marker so the inbox renders this as a contact card
+        student_id: student.id,
+        family_id: student.family_id,
+        name: student.preferred_name?.trim() || student.first_name,
+        full_name: `${student.preferred_name?.trim() || student.first_name} ${student.last_name}`.trim(),
+        last_name: student.last_name,
+        homeroom: student.homeroom,
+        parents: parents.map((p) => ({
+          id: p.id,
+          name: `${p.first_name} ${p.last_name}`.trim(),
+          email: p.email,
+          phone: p.phone,
+          role: p.role,
+          is_primary: p.is_primary,
+        })),
+      };
+      linkedStudentId = student.id;
+      if (student.family_id) linkedFamilyId = student.family_id;
     } else if (type !== 'file_upload') {
       const v = fd.get(key);
       if (v != null) responses[key] = typeof v === 'string' ? v : String(v);
@@ -113,23 +173,51 @@ export async function POST(request: NextRequest) {
     ? def.notify_emails[0]
     : null;
 
+  // Family + student get linked when the form included a student_picker
+  // (incident report today). Parent column stays NULL — incidents are
+  // submitted BY a teacher, not by a parent.
   const ins = await query<{ id: string }>(
     `INSERT INTO portal_form_submissions
        (school_id, form_definition_id, family_id, parent_id, student_id,
         responses, status, submitted_at, is_test,
         submitter_email, assigned_to_email, resolved_status)
-     VALUES ($1, $2, NULL, NULL, NULL,
+     VALUES ($1, $2, $6, NULL, $7,
              $3::jsonb, 'submitted', now(), false,
              $4, $5, 'pending')
      RETURNING id`,
-    [session.school_id, formDefId, JSON.stringify(responses), teacherEmail, assignedTo],
+    [session.school_id, formDefId, JSON.stringify(responses), teacherEmail, assignedTo, linkedFamilyId, linkedStudentId],
   );
   const submissionId = ins.rows[0].id;
 
-  // Fire the notification email to Lexi (fire-and-forget). Renders via
-  // the shared notification-email helper — same body production uses
-  // for any office notification.
+  // Pull the student_picker card (if present) so the notification
+  // email can surface the kid + first-parent contact in the header.
+  // Falls through harmlessly when the form has no picker.
+  const pickerKey = blocks.find((b) => String(b.type ?? '') === 'student_picker')?.key;
+  const pickerVal = pickerKey ? responses[String(pickerKey)] : undefined;
+  let studentLabel: string | null = null;
+  let primaryParentEmail: string | null = null;
+  let primaryParentPhone: string | null = null;
+  if (pickerVal && typeof pickerVal === 'object') {
+    const card = pickerVal as Record<string, unknown>;
+    studentLabel = String(card.full_name ?? card.name ?? '') || null;
+    const parents = Array.isArray(card.parents) ? card.parents as Array<Record<string, unknown>> : [];
+    // is_primary is sorted first in the SQL, so head of list is the
+    // preferred contact when one exists.
+    const primary = parents[0];
+    if (primary) {
+      primaryParentEmail = primary.email ? String(primary.email) : null;
+      primaryParentPhone = primary.phone ? String(primary.phone) : null;
+    }
+  }
+
+  // Notify recipients defined on the form (Lexi for labor/supplies,
+  // admin + iTeam for incidents). The student's parents are NOT
+  // automatically CC'd — they're surfaced in the email body + the
+  // inbox so Lexi can decide whether to call/email them based on
+  // severity. Auto-emailing every parent on every minor incident
+  // would generate a lot of low-value (or panicked) parent traffic.
   if (def.notify_emails && def.notify_emails.length > 0) {
+    const allRecipients = def.notify_emails;
     import('@/lib/forms/notification-email').then(({ renderNotificationEmail }) =>
       import('@/lib/email').then(({ sendBrandedEmail }) => {
         const { subject, html, text } = renderNotificationEmail({
@@ -137,13 +225,13 @@ export async function POST(request: NextRequest) {
           schoolName: 'Desert Garden Montessori', // could resolve via schools table; cheap shortcut
           submissionId,
           familyLabel: `STAFF REQUEST · ${teacher?.name ? `${teacher.name} (${teacherEmail})` : teacherEmail}`,
-          studentLabel: null,
-          parentEmail: null,
-          parentPhone: null,
+          studentLabel,
+          parentEmail: primaryParentEmail,
+          parentPhone: primaryParentPhone,
           responses,
         });
         return Promise.allSettled(
-          (def.notify_emails ?? []).map((to) =>
+          allRecipients.map((to) =>
             sendBrandedEmail({ to, schoolId: session.school_id, subject, html, text }),
           ),
         );

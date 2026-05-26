@@ -94,6 +94,29 @@ function formatValue(v: unknown): string {
   if (Array.isArray(v)) return v.length === 0 ? '(none)' : v.map(String).join(', ');
   if (typeof v === 'boolean') return v ? 'yes' : 'no';
   if (typeof v === 'string') return v.startsWith('data:') ? '(data URL — signature/file)' : v;
+  if (typeof v === 'object') {
+    const obj = v as Record<string, unknown>;
+    // student_picker structured value: render student name + parents
+    // inline so the office email gets a usable contact list without
+    // anyone having to open the dashboard.
+    if (obj._type === 'student_picker') {
+      const full = String(obj.full_name ?? obj.name ?? 'Student');
+      const home = obj.homeroom ? ` (${String(obj.homeroom)})` : '';
+      const parents = Array.isArray(obj.parents) ? obj.parents as Array<Record<string, unknown>> : [];
+      const parentLines = parents
+        .map((p) => {
+          const nm = String(p.name ?? '').trim() || 'Parent';
+          const bits = [p.email, p.phone].filter(Boolean).map(String);
+          return bits.length > 0 ? `${nm} (${bits.join(', ')})` : nm;
+        })
+        .join('; ');
+      return parentLines ? `${full}${home} — Notify: ${parentLines}` : `${full}${home}`;
+    }
+    // quantity_grid (and other plain objects): "item × N" list
+    const entries = Object.entries(obj).filter(([k]) => !k.startsWith('_'));
+    if (entries.length === 0) return '(none)';
+    return entries.map(([k, val]) => `${k} × ${String(val)}`).join(', ');
+  }
   return String(v);
 }
 

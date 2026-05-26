@@ -247,18 +247,24 @@ function incidentReportForm() {
       ),
 
       blockSection('Child'),
-      txt('child_full_name', 'Child full name', { required: false }),
-      txt('child_age', 'Child age', { required: false }),
+      // student_picker pulls the kid from the live roster + auto-attaches
+      // family/parent contact info to the submission so Lexi sees a
+      // clickable card instead of free-text. Replaces what used to be
+      // child_full_name + child_age + a manual parent_emails textarea.
+      {
+        type: 'student_picker',
+        key: 'child',
+        label: 'Search and select the child',
+        required: true,
+        help: 'Type a name or classroom to filter. We\'ll auto-attach the parent / guardian contacts to this report.',
+      },
 
       blockSection('Notifications'),
-      area('parent_emails',
-        'List parent emails',
-        { required: true, help: 'Comma-separate the parent / guardian email addresses to copy on this report.' }),
       multi('staff_emails_to_notify',
         'List staff emails to notify',
         DGM_STAFF_EMAILS,
         { required: false,
-          help: 'Pick any specific teachers who should know. Admin + iTeam are notified automatically.' }),
+          help: 'Pick any specific teachers who should know. Admin + iTeam are notified automatically. Parents are surfaced in the inbox via the child you picked above — no need to type them here.' }),
 
       blockSection('Classroom & timing'),
       selectF('classroom', 'Classroom', ALL_CLASSROOMS, { required: false }),
