@@ -8,9 +8,9 @@
 // they land back on classroom-3 (not the default).
 
 import Link from 'next/link';
-import { ClipboardList, Plus, Inbox, ArrowLeft, FolderOpen } from 'lucide-react';
+import { ClipboardList, Plus, Inbox, ArrowLeft, FolderOpen, Soup, Image as ImageIcon } from 'lucide-react';
 
-export type ActiveTab = 'roster' | 'submit' | 'mine' | 'inbox' | 'documents';
+export type ActiveTab = 'roster' | 'submit' | 'mine' | 'inbox' | 'documents' | 'menus' | 'lunch';
 
 export function ClassroomTopNav({
   locationId,
@@ -51,6 +51,11 @@ export function ClassroomTopNav({
   if (classroomSlug)      docsParams.set('from', classroomSlug);
   const docsHref = `/school/${locationId}/documents?${docsParams.toString()}`;
 
+  // Lunch + Menus pages also need the from= so the Roster tab keeps
+  // a back-link to the original classroom hub.
+  const lunchHref = `/school/${locationId}/lunch-roster?chrome=none${fromParam}`;
+  const menusHref = `/school/${locationId}/menus?chrome=none${fromParam}`;
+
   return (
     <nav className="print:hidden border-b border-slate-200 bg-white -mx-4 sm:-mx-6 px-4 sm:px-6 mb-3">
       <div className="flex items-center gap-1 overflow-x-auto">
@@ -77,6 +82,18 @@ export function ClassroomTopNav({
           active={active === 'documents'}
           icon={<FolderOpen className="h-3.5 w-3.5" />}
           label="Documents"
+        />
+        <Tab
+          href={lunchHref}
+          active={active === 'lunch'}
+          icon={<Soup className="h-3.5 w-3.5" />}
+          label="Lunch Roster"
+        />
+        <Tab
+          href={menusHref}
+          active={active === 'menus'}
+          icon={<ImageIcon className="h-3.5 w-3.5" />}
+          label="Menus"
         />
       </div>
     </nav>
