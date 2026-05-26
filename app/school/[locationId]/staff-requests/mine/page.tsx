@@ -7,15 +7,26 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { cookies } from 'next/headers';
-import { ArrowLeft, CheckCircle2, Clock, CalendarCheck, XCircle, AlertCircle, Plus } from 'lucide-react';
+import { CheckCircle2, Clock, CalendarCheck, XCircle, AlertCircle, Plus } from 'lucide-react';
 import { query } from '@/lib/db';
 import { loadSchoolByLocationId } from '@/lib/dashboards/loader';
 import { SCHOOL_SESSION_COOKIE, verifySchoolSession } from '@/lib/auth/school';
+import { ClassroomTopNav } from '@/components/ClassroomTopNav';
 
 export const dynamic = 'force-dynamic';
 
 type Params = Promise<{ locationId: string }>;
-type SearchParams = Promise<{ submitted?: string }>;
+type SearchParams = Promise<{ submitted?: string; from?: string }>;
+
+function isClassroomSlug(s: string | undefined): boolean {
+  return !!s && /^(classroom-|program-)[a-z0-9-]+$/.test(s);
+}
+function prettyClassroom(slug: string): string {
+  const stripped = slug.replace(/^(classroom-|program-)/, '');
+  return slug.startsWith('classroom-')
+    ? `Classroom ${stripped}`
+    : stripped.toUpperCase().replace(/-/g, ' ');
+}
 
 interface SubmissionRow {
   id: string;
@@ -33,6 +44,9 @@ export default async function MyStaffRequestsPage({
 }: { params: Params; searchParams: SearchParams }) {
   const { locationId } = await params;
   const sp = await searchParams;
+  const classroomSlug = isClassroomSlug(sp.from) ? sp.from! : null;
+  const classroomLabel = classroomSlug ? prettyClassroom(classroomSlug) : null;
+  const fromParam = classroomSlug ? `&from=${classroomSlug}` : '';
 
   const school = await loadSchoolByLocationId(locationId);
   if (!school) notFound();
@@ -54,11 +68,13 @@ export default async function MyStaffRequestsPage({
 
   return (
     <main className="min-h-screen bg-slate-50">
-      <div className="max-w-4xl mx-auto px-6 py-6">
-        <Link href={`/school/${locationId}/staff-requests?chrome=none`}
-          className="inline-flex items-center gap-1 text-xs text-slate-500 hover:text-slate-700 mb-3">
-          <ArrowLeft className="h-3 w-3" /> Submit a new request
-        </Link>
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 py-4 sm:py-6">
+        <ClassroomTopNav
+          locationId={locationId}
+          classroomSlug={classroomSlug}
+          classroomLabel={classroomLabel}
+          active="mine"
+        />
 
         <div className="flex items-baseline justify-between mb-4 flex-wrap gap-2">
           <div>
@@ -68,7 +84,7 @@ export default async function MyStaffRequestsPage({
             </p>
           </div>
           <Link
-            href={`/school/${locationId}/staff-requests?chrome=none`}
+            href={`/school/${locationId}/staff-requests?chrome=none${fromParam}`}
             className="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-blue-700"
           >
             <Plus className="h-4 w-4" /> Submit a new request

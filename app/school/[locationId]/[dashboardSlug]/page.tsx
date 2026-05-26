@@ -4,7 +4,16 @@ import {
   getSchoolDashboard,
 } from '@/lib/dashboards/loader';
 import { WidgetRenderer } from '@/components/WidgetRenderer';
+import { ClassroomTopNav } from '@/components/ClassroomTopNav';
 import type { SchoolContext, WidgetSearchParams } from '@/lib/widgets/types';
+
+// Classroom + program hubs get a top tab bar (Roster / Submit
+// Request / My Requests). Other dashboards (Family Hub, Tuition,
+// etc.) render plain. Match the slug pattern that the provisioner
+// uses for the per-classroom dashboards.
+function isClassroomHub(slug: string): boolean {
+  return /^(classroom-|program-)/.test(slug);
+}
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -39,8 +48,19 @@ export default async function DashboardPage({
     locationId: school.ghl_location_id,
   };
 
+  const showClassroomNav = isClassroomHub(dashboardSlug);
+
   return (
     <div className="space-y-4">
+      {showClassroomNav ? (
+        <ClassroomTopNav
+          locationId={locationId}
+          classroomSlug={dashboardSlug}
+          classroomLabel={dashboard.display_name}
+          active="roster"
+        />
+      ) : null}
+
       <header>
         <h1 className="text-xl font-semibold text-gray-900">{dashboard.display_name}</h1>
         {dashboard.description ? (

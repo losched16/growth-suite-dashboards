@@ -1,0 +1,82 @@
+// Shared top-nav for the teacher experience: tab bar with Roster /
+// Submit Request / My Requests. Renders inside the classroom hub
+// dashboards (where the active tab is 'roster') and the
+// staff-requests pages (active tab 'submit' or 'mine').
+//
+// classroomSlug carries through the click flow so when a teacher
+// clicks "Submit Request" from Classroom 3, then "Roster" again,
+// they land back on classroom-3 (not the default).
+
+import Link from 'next/link';
+import { ClipboardList, Plus, Inbox, ArrowLeft } from 'lucide-react';
+
+export type ActiveTab = 'roster' | 'submit' | 'mine' | 'inbox';
+
+export function ClassroomTopNav({
+  locationId,
+  classroomSlug,
+  classroomLabel,
+  active,
+}: {
+  locationId: string;
+  // Which classroom hub the teacher came from. May be null when the
+  // teacher landed on the staff-requests pages without a classroom
+  // context (e.g. via a direct link).
+  classroomSlug: string | null;
+  // Pretty label for the roster tab. Falls back to "Roster" when no
+  // classroom context is available.
+  classroomLabel: string | null;
+  active: ActiveTab;
+}) {
+  const fromParam = classroomSlug ? `&from=${encodeURIComponent(classroomSlug)}` : '';
+
+  // Roster tab links back to the classroom hub if we have one;
+  // otherwise we point at the "All staff requests" landing.
+  const rosterHref = classroomSlug
+    ? `/school/${locationId}/${classroomSlug}?chrome=none`
+    : `/school/${locationId}/staff-requests?chrome=none`;
+  const rosterLabel = classroomLabel ?? 'Roster';
+
+  const submitHref = `/school/${locationId}/staff-requests?chrome=none${fromParam}`;
+  const mineHref   = `/school/${locationId}/staff-requests/mine?chrome=none${fromParam}`;
+
+  return (
+    <nav className="print:hidden border-b border-slate-200 bg-white -mx-4 sm:-mx-6 px-4 sm:px-6 mb-3">
+      <div className="flex items-center gap-1 overflow-x-auto">
+        <Tab
+          href={rosterHref}
+          active={active === 'roster'}
+          icon={active !== 'roster' && classroomSlug ? <ArrowLeft className="h-3.5 w-3.5" /> : <ClipboardList className="h-3.5 w-3.5" />}
+          label={rosterLabel}
+        />
+        <Tab
+          href={submitHref}
+          active={active === 'submit'}
+          icon={<Plus className="h-3.5 w-3.5" />}
+          label="Submit a Request"
+        />
+        <Tab
+          href={mineHref}
+          active={active === 'mine'}
+          icon={<Inbox className="h-3.5 w-3.5" />}
+          label="My Requests"
+        />
+      </div>
+    </nav>
+  );
+}
+
+function Tab({
+  href, active, icon, label,
+}: { href: string; active: boolean; icon: React.ReactNode; label: string }) {
+  const base = 'inline-flex items-center gap-1.5 px-3 py-2.5 text-sm border-b-2 -mb-px whitespace-nowrap';
+  const cls = active
+    ? `${base} border-blue-600 text-blue-700 font-semibold`
+    : `${base} border-transparent text-slate-600 hover:text-slate-900 hover:border-slate-300`;
+  return (
+    <Link href={href} className={cls}>
+      {icon}
+      {label}
+    </Link>
+  );
+}

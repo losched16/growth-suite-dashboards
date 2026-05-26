@@ -13,11 +13,23 @@ import { notFound } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
 import { query } from '@/lib/db';
 import { loadSchoolByLocationId } from '@/lib/dashboards/loader';
+import { ClassroomTopNav } from '@/components/ClassroomTopNav';
 import { StaffSubmitForm } from './StaffSubmitForm';
 
 export const dynamic = 'force-dynamic';
 
 type Params = Promise<{ locationId: string; slug: string }>;
+type SearchParams = Promise<{ from?: string }>;
+
+function isClassroomSlug(s: string | undefined): boolean {
+  return !!s && /^(classroom-|program-)[a-z0-9-]+$/.test(s);
+}
+function prettyClassroom(slug: string): string {
+  const stripped = slug.replace(/^(classroom-|program-)/, '');
+  return slug.startsWith('classroom-')
+    ? `Classroom ${stripped}`
+    : stripped.toUpperCase().replace(/-/g, ' ');
+}
 
 interface FormRow {
   id: string;
@@ -28,8 +40,14 @@ interface FormRow {
   audience: string;
 }
 
-export default async function StaffFormFillPage({ params }: { params: Params }) {
+export default async function StaffFormFillPage({
+  params, searchParams,
+}: { params: Params; searchParams: SearchParams }) {
   const { locationId, slug } = await params;
+  const sp = await searchParams;
+  const classroomSlug = isClassroomSlug(sp.from) ? sp.from! : null;
+  const classroomLabel = classroomSlug ? prettyClassroom(classroomSlug) : null;
+
   const school = await loadSchoolByLocationId(locationId);
   if (!school) notFound();
 
@@ -42,11 +60,19 @@ export default async function StaffFormFillPage({ params }: { params: Params }) 
   if (rows.length === 0 || rows[0].audience !== 'staff') notFound();
   const form = rows[0];
 
+  const returnTo = `/school/${locationId}/staff-requests/mine?chrome=none${classroomSlug ? `&from=${classroomSlug}` : ''}&submitted=${form.slug}`;
+
   return (
     <main className="min-h-screen bg-zinc-50">
-      <div className="max-w-2xl mx-auto px-6 py-6">
+      <div className="max-w-2xl mx-auto px-4 sm:px-6 py-4 sm:py-6">
+        <ClassroomTopNav
+          locationId={locationId}
+          classroomSlug={classroomSlug}
+          classroomLabel={classroomLabel}
+          active="submit"
+        />
         <Link
-          href={`/school/${locationId}/staff-requests?chrome=none`}
+          href={`/school/${locationId}/staff-requests?chrome=none${classroomSlug ? `&from=${classroomSlug}` : ''}`}
           className="inline-flex items-center gap-1 text-xs text-zinc-500 hover:text-zinc-700 mb-3"
         >
           <ArrowLeft className="h-3 w-3" /> All staff requests
@@ -63,7 +89,7 @@ export default async function StaffFormFillPage({ params }: { params: Params }) 
           <StaffSubmitForm
             formId={form.id}
             schema={form.field_schema}
-            returnTo={`/school/${locationId}/staff-requests/mine?chrome=none&submitted=${form.slug}`}
+            returnTo={returnTo}
           />
         </div>
       </div>

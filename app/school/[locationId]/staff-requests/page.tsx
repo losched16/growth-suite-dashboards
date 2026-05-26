@@ -9,10 +9,12 @@ import { notFound } from 'next/navigation';
 import { FileText, Inbox, Wrench, AlertCircle, Package } from 'lucide-react';
 import { query } from '@/lib/db';
 import { loadSchoolByLocationId } from '@/lib/dashboards/loader';
+import { ClassroomTopNav } from '@/components/ClassroomTopNav';
 
 export const dynamic = 'force-dynamic';
 
 type Params = Promise<{ locationId: string }>;
+type SearchParams = Promise<{ from?: string }>;
 
 interface FormRow {
   id: string;
@@ -27,8 +29,33 @@ const ICON_BY_SLUG: Record<string, React.ComponentType<{ className?: string }>> 
   'staff-supply-request': Package,
 };
 
-export default async function StaffRequestsLanding({ params }: { params: Params }) {
+// Validate the `?from=` query param so we only roundtrip known
+// classroom slugs. Anything else gets discarded.
+function isClassroomSlug(s: string | undefined): boolean {
+  return !!s && /^(classroom-|program-)[a-z0-9-]+$/.test(s);
+}
+
+// Pretty label for a classroom slug — "classroom-3" -> "Classroom 3",
+// "program-06-my-hs" -> "06 MY/HS Hub". Best-effort: the dashboard
+// table has a display_name we could query but for nav speed we just
+// transform the slug.
+function prettyClassroom(slug: string): string {
+  const stripped = slug.replace(/^(classroom-|program-)/, '');
+  return slug.startsWith('classroom-')
+    ? `Classroom ${stripped}`
+    : stripped.toUpperCase().replace(/-/g, ' ');
+}
+
+export default async function StaffRequestsLanding({
+  params, searchParams,
+}: { params: Params; searchParams: SearchParams }) {
   const { locationId } = await params;
+  const sp = await searchParams;
+  // Where the teacher came from — preserved across sub-pages so
+  // the "Roster" tab links back to their classroom hub.
+  const classroomSlug = isClassroomSlug(sp.from) ? sp.from! : null;
+  const classroomLabel = classroomSlug ? prettyClassroom(classroomSlug) : null;
+
   const school = await loadSchoolByLocationId(locationId);
   if (!school) notFound();
 
@@ -42,20 +69,18 @@ export default async function StaffRequestsLanding({ params }: { params: Params 
 
   return (
     <main className="min-h-screen bg-slate-50">
-      <div className="max-w-3xl mx-auto px-6 py-8">
-        <div className="flex items-baseline justify-between mb-6 flex-wrap gap-2">
-          <div>
-            <h1 className="text-2xl font-semibold text-slate-900">Staff requests</h1>
-            <p className="text-sm text-slate-500 mt-0.5">
-              Submit a request, then track its status here. Lexi gets a notification on every submission.
-            </p>
-          </div>
-          <Link
-            href={`/school/${locationId}/staff-requests/mine?chrome=none`}
-            className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
-          >
-            <Inbox className="h-4 w-4" /> My recent requests
-          </Link>
+      <div className="max-w-3xl mx-auto px-4 sm:px-6 py-4 sm:py-6">
+        <ClassroomTopNav
+          locationId={locationId}
+          classroomSlug={classroomSlug}
+          classroomLabel={classroomLabel}
+          active="submit"
+        />
+        <div className="mb-5">
+          <h1 className="text-2xl font-semibold text-slate-900">Submit a request</h1>
+          <p className="text-sm text-slate-500 mt-0.5">
+            Pick a form below — Lexi gets notified the moment you submit. Track status in <Link href={`/school/${locationId}/staff-requests/mine?chrome=none${classroomSlug ? `&from=${classroomSlug}` : ''}`} className="text-blue-600 hover:underline">My Requests</Link>.
+          </p>
         </div>
 
         {forms.length === 0 ? (
@@ -69,7 +94,7 @@ export default async function StaffRequestsLanding({ params }: { params: Params 
               return (
                 <Link
                   key={f.id}
-                  href={`/school/${locationId}/staff-requests/${f.slug}?chrome=none`}
+                  href={`/school/${locationId}/staff-requests/${f.slug}?chrome=none${classroomSlug ? `&from=${classroomSlug}` : ''}`}
                   className="rounded-lg border border-slate-200 bg-white p-4 hover:border-blue-300 hover:shadow-sm transition"
                 >
                   <Icon className="h-6 w-6 text-blue-600 mb-2" />
