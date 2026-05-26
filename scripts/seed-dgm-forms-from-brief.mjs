@@ -179,12 +179,59 @@ const updateSQL = `
          updated_at = now()
    WHERE school_id = $1 AND slug = $2`;
 
+// ── student-name field cleanup ──────────────────────────────────────
+//
+// Per the 2026-05-26 UX decision: the parent already picks a student
+// before the form renders, so asking them to retype the student name
+// is redundant. We:
+//   - LEGAL_FORMS keep the field but get `prefill: 'student.*'`
+//     added so it auto-populates (still editable in case the legal
+//     name differs from the preferred name on file).
+//   - All other forms have the student-name fields stripped out
+//     entirely. The submission row already has student_id so the
+//     inbox displays the name via a join.
+// This runs in `insertArgs` so the same transformation applies to
+// every form coming out of the brief, every time we re-seed.
+const LEGAL_FORMS_PREFILL_ONLY = new Set([
+  'az-state-emergency-immunization-card',
+  'az-state-medication-consent',
+  'myhs-otc-medication-consent',
+  'request-administering-medication',
+  'records-release-authorization',
+]);
+const STUDENT_NAME_PREFILL = {
+  'child_name':         'student.full_name',
+  'student_name':       'student.full_name',
+  'student_full_name':  'student.full_name',
+  'student_first_name': 'student.first_name',
+  'student_last_name':  'student.last_name',
+  'child_first_name':   'student.first_name',
+  'child_last_name':    'student.last_name',
+};
+function cleanupStudentNameFields(schema, slug) {
+  if (!Array.isArray(schema)) return schema;
+  const out = [];
+  for (const block of schema) {
+    const key = String(block?.key ?? '').trim();
+    if (key && key in STUDENT_NAME_PREFILL) {
+      if (LEGAL_FORMS_PREFILL_ONLY.has(slug)) {
+        out.push(block.prefill ? block : { ...block, prefill: STUDENT_NAME_PREFILL[key] });
+      }
+      // Non-legal forms: drop the block entirely.
+      continue;
+    }
+    out.push(block);
+  }
+  return out;
+}
+
 function insertArgs(sid, f) {
+  const cleanedSchema = cleanupStudentNameFields(f.field_schema, f.slug);
   return [
     sid, f.slug, f.display_name, f.description, f.category, f.per_student,
     f.is_active, f.needs_review, f.allow_addendum, f.resubmission_allowed,
     f.one_submission_per_year,
-    JSON.stringify(f.field_schema), JSON.stringify(f.ghl_writeback ?? []),
+    JSON.stringify(cleanedSchema), JSON.stringify(f.ghl_writeback ?? []),
     f.fee_amount, f.payment_config ? JSON.stringify(f.payment_config) : null,
     f.confirmation_message, f.confirmation_redirect_url,
     f.notify_emails ?? [], f.webhook_urls ?? [],
