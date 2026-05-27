@@ -64,19 +64,24 @@ const HUB_FILTERS = {
   'program-06-my-hs':    { program_filter: '06 MY/HS' },
 };
 
-// Columns visible on a teacher's roster by default. Allergy +
-// special-instructions sit next to each other for at-a-glance scanning.
-// Family + documents stay enabled — opening the accordion is the way
-// to get every detail without leaving the page.
+// Columns visible on a teacher's roster.
 //
-// `status` is intentionally OFF: every kid on a classroom roster is
+// `status` is OFF everywhere: every kid on a classroom roster is
 // enrolled by definition (the roster query already filters), so the
 // pill was just visual noise that ate a column of width.
-const TEACHER_ROSTER_COLUMNS = [
+//
+// Classroom vs program hubs use different column sets:
+//   - CLASSROOM hubs (classroom-1, classroom-2, …): every row IS this
+//     classroom, so `program` + `homeroom` are constants — wasted
+//     horizontal space. Dropped.
+//   - PROGRAM hubs (program-05-upper-el, program-06-my-hs): students
+//     span MULTIPLE classrooms in the program, so `homeroom` is
+//     useful for at-a-glance "which Upper El classroom is this kid
+//     in." `program` is still redundant (it's the hub name) so it
+//     stays off.
+const CLASSROOM_HUB_COLUMNS = [
   'student',
   'gender_age',
-  'program',
-  'homeroom',
   'schedule',
   'allergy',
   'special_instructions',
@@ -86,6 +91,22 @@ const TEACHER_ROSTER_COLUMNS = [
   'attendance_notes',     // today's check-in notes inline so teachers see "rough morning" w/o opening attendance
   'pickup_restrictions',  // people NOT authorized to pick up this kid — red chips, scannable at the door
   'documents',            // inline cell — click chip to view IEP/504/health docs for that student
+  'family',
+];
+
+const PROGRAM_HUB_COLUMNS = [
+  'student',
+  'gender_age',
+  'homeroom',             // kept — Upper El / MY/HS span several classrooms
+  'schedule',
+  'allergy',
+  'special_instructions',
+  'iep_504',
+  'lunch',
+  'attendance',
+  'attendance_notes',
+  'pickup_restrictions',
+  'documents',
   'family',
 ];
 
@@ -126,7 +147,7 @@ function buildLayout(slug, filter) {
       config: {
         page_size: 100,
         enable_views: ['list', 'grid', 'allergies'],
-        shown_columns: TEACHER_ROSTER_COLUMNS,
+        shown_columns: isProgramHub ? PROGRAM_HUB_COLUMNS : CLASSROOM_HUB_COLUMNS,
         shown_filters: TEACHER_ROSTER_FILTERS,
         ...rosterDefaults,
         drilldown_dashboard_slug: 'family-hub',
