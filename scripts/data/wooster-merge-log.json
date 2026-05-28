@@ -1,0 +1,182 @@
+[
+  {
+    "run_at": "2026-05-28T13:47:28.607Z",
+    "entries": [
+      {
+        "pair": "Marian Churpek",
+        "reason": "Exact duplicate, both no DOB",
+        "keptId": "e0cda6c4-59b2-4e34-8712-c30855c6ac7c",
+        "loserId": "cc8e0996-42c6-4e4d-9543-2878b8ab8d34",
+        "keptLabel": "Marian Churpek · DOB none",
+        "loserLabel": "Marian Churpek · DOB none",
+        "moved": {
+          "enrollments": 1,
+          "portal_migration_flags": 6
+        },
+        "conflicted_deleted": {},
+        "applied": true
+      },
+      {
+        "pair": "Beau Overmyer",
+        "reason": "Exact duplicate, both no DOB",
+        "keptId": "0f370f84-934e-4b60-96f4-1bf0a8919997",
+        "loserId": "3d095ce2-d0b7-49bd-bd7d-63a4a418513a",
+        "keptLabel": "Beau Overmyer · DOB none",
+        "loserLabel": "Beau Overmyer · DOB none",
+        "moved": {
+          "enrollments": 1,
+          "portal_form_submissions": 5,
+          "portal_migration_flags": 2,
+          "student_health_profiles": 1
+        },
+        "conflicted_deleted": {},
+        "applied": true
+      },
+      {
+        "pair": "Sydney Carr",
+        "reason": "Keep has DOB 2019-06-24 + preferred_name",
+        "keptId": "db8a55f0-56dc-49f3-a0c7-531ac3b1f0c7",
+        "loserId": "59b908c4-a881-4e9f-a9a8-d222de91369d",
+        "keptLabel": "Sydney (Sydney) Carr · DOB 2019-06-24",
+        "loserLabel": "Sydney Carr · DOB none",
+        "moved": {
+          "enrollments": 1,
+          "portal_form_submissions": 5,
+          "portal_migration_flags": 3
+        },
+        "conflicted_deleted": {
+          "student_health_profiles": 1
+        },
+        "applied": true
+      },
+      {
+        "pair": "Cruz Dravenstott",
+        "reason": "Keep has DOB 2018-10-03 + preferred_name",
+        "keptId": "2dbdea0e-9669-40fa-a64f-dc9227c8a5a7",
+        "loserId": "3f57c0c6-c0b4-46d0-8a1d-3e8e797495c6",
+        "keptLabel": "Cruz (Cruz) Dravenstott · DOB 2018-10-03",
+        "loserLabel": "Cruz Dravenstott · DOB none",
+        "moved": {
+          "enrollments": 1,
+          "portal_form_submissions": 4,
+          "portal_migration_flags": 2
+        },
+        "conflicted_deleted": {
+          "student_health_profiles": 1
+        },
+        "applied": true
+      },
+      {
+        "pair": "Connar Dunlap",
+        "reason": "Keep has DOB 2012-06-28; loser is lowercase \"dunlap\"",
+        "keptId": "03d5e5f6-3e34-43c2-a458-0d8099ae3e83",
+        "loserId": "cd1697ab-6733-4d47-865a-4b81fdba3da0",
+        "keptLabel": "Connar (Connar) Dunlap · DOB 2012-06-28",
+        "loserLabel": "Connar dunlap · DOB none",
+        "moved": {
+          "enrollments": 1,
+          "portal_form_submissions": 5,
+          "portal_migration_flags": 3
+        },
+        "conflicted_deleted": {
+          "student_health_profiles": 1
+        },
+        "applied": true
+      },
+      {
+        "pair": "Isaiah Gibbs",
+        "reason": "Keep has DOB 2018-08-15",
+        "keptId": "21ebb1fe-47bd-4bc7-bed1-066cbfc0c55c",
+        "loserId": "7a4a7be8-95e4-4967-af85-acce1bf5af2f",
+        "keptLabel": "Isaiah (Isaiah) Gibbs · DOB 2018-08-15",
+        "loserLabel": "Isaiah Gibbs · DOB none",
+        "moved": {
+          "enrollments": 1,
+          "portal_form_submissions": 4,
+          "portal_migration_flags": 2
+        },
+        "conflicted_deleted": {
+          "student_health_profiles": 1
+        },
+        "applied": true
+      },
+      {
+        "pair": "Julian \"Jude\" Lee",
+        "reason": "Keep has DOB 2019-03-08",
+        "keptId": "16349f2e-3864-4250-984c-d9d1d1e9a613",
+        "loserId": "74a2be99-80e7-4c1a-933f-b2a1cbf7cbd4",
+        "keptLabel": "Julian (Jude) Lee · DOB 2019-03-08",
+        "loserLabel": "Julian (Jude) Lee · DOB none",
+        "moved": {
+          "enrollments": 1
+        },
+        "conflicted_deleted": {},
+        "applied": true
+      },
+      {
+        "pair": "Braxton McClintock",
+        "reason": "Keep has DOB 2015-01-04; loser is typo \"McClintok\"",
+        "keptId": "bb5a3a73-8e67-4502-882e-2224922326e0",
+        "loserId": "8185fb91-19bd-4193-a415-4e30c2bc6151",
+        "keptLabel": "Braxton (Braxton) McClintok · DOB 2015-01-04",
+        "loserLabel": "Braxton McClintock · DOB none",
+        "moved": {
+          "enrollments": 1,
+          "portal_form_submissions": 4,
+          "portal_migration_flags": 2
+        },
+        "conflicted_deleted": {
+          "student_health_profiles": 1
+        },
+        "applied": true
+      },
+      {
+        "pair": "Lenka Velasquez Robinson",
+        "reason": "Keep has DOB 2013-10-27; loser spelled \"Velazquez\"",
+        "keptId": "246201b4-433f-42ba-bf45-0e513766107b",
+        "loserId": "7a726b4c-0d87-4c63-9e44-7118263c676b",
+        "keptLabel": "Lenka (Lenka) Velasquez Robinson · DOB 2013-10-27",
+        "loserLabel": "Lenka Velazquez Robinson · DOB none",
+        "moved": {
+          "enrollments": 1,
+          "portal_form_submissions": 7,
+          "portal_migration_flags": 2
+        },
+        "conflicted_deleted": {
+          "student_health_profiles": 1
+        },
+        "applied": true
+      },
+      {
+        "pair": "Zoe Boord-Falter",
+        "reason": "Keep has DOB + full hyphenated last name; loser is \"Boord\" no DOB",
+        "keptId": "b4911f18-bb45-48ea-8ab2-214dc6ad7842",
+        "loserId": "3f277c85-76ef-482b-ac12-a57e70ec761d",
+        "keptLabel": "Zoe (Zoe) Boord-Falter · DOB 2014-08-29",
+        "loserLabel": "Zoe Boord · DOB none",
+        "moved": {
+          "enrollments": 1
+        },
+        "conflicted_deleted": {},
+        "applied": true
+      },
+      {
+        "pair": "Zachary \"Zach\" Stewart",
+        "reason": "Keep has DOB 2013-03-01 + full first name; loser is \"Zach\" no DOB",
+        "keptId": "d584e73c-d11d-4a57-a313-8c8b6d1447d3",
+        "loserId": "a0a8b01b-62a9-4429-89d0-785344cc6451",
+        "keptLabel": "Zachary (Zachary) Stewart · DOB 2013-03-01",
+        "loserLabel": "Zach Stewart · DOB none",
+        "moved": {
+          "enrollments": 1,
+          "portal_form_submissions": 5,
+          "portal_migration_flags": 2
+        },
+        "conflicted_deleted": {
+          "student_health_profiles": 1
+        },
+        "applied": true
+      }
+    ]
+  }
+]
