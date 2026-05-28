@@ -20,6 +20,7 @@ import { ArrowLeft, Pause, Play, Edit3, Scissors, Calendar, Plus, RotateCw } fro
 import { query } from '@/lib/db';
 import { loadSchoolByLocationId } from '@/lib/dashboards/loader';
 import { HelpCallout } from '@/components/HelpCallout';
+import { BillingSplitEditor } from './BillingSplitEditor';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 30;
@@ -134,6 +135,27 @@ export default async function PlanDetailPage({
   // Posted to every action API so it redirects back here.
   const returnTo = selfHref;
 
+  // Parents on the family + any existing billing-share rows. Joined so
+  // the BillingSplitEditor gets the existing share (or 0 if joint).
+  const { rows: parentRows } = await query<{
+    id: string;
+    first_name: string | null;
+    last_name: string | null;
+    email: string | null;
+    is_primary: boolean;
+    existing_share_bp: number;
+  }>(
+    `SELECT p.id, p.first_name, p.last_name, p.email, p.is_primary,
+            COALESCE(s.share_basis_points, 0) AS existing_share_bp
+       FROM parents p
+       LEFT JOIN enrollment_billing_shares s
+              ON s.enrollment_id = $1 AND s.parent_id = p.id
+      WHERE p.family_id = $2 AND p.school_id = $3 AND p.status = 'active'
+      ORDER BY p.is_primary DESC, p.created_at ASC`,
+    [enrollmentId, enr.family_id, schoolId],
+  );
+  const isCurrentlySplit = parentRows.some((p) => p.existing_share_bp > 0);
+
   return (
     <main className="flex flex-1 flex-col items-center bg-slate-50 p-6 min-h-screen">
       <div className="w-full max-w-5xl space-y-4">
@@ -182,7 +204,19 @@ export default async function PlanDetailPage({
             <>Use <strong>Reschedule remaining balance</strong> below to spread the unpaid balance across more (or fewer) months — useful for hardship plans.</>,
             <>Use <strong>Pause plan</strong> to halt the rhythm of future autopay reminders. The invoices stay live; you re-activate when ready.</>,
             <>Use <strong>Add charge / credit</strong> for a one-off adjustment (late fee, refund, manual line item).</>,
+            <>Set up <strong>split billing</strong> below for divorced / separated families — each parent gets their own invoice and autopay.</>,
           ]}
+        />
+
+        {/* Billing-split editor — set per-parent shares for divorced /
+            separated families. Only future invoice generation honors
+            the change; existing draft/open invoices are not retroactively
+            split. */}
+        <BillingSplitEditor
+          enrollmentId={enrollmentId}
+          returnTo={returnTo}
+          parents={parentRows}
+          isCurrentlySplit={isCurrentlySplit}
         />
 
         {/* PLAN-LEVEL ACTIONS */}

@@ -17,6 +17,7 @@
 
 import { query, withTransaction } from '@/lib/db';
 import { evaluateDiscounts, recordDiscountApplications } from './discounts';
+import { loadEnrollmentShares, splitCents } from './billing-shares';
 
 interface AddonSnap { key: string; label: string; amount_cents: number }
 
@@ -187,101 +188,157 @@ export async function generateTuitionEnrollment(opts: GenerateOpts): Promise<Gen
 
     const invoiceIds: string[] = [];
 
+    // Load split-billing shares for this enrollment ONCE up front. When
+    // shares.length === 0 → joint billing (current behavior, one invoice
+    // per installment to the family). When shares.length >= 1 → split
+    // billing (N invoices per installment, one per parent, each scoped
+    // to that parent's share + amount).
+    const shares = await loadEnrollmentShares(opts.schoolId, enrollmentId, q);
+    const shareBp = shares.map((s) => s.share_basis_points);
+    const splitParents: Array<{ parent_id: string | null; share_label: string | null }> =
+      shares.length > 0
+        ? shares.map((s) => ({
+            parent_id: s.parent_id,
+            share_label: `${(s.parent_first_name || '').trim()} ${(s.parent_last_name || '').trim()}`.trim() || null,
+          }))
+        : [{ parent_id: null, share_label: null }];
+
     for (let i = 0; i < plan.installment_count; i++) {
       const installmentNumber = i + 1;
       const installmentCents = installmentAmounts[i];
       const dueDate = dueDates[i];
 
-      // Allocate invoice number (atomic increment, just like the manual
-      // route). One sequential number per installment.
-      const cfg = await q<{ prefix: string; next: number }>(
-        `INSERT INTO school_payment_config (school_id) VALUES ($1)
-         ON CONFLICT (school_id) DO UPDATE SET next_invoice_number = school_payment_config.next_invoice_number + 1
-         RETURNING invoice_number_prefix AS prefix, next_invoice_number AS next`,
-        [opts.schoolId],
-      );
-      const seq = cfg.rows[0].next > 1 ? cfg.rows[0].next - 1 : 1;
-      const invoiceNumber = `${cfg.rows[0].prefix}-${String(seq).padStart(6, '0')}`;
+      // For split billing, partition the installment into per-parent
+      // amounts that sum back to installmentCents exactly. For joint
+      // billing this is a single-element array equal to installmentCents.
+      const perPartyInstallment = shares.length > 0
+        ? splitCents(installmentCents, shareBp)
+        : [installmentCents];
 
-      // Pro-rate each line across the installment so per-line totals sum
-      // to the installment amount exactly.
-      const lines = buildInstallmentLines({
-        gridDisplayName: grid.display_name,
-        tuitionTotal: discountedTuition,
-        addons: selectedAddons,
-        installmentAmount: installmentCents,
-        annualTotal: totalAnnualCents,
-        installmentNumber,
-        installmentCount: plan.installment_count,
-      });
+      for (let p = 0; p < splitParents.length; p++) {
+        const party = splitParents[p];
+        const partyInstallment = perPartyInstallment[p];
 
-      // Discounts evaluation per-installment (so e.g. a 10% sibling
-      // discount comes off each invoice, not just the first).
-      const discountResult = await evaluateDiscounts({
-        schoolId: opts.schoolId,
-        familyId: opts.familyId,
-        studentId: opts.studentId,
-        lines: lines.map((l) => ({
-          description: l.description,
-          amount_cents: l.amount_cents,
-          category: l.category,
-        })),
-      });
-      const subtotalCents = lines.reduce((s, l) => s + l.amount_cents, 0);
-      const discountCents = discountResult.total_cents;
-      const totalCents = Math.max(0, subtotalCents - discountCents);
+        // Skip zero-share invoices entirely — no point emitting a $0
+        // invoice when one parent's share is 0%. (Future case: when an
+        // admin sets a parent to 0% to "show on the record but don't
+        // bill them" — we just don't generate.)
+        if (partyInstallment <= 0) continue;
 
-      const title = `${grid.display_name} — Installment ${installmentNumber}/${plan.installment_count}`;
-      const description = `${plan.display_name} · ${opts.academicYear}`;
-
-      const invIns = await q<{ id: string }>(
-        `INSERT INTO invoices
-           (school_id, family_id, student_id, invoice_number, title, description,
-            status, subtotal_cents, platform_fee_cents, discount_total_cents,
-            total_cents, due_at, issued_at, source, source_ref,
-            includes_platform_setup_fee, created_by_email)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 0, $9, $10, $11, $12,
-                 'tuition_plan', $13::jsonb, false, $14)
-         RETURNING id`,
-        [
-          opts.schoolId, opts.familyId, opts.studentId,
-          invoiceNumber, title, description,
-          initialStatus,
-          subtotalCents, discountCents, totalCents,
-          dueDate.toISOString(),
-          initialStatus === 'open' ? new Date().toISOString() : null,
-          JSON.stringify({ enrollment_id: enrollmentId, installment_number: installmentNumber }),
-          opts.createdByEmail,
-        ],
-      );
-      const invoiceId = invIns.rows[0].id;
-      invoiceIds.push(invoiceId);
-
-      // Positive lines
-      let pos = 0;
-      for (const l of lines) {
-        await q(
-          `INSERT INTO invoice_line_items
-             (invoice_id, position, description, quantity, unit_amount_cents,
-              amount_cents, category, student_id)
-           VALUES ($1, $2, $3, 1, $4, $4, $5, $6)`,
-          [invoiceId, pos++, l.description, l.amount_cents, l.category, opts.studentId],
+        // Allocate invoice number (atomic increment). One sequential
+        // number per emitted invoice — in split-billed mode this means
+        // one number per (installment × parent) pair, which is the right
+        // behavior (each parent gets a unique invoice number).
+        const cfg = await q<{ prefix: string; next: number }>(
+          `INSERT INTO school_payment_config (school_id) VALUES ($1)
+           ON CONFLICT (school_id) DO UPDATE SET next_invoice_number = school_payment_config.next_invoice_number + 1
+           RETURNING invoice_number_prefix AS prefix, next_invoice_number AS next`,
+          [opts.schoolId],
         );
-      }
-      // Discount lines
-      for (const d of discountResult.lines) {
-        await q(
-          `INSERT INTO invoice_line_items
-             (invoice_id, position, description, quantity, unit_amount_cents,
-              amount_cents, category, student_id)
-           VALUES ($1, $2, $3, 1, $4, $4, $5, $6)`,
-          [invoiceId, pos++, d.description, d.amount_cents, d.category, opts.studentId],
+        const seq = cfg.rows[0].next > 1 ? cfg.rows[0].next - 1 : 1;
+        const invoiceNumber = `${cfg.rows[0].prefix}-${String(seq).padStart(6, '0')}`;
+
+        // Pro-rate each line across this party's portion of the
+        // installment so per-line totals sum to partyInstallment exactly.
+        const lines = buildInstallmentLines({
+          gridDisplayName: grid.display_name,
+          tuitionTotal: shares.length > 0
+            ? Math.round((discountedTuition * shareBp[p]) / 10000)
+            : discountedTuition,
+          addons: shares.length > 0
+            ? selectedAddons.map((a) => ({
+                ...a,
+                amount_cents: Math.round((a.amount_cents * shareBp[p]) / 10000),
+              }))
+            : selectedAddons,
+          installmentAmount: partyInstallment,
+          annualTotal: shares.length > 0
+            ? Math.round((totalAnnualCents * shareBp[p]) / 10000)
+            : totalAnnualCents,
+          installmentNumber,
+          installmentCount: plan.installment_count,
+        });
+
+        // Discounts evaluation per-installment. For split billing we
+        // evaluate on the party's portion so e.g. a $50 sibling discount
+        // gets split proportionally (60% parent pays $30, 40% parent
+        // pays $20). Same downstream policy machinery — no special case.
+        const discountResult = await evaluateDiscounts({
+          schoolId: opts.schoolId,
+          familyId: opts.familyId,
+          studentId: opts.studentId,
+          lines: lines.map((l) => ({
+            description: l.description,
+            amount_cents: l.amount_cents,
+            category: l.category,
+          })),
+        });
+        const subtotalCents = lines.reduce((s, l) => s + l.amount_cents, 0);
+        const discountCents = discountResult.total_cents;
+        const totalCents = Math.max(0, subtotalCents - discountCents);
+
+        const titleSuffix = party.share_label
+          ? ` — ${party.share_label}'s share`
+          : '';
+        const title = `${grid.display_name} — Installment ${installmentNumber}/${plan.installment_count}${titleSuffix}`;
+        const description = `${plan.display_name} · ${opts.academicYear}`;
+
+        const invIns = await q<{ id: string }>(
+          `INSERT INTO invoices
+             (school_id, family_id, student_id, responsible_parent_id,
+              invoice_number, title, description,
+              status, subtotal_cents, platform_fee_cents, discount_total_cents,
+              total_cents, due_at, issued_at, source, source_ref,
+              includes_platform_setup_fee, created_by_email)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 0, $10, $11, $12, $13, $14,
+                   'tuition_plan', $15::jsonb, false, $16)
+           RETURNING id`,
+          [
+            opts.schoolId, opts.familyId, opts.studentId, party.parent_id,
+            invoiceNumber, title, description,
+            initialStatus,
+            subtotalCents, discountCents, totalCents,
+            dueDate.toISOString(),
+            initialStatus === 'open' ? new Date().toISOString() : null,
+            JSON.stringify({
+              enrollment_id: enrollmentId,
+              installment_number: installmentNumber,
+              // When split-billed, record which share index this invoice
+              // came from so the admin UI can group them per-parent.
+              ...(party.parent_id ? { share_parent_id: party.parent_id } : {}),
+            }),
+            opts.createdByEmail,
+          ],
         );
-      }
-      await recordDiscountApplications(
-        opts.schoolId, opts.familyId, invoiceId, discountResult.applications, q,
-      );
-    }
+        const invoiceId = invIns.rows[0].id;
+        invoiceIds.push(invoiceId);
+
+        // Positive lines
+        let pos = 0;
+        for (const l of lines) {
+          await q(
+            `INSERT INTO invoice_line_items
+               (invoice_id, position, description, quantity, unit_amount_cents,
+                amount_cents, category, student_id)
+             VALUES ($1, $2, $3, 1, $4, $4, $5, $6)`,
+            [invoiceId, pos++, l.description, l.amount_cents, l.category, opts.studentId],
+          );
+        }
+        // Discount lines
+        for (const d of discountResult.lines) {
+          await q(
+            `INSERT INTO invoice_line_items
+               (invoice_id, position, description, quantity, unit_amount_cents,
+                amount_cents, category, student_id)
+             VALUES ($1, $2, $3, 1, $4, $4, $5, $6)`,
+            [invoiceId, pos++, d.description, d.amount_cents, d.category, opts.studentId],
+          );
+        }
+        await recordDiscountApplications(
+          opts.schoolId, opts.familyId, invoiceId, discountResult.applications, q,
+        );
+      } // end per-party loop
+    } // end per-installment loop
 
     await q(
       `UPDATE family_tuition_enrollments
