@@ -9,7 +9,7 @@ import {
   financeDashboardSchema,
   type FinanceDashboardConfig,
 } from './config';
-import { fetcher, type FinanceData, type RecipientRow, type FactsActuals } from './fetcher';
+import { fetcher, type FinanceData, type RecipientRow, type FactsActuals, type LivePayments } from './fetcher';
 import { DownloadCsvButton } from '@/components/DownloadCsvButton';
 import Link from 'next/link';
 
@@ -263,6 +263,13 @@ function Component({
         </div>
       ) : null}
 
+      {/* Live cash data from our own invoices + enrollments tables.
+          Renders for any tenant on the native tuition stack (MCH and
+          forward). DGM may have this too if they've started running
+          tuition through the platform; otherwise their FACTS section
+          below covers them. */}
+      {data.live_payments ? <LivePaymentsSection live={data.live_payments} /> : null}
+
       {/* FACTS actuals — replaces the Coming Soon section once data is imported */}
       {data.facts ? <FactsActualsSection facts={data.facts} school={school} /> : (showPlaceholder ? (
         <Section title="Actual payment data (FACTS import pending)">
@@ -286,6 +293,78 @@ function Component({
           </div>
         </Section>
       ) : null)}
+    </div>
+  );
+}
+
+// Renders the native (non-FACTS) cash + contracted-revenue figures.
+// Sources: invoices + family_tuition_enrollments tables (the platform's
+// own books). For tenants on the new tuition stack this is the source
+// of truth; for legacy DGM-style tenants this surfaces alongside the
+// FACTS section below.
+function LivePaymentsSection({ live }: { live: LivePayments }) {
+  const fmt = (cents: number) =>
+    new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })
+      .format(cents / 100);
+  const collectedPct = live.total_billed_cents > 0
+    ? Math.round((live.total_paid_cents / live.total_billed_cents) * 100)
+    : 0;
+
+  return (
+    <div className="rounded-lg border-2 border-blue-300 bg-blue-50/40 p-4">
+      <div className="flex items-baseline justify-between mb-3 gap-3 flex-wrap">
+        <div>
+          <h2 className="text-lg font-bold text-blue-900">💳 Live cash flow (platform tuition system)</h2>
+          <p className="text-xs text-blue-800">
+            Pulled from your invoices + active enrollments. Refreshes every time a parent pays.
+          </p>
+        </div>
+        <span className="text-[11px] text-blue-700 italic">{live.active_enrollments} active enrollments</span>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <Card label="Contracted annual" value={fmt(live.total_annual_contracted_cents)} hint="Sum of all active plans" />
+        <Card label="Billed to date"    value={fmt(live.total_billed_cents)}            hint={`${live.total_invoices - live.voided_invoices} invoices`} />
+        <Card label="Collected"         value={fmt(live.total_paid_cents)}              hint={`${collectedPct}% of billed`} accent="emerald" />
+        <Card label="Outstanding"       value={fmt(live.total_outstanding_cents)}       hint={`${live.open_invoices + live.partially_paid_invoices} unpaid`} accent={live.total_outstanding_cents === 0 ? 'emerald' : 'amber'} />
+      </div>
+
+      <div className="mt-3 flex items-center gap-3 text-[11px] text-blue-800 flex-wrap">
+        <span><strong>{live.paid_invoices}</strong> paid</span>
+        <span>·</span>
+        <span><strong>{live.partially_paid_invoices}</strong> partial</span>
+        <span>·</span>
+        <span><strong>{live.open_invoices}</strong> open</span>
+        {live.voided_invoices > 0 ? (
+          <>
+            <span>·</span>
+            <span><strong>{live.voided_invoices}</strong> voided</span>
+          </>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+// Small KPI card used by LivePaymentsSection. Doesn't share with the
+// existing Card variants because those expect dollar-denominated metadata
+// values, not cents.
+function Card({ label, value, hint, accent }: {
+  label: string;
+  value: string;
+  hint?: string;
+  accent?: 'emerald' | 'amber' | 'rose';
+}) {
+  const accentCls =
+    accent === 'emerald' ? 'border-emerald-300 bg-emerald-50' :
+    accent === 'amber'   ? 'border-amber-300 bg-amber-50' :
+    accent === 'rose'    ? 'border-rose-300 bg-rose-50' :
+                           'border-slate-200 bg-white';
+  return (
+    <div className={`rounded-md border ${accentCls} px-3 py-2`}>
+      <div className="text-[10px] uppercase tracking-wide text-slate-500 font-medium">{label}</div>
+      <div className="text-xl font-semibold text-slate-900 tabular-nums mt-0.5">{value}</div>
+      {hint ? <div className="text-[11px] text-slate-500 mt-0.5">{hint}</div> : null}
     </div>
   );
 }

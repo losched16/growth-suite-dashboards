@@ -27,6 +27,29 @@ export interface RecipientRow {
   amount: number;
 }
 
+// Live cash data drawn from our own invoices + payments tables (the
+// native side). This is the source of truth for tenants on the new
+// stack (MCH and forward). DGM may have BOTH FactsActuals (legacy CSV
+// imports for prior terms) AND LivePayments (current term via the
+// portal) — the index renders both side-by-side when both exist.
+export interface LivePayments {
+  has_data: boolean;
+  // Aggregated invoice counts
+  total_invoices: number;
+  open_invoices: number;
+  paid_invoices: number;
+  partially_paid_invoices: number;
+  voided_invoices: number;
+  // Aggregated cents
+  total_billed_cents: number;        // SUM(total_cents) across non-voided
+  total_paid_cents: number;          // SUM(amount_paid_cents)
+  total_outstanding_cents: number;   // total_billed - total_paid
+  // Live tuition enrollments aggregate (gives us "contracted revenue for
+  // the year" even before invoices have been generated for every month).
+  active_enrollments: number;
+  total_annual_contracted_cents: number;
+}
+
 export interface FactsActuals {
   term: string;
   has_data: boolean;
@@ -67,6 +90,12 @@ export interface FinanceData {
   student_count: number;
   // Actual cash data from FACTS (null if no import yet)
   facts: FactsActuals | null;
+  // Live cash data from our own invoices + payments tables (null when no
+  // invoices have been generated yet for this school). Independent of
+  // FactsActuals — a tenant on the native stack will have live_payments
+  // populated and facts NULL; a tenant who imported old FACTS terms can
+  // see both.
+  live_payments: LivePayments | null;
 
   // Tuition by program
   by_program: ProgramBucket[];
@@ -112,6 +141,12 @@ interface DbStudent {
   last_name: string;
   preferred_name: string | null;
   primary_parent_name: string | null;
+  // Native bridge columns. When a student has an active enrollment in
+  // family_tuition_enrollments (the new tuition system), these come back
+  // populated. When NULL, fall back to student.metadata (legacy DGM
+  // path). Joining via LEFT JOIN so legacy students remain unaffected.
+  enr_annual_tuition_cents: number | null;
+  enr_program_label: string | null;
 }
 
 function mdNum(s: Record<string, unknown> | null, key: string): number {
@@ -154,12 +189,27 @@ export async function fetcher(
 ): Promise<FinanceData> {
   const groups = config.program_groups ?? [];
 
+  // Bridge JOIN: pull the active enrollment + grid program label so the
+  // widget surfaces native-tuition data when student.metadata is empty.
+  // LEFT JOIN means legacy DGM students (who have metadata.tuition_fee
+  // but no row in family_tuition_enrollments) still come back with all
+  // their metadata intact — those JOIN columns are NULL and the legacy
+  // path takes over. Native MCH students (enrollments populated but
+  // metadata.tuition_fee = 0) get the JOIN columns filled and the
+  // bridge below uses them.
   const { rows } = await query<DbStudent>(
     `SELECT
        s.metadata, s.first_name, s.last_name, s.preferred_name,
        (SELECT first_name || ' ' || last_name FROM parents pp
-        WHERE pp.family_id = s.family_id AND pp.is_primary = true LIMIT 1) AS primary_parent_name
+        WHERE pp.family_id = s.family_id AND pp.is_primary = true LIMIT 1) AS primary_parent_name,
+       fte.annual_tuition_cents AS enr_annual_tuition_cents,
+       g.program AS enr_program_label
      FROM students s
+     LEFT JOIN family_tuition_enrollments fte
+            ON fte.student_id = s.id
+           AND fte.school_id = s.school_id
+           AND fte.status = 'active'
+     LEFT JOIN tuition_grids g ON g.id = fte.tuition_grid_id
      WHERE s.school_id = $1 AND s.status = 'active'`,
     [school.schoolId],
   );
@@ -181,24 +231,37 @@ export async function fetcher(
 
   for (const r of rows) {
     const m = r.metadata;
-    if (!m) continue;
+    // Empty-metadata fallback: when a school is on the native tuition
+    // stack (no GHL metadata sync), `m` is null/empty. Treat as an
+    // object so the metadata reads return 0 — the enrollment bridge
+    // below supplies the tuition value.
+    const md = m ?? {};
 
-    const t = mdNum(m, 'tuition_fee');
-    const e = mdNum(m, 'extended_day_fee');
-    const lu = mdNum(m, 'lunch_fee');
-    const a = mdNum(m, 'admin_fee');
-    const ef = mdNum(m, 'enrollment_fee');
-    const s1 = mdNum(m, 'service_1_bill_amount');
-    const s2 = mdNum(m, 'service_2_bill_amount');
-    const sstF = mdNum(m, 'sst_fee');
-    const lf = mdNum(m, 'late_fee');
-    const ed = mdNum(m, 'employee_discount');
-    const ad = mdNum(m, 'annual_discount');
-    const sd = mdNum(m, 'sibling_discount');
-    const fa = mdNum(m, 'financial_aid');
-    const rc = mdNum(m, 'referral_credit');
-    const esaAmt = mdNum(m, 'esa_amount');
-    const stoAmt = mdNum(m, 'sto_amount');
+    // Native bridge: prefer the family_tuition_enrollments value when
+    // present (annual_tuition_cents is cents → convert to dollars to
+    // match metadata's dollar-denominated values). Otherwise fall back
+    // to the legacy metadata.tuition_fee.
+    const tFromMd = mdNum(md, 'tuition_fee');
+    const tFromEnr = r.enr_annual_tuition_cents != null
+      ? r.enr_annual_tuition_cents / 100
+      : 0;
+    const t = tFromEnr > 0 ? tFromEnr : tFromMd;
+
+    const e = mdNum(md, 'extended_day_fee');
+    const lu = mdNum(md, 'lunch_fee');
+    const a = mdNum(md, 'admin_fee');
+    const ef = mdNum(md, 'enrollment_fee');
+    const s1 = mdNum(md, 'service_1_bill_amount');
+    const s2 = mdNum(md, 'service_2_bill_amount');
+    const sstF = mdNum(md, 'sst_fee');
+    const lf = mdNum(md, 'late_fee');
+    const ed = mdNum(md, 'employee_discount');
+    const ad = mdNum(md, 'annual_discount');
+    const sd = mdNum(md, 'sibling_discount');
+    const fa = mdNum(md, 'financial_aid');
+    const rc = mdNum(md, 'referral_credit');
+    const esaAmt = mdNum(md, 'esa_amount');
+    const stoAmt = mdNum(md, 'sto_amount');
 
     tuition += t;
     extDay += e;
@@ -216,7 +279,7 @@ export async function fetcher(
     referralCredit += rc;
     esa += esaAmt;
 
-    const stoType = mdStr(m, 'sto_type').toLowerCase();
+    const stoType = mdStr(md, 'sto_type').toLowerCase();
     if (stoAmt > 0) {
       if (stoType.includes('orig')) stoOrig += stoAmt;
       else if (stoType.includes('switch')) stoSwitcher += stoAmt;
@@ -224,8 +287,10 @@ export async function fetcher(
       else stoOther += stoAmt;
     }
 
-    // By-program
-    const program = mdStr(m, 'program');
+    // By-program — prefer the native tuition_grids.program value when
+    // present (MCH and forward); fall back to metadata.program for
+    // legacy DGM-style data.
+    const program = (r.enr_program_label && r.enr_program_label.trim()) || mdStr(md, 'program');
     const groupLabel = pickProgramGroup(program, groups);
     if (!byProgram.has(groupLabel)) byProgram.set(groupLabel, { label: groupLabel, count: 0, tuition: 0 });
     const bp = byProgram.get(groupLabel)!;
@@ -233,14 +298,14 @@ export async function fetcher(
     bp.tuition += t;
 
     // By enrichment / sport
-    const e1 = mdStr(m, 'service_1');
+    const e1 = mdStr(md, 'service_1');
     if (e1) {
       if (!byEnrichment.has(e1)) byEnrichment.set(e1, { label: e1, count: 0, revenue: 0 });
       const be = byEnrichment.get(e1)!;
       be.count++;
       be.revenue += s1;
     }
-    const e2 = mdStr(m, 'service_2');
+    const e2 = mdStr(md, 'service_2');
     if (e2) {
       if (!bySport.has(e2)) bySport.set(e2, { label: e2, count: 0, revenue: 0 });
       const bs = bySport.get(e2)!;
@@ -257,11 +322,11 @@ export async function fetcher(
       sub: parent,
       amount: fa,
     });
-    if (esaAmt > 0 || ynActive(mdStr(m, 'esa_recipient'))) {
+    if (esaAmt > 0 || ynActive(mdStr(md, 'esa_recipient'))) {
       esaList.push({ name: `${studentName} ${r.last_name}`, sub: parent, amount: esaAmt });
     }
-    if (stoAmt > 0 || ynActive(mdStr(m, 'sto_recipient')) || mdStr(m, 'sto_type')) {
-      const ty = mdStr(m, 'sto_type');
+    if (stoAmt > 0 || ynActive(mdStr(md, 'sto_recipient')) || mdStr(md, 'sto_type')) {
+      const ty = mdStr(md, 'sto_type');
       stoList.push({
         name: `${studentName} ${r.last_name}`,
         sub: `${parent}${ty ? ` · ${ty}` : ''}`,
@@ -278,8 +343,14 @@ export async function fetcher(
   // FACTS actuals — picks the most-recently-imported term automatically.
   const facts = await loadFactsActuals(school.schoolId);
 
+  // Live payments — aggregates from the platform's own invoices +
+  // family_tuition_enrollments tables. Independent of FACTS; native
+  // tenants (MCH and forward) populate this from day one.
+  const livePayments = await loadLivePayments(school.schoolId);
+
   return {
     facts,
+    live_payments: livePayments,
     total_revenue: totalRevenue,
     total_discounts: totalDiscounts,
     total_aid_credits: totalAids,
@@ -415,5 +486,73 @@ async function loadFactsActuals(schoolId: string): Promise<FactsActuals | null> 
       matched_family_id: r.matched_family_id,
     })),
     imported_at: a.imported_at ? a.imported_at.toISOString() : null,
+  };
+}
+
+// Native (non-FACTS) cash + contracted figures. Aggregates from the
+// invoices and family_tuition_enrollments tables — the source of truth
+// for tenants on the new tuition stack.
+//
+// Returns null only when the school has *zero* invoices AND zero active
+// enrollments (a brand-new tenant whose tuition system isn't wired yet).
+async function loadLivePayments(schoolId: string): Promise<LivePayments | null> {
+  // Invoice aggregates: how much we've billed, paid, and have outstanding.
+  const { rows: invAgg } = await query<{
+    total_invoices: string;
+    open_invoices: string;
+    paid_invoices: string;
+    partially_paid_invoices: string;
+    voided_invoices: string;
+    total_billed_cents: string | null;
+    total_paid_cents: string | null;
+  }>(
+    `SELECT COUNT(*)::text AS total_invoices,
+            COUNT(*) FILTER (WHERE status = 'open')::text AS open_invoices,
+            COUNT(*) FILTER (WHERE status = 'paid')::text AS paid_invoices,
+            COUNT(*) FILTER (WHERE status = 'partially_paid')::text AS partially_paid_invoices,
+            COUNT(*) FILTER (WHERE status = 'voided')::text AS voided_invoices,
+            COALESCE(SUM(total_cents) FILTER (WHERE status <> 'voided'), 0)::text AS total_billed_cents,
+            COALESCE(SUM(amount_paid_cents), 0)::text AS total_paid_cents
+       FROM invoices
+      WHERE school_id = $1`,
+    [schoolId],
+  );
+
+  // Enrollment aggregates: contracted annual revenue (the "what the
+  // school is owed for the year" figure). Independent of invoice
+  // generation timing — useful when invoices haven't been materialized
+  // for all installments yet.
+  const { rows: enrAgg } = await query<{
+    active_enrollments: string;
+    total_annual_contracted_cents: string | null;
+  }>(
+    `SELECT COUNT(*)::text AS active_enrollments,
+            COALESCE(SUM(total_annual_cents), 0)::text AS total_annual_contracted_cents
+       FROM family_tuition_enrollments
+      WHERE school_id = $1 AND status = 'active'`,
+    [schoolId],
+  );
+
+  const inv = invAgg[0];
+  const enr = enrAgg[0];
+
+  const totalInvoices = Number(inv?.total_invoices ?? 0);
+  const activeEnrollments = Number(enr?.active_enrollments ?? 0);
+  if (totalInvoices === 0 && activeEnrollments === 0) return null;
+
+  const totalBilled = Number(inv?.total_billed_cents ?? 0);
+  const totalPaid = Number(inv?.total_paid_cents ?? 0);
+  return {
+    has_data: true,
+    total_invoices: totalInvoices,
+    open_invoices: Number(inv?.open_invoices ?? 0),
+    paid_invoices: Number(inv?.paid_invoices ?? 0),
+    partially_paid_invoices: Number(inv?.partially_paid_invoices ?? 0),
+    voided_invoices: Number(inv?.voided_invoices ?? 0),
+    total_billed_cents: totalBilled,
+    total_paid_cents: totalPaid,
+    total_outstanding_cents: Math.max(0, totalBilled - totalPaid),
+    active_enrollments: activeEnrollments,
+    total_annual_contracted_cents: Number(enr?.total_annual_contracted_cents ?? 0),
   };
 }
