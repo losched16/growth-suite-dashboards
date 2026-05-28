@@ -1,8 +1,18 @@
 // Next.js 16 renamed `middleware` to `proxy`. Same behavior.
 //
-// Two distinct gates handled in one file:
+// Three distinct gates handled in one file:
 //   - /school/*  → school admin session JWT cookie (or dev-token bypass)
-//   - everything else (admin UI) → operator session cookie
+//   - /admin/*   → operator password (gsd_operator_session cookie). The
+//                  cross-tenant school selector lives here, so it MUST
+//                  be gated separately from the school iframe. Without
+//                  this, a user authenticated to one school's GHL
+//                  sub-account could browse /admin and see/select any
+//                  other tenant's data.
+//   - everything else (API endpoints, public pages) → no gate at this
+//                  layer; individual route handlers do their own auth.
+//                  `/api/admin/*` is intentionally not gated here because
+//                  school iframe forms POST to those endpoints with the
+//                  schoolId in the path (verified inside each handler).
 //
 // Public (no gate), excluded from the matcher entirely:
 //   - /login, /api/login, /api/logout — operator auth surface
@@ -18,9 +28,7 @@
 
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-// Operator-auth helpers kept around in case we re-enable the password
-// layer later; not imported here while the gate is a no-op.
-// import { SESSION_COOKIE as OPERATOR_COOKIE, verifySessionToken } from '@/lib/auth/operator';
+import { SESSION_COOKIE as OPERATOR_COOKIE, verifySessionToken } from '@/lib/auth/operator';
 import {
   SCHOOL_SESSION_COOKIE,
   SCHOOL_SESSION_TTL_S,
@@ -38,27 +46,32 @@ export async function proxy(request: NextRequest) {
   if (path.startsWith('/school/')) {
     return guardSchool(request);
   }
-  return guardOperator(request);
+  if (path.startsWith('/admin/') || path === '/admin') {
+    return guardOperator(request);
+  }
+  // All other paths (including /api/admin/*) pass through. Per-endpoint
+  // auth lives in individual route handlers.
+  return NextResponse.next();
 }
 
 function guardOperator(request: NextRequest) {
-  // Admin pages are designed to be embedded inside the school's GHL
-  // portal. GHL is the trust boundary — anyone who's authenticated
-  // there sees the appropriate sub-account's iframe. We don't impose
-  // a separate password layer on top.
+  // The /admin/* UI surface is operator-only because it includes the
+  // cross-tenant school selector at /admin and detail editors at
+  // /admin/[schoolId]/*. Without a password gate here, anyone inside
+  // a single school's GHL embed could navigate to /admin and see every
+  // other tenant — confirmed leak that prompted this gate.
   //
-  // School-scoped routes still pass the schoolId in the URL path
-  // (UUID, non-public, ~128 bits of entropy), so an attacker would
-  // need to know that ID to address a specific school.
-  //
-  // If you later want to lock this down again, restore the cookie
-  // check below.
-  //
-  // const token = request.cookies.get(OPERATOR_COOKIE)?.value;
-  // if (verifySessionToken(token)) return NextResponse.next();
-  // const url = request.nextUrl.clone(); url.pathname = '/login';
-  // return NextResponse.redirect(url);
-  return NextResponse.next();
+  // School-iframe forms POST to /api/admin/schools/{schoolId}/... which
+  // are NOT gated here — they live behind individual route-handler
+  // auth checks (school session cookie validates the schoolId matches).
+  const token = request.cookies.get(OPERATOR_COOKIE)?.value;
+  if (verifySessionToken(token)) return NextResponse.next();
+  const url = request.nextUrl.clone();
+  url.pathname = '/login';
+  // Preserve the original destination so /login can bounce the operator
+  // back to where they were trying to go after they authenticate.
+  url.searchParams.set('next', request.nextUrl.pathname + request.nextUrl.search);
+  return NextResponse.redirect(url);
 }
 
 async function guardSchool(request: NextRequest) {
