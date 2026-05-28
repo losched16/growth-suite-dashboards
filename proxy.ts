@@ -54,7 +54,7 @@ export async function proxy(request: NextRequest) {
   return NextResponse.next();
 }
 
-function guardOperator(request: NextRequest) {
+async function guardOperator(request: NextRequest) {
   // The /admin/* UI surface is operator-only because it includes the
   // cross-tenant school selector at /admin and detail editors at
   // /admin/[schoolId]/*. Without a password gate here, anyone inside
@@ -66,12 +66,55 @@ function guardOperator(request: NextRequest) {
   // auth checks (school session cookie validates the schoolId matches).
   const token = request.cookies.get(OPERATOR_COOKIE)?.value;
   if (verifySessionToken(token)) return NextResponse.next();
+
+  // School-session fallback: if the request came from a logged-in
+  // school iframe (e.g. a form POST that 303-redirected to /admin/...
+  // after success), bounce them BACK to their own school dashboard
+  // instead of showing the operator login screen. School staff should
+  // never see /login — they're already authenticated to their school.
+  //
+  // We pick a destination based on the /admin/* subpath when possible
+  // so a "Save settings" round-trip lands them back on the equivalent
+  // /school/{locationId}/* page they came from, not a random landing.
+  try {
+    const sessionToken = request.cookies.get(SCHOOL_SESSION_COOKIE)?.value;
+    if (sessionToken) {
+      const session = await verifySchoolSession(sessionToken);
+      if (session?.ghl_location_id) {
+        const url = request.nextUrl.clone();
+        url.pathname = mapAdminPathToSchoolPath(request.nextUrl.pathname, session.ghl_location_id);
+        url.search = '';
+        url.searchParams.set('chrome', 'none');
+        return NextResponse.redirect(url, 303);
+      }
+    }
+  } catch {
+    // School session verify threw — fall through to operator login.
+  }
+
   const url = request.nextUrl.clone();
   url.pathname = '/login';
   // Preserve the original destination so /login can bounce the operator
   // back to where they were trying to go after they authenticate.
   url.searchParams.set('next', request.nextUrl.pathname + request.nextUrl.search);
   return NextResponse.redirect(url);
+}
+
+// Best-effort mapping from an /admin/{schoolId}/<sub> path to the
+// equivalent /school/{locationId}/<sub> path. Used when a school-session
+// user is redirected to an /admin/* route (typically by a form POST
+// completion 303); we want them to land on the school-iframe version
+// of that page, not the operator-only admin one.
+function mapAdminPathToSchoolPath(adminPath: string, locationId: string): string {
+  // /admin                       → /school/{loc}/
+  // /admin/{schoolId}            → /school/{loc}/
+  // /admin/{schoolId}/payments   → /school/{loc}/payments
+  // /admin/{schoolId}/forms/x    → /school/{loc}/forms/x
+  // /admin/{schoolId}/<anything> → /school/{loc}/<anything>
+  // /admin/                      → /school/{loc}/
+  const m = adminPath.match(/^\/admin(?:\/[A-Za-z0-9_-]+(\/.*)?)?$/);
+  const sub = m?.[1] ?? '';
+  return `/school/${locationId}${sub}`;
 }
 
 async function guardSchool(request: NextRequest) {
