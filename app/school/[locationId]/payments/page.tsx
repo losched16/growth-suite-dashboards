@@ -24,6 +24,7 @@ import { loadPaymentAccount } from '@/lib/stripe/connect-onboarding';
 import { PaymentsHubOverview } from './tabs/Overview';
 import { PaymentsHubInvoices } from './tabs/Invoices';
 import { PaymentsHubPlans } from './tabs/Plans';
+import { PaymentsHubGrids } from './tabs/Grids';
 import { PaymentsHubDiscounts } from './tabs/Discounts';
 import { PaymentsHubForms } from './tabs/Forms';
 import { PaymentsHubSettings } from './tabs/Settings';
@@ -39,6 +40,7 @@ const TABS = [
   { value: 'overview',  label: 'Overview' },
   { value: 'invoices',  label: 'Invoices' },
   { value: 'plans',     label: 'Tuition Plans' },
+  { value: 'grids',     label: 'Grids' },
   { value: 'catalog',   label: 'Catalog' },
   { value: 'discounts', label: 'Discounts' },
   { value: 'forms',     label: 'Forms' },
@@ -153,6 +155,7 @@ export default async function PaymentsHubPage({
         {tab === 'overview'  ? <PaymentsHubOverview  schoolId={school.id} locationId={locationId} /> : null}
         {tab === 'invoices'  ? <PaymentsHubInvoices  schoolId={school.id} locationId={locationId} /> : null}
         {tab === 'plans'     ? <PaymentsHubPlans     schoolId={school.id} locationId={locationId} editTemplateId={sp.edit_template ?? null} /> : null}
+        {tab === 'grids'     ? <PaymentsHubGrids     schoolId={school.id} locationId={locationId} /> : null}
         {tab === 'catalog'   ? <PaymentsHubCatalog   schoolId={school.id} locationId={locationId} /> : null}
         {tab === 'discounts' ? <PaymentsHubDiscounts schoolId={school.id} locationId={locationId} /> : null}
         {tab === 'forms'     ? <PaymentsHubForms     schoolId={school.id} locationId={locationId} /> : null}
