@@ -35,6 +35,12 @@ export default async function AdminHome() {
           </div>
           <div className="flex gap-2">
             <Link
+              href="/admin/billing-status"
+              className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
+            >
+              Billing Status →
+            </Link>
+            <Link
               href="/admin/schools/new"
               className="rounded-md bg-emerald-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-800"
             >
