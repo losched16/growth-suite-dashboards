@@ -145,12 +145,21 @@ function ConnectPrompt({ schoolId, locationId }: { schoolId: string; locationId?
       <p className="text-sm text-slate-700 mb-3">
         Not connected yet. Connect a Stripe account to start accepting parent payments. The school keeps full ownership of its Stripe account — funds settle directly to their bank.
       </p>
-      <form action={`/api/admin/schools/${schoolId}/payments/connect`} method="POST">
+      {/* target="_top" breaks out of the GHL iframe. Stripe Connect refuses
+          to load inside iframes (X-Frame-Options: DENY on connect.stripe.com),
+          which is why posting in-place returned "connect.stripe.com can't
+          connect" in the iframe. Top-level navigation lets onboarding load,
+          and Stripe sends the operator back to /school/{locationId}/payments
+          (preserved via return_to) where they can re-embed in GHL. */}
+      <form action={`/api/admin/schools/${schoolId}/payments/connect`} method="POST" target="_top">
         {locationId ? <input type="hidden" name="return_to" value={`/school/${locationId}/payments`} /> : null}
         <button type="submit" className="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">
           Connect with Stripe
         </button>
       </form>
+      <p className="mt-2 text-[11px] text-slate-500">
+        Opens Stripe in the full window (not the embedded view). You&rsquo;ll come back here when done.
+      </p>
     </div>
   );
 }
@@ -217,12 +226,16 @@ function InProgressPanel({ schoolId, locationId }: { schoolId: string; locationI
       <p className="text-sm text-slate-700 mb-2">
         Stripe onboarding started but not yet finished. Continue where the school left off:
       </p>
-      <form action={`/api/admin/schools/${schoolId}/payments/connect`} method="POST">
+      {/* target="_top" — Stripe Connect refuses to load inside the iframe; see ConnectPrompt above. */}
+      <form action={`/api/admin/schools/${schoolId}/payments/connect`} method="POST" target="_top">
         {locationId ? <input type="hidden" name="return_to" value={`/school/${locationId}/payments`} /> : null}
         <button type="submit" className="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">
           Continue Stripe onboarding
         </button>
       </form>
+      <p className="mt-2 text-[11px] text-slate-500">
+        Opens Stripe in the full window (not the embedded view).
+      </p>
     </div>
   );
 }
