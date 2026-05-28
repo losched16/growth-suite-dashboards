@@ -141,26 +141,45 @@ export async function PaymentsHubSettings({
 
 function ConnectPrompt({ schoolId, locationId }: { schoolId: string; locationId?: string }) {
   return (
-    <div>
-      <p className="text-sm text-slate-700 mb-3">
-        Not connected yet. Connect a Stripe account to start accepting parent payments. The school keeps full ownership of its Stripe account — funds settle directly to their bank.
+    <div className="space-y-4">
+      <p className="text-sm text-slate-700">
+        Not connected yet. Pick the path that fits your school:
       </p>
-      {/* target="_blank" opens Stripe in a new tab. Stripe Connect refuses
-          to load inside iframes (X-Frame-Options: DENY on connect.stripe.com),
-          so the embedded form needs to escape. _blank keeps the operator's
-          original GHL session intact in the original tab while they do KYC
-          in the new one. After Stripe finishes, the new tab lands on
-          /school/{locationId}/payments (preserved via return_to) — the
-          operator closes it and the original GHL tab refreshes to show
-          the new "Connected" status. */}
-      <form action={`/api/admin/schools/${schoolId}/payments/connect`} method="POST" target="_blank" rel="noopener noreferrer">
-        {locationId ? <input type="hidden" name="return_to" value={`/school/${locationId}/payments`} /> : null}
-        <button type="submit" className="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">
-          Connect with Stripe
-        </button>
-      </form>
-      <p className="mt-2 text-[11px] text-slate-500">
-        Opens Stripe in a new tab. Close it when done — this view will refresh to show your status.
+
+      {/* Path 1: brand-new Stripe account */}
+      <div className="rounded-md border border-slate-200 bg-slate-50/50 p-3">
+        <div className="text-sm font-semibold text-slate-900 mb-1">
+          📦 Set up a new Stripe account
+        </div>
+        <p className="text-xs text-slate-600 mb-2">
+          For schools that have never used Stripe. Walks through KYC, bank account, and identity verification in one flow. Takes about 5 minutes.
+        </p>
+        {/* target="_blank" — Stripe refuses to load in iframes. New-tab pattern preserves the GHL session. */}
+        <form action={`/api/admin/schools/${schoolId}/payments/connect`} method="POST" target="_blank" rel="noopener noreferrer">
+          {locationId ? <input type="hidden" name="return_to" value={`/school/${locationId}/payments`} /> : null}
+          <button type="submit" className="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-blue-700">
+            Create a new Stripe account
+          </button>
+        </form>
+      </div>
+
+      {/* Path 2: connect existing Stripe account */}
+      <div className="rounded-md border border-slate-200 bg-slate-50/50 p-3">
+        <div className="text-sm font-semibold text-slate-900 mb-1">
+          🔗 I already have a Stripe account
+        </div>
+        <p className="text-xs text-slate-600 mb-2">
+          For schools that already accept payments through Stripe. Sign in with your existing Stripe credentials and authorize this platform to issue invoices on your account. Bank account + payment methods + tax settings stay exactly as they are. ~30 seconds.
+        </p>
+        <form action={`/api/admin/schools/${schoolId}/payments/connect-oauth/start`} method="POST" target="_blank" rel="noopener noreferrer">
+          <button type="submit" className="inline-flex items-center gap-1.5 rounded-md border-2 border-blue-600 bg-white px-3 py-1.5 text-sm font-semibold text-blue-700 hover:bg-blue-50">
+            Connect existing Stripe account
+          </button>
+        </form>
+      </div>
+
+      <p className="text-[11px] text-slate-500">
+        Both paths open Stripe in a new tab. The school keeps full ownership of its Stripe account either way — funds settle directly to their bank, never to us.
       </p>
     </div>
   );
