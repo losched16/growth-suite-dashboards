@@ -20,7 +20,7 @@
 // by a "Pending enrollment forms" banner on /home.
 
 import Link from 'next/link';
-import { FileText, Edit3, Eye, Send, Inbox, ExternalLink } from 'lucide-react';
+import { FileText, Edit3, Eye, Send, Inbox, ExternalLink, Plus } from 'lucide-react';
 import { query } from '@/lib/db';
 import { HelpCallout } from '@/components/HelpCallout';
 import { CopyButton } from '@/components/CopyButton';
@@ -110,10 +110,16 @@ export async function PaymentsHubForms({
             Push forms to families through their parent portal. Send the email blast from Growth Suite using your enrolled-families list.
           </p>
         </div>
-        {/* No "All forms" / "Form editor" escape link here — every form
-            below has its own Edit and Submissions chips that stay inside
-            the /school namespace, so the demo audience can never click
-            out of the DGM iframe context. */}
+        {/* The "+ Create" button lands on the school-namespace new-form
+            wizard so admins can build forms without escaping the iframe.
+            Previously this was admin-only; the school-context API +
+            route were added so the same flow works from inside GHL. */}
+        <Link
+          href={`/school/${locationId}/forms/new?chrome=none`}
+          className="inline-flex items-center gap-1.5 rounded-md bg-emerald-700 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-800 shrink-0"
+        >
+          <Plus className="h-4 w-4" /> Create new form
+        </Link>
       </div>
 
       {/* HOW THIS WORKS — numbered steps */}
