@@ -145,20 +145,22 @@ function ConnectPrompt({ schoolId, locationId }: { schoolId: string; locationId?
       <p className="text-sm text-slate-700 mb-3">
         Not connected yet. Connect a Stripe account to start accepting parent payments. The school keeps full ownership of its Stripe account — funds settle directly to their bank.
       </p>
-      {/* target="_top" breaks out of the GHL iframe. Stripe Connect refuses
+      {/* target="_blank" opens Stripe in a new tab. Stripe Connect refuses
           to load inside iframes (X-Frame-Options: DENY on connect.stripe.com),
-          which is why posting in-place returned "connect.stripe.com can't
-          connect" in the iframe. Top-level navigation lets onboarding load,
-          and Stripe sends the operator back to /school/{locationId}/payments
-          (preserved via return_to) where they can re-embed in GHL. */}
-      <form action={`/api/admin/schools/${schoolId}/payments/connect`} method="POST" target="_top">
+          so the embedded form needs to escape. _blank keeps the operator's
+          original GHL session intact in the original tab while they do KYC
+          in the new one. After Stripe finishes, the new tab lands on
+          /school/{locationId}/payments (preserved via return_to) — the
+          operator closes it and the original GHL tab refreshes to show
+          the new "Connected" status. */}
+      <form action={`/api/admin/schools/${schoolId}/payments/connect`} method="POST" target="_blank" rel="noopener noreferrer">
         {locationId ? <input type="hidden" name="return_to" value={`/school/${locationId}/payments`} /> : null}
         <button type="submit" className="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">
           Connect with Stripe
         </button>
       </form>
       <p className="mt-2 text-[11px] text-slate-500">
-        Opens Stripe in the full window (not the embedded view). You&rsquo;ll come back here when done.
+        Opens Stripe in a new tab. Close it when done — this view will refresh to show your status.
       </p>
     </div>
   );
@@ -226,15 +228,15 @@ function InProgressPanel({ schoolId, locationId }: { schoolId: string; locationI
       <p className="text-sm text-slate-700 mb-2">
         Stripe onboarding started but not yet finished. Continue where the school left off:
       </p>
-      {/* target="_top" — Stripe Connect refuses to load inside the iframe; see ConnectPrompt above. */}
-      <form action={`/api/admin/schools/${schoolId}/payments/connect`} method="POST" target="_top">
+      {/* target="_blank" — Stripe Connect refuses to load inside the iframe; see ConnectPrompt above. */}
+      <form action={`/api/admin/schools/${schoolId}/payments/connect`} method="POST" target="_blank" rel="noopener noreferrer">
         {locationId ? <input type="hidden" name="return_to" value={`/school/${locationId}/payments`} /> : null}
         <button type="submit" className="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">
           Continue Stripe onboarding
         </button>
       </form>
       <p className="mt-2 text-[11px] text-slate-500">
-        Opens Stripe in the full window (not the embedded view).
+        Opens Stripe in a new tab.
       </p>
     </div>
   );
