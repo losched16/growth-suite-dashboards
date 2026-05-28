@@ -64,6 +64,24 @@ export default async function PaymentsHubPage({
     : account ? 'in_progress'
     : 'not_connected';
 
+  // Dry-run mode: migration 046 added billing_active. While false, all
+  // new invoices land in 'draft' status, parents see nothing, autopay
+  // is paused. The banner below makes this state obvious and gives the
+  // operator a one-click Go-Live action.
+  const { rows: cfgRows } = await query<{ billing_active: boolean; draft_count: number }>(
+    `SELECT
+       COALESCE(spc.billing_active, false) AS billing_active,
+       (SELECT COUNT(*)::int FROM invoices i
+         WHERE i.school_id = $1
+           AND i.source = 'tuition_plan'
+           AND i.status = 'draft') AS draft_count
+       FROM school_payment_config spc
+      WHERE spc.school_id = $1`,
+    [school.id],
+  );
+  const billingActive = cfgRows[0]?.billing_active ?? false;
+  const draftCount = cfgRows[0]?.draft_count ?? 0;
+
   return (
     <div className="min-h-screen bg-slate-50">
       {/* Header */}
@@ -120,6 +138,16 @@ export default async function PaymentsHubPage({
         </div>
       ) : null}
 
+      {/* Dry-run banner — when billing_active=false. Sticky-prominent so
+          the operator never forgets they're not actually charging anyone
+          yet, with a Go-Live form inline. */}
+      {!billingActive ? (
+        <DryRunBanner
+          locationId={locationId}
+          draftCount={draftCount}
+        />
+      ) : null}
+
       {/* Tab content */}
       <div className="px-6 py-5">
         {tab === 'overview'  ? <PaymentsHubOverview  schoolId={school.id} locationId={locationId} /> : null}
@@ -129,6 +157,73 @@ export default async function PaymentsHubPage({
         {tab === 'discounts' ? <PaymentsHubDiscounts schoolId={school.id} locationId={locationId} /> : null}
         {tab === 'forms'     ? <PaymentsHubForms     schoolId={school.id} locationId={locationId} /> : null}
         {tab === 'settings'  ? <PaymentsHubSettings  schoolId={school.id} locationId={locationId} account={account} /> : null}
+      </div>
+    </div>
+  );
+}
+
+// Dry-run banner shown at the top of the Payments hub when the school
+// hasn't flipped billing_active=true yet. Explains the implications and
+// gives the operator a confirm-phrase-gated "Go live" form to flip the
+// switch. We require the operator to type GO_LIVE so it can't be
+// accidentally clicked while clicking around.
+function DryRunBanner({
+  locationId, draftCount,
+}: { locationId: string; draftCount: number }) {
+  const returnTo = `/school/${locationId}/payments`;
+  return (
+    <div className="px-6 pt-4">
+      <div className="rounded-lg border-2 border-amber-300 bg-amber-50 p-4">
+        <div className="flex items-start gap-3">
+          <div className="text-2xl leading-none mt-0.5">⚠️</div>
+          <div className="flex-1 min-w-0">
+            <div className="text-base font-bold text-amber-900">Dry-run mode — billing is paused</div>
+            <p className="mt-1 text-sm text-amber-900">
+              No real parent charges happen yet. New invoices generate as <strong>drafts</strong>{' '}
+              that only you can see — parents don&rsquo;t get notification emails, drafts don&rsquo;t appear
+              in their portal, autopay is paused.
+            </p>
+            <p className="mt-1 text-sm text-amber-900">
+              Use this time to verify tuition amounts, plan schedules, and discount rules against your
+              actual family data. When everything looks right, click <strong>Go live</strong> to flip the
+              switch — all {draftCount > 0 ? <><strong>{draftCount}</strong> existing draft invoice{draftCount === 1 ? '' : 's'}</> : 'future invoices'} will become visible to parents and the autopay rhythm starts.
+            </p>
+
+            <details className="mt-3 group">
+              <summary className="cursor-pointer list-none inline-flex items-center gap-1.5 rounded-md bg-amber-700 px-3 py-1.5 text-sm font-semibold text-white hover:bg-amber-800">
+                Ready to go live — show me the confirmation step
+              </summary>
+              <form
+                action="/api/school/billing/go-live"
+                method="POST"
+                className="mt-3 rounded-md border border-amber-200 bg-white p-3 space-y-2"
+              >
+                <input type="hidden" name="return_to" value={returnTo} />
+                <p className="text-xs text-slate-700">
+                  Type <code className="font-mono bg-slate-100 px-1.5 py-0.5 rounded">GO_LIVE</code> to
+                  confirm. This action is final — once parents see real invoices, they expect them to
+                  represent real charges. You can still pause individual enrollments or void specific
+                  invoices afterward, but the &ldquo;dry-run&rdquo; gate doesn&rsquo;t come back.
+                </p>
+                <input
+                  type="text"
+                  name="confirm"
+                  required
+                  pattern="GO_LIVE"
+                  placeholder="GO_LIVE"
+                  autoComplete="off"
+                  className="block w-full max-w-xs rounded border border-slate-300 bg-white px-3 py-2 text-sm font-mono focus:border-amber-600 focus:outline-none focus:ring-1 focus:ring-amber-200"
+                />
+                <button
+                  type="submit"
+                  className="inline-flex items-center gap-1.5 rounded-md bg-emerald-700 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-800"
+                >
+                  Go live — start billing parents
+                </button>
+              </form>
+            </details>
+          </div>
+        </div>
       </div>
     </div>
   );

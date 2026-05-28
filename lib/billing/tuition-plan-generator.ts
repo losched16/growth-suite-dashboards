@@ -134,7 +134,20 @@ export async function generateTuitionEnrollment(opts: GenerateOpts): Promise<Gen
   // mismatches per-month math, so we instead pro-rate addons per installment.
 
   // ── 6. Create the enrollment row + all the invoices in one txn ───────
-  const initialStatus = opts.initialStatus ?? 'open';
+  // Dry-run gate: when the school's billing_active flag is false, force
+  // every new invoice into 'draft' status regardless of what the caller
+  // asked for. Drafts don't appear in the parent portal, don't fire
+  // notification emails, and are skipped by the autopay cron — the
+  // school can fully verify its tuition setup against real family data
+  // before any real money moves. Operator flips billing_active via the
+  // Payments hub "Go live" action; existing drafts then upgrade to open.
+  const { rows: cfgRows } = await query<{ billing_active: boolean }>(
+    `SELECT COALESCE(billing_active, false) AS billing_active
+       FROM school_payment_config WHERE school_id = $1`,
+    [opts.schoolId],
+  );
+  const billingActive = cfgRows[0]?.billing_active ?? false;
+  const initialStatus = !billingActive ? 'draft' : (opts.initialStatus ?? 'open');
 
   const result = await withTransaction(async (q) => {
     // Upsert enrollment — replaces a prior enrollment for the same
