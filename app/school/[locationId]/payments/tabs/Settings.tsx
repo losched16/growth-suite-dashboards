@@ -58,13 +58,13 @@ export async function PaymentsHubSettings({
         </div>
 
         {!account ? (
-          <ConnectPrompt schoolId={schoolId} />
+          <ConnectPrompt schoolId={schoolId} locationId={locationId} />
         ) : account.charges_enabled && account.payouts_enabled ? (
           <LivePanel account={account} />
         ) : account.details_submitted ? (
           <NeedsInfoPanel account={account} />
         ) : (
-          <InProgressPanel schoolId={schoolId} />
+          <InProgressPanel schoolId={schoolId} locationId={locationId} />
         )}
       </section>
 
@@ -139,13 +139,14 @@ export async function PaymentsHubSettings({
   );
 }
 
-function ConnectPrompt({ schoolId }: { schoolId: string }) {
+function ConnectPrompt({ schoolId, locationId }: { schoolId: string; locationId?: string }) {
   return (
     <div>
       <p className="text-sm text-slate-700 mb-3">
         Not connected yet. Connect a Stripe account to start accepting parent payments. The school keeps full ownership of its Stripe account — funds settle directly to their bank.
       </p>
-      <form action={`/api/admin/schools/${schoolId}/stripe-connect/start`} method="POST">
+      <form action={`/api/admin/schools/${schoolId}/payments/connect`} method="POST">
+        {locationId ? <input type="hidden" name="return_to" value={`/school/${locationId}/payments`} /> : null}
         <button type="submit" className="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">
           Connect with Stripe
         </button>
@@ -210,13 +211,14 @@ function NeedsInfoPanel({ account }: { account: Account }) {
   );
 }
 
-function InProgressPanel({ schoolId }: { schoolId: string }) {
+function InProgressPanel({ schoolId, locationId }: { schoolId: string; locationId?: string }) {
   return (
     <div>
       <p className="text-sm text-slate-700 mb-2">
         Stripe onboarding started but not yet finished. Continue where the school left off:
       </p>
-      <form action={`/api/admin/schools/${schoolId}/stripe-connect/continue`} method="POST">
+      <form action={`/api/admin/schools/${schoolId}/payments/connect`} method="POST">
+        {locationId ? <input type="hidden" name="return_to" value={`/school/${locationId}/payments`} /> : null}
         <button type="submit" className="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">
           Continue Stripe onboarding
         </button>

@@ -39,8 +39,22 @@ export async function POST(request: NextRequest, { params }: { params: Params })
   );
   const supportEmail = bRows[0]?.support_email ?? 'support@mygrowthsuite.com';
 
+  // Allow callers (e.g. the school-iframe Payments hub) to override where
+  // Stripe sends the operator back to after onboarding. Must be a same-
+  // origin path starting with /school/ or /admin/ — never an absolute URL
+  // (security: don't redirect to attacker-controlled hosts).
   const origin = request.nextUrl.origin;
-  const returnBaseUrl = `${origin}/admin/${schoolId}/payments`;
+  let returnPath = `/admin/${schoolId}/payments`;
+  try {
+    const fd = await request.formData();
+    const candidate = String(fd.get('return_to') ?? '').trim();
+    if (candidate && /^\/(school|admin)\/[A-Za-z0-9_-]+\//.test(candidate)) {
+      returnPath = candidate;
+    }
+  } catch {
+    // No form data / not multipart — fall through to the admin default.
+  }
+  const returnBaseUrl = `${origin}${returnPath}`;
 
   try {
     const r = await beginConnectOnboarding({
