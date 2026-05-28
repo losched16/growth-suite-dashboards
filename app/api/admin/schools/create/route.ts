@@ -16,10 +16,46 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import axios from 'axios';
-import { query } from '@/lib/db';
+import crypto from 'node:crypto';
+import { query, withTransaction } from '@/lib/db';
 import { encrypt } from '@/lib/crypto';
 
 export const maxDuration = 30;
+
+// Mirrors scripts/provision-school.mjs so the UI-driven onboard matches
+// what the CLI used to do. Lift to a shared lib if a third caller appears.
+function familyHubLayout() {
+  return [{
+    instance_id: crypto.randomUUID(),
+    widget_id: 'family_hub_table',
+    config: {
+      page_size: 50,
+      shown_columns: ['family', 'phone', 'students', 'enrollment', 'payment_plan', 'total_tuition', 'active'],
+      shown_filters: ['family_status', 'enrollment_status', 'program', 'payment_plan'],
+      show_stat_cards: true,
+      drilldown_dashboard_slug: 'family-hub',
+    },
+    position: { x: 0, y: 0, w: 12, h: 12 },
+  }];
+}
+function studentRosterLayout() {
+  return [{
+    instance_id: crypto.randomUUID(),
+    widget_id: 'student_roster_rich',
+    config: {
+      page_size: 100,
+      enable_views: ['list', 'grid', 'allergies'],
+      shown_columns: ['student', 'gender_age', 'program', 'homeroom', 'lead_teacher', 'schedule', 'status', 'allergy', 'iep_504', 'family'],
+      shown_filters: ['program', 'homeroom', 'schedule', 'lead_teacher', 'allergies_only', 'iep_504_only'],
+      drilldown_dashboard_slug: 'family-hub',
+    },
+    position: { x: 0, y: 0, w: 12, h: 12 },
+  }];
+}
+const CORE_DASHBOARDS = [
+  { slug: 'family-hub',     name: 'Family Hub',     description: 'Browse families and drill into their full picture.', position: 1, layout: familyHubLayout() },
+  { slug: 'student-roster', name: 'Student Roster', description: 'Browse all students with filters.',                  position: 2, layout: studentRosterLayout() },
+];
 
 export async function POST(request: NextRequest) {
   try {
@@ -61,20 +97,61 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Encrypt + insert
+    // Encrypt + insert all the defaults in one transaction. If any step
+    // fails we want NONE of it (no half-provisioned school with a row
+    // but no dashboards / no payment config).
     const { ciphertext, iv, tag } = encrypt(pit);
-    const { rows } = await query<{ id: string }>(
-      `INSERT INTO schools (name, ghl_location_id, ghl_pit_encrypted, ghl_pit_iv, ghl_pit_tag)
-       VALUES ($1, $2, $3, $4, $5)
-       RETURNING id`,
-      [name, locationId, ciphertext, iv, tag],
-    );
+    const schoolId = await withTransaction(async (q) => {
+      const { rows } = await q<{ id: string }>(
+        `INSERT INTO schools (name, ghl_location_id, ghl_pit_encrypted, ghl_pit_iv, ghl_pit_tag)
+         VALUES ($1, $2, $3, $4, $5)
+         RETURNING id`,
+        [name, locationId, ciphertext, iv, tag],
+      );
+      const id = rows[0].id;
 
-    const schoolId = rows[0].id;
+      // Core dashboards (family-hub + student-roster). Mirrors the CLI
+      // provisioner's output exactly.
+      for (const d of CORE_DASHBOARDS) {
+        await q(
+          `INSERT INTO school_dashboards
+             (school_id, dashboard_slug, display_name, description, layout, is_enabled, position)
+           VALUES ($1, $2, $3, $4, $5::jsonb, true, $6)
+           ON CONFLICT (school_id, dashboard_slug) DO NOTHING`,
+          [id, d.slug, d.name, d.description, JSON.stringify(d.layout), d.position],
+        );
+      }
+
+      // Payment config row — billing_active defaults to false (dry-run
+      // mode from day one, see migration 046). Schools always start with
+      // a sensible config; admin can tweak via Payments → Settings later.
+      await q(
+        `INSERT INTO school_payment_config (school_id)
+         VALUES ($1)
+         ON CONFLICT (school_id) DO NOTHING`,
+        [id],
+      );
+
+      // Blank branding row so /admin/{schoolId}/branding has something to
+      // edit. Defaults are fine; admin can customize the logo / support
+      // email later.
+      await q(
+        `INSERT INTO school_branding (school_id)
+         VALUES ($1)
+         ON CONFLICT (school_id) DO NOTHING`,
+        [id],
+      ).catch(() => undefined); // table may not exist on older DBs
+
+      return id;
+    });
+
     const url = request.nextUrl.clone();
     url.pathname = `/admin/${schoolId}`;
     url.search = '';
-    url.searchParams.set('msg', `Created "${name}". Run "Sync from GHL" next to pull their families.`);
+    url.searchParams.set('msg',
+      `Created "${name}" with default dashboards (Family Hub, Student Roster) and payment config (dry-run mode). ` +
+      `Next: run "Sync from GHL" to pull their families, then provision tuition grids in Payments → Settings.`,
+    );
     return NextResponse.redirect(url, 303);
   } catch (err) {
     return back(request, {
