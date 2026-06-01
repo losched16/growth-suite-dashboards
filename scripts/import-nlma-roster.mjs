@@ -101,12 +101,17 @@ function normalizePhone(raw) {
   if (!raw) return null;
   let s = String(raw).trim();
   if (!s) return null;
+  // Junk-value filter — "N/a", "None", etc. shouldn't survive into
+  // the phone column or GHL will reject the contact create.
+  if (['n/a', 'na', 'none', '.', '-', 'tbd', 'unknown'].includes(s.toLowerCase())) return null;
   // strip leading "+1 " or +
   s = s.replace(/^\+/, '').replace(/[\s()\-.]/g, '');
   if (s.length === 11 && s.startsWith('1')) s = s.slice(1);
   if (s.length === 10 && /^\d+$/.test(s)) {
     return `(${s.slice(0, 3)}) ${s.slice(3, 6)}-${s.slice(6)}`;
   }
+  // If after stripping there are no digits at all, treat as junk.
+  if (!/\d/.test(s)) return null;
   // fall through to as-is for anything funky — better than throwing it away
   return raw.trim() || null;
 }
