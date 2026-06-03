@@ -21,12 +21,18 @@ type Params = Promise<{ schoolId: string }>;
 export async function POST(request: NextRequest, { params }: { params: Params }) {
   const { schoolId } = await params;
 
-  const { rows } = await query<{ name: string }>(
-    `SELECT name FROM schools WHERE id = $1`, [schoolId],
+  // Pull the school's location id so we can route any error redirect
+  // back to a valid /school/<locationId>/payments page (the old code
+  // used "/school/_/payments" which 404s, so when STRIPE_CLIENT_ID was
+  // missing the operator just saw a 404 in the new tab instead of the
+  // actual error message).
+  const { rows } = await query<{ name: string; ghl_location_id: string }>(
+    `SELECT name, ghl_location_id FROM schools WHERE id = $1`, [schoolId],
   );
   if (rows.length === 0) {
     return NextResponse.json({ error: 'school_not_found' }, { status: 404 });
   }
+  const locationId = rows[0].ghl_location_id;
   const { rows: bRows } = await query<{ support_email: string | null }>(
     `SELECT support_email FROM school_branding WHERE school_id = $1`, [schoolId],
   );
@@ -41,13 +47,31 @@ export async function POST(request: NextRequest, { params }: { params: Params })
     const redirectUri = `${origin}/api/admin/schools/${schoolId}/payments/connect-oauth/callback`;
     authorizeUrl = buildAuthorizeUrl({ state, redirectUri, schoolEmail: supportEmail });
   } catch (err) {
-    // Most likely STRIPE_CLIENT_ID isn't configured — surface that as
-    // a real error rather than silently bouncing back. Operator can
-    // wire the env var in Vercel and try again.
+    // Most likely STRIPE_CLIENT_ID isn't configured. Send the operator
+    // to a friendly HTML error page with the underlying reason — far
+    // better UX than a raw 404 or JSON blob in the new tab the form
+    // opened.
     const msg = err instanceof Error ? err.message : String(err);
-    const back = new URL(`/school/_/payments?tab=settings`, request.url);
-    back.searchParams.set('err', `OAuth setup failed: ${msg}`);
-    return NextResponse.redirect(back, 303);
+    const helpUrl = `${request.nextUrl.origin}/school/${locationId}/payments?tab=settings&err=${encodeURIComponent('Connect-existing flow is not set up yet: ' + msg)}`;
+    const html = `<!doctype html>
+<html><head><meta charset="utf-8"><title>Stripe Connect not configured</title>
+<style>body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;max-width:600px;margin:48px auto;padding:24px;color:#0f172a}h1{margin:0 0 8px;font-size:18px}code{background:#f1f5f9;padding:2px 6px;border-radius:4px;font-size:13px}.box{border-left:4px solid #f59e0b;background:#fffbeb;padding:12px 16px;border-radius:6px;margin:16px 0}a{color:#2563eb}</style>
+</head><body>
+<h1>⚠️ The &quot;Connect existing Stripe account&quot; flow isn&rsquo;t configured yet.</h1>
+<p class="box"><strong>Underlying reason:</strong> ${msg.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]!))}</p>
+<p>To enable this flow:</p>
+<ol>
+<li>In the <a href="https://dashboard.stripe.com/settings/connect/onboarding-options/oauth" target="_blank">Stripe Dashboard</a> under <em>Connect → Onboarding options</em>, toggle <strong>Standard</strong> + enable <strong>OAuth</strong>.</li>
+<li>Copy the <strong>OAuth client ID</strong> (starts with <code>ca_…</code>).</li>
+<li>Add it to Vercel as <code>STRIPE_CLIENT_ID</code> and redeploy.</li>
+</ol>
+<p>Once set, this button will redirect to Stripe&rsquo;s authorize page like normal.</p>
+<p><a href="${helpUrl}">← Back to school payments settings</a></p>
+</body></html>`;
+    return new NextResponse(html, {
+      status: 503,
+      headers: { 'Content-Type': 'text/html; charset=utf-8' },
+    });
   }
 
   return NextResponse.redirect(authorizeUrl, 303);
