@@ -60,6 +60,13 @@ const REQUIRED_FIELDS = [
   { name: 'Billing Share Percentage',    dataType: 'TEXT',      fieldKey: 'billing_share_percentage' },
   { name: 'Billing Share Annual Amount', dataType: 'MONETORY',  fieldKey: 'billing_share_annual_amount' },
   { name: 'Billing Plan',                dataType: 'TEXT',      fieldKey: 'billing_plan' },
+  // Per-student admission date — slot 1 has no number prefix (per the
+  // studentFieldKey() helper); slots 2-4 use student_N_… Each parent
+  // contact carries up to 4 student slots.
+  { name: 'Student Date of Admission',   dataType: 'DATE',      fieldKey: 'student_date_of_admission' },
+  { name: 'Student 2 Date of Admission', dataType: 'DATE',      fieldKey: 'student_2_date_of_admission' },
+  { name: 'Student 3 Date of Admission', dataType: 'DATE',      fieldKey: 'student_3_date_of_admission' },
+  { name: 'Student 4 Date of Admission', dataType: 'DATE',      fieldKey: 'student_4_date_of_admission' },
 ];
 
 // Lazy-load the TS helper so this script runs through tsx.

@@ -345,7 +345,13 @@ function dhsAgreementForm() {
         { required: true }),
 
       blockSection('Dates'),
-      dateF('admission_date', 'Date of child\'s admission', { required: true }),
+      // Date of admission is set per-student by school staff (Melody)
+      // via the admin UI and synced to GHL custom field
+      // student_date_of_admission. The form prefills it so parents
+      // don't have to know the date themselves.
+      dateF('admission_date', 'Date of child\'s admission',
+        { required: true, prefill: 'student.date_of_admission',
+          help: 'Pre-filled from your child\'s enrollment record. Contact the office if this looks wrong.' }),
 
       blockSection('Signature'),
       blockParagraph(MCH_ESIG_CONSENT, 'note'),
@@ -403,6 +409,11 @@ function dhsAgreementSummerForm() {
       area('attendance_weeks',
         'Days of attendance — list the weeks & days your child will attend',
         { required: true, rows: 3, placeholder: 'e.g. Weeks of June 15, June 22, July 6 — Mon/Wed/Fri' }),
+      // Date of admission auto-fills from student.metadata.date_of_admission
+      // (set by school staff in the admin UI / synced from GHL).
+      dateF('admission_date', 'Date of child\'s admission',
+        { required: true, prefill: 'student.date_of_admission',
+          help: 'Pre-filled from your child\'s enrollment record. Contact the office if this looks wrong.' }),
 
       blockSection('Persons Designated by Parents to Whom Child May Be Released',
         'List anyone authorized to pick up your child during camp.'),

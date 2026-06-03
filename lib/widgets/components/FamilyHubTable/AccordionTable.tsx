@@ -325,6 +325,8 @@ function StudentDetailCard({ student }: { student: StudentRecord }) {
   // still see it without us having to enumerate every school's fields.
   const sections = bucketMetadata(md, student);
 
+  const admissionDate = typeof md.date_of_admission === 'string' ? md.date_of_admission : '';
+
   return (
     <div className="rounded-lg border border-gray-200 bg-white p-4 space-y-3 shadow-sm">
       <div className="flex items-baseline justify-between gap-3 border-b border-gray-100 pb-2">
@@ -344,12 +346,90 @@ function StudentDetailCard({ student }: { student: StudentRecord }) {
         ) : null}
       </div>
 
+      <AdmissionDateEditor studentId={student.id} currentDate={admissionDate} />
+
       {sections.map((sec) =>
         sec.rows.length > 0 ? (
           <DetailSection key={sec.title} title={sec.title} rows={sec.rows} />
         ) : null
       )}
     </div>
+  );
+}
+
+// Compact inline editor for students.metadata.date_of_admission. Saves
+// via /api/school/students/set-admission-date which (a) writes the
+// field and (b) fires the GHL writeback so the value lands on the
+// parent's contact record under student_date_of_admission / student_N_…
+function AdmissionDateEditor({
+  studentId,
+  currentDate,
+}: {
+  studentId: string;
+  currentDate: string;
+}) {
+  // Preserve the current iframe URL so the redirect lands the operator
+  // back where they were (with the success/error flash query params).
+  // window is fine to read here — parent component is already 'use client'.
+  const returnTo = typeof window !== 'undefined'
+    ? window.location.pathname + window.location.search
+    : '';
+
+  return (
+    <form
+      action="/api/school/students/set-admission-date"
+      method="post"
+      className="rounded-md border border-emerald-100 bg-emerald-50/40 p-2.5"
+    >
+      <input type="hidden" name="student_id" value={studentId} />
+      <input type="hidden" name="return_to" value={returnTo} />
+      <div className="mb-1.5 flex items-center justify-between gap-2">
+        <div className="text-[10px] uppercase tracking-wider text-emerald-800 font-semibold">
+          Date of Admission
+        </div>
+        {currentDate ? (
+          <span className="text-[10px] text-emerald-700">currently {fmtDate(currentDate)}</span>
+        ) : (
+          <span className="text-[10px] text-amber-700">not set</span>
+        )}
+      </div>
+      <div className="flex flex-wrap items-center gap-1.5">
+        <input
+          type="date"
+          name="date_of_admission"
+          defaultValue={currentDate}
+          className="flex-1 min-w-[140px] rounded border border-gray-300 bg-white px-2 py-1 text-xs"
+        />
+        <button
+          type="submit"
+          className="rounded-md bg-emerald-600 px-2.5 py-1 text-xs font-semibold text-white shadow-sm hover:bg-emerald-700"
+        >
+          Save
+        </button>
+        {currentDate ? (
+          <button
+            type="submit"
+            formAction="/api/school/students/set-admission-date"
+            onClick={(e) => {
+              // Submit with an empty date_of_admission to clear it.
+              const form = (e.currentTarget as HTMLButtonElement).form;
+              if (!form) return;
+              const input = form.querySelector('input[name="date_of_admission"]') as HTMLInputElement | null;
+              if (input) input.value = '';
+            }}
+            className="rounded-md border border-gray-300 bg-white px-2 py-1 text-[11px] text-gray-700 hover:bg-gray-50"
+          >
+            Clear
+          </button>
+        ) : null}
+      </div>
+      <p className="mt-1 text-[10px] text-gray-500 leading-snug">
+        Pre-fills the parent&apos;s DHS Agreement and syncs to the GHL contact field
+        <code className="ml-1 rounded bg-white px-1 font-mono text-[9px] text-gray-700">
+          student_date_of_admission
+        </code>.
+      </p>
+    </form>
   );
 }
 
@@ -453,6 +533,7 @@ function bucketMetadata(md: Record<string, unknown>, st: StudentRecord): Section
   const known = new Set<string>([
     'preferred_name', 'birth_date', 'gender', 'grade_level', 'program', 'homeroom',
     'enrollment_status', 'initial_start_date', 'current_year_enrollment_start_date',
+    'date_of_admission', // surfaced via the prominent AdmissionDateEditor
     'iep', '504_plan', 'daily_schedule', 'lead_teacher', 'allergy',
     'tuition_fee', 'extended_day_fee', 'lunch_fee', 'admin_fee', 'enrollment_fee',
     'late_fee', 'total_amount', 'payment_plan', 'organic_lunch',
