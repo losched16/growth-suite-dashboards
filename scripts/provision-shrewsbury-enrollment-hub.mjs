@@ -85,7 +85,7 @@ const STUDENT_ROSTER_LAYOUT = [
         'status', 'allergy', 'iep_504', 'documents', 'family',
       ],
       shown_filters: [
-        'program', 'homeroom', 're_enrolled_only',
+        'program', 'homeroom', 'gender', 're_enrolled_only',
         'allergies_only', 'iep_504_only',
       ],
       drilldown_dashboard_slug: 'family-hub',
