@@ -296,6 +296,9 @@ export async function generateTuitionEnrollment(opts: GenerateOpts): Promise<Gen
         const title = `${grid.display_name} — Installment ${installmentNumber}/${plan.installment_count}${titleSuffix}`;
         const description = `${plan.display_name} · ${opts.academicYear}`;
 
+        // 18 cols, 18 values. $1-$15 are the parameters; positions 10
+        // (platform_fee_cents=0), 15 (source='tuition_plan'),
+        // and 17 (includes_platform_setup_fee=false) are literals.
         const invIns = await q<{ id: string }>(
           `INSERT INTO invoices
              (school_id, family_id, student_id, responsible_parent_id,
@@ -303,8 +306,8 @@ export async function generateTuitionEnrollment(opts: GenerateOpts): Promise<Gen
               status, subtotal_cents, platform_fee_cents, discount_total_cents,
               total_cents, due_at, issued_at, source, source_ref,
               includes_platform_setup_fee, created_by_email)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 0, $10, $11, $12, $13, $14,
-                   'tuition_plan', $15::jsonb, false, $16)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 0, $10,
+                   $11, $12, $13, 'tuition_plan', $14::jsonb, false, $15)
            RETURNING id`,
           [
             opts.schoolId, opts.familyId, opts.studentId, party.parent_id,
@@ -466,8 +469,15 @@ function computeDueDates(
   }
 
   // Map a month number (1-12) to a calendar year inside the academic
-  // year: months 8-12 fall in the START year, months 1-7 in start+1.
-  const yearOf = (month: number) => month >= 8 ? startYear : startYear + 1;
+  // year. The boundary is the school's academic-year start month —
+  // typically August (fall-start), but MCH and some others start in
+  // July. When an anchor is set we use the anchor month as the boundary;
+  // otherwise we default to August (preserves the old behavior for
+  // schools that never configured an anchor).
+  //   months >= start → calendar year is the academic-year start year
+  //   months <  start → calendar year is start + 1
+  const startMonth = anchorMonth ?? 8;
+  const yearOf = (month: number) => month >= startMonth ? startYear : startYear + 1;
 
   // Clamp day to the actual length of the month (e.g. anchor day 31
   // applied to February → 28/29). UTC noon to dodge DST edge cases.
