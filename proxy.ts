@@ -297,6 +297,14 @@ function extractLocationId(request: NextRequest): string | null {
 // admins). Next.js 16 layouts can't read searchParams, so the proxy
 // reads it here and propagates via the `x-chrome` request header which
 // the school layout reads via next/headers.
+// Locations that always render sidebar-less. Lets a school's GHL Custom
+// Menu Links omit `?chrome=none` and still get the bare-embed view.
+// Add a locationId here once we've confirmed the school never wants
+// the Growth Suite sidebar visible inside their GHL embeds.
+const FORCE_NO_CHROME_LOCATIONS = new Set<string>([
+  '61ZKzUGlRhlujvo9vljO', // Shrewsbury Montessori
+]);
+
 function passThroughWithChrome(request: NextRequest): NextResponse {
   // Resolve effective chrome:
   //   1. Explicit `?chrome=none` query param (operator chooses per-iframe)
@@ -304,10 +312,15 @@ function passThroughWithChrome(request: NextRequest): NextResponse {
   //      its own header + sub-nav and must never render inside the
   //      Growth Suite sidebar (would look like two competing chromes
   //      stacked inside the same iframe).
+  //   3. Per-school allowlist: schools in FORCE_NO_CHROME_LOCATIONS
+  //      always render bare regardless of the URL param.
   const queryChrome = request.nextUrl.searchParams.get('chrome') ?? '';
   const path = request.nextUrl.pathname;
   const isPaymentsHub = /^\/school\/[^/]+\/payments(?:\/.*)?$/.test(path);
-  const chrome = queryChrome || (isPaymentsHub ? 'none' : '');
+  const schoolMatch = /^\/school\/([^/]+)/.exec(path);
+  const locationId = schoolMatch?.[1] ?? '';
+  const isForceLocation = FORCE_NO_CHROME_LOCATIONS.has(locationId);
+  const chrome = queryChrome || (isPaymentsHub || isForceLocation ? 'none' : '');
   const response = chrome
     ? NextResponse.next({
         request: {
