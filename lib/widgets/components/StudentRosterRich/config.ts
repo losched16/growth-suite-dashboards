@@ -20,6 +20,7 @@ export const AVAILABLE_FILTERS = [
   { key: 'iep_504_only', label: 'IEP/504 only', type: 'checkbox' as const },
   { key: 'lunch_only', label: 'Hot lunch only', type: 'checkbox' as const },
   { key: 'curbside_only', label: 'Curbside today', type: 'checkbox' as const },
+  { key: 're_enrolled_only', label: 'Re-enrolled only', type: 'checkbox' as const },
 ] as const;
 
 export type FilterKey = typeof AVAILABLE_FILTERS[number]['key'];
@@ -39,6 +40,7 @@ export const AVAILABLE_COLUMNS = [
   { key: 'attendance',           label: 'Today\'s attendance' },
   { key: 'attendance_notes',     label: 'Check-in notes' },
   { key: 'pickup_restrictions',  label: 'NOT authorized pickup' },
+  { key: 're_enrolled',          label: 'Re-enrolled' },
   { key: 'family',               label: 'Family' },
   { key: 'documents',            label: 'Documents' },
 ] as const;

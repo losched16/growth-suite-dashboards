@@ -341,6 +341,11 @@ function renderCell(
         </span>
       );
     }
+    case 're_enrolled': {
+      return s.re_enrolled
+        ? <span className="inline-block rounded-full bg-emerald-100 text-emerald-800 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide">Re-enrolled</span>
+        : <span className="text-gray-400">—</span>;
+    }
     case 'attendance_notes': {
       // Substantive notes left during today's check-in. Surfaces things
       // like "ate breakfast late" / "needs nap by 10:30" without making

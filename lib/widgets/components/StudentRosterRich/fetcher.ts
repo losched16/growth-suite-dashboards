@@ -100,6 +100,9 @@ export interface RosterStudent {
   // teacher at the door doesn't have to open the family accordion to
   // know who to refuse. Empty array = no restrictions.
   pickup_restrictions: Array<{ name: string; reason: string | null }>;
+  // True when the school's GHL contact carries a "re-enrolled" tag.
+  // Surfaced as a chip next to the student name.
+  re_enrolled: boolean;
   search_haystack: string;
 }
 
@@ -162,6 +165,10 @@ interface DbRow {
   // JSON array of { name, reason } for everyone on this student's
   // pickup_restrictions list (active rows only).
   pickup_restrictions_json: Array<{ name: string; reason: string | null }> | null;
+  // students.metadata.re_enrolled — true when the school's GHL contact
+  // carries the "re-enrolled" tag. Set by the per-school tag sync;
+  // null/false otherwise.
+  re_enrolled_flag: boolean | null;
 }
 
 export async function fetcher(
@@ -192,7 +199,8 @@ export async function fetcher(
        shp.allergies          AS hp_allergies,
        shp.medical_conditions AS hp_medical_conditions,
        an.notes               AS attendance_notes_today,
-       pr.restrictions_json   AS pickup_restrictions_json
+       pr.restrictions_json   AS pickup_restrictions_json,
+       (s.metadata->>'re_enrolled')::boolean AS re_enrolled_flag
      FROM students s
      JOIN families f ON f.id = s.family_id
      LEFT JOIN LATERAL (
@@ -322,6 +330,7 @@ export async function fetcher(
       curbside_slot: r.curbside_slot,
       attendance_notes: r.attendance_notes_today,
       pickup_restrictions: Array.isArray(r.pickup_restrictions_json) ? r.pickup_restrictions_json : [],
+      re_enrolled: r.re_enrolled_flag === true,
       search_haystack: haystack,
     };
   });
@@ -355,6 +364,7 @@ export async function fetcher(
   const lunchOnly = sp.lunch_only === '1' || sp.lunch_only === 'true';
   const fAttendance = (sp.attendance_status ?? '').trim();
   const curbsideOnly = sp.curbside_only === '1' || sp.curbside_only === 'true';
+  const reEnrolledOnly = sp.re_enrolled_only === '1' || sp.re_enrolled_only === 'true';
 
   const filtered = all.filter((s) => {
     if (fProg && (s.program ?? s.classroom_name ?? '') !== fProg) return false;
@@ -368,6 +378,7 @@ export async function fetcher(
     if (lunchOnly && !s.has_lunch) return false;
     if (fAttendance && s.attendance_status !== fAttendance) return false;
     if (curbsideOnly && !s.curbside_today) return false;
+    if (reEnrolledOnly && !s.re_enrolled) return false;
     if (search && !s.search_haystack.includes(search)) return false;
     return true;
   });

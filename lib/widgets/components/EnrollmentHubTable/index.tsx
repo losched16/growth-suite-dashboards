@@ -137,6 +137,7 @@ function FilterRow({
     iep: ['yes', 'no'],
     '504_plan': ['yes', 'no'],
     allergy: ['yes', 'no'],
+    re_enrolled: ['yes', 'no'],
   };
 
   // GET form so all current params (search + filters) are submitted as
@@ -285,6 +286,9 @@ function renderCell(
     case 'iep': return s.iep && s.iep.toLowerCase() !== 'no' ? <span className="text-amber-700">{s.iep}</span> : <span className="text-gray-400">—</span>;
     case '504_plan': return s.five04_plan && s.five04_plan.toLowerCase() !== 'no' ? <span className="text-amber-700">{s.five04_plan}</span> : <span className="text-gray-400">—</span>;
     case 'allergy': return s.allergy && s.allergy.toLowerCase() !== 'no' && s.allergy.toLowerCase() !== 'none' ? <span className="text-rose-700">{s.allergy}</span> : <span className="text-gray-400">—</span>;
+    case 're_enrolled': return s.re_enrolled
+      ? <span className="inline-block rounded-full bg-emerald-100 text-emerald-800 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide">Re-enrolled</span>
+      : <span className="text-gray-400">—</span>;
     default: return '—';
   }
 }

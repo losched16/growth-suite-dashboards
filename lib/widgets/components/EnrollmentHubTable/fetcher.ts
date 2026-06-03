@@ -31,6 +31,10 @@ export interface StudentRow {
   iep: string | null;
   five04_plan: string | null;
   allergy: string | null;
+  // True when the school's GHL contact carries a "re-enrolled" tag
+  // (synced into students.metadata.re_enrolled by the per-school tag
+  // sync). Shrewsbury uses this to flag families committed for next year.
+  re_enrolled: boolean;
   // For search
   parent_names: string;
   // Primary parent's GHL contact id — used to deep-link the "family"
@@ -190,6 +194,7 @@ export async function fetcher(
       iep: typeof md.iep === 'string' ? md.iep : null,
       five04_plan: typeof md.five04_plan === 'string' ? md.five04_plan : null,
       allergy: typeof md.allergy === 'string' ? md.allergy : null,
+      re_enrolled: md.re_enrolled === true,
       parent_names: r.parent_names ?? '',
       primary_parent_ghl_contact_id: r.primary_parent_ghl_contact_id ?? null,
     };
@@ -220,6 +225,7 @@ export async function fetcher(
   const fIep = (sp.iep ?? '').trim();          // 'yes' | 'no' | ''
   const f504 = (sp['504_plan'] ?? '').trim();
   const fAllergy = (sp.allergy ?? '').trim();
+  const fReEnrolled = (sp.re_enrolled ?? '').trim();   // 'yes' | 'no' | ''
 
   const filtered = allStudents.filter((s) => {
     if (fStatus && (s.status ?? '') !== fStatus) return false;
@@ -231,6 +237,11 @@ export async function fetcher(
     if (fIep && yesNo(s.iep) !== fIep) return false;
     if (f504 && yesNo(s.five04_plan) !== f504) return false;
     if (fAllergy && hasAllergy(s.allergy) !== fAllergy) return false;
+    if (fReEnrolled) {
+      const isYes = s.re_enrolled === true;
+      if (fReEnrolled === 'yes' && !isYes) return false;
+      if (fReEnrolled === 'no'  &&  isYes) return false;
+    }
     if (search) {
       const hay = `${s.first_name} ${s.preferred_name ?? ''} ${s.last_name} ${s.parent_names} ${s.family_display_name ?? ''}`.toLowerCase();
       if (!hay.includes(search)) return false;

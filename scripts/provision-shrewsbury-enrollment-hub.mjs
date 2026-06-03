@@ -57,9 +57,10 @@ const ENROLLMENT_HUB_LAYOUT = [
       // enrollments come in, the operator can filter to status=enrolled
       // on the page itself or this can be flipped via re-run.
       only_enrolled: false,
-      shown_filters: ['status', 'year'],
+      shown_filters: ['status', 'program', 'homeroom', 're_enrolled', 'year'],
       shown_columns: [
-        'student', 'dob', 'age', 'status', 'family',
+        'student', 'dob', 'age', 'status', 're_enrolled',
+        'program', 'homeroom', 'family',
       ],
       show_stat_cards: true,
       show_breakdowns: true,
@@ -68,44 +69,78 @@ const ENROLLMENT_HUB_LAYOUT = [
   },
 ];
 
+// Companion config for the Student Roster dashboard. Same idea:
+// surface the room (homeroom), program, and re-enrolled chip so
+// teachers and admins see the same data the Enrollment Hub does.
+const STUDENT_ROSTER_LAYOUT = [
+  {
+    widget_id: 'student_roster_rich',
+    instance_id: 'shrewsbury-student-roster',
+    position: { x: 0, y: 0, w: 12, h: 32 },
+    config: {
+      page_size: 100,
+      enable_views: ['list', 'grid'],
+      shown_columns: [
+        'student', 'gender_age', 'program', 'homeroom', 're_enrolled',
+        'status', 'allergy', 'iep_504', 'documents', 'family',
+      ],
+      shown_filters: [
+        'program', 'homeroom', 're_enrolled_only',
+        'allergies_only', 'iep_504_only',
+      ],
+      drilldown_dashboard_slug: 'family-hub',
+      documents_audience: 'all',
+    },
+  },
+];
+
+// Upsert one dashboard config. Shared by both the enrollment-hub and
+// student-roster updates below — they only differ in slug + layout.
+async function upsertDashboard(c, slug, display, description, layout) {
+  const existing = await c.query(
+    `SELECT id FROM school_dashboards WHERE school_id = $1 AND dashboard_slug = $2`,
+    [SCHOOL_ID, slug],
+  );
+  if (existing.rows[0]) {
+    await c.query(
+      `UPDATE school_dashboards
+          SET display_name = $1, description = $2, layout = $3::jsonb,
+              is_enabled = true, updated_at = now()
+        WHERE id = $4`,
+      [display, description, JSON.stringify(layout), existing.rows[0].id],
+    );
+    return { id: existing.rows[0].id, created: false };
+  }
+  const ins = await c.query(
+    `INSERT INTO school_dashboards
+       (school_id, dashboard_slug, display_name, description, layout, is_enabled, position)
+     VALUES ($1, $2, $3, $4, $5::jsonb, true,
+             COALESCE((SELECT MAX(position) + 10 FROM school_dashboards WHERE school_id = $1), 100))
+     RETURNING id`,
+    [SCHOOL_ID, slug, display, description, JSON.stringify(layout)],
+  );
+  return { id: ins.rows[0].id, created: true };
+}
+
 async function main() {
   const c = await pool.connect();
   try {
-    const slug = 'enrollment-hub';
-    const display = 'Enrollment Hub';
-    const description =
+    const eh = await upsertDashboard(
+      c, 'enrollment-hub', 'Enrollment Hub',
       `Admissions + enrollment pipeline for ${ACADEMIC_YEAR}. `
       + 'Stat cards roll up totals; the table below is searchable + sortable. '
-      + 'As inquiries convert to enrolled students, use the status filter to slice the pipeline.';
-
-    const existing = await c.query(
-      `SELECT id FROM school_dashboards WHERE school_id = $1 AND dashboard_slug = $2`,
-      [SCHOOL_ID, slug],
+      + 'Re-enrolled, room (homeroom), and program columns pull from the GHL tag sync.',
+      ENROLLMENT_HUB_LAYOUT,
     );
+    console.log(`✓ ${eh.created ? 'Created' : 'Updated'} Shrewsbury Enrollment Hub (id=${eh.id}, year=${ACADEMIC_YEAR}).`);
 
-    let dashboardId;
-    if (existing.rows[0]) {
-      await c.query(
-        `UPDATE school_dashboards
-            SET display_name = $1, description = $2, layout = $3::jsonb,
-                is_enabled = true, updated_at = now()
-          WHERE id = $4`,
-        [display, description, JSON.stringify(ENROLLMENT_HUB_LAYOUT), existing.rows[0].id],
-      );
-      dashboardId = existing.rows[0].id;
-      console.log(`✓ Updated Shrewsbury Enrollment Hub (id=${dashboardId}, year=${ACADEMIC_YEAR}).`);
-    } else {
-      const ins = await c.query(
-        `INSERT INTO school_dashboards
-           (school_id, dashboard_slug, display_name, description, layout, is_enabled, position)
-         VALUES ($1, $2, $3, $4, $5::jsonb, true,
-                 COALESCE((SELECT MAX(position) + 10 FROM school_dashboards WHERE school_id = $1), 100))
-         RETURNING id`,
-        [SCHOOL_ID, slug, display, description, JSON.stringify(ENROLLMENT_HUB_LAYOUT)],
-      );
-      dashboardId = ins.rows[0].id;
-      console.log(`✓ Created Shrewsbury Enrollment Hub (id=${dashboardId}, year=${ACADEMIC_YEAR}).`);
-    }
+    const sr = await upsertDashboard(
+      c, 'student-roster', 'Student Roster',
+      'Searchable + filterable student roster. Re-enrolled, room, and program '
+      + 'columns reflect the latest GHL tag sync.',
+      STUDENT_ROSTER_LAYOUT,
+    );
+    console.log(`✓ ${sr.created ? 'Created' : 'Updated'} Shrewsbury Student Roster (id=${sr.id}).`);
 
     // Quick sanity check — how many rows match the current config?
     const cnt = await c.query(
@@ -115,8 +150,18 @@ async function main() {
         WHERE s.school_id = $1 AND e.academic_year = $2`,
       [SCHOOL_ID, ACADEMIC_YEAR],
     );
-    console.log(`  Matched ${cnt.rows[0].n} students with enrollments for ${ACADEMIC_YEAR}.`);
-    console.log(`  Open at: /school/<locationId>/${slug}`);
+    console.log(`\n  Matched ${cnt.rows[0].n} students with enrollments for ${ACADEMIC_YEAR}.`);
+    const tagCounts = await c.query(
+      `SELECT
+         COUNT(*) FILTER (WHERE metadata->>'re_enrolled' = 'true') AS re_enrolled,
+         COUNT(*) FILTER (WHERE metadata->>'homeroom'   IS NOT NULL) AS with_homeroom,
+         COUNT(*) FILTER (WHERE metadata->>'program'    IS NOT NULL) AS with_program
+         FROM students WHERE school_id = $1`,
+      [SCHOOL_ID],
+    );
+    console.log(`  Re-enrolled flag: ${tagCounts.rows[0].re_enrolled}`);
+    console.log(`  Homeroom synced:  ${tagCounts.rows[0].with_homeroom}`);
+    console.log(`  Program synced:   ${tagCounts.rows[0].with_program}`);
   } finally {
     c.release();
     await pool.end();
