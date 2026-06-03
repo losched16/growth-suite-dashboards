@@ -256,6 +256,11 @@ function act90Form() {
       'loan. Sign once per child per school year. Pennsylvania residents only.',
     category: 'enrollment',
     per_student: true,
+    // Kindergarten-only: Act 195/90 textbook loan is a K-12 entitlement.
+    // PA does not require it for Primary or Young Community kids — and
+    // MCH was sending it to every family, creating noise. Restrict to
+    // students enrolled in the dedicated Kindergarten tuition grid.
+    applies_to: { tuition_grid_match: ['kindergarten'] },
     confirmation_message:
       'Thanks! Your Act 90 / 195 textbook loan request has been received. MCH will ' +
       'forward the request to your local public school district.',
@@ -295,6 +300,18 @@ function dhsAgreementForm() {
   return {
     slug: 'mch-dhs-agreement',
     display_name: 'DHS Agreement — Extended Care (School Year)',
+    // Visible to: (a) Young Community / Toddler kids — they're enrolled
+    // in DHS-licensed child care by default, and (b) anyone who selected
+    // extended care (before-care, after-care, or both) on their
+    // enrollment paperwork — those services trigger the DHS agreement
+    // even for older Primary / Kindergarten students. Plain half-day
+    // Primary kids without extended care skip it.
+    applies_to: {
+      program_match: ['young community'],
+      metadata_match: {
+        aftercare: ['before', 'after', 'both', 'full'],
+      },
+    },
     description:
       'Pennsylvania DHS-required care agreement (55 PA Code Ch. 3270.123 & .181). ' +
       'Sets the Extended Care fee, arrival / departure times, and authorized release ' +
@@ -520,6 +537,11 @@ function dentalExamForm() {
       'signs — upload the completed PDF here before your child\'s first day.',
     category: 'medical',
     per_student: true,
+    // Kindergarten-only: PA Department of Health Act 28 dental exam
+    // requirement is for K + 3rd grade. MCH only enrolls through K,
+    // so this form should appear for K students only. Primary +
+    // Young Community kids don't need it.
+    applies_to: { tuition_grid_match: ['kindergarten'] },
     confirmation_message:
       'Thanks! Your dental exam form has been received and added to your child\'s file.',
     field_schema: [
@@ -868,6 +890,12 @@ async function main() {
       [MCH_SCHOOL_ID, f.slug],
     );
 
+    // Per-student visibility rule (migration 048). Always passed, even
+    // when null — the column accepts NULL and that's the "applies to
+    // every student" sentinel. Lets us un-restrict a form on a re-seed
+    // by removing the applies_to property from the form definition.
+    const appliesTo = f.applies_to ? JSON.stringify(f.applies_to) : null;
+
     if (existing.rowCount === 0) {
       await pool.query(
         `INSERT INTO portal_form_definitions
@@ -875,11 +903,13 @@ async function main() {
             is_active, needs_review, allow_addendum, resubmission_allowed,
             one_submission_per_year,
             field_schema, ghl_writeback, notify_emails, webhook_urls,
-            confirmation_message, audience)
+            confirmation_message, audience, applies_to)
          VALUES ($1,$2,$3,$4,$5,$6, true, false, false, true, false,
-                 $7::jsonb, '[]'::jsonb, $8::text[], '{}'::text[], $9, 'parents')`,
+                 $7::jsonb, '[]'::jsonb, $8::text[], '{}'::text[], $9, 'parents',
+                 $10::jsonb)`,
         [MCH_SCHOOL_ID, f.slug, f.display_name, f.description, f.category, f.per_student,
-         JSON.stringify(f.field_schema), f.notify_emails, f.confirmation_message],
+         JSON.stringify(f.field_schema), f.notify_emails, f.confirmation_message,
+         appliesTo],
       );
       console.log(`  ✓ created ${f.slug}`);
       created++;
@@ -895,11 +925,13 @@ async function main() {
           SET display_name = $3, description = $4, category = $5, per_student = $6,
               field_schema = $7::jsonb, notify_emails = $8::text[],
               confirmation_message = $9, audience = 'parents',
+              applies_to = $10::jsonb,
               needs_review = false, is_active = true,
               updated_at = now()
         WHERE school_id = $1 AND slug = $2`,
       [MCH_SCHOOL_ID, f.slug, f.display_name, f.description, f.category, f.per_student,
-       JSON.stringify(f.field_schema), f.notify_emails, f.confirmation_message],
+       JSON.stringify(f.field_schema), f.notify_emails, f.confirmation_message,
+       appliesTo],
     );
     console.log(`  ↻ updated ${f.slug}`);
     updated++;
