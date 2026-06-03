@@ -62,9 +62,9 @@ export async function PaymentsHubSettings({
         ) : account.charges_enabled && account.payouts_enabled ? (
           <LivePanel account={account} />
         ) : account.details_submitted ? (
-          <NeedsInfoPanel account={account} />
+          <NeedsInfoPanel schoolId={schoolId} account={account} />
         ) : (
-          <InProgressPanel schoolId={schoolId} locationId={locationId} />
+          <InProgressPanel schoolId={schoolId} locationId={locationId} account={account} />
         )}
       </section>
 
@@ -214,50 +214,95 @@ function LivePanel({ account }: { account: Account }) {
   );
 }
 
-function NeedsInfoPanel({ account }: { account: Account }) {
+function NeedsInfoPanel({
+  schoolId, account,
+}: { schoolId: string; account: Account }) {
   return (
-    <div>
-      <div className="flex items-center gap-2 text-amber-700 mb-2">
+    <div className="space-y-3">
+      <div className="flex items-center gap-2 text-amber-700">
         <AlertTriangle className="h-4 w-4" />
         <span className="font-semibold">Stripe needs additional info</span>
       </div>
-      <p className="text-sm text-slate-700 mb-2">
+      <p className="text-sm text-slate-700">
         Stripe has flagged the following items for review:
       </p>
       {account.requirements_currently_due && account.requirements_currently_due.length > 0 ? (
-        <ul className="list-disc pl-5 text-xs text-slate-600 mb-3">
+        <ul className="list-disc pl-5 text-xs text-slate-600">
           {account.requirements_currently_due.map((r, i) => <li key={i}><code>{r}</code></li>)}
         </ul>
       ) : null}
-      <a
-        href={`https://dashboard.stripe.com/${account.stripe_account_id}`}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="inline-flex items-center gap-1 rounded-md border border-amber-400 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900 hover:bg-amber-50"
-      >
-        Resolve in Stripe <ExternalLink className="h-3 w-3" />
-      </a>
+      <div className="flex flex-wrap items-center gap-2">
+        <a
+          href={`https://dashboard.stripe.com/${account.stripe_account_id}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1 rounded-md border border-amber-400 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900 hover:bg-amber-50"
+        >
+          Resolve in Stripe <ExternalLink className="h-3 w-3" />
+        </a>
+      </div>
+      <SwitchToExistingPrompt schoolId={schoolId} currentAccountId={account.stripe_account_id} />
     </div>
   );
 }
 
-function InProgressPanel({ schoolId, locationId }: { schoolId: string; locationId?: string }) {
+function InProgressPanel({
+  schoolId, locationId, account,
+}: { schoolId: string; locationId?: string; account: Account }) {
   return (
-    <div>
-      <p className="text-sm text-slate-700 mb-2">
-        Stripe onboarding started but not yet finished. Continue where the school left off:
+    <div className="space-y-3">
+      <p className="text-sm text-slate-700">
+        Stripe onboarding was started but not yet finished. Pick up where the school left off:
       </p>
       {/* target="_blank" — Stripe Connect refuses to load inside the iframe; see ConnectPrompt above. */}
       <form action={`/api/admin/schools/${schoolId}/payments/connect`} method="POST" target="_blank" rel="noopener noreferrer">
         {locationId ? <input type="hidden" name="return_to" value={`/school/${locationId}/payments`} /> : null}
-        <button type="submit" className="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">
+        <button type="submit" className="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-blue-700">
           Continue Stripe onboarding
         </button>
       </form>
-      <p className="mt-2 text-[11px] text-slate-500">
-        Opens Stripe in a new tab.
-      </p>
+      <p className="text-[11px] text-slate-500">Opens Stripe in a new tab.</p>
+      <SwitchToExistingPrompt schoolId={schoolId} currentAccountId={account.stripe_account_id} />
     </div>
+  );
+}
+
+// Reusable "actually, I already have a Stripe account I'd like to use
+// instead" prompt. Shown on both InProgressPanel and NeedsInfoPanel —
+// covers the case where a school clicked "Create new" by mistake and
+// now wants to switch to OAuth-connecting their existing account.
+//
+// Safe: the OAuth callback INSERTs ON CONFLICT (school_id) DO UPDATE,
+// so authorizing a different stripe_user_id cleanly replaces the
+// half-completed row. No funds / invoices live on the abandoned
+// in-progress account, so there's nothing to migrate.
+function SwitchToExistingPrompt({
+  schoolId, currentAccountId,
+}: { schoolId: string; currentAccountId: string }) {
+  return (
+    <details className="rounded-md border border-slate-200 bg-slate-50/60 p-3 group">
+      <summary className="cursor-pointer text-xs font-semibold text-slate-700 list-none flex items-center gap-1">
+        <span className="text-slate-400 group-open:rotate-90 inline-block transition-transform">▸</span>
+        I&apos;d rather connect an existing Stripe account
+      </summary>
+      <div className="mt-2 space-y-2">
+        <p className="text-xs text-slate-600">
+          Already have a Stripe account you use elsewhere? Sign in with your existing credentials below
+          and we&apos;ll switch this school over. Bank account, tax settings, and payment methods stay
+          exactly as they are on your existing account — we just authorize this platform to issue
+          invoices on it.
+        </p>
+        <p className="text-[11px] text-slate-500">
+          This will replace the in-progress connection (<code className="font-mono">{currentAccountId}</code>),
+          which has no live invoices yet. Takes about 30 seconds.
+        </p>
+        <form action={`/api/admin/schools/${schoolId}/payments/connect-oauth/start`} method="POST" target="_blank" rel="noopener noreferrer">
+          <button type="submit" className="inline-flex items-center gap-1.5 rounded-md border-2 border-blue-600 bg-white px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-50">
+            Connect existing Stripe account
+          </button>
+        </form>
+      </div>
+    </details>
   );
 }
 
