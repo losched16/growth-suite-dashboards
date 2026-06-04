@@ -7,7 +7,7 @@
 // application-level decision and the per-student awards atomically.
 
 import { useState } from 'react';
-import { ChevronRight, ChevronDown, FileText, ExternalLink, Users } from 'lucide-react';
+import { ChevronRight, ChevronDown, FileText, ExternalLink, Users, Printer } from 'lucide-react';
 import type { FaApplicationRow, FaStudentRow } from './fetcher';
 
 const EMDASH = '—';
@@ -312,7 +312,12 @@ function AwardForm({
     return init;
   });
   const [familyNote, setFamilyNote] = useState<string>(a.decision_note ?? '');
-  const [status, setStatus] = useState<string>(a.status === 'submitted' ? 'reviewing' : a.status);
+  // 'submitted' isn't an option in the dropdown — it's the auto-set
+  // state the parent portal writes. We bump the default to
+  // 'under_review' so an admin opening a fresh app sees a sensible
+  // next-step value (legacy 'reviewing' is also remapped here).
+  const initialStatus = a.status === 'submitted' || a.status === 'reviewing' ? 'under_review' : a.status;
+  const [status, setStatus] = useState<string>(initialStatus);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -420,15 +425,16 @@ function AwardForm({
             onChange={(e) => setStatus(e.target.value)}
             className="w-full rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm focus:border-emerald-600 focus:outline-none"
           >
-            <option value="reviewing">Reviewing</option>
+            <option value="under_review">Under review</option>
             <option value="decided">Decided</option>
+            <option value="declined">Declined</option>
             <option value="withdrawn">Withdrawn</option>
           </select>
         </label>
       </div>
 
       {err ? <div className="rounded border border-red-200 bg-red-50 px-2 py-1 text-xs text-red-800">{err}</div> : null}
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 flex-wrap">
         <button
           type="button"
           onClick={() => save(false)}
@@ -445,6 +451,28 @@ function AwardForm({
         >
           {busy ? 'Saving…' : 'Mark as Decided'}
         </button>
+        {/* Print decision letter — opens the HTML letter rendered
+            from the school's template in a new tab; the admin uses
+            the browser print dialog (or the in-page button) to save
+            it as PDF. Only meaningful once the decision is recorded,
+            so we disable until status === 'decided'. */}
+        <a
+          href={`/api/school/fa-applications/${a.id}/letter`}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-disabled={a.status !== 'decided'}
+          onClick={(e) => { if (a.status !== 'decided') e.preventDefault(); }}
+          title={a.status !== 'decided'
+            ? 'Mark this application as Decided first — then you can print the letter.'
+            : 'Open a print-ready decision letter in a new tab.'}
+          className={
+            a.status === 'decided'
+              ? 'inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50'
+              : 'inline-flex items-center gap-1 rounded-md border border-slate-200 bg-slate-50 px-3 py-1.5 text-sm font-medium text-slate-400 cursor-not-allowed'
+          }
+        >
+          <Printer className="h-3.5 w-3.5" /> Print decision letter
+        </a>
       </div>
     </div>
   );
@@ -517,6 +545,8 @@ function StatusBadge({ status }: { status: string }) {
     status === 'submitted'   ? 'bg-amber-100 text-amber-800' :
     status === 'reviewing'   ? 'bg-blue-100 text-blue-800' :
     status === 'decided'     ? 'bg-emerald-100 text-emerald-800' :
+    status === 'under_review'? 'bg-violet-100 text-violet-800' :
+    status === 'declined'    ? 'bg-rose-100 text-rose-800' :
     status === 'withdrawn'   ? 'bg-zinc-200 text-zinc-700' :
                                 'bg-gray-100 text-gray-700';
   return (
