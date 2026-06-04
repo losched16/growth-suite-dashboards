@@ -15,7 +15,7 @@ import { query, withTransaction } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
 
-const ALLOWED_STATUSES = new Set(['reviewing', 'decided', 'withdrawn']);
+const ALLOWED_STATUSES = new Set(['under_review', 'decided', 'withdrawn', 'declined']);
 
 export async function POST(request: NextRequest) {
   const ck = await cookies();
@@ -67,25 +67,75 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const decidedAt = status === 'decided' ? new Date().toISOString() : null;
+    const now = new Date().toISOString();
+    const decidedAt = status === 'decided' ? now : null;
+    const reviewStartedAt = status === 'under_review' ? now : null;
     await q(
       `UPDATE fa_applications
        SET recommended_award = $1,
            decision_note = $2,
            status = $3,
            decided_at = COALESCE($4::timestamptz, decided_at),
-           decided_by = COALESCE($5, decided_by)
-       WHERE id = $6`,
+           decided_by = COALESCE($5, decided_by),
+           review_started_at = COALESCE($6::timestamptz, review_started_at),
+           review_started_by = COALESCE($7, review_started_by)
+       WHERE id = $8`,
       [
         anyAwardSet ? totalAward : null,
         familyNote,
         status,
         decidedAt,
         status === 'decided' ? session.user_email : null,
+        reviewStartedAt,
+        status === 'under_review' ? session.user_email : null,
         applicationId,
       ],
     );
   });
+
+  // Fire-and-forget parent notification on decision. We look up the
+  // family's primary parent + the school name, then build a friendly
+  // email with the decision summary + a link to view the full letter
+  // in the parent portal.
+  if (status === 'decided') {
+    Promise.resolve().then(async () => {
+      try {
+        const { rows: app } = await query<{
+          family_id: string; academic_year: string; recommended_award: string | null; decision_note: string | null;
+          school_name: string; parent_email: string | null; parent_first: string | null;
+        }>(
+          `SELECT a.family_id, a.academic_year, a.recommended_award::text, a.decision_note,
+                  sc.name AS school_name,
+                  (SELECT email FROM parents WHERE family_id = a.family_id AND is_primary = true AND status='active' LIMIT 1) AS parent_email,
+                  (SELECT first_name FROM parents WHERE family_id = a.family_id AND is_primary = true AND status='active' LIMIT 1) AS parent_first
+             FROM fa_applications a
+             JOIN schools sc ON sc.id = a.school_id
+            WHERE a.id = $1`,
+          [applicationId],
+        );
+        if (app.length === 0) return;
+        const parentEmail = app[0].parent_email;
+        if (!parentEmail) return;                  // narrowed for downstream use
+        const a = app[0];
+        const award = a.recommended_award !== null ? `$${Number(a.recommended_award).toLocaleString()}` : 'No award';
+        const { sendBrandedEmail } = await import('@/lib/email');
+        await sendBrandedEmail({
+          to: parentEmail,
+          schoolId: session.school_id,
+          subject: `Your ${a.academic_year} Financial Aid decision from ${a.school_name}`,
+          html: `<p>Hi ${a.parent_first ?? 'there'},</p>
+<p>The financial aid committee at <strong>${a.school_name}</strong> has reached a decision on your application for the <strong>${a.academic_year}</strong> school year.</p>
+<p><strong>Award:</strong> ${award}</p>
+${a.decision_note ? `<p><strong>Note from the school:</strong></p><blockquote>${a.decision_note.replace(/[<>]/g, '')}</blockquote>` : ''}
+<p>Sign in to your parent portal to view the full decision letter and download a PDF for your records.</p>
+<p>Warmly,<br/>${a.school_name}</p>`,
+          text: `Hi ${a.parent_first ?? 'there'},\n\nThe financial aid committee at ${a.school_name} has reached a decision on your application for the ${a.academic_year} school year.\n\nAward: ${award}\n\n${a.decision_note ? 'Note from the school: ' + a.decision_note + '\n\n' : ''}Sign in to your parent portal for the full letter.\n\nWarmly,\n${a.school_name}`,
+        });
+      } catch (e) {
+        console.error('[fa/set-award] parent notify failed:', e);
+      }
+    });
+  }
 
   return NextResponse.json({ ok: true });
 }

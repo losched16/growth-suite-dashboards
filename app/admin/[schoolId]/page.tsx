@@ -196,6 +196,12 @@ export default async function SchoolAdmin({
               Menu editors →
             </Link>
             <Link
+              href={`/admin/${schoolId}/financial-aid/settings`}
+              className="rounded-md border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-sm font-medium text-emerald-900 hover:bg-emerald-100"
+            >
+              Financial Aid →
+            </Link>
+            <Link
               href={`/school/${school.ghl_location_id}${
                 previewToken
                   ? `?embed_token=${encodeURIComponent(previewToken)}`
