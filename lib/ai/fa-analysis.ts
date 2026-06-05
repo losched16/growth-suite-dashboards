@@ -54,15 +54,22 @@ export interface FaAnalysisResult {
   demonstrated_need_assessment: string;
   positives: string[];
   concerns: string[];
-  // Per-student recommendation as a range.
+  // Per-student recommendation: a specific number Claude believes is
+  // right, with a low/high range bracketing it so the committee has
+  // room to negotiate up or down.
   recommended_awards: Array<{
     student_id: string;
     student_name: string;
+    recommended_cents: number;     // Claude's best-guess number
+    low_cents: number;             // committee debate floor
+    high_cents: number;            // committee debate ceiling
+    rationale: string;             // why this specific number
+  }>;
+  total_award_range: {
+    recommended_cents: number;     // sum of per-student recommended
     low_cents: number;
     high_cents: number;
-    rationale: string;
-  }>;
-  total_award_range: { low_cents: number; high_cents: number };
+  };
   suggested_decision_note: string;
   // What documents are missing / look stale, if any.
   missing_documents: string[];
@@ -93,11 +100,13 @@ Schema:
   "recommended_awards": [{
     "student_id": string,                               // EXACT student_id passed in input.students[].student_id
     "student_name": string,
-    "low_cents": number,                                // low end of recommended award range
-    "high_cents": number,                               // high end
-    "rationale": string                                 // 1-2 sentence reasoning
+    "recommended_cents": number,                        // YOUR SPECIFIC RECOMMENDATION — the number you'd argue for at the committee table
+    "low_cents": number,                                // floor of the debate range (where you'd reluctantly go)
+    "high_cents": number,                               // ceiling of the debate range (where you'd reach if pushed)
+    "rationale": string                                 // 2-3 sentences explaining your specific recommended_cents number — what it covers, what it leaves the family responsible for
   }],
   "total_award_range": {
+    "recommended_cents": number,                        // sum of per-student recommended_cents
     "low_cents": number,
     "high_cents": number
   },
@@ -107,11 +116,13 @@ Schema:
 }
 
 Guidelines:
-- The recommended award range should be conservative on the low end and generous on the high end so the committee has room to debate.
-- Cap any single student's high_cents at the student's current_tuition_cents (don't recommend awarding more than they owe).
-- If documented data is missing or inconsistent, NOTE it in concerns/missing_documents instead of guessing.
-- If the family is clearly in financial distress (income < expenses, no savings, high debt), say so plainly.
-- If the family is clearly NOT in need (income substantially exceeds expenses, large liquid assets, low debt), recommend low_cents = 0 and explain in the rationale.
+- **recommended_cents is your real recommendation.** Don't hedge — pick the specific dollar amount you'd advocate for in committee, given everything in the data. The low/high range exists separately so the committee has room to argue around your number.
+- Order: low_cents ≤ recommended_cents ≤ high_cents.
+- Cap recommended_cents and high_cents at the student's current_tuition_cents (never recommend awarding more than they owe).
+- If the family has clear demonstrated need, your recommended_cents should be generous toward the high end of plausible — your job is to advocate for the family's case, the committee will pull it down if needed.
+- If documented data is missing or inconsistent, NOTE it in concerns/missing_documents and pick a conservative recommended_cents based on what IS documented (don't refuse to recommend).
+- If the family is clearly in financial distress (income < expenses, no savings, high debt), recommend strong support.
+- If the family is clearly NOT in need (income substantially exceeds expenses, large liquid assets, low debt), recommended_cents = 0 and explain plainly in the rationale.
 - For housing_burden_label: <30% of income = low, 30-40% = moderate, >40% = high. Calculate from monthly housing cost × 12 vs annual income.
 - For debt_burden_label: total monthly debt service ÷ monthly income. <15% = low, 15-30% = moderate, >30% = high.
 - discretionary_capacity_cents is annual income minus annual non-negotiable expenses (housing, debt service, taxes, basic insurance, childcare, medical). It's the family's "real" capacity to pay tuition. If negative, the family is running a deficit before tuition.`;

@@ -613,9 +613,15 @@ interface AnalysisShape {
   concerns?: string[];
   recommended_awards?: Array<{
     student_id: string; student_name: string;
-    low_cents: number; high_cents: number; rationale: string;
+    recommended_cents: number;
+    low_cents: number; high_cents: number;
+    rationale: string;
   }>;
-  total_award_range?: { low_cents: number; high_cents: number };
+  total_award_range?: {
+    recommended_cents?: number;
+    low_cents: number;
+    high_cents: number;
+  };
   suggested_decision_note?: string;
   missing_documents?: string[];
   follow_up_questions?: string[];
@@ -760,25 +766,37 @@ function AiAnalysisPanel({
             <SignalList tone="concern"  title="Concerns / yellow flags" items={analysis.concerns ?? []} />
           </div>
 
-          {/* Per-student award recommendation */}
+          {/* Per-student award recommendation — Claude's specific number, plus the range */}
           {(analysis.recommended_awards ?? []).length > 0 ? (
             <div className="rounded-md border-2 border-emerald-300 bg-emerald-50/40 p-3 space-y-2">
               <div className="flex items-baseline justify-between flex-wrap gap-2">
-                <div className="text-[10px] uppercase tracking-wide text-emerald-800 font-bold">Recommended award range</div>
+                <div className="text-[10px] uppercase tracking-wide text-emerald-800 font-bold">Recommended award</div>
                 {total ? (
-                  <div className="text-sm font-semibold text-emerald-900 tabular-nums">
-                    Family total: {fmtCents(total.low_cents)} – {fmtCents(total.high_cents)}
+                  <div className="text-right">
+                    <div className="text-lg font-bold text-emerald-900 tabular-nums leading-tight">
+                      Family total: {fmtCents(total.recommended_cents ?? null)}
+                    </div>
+                    <div className="text-[10px] text-emerald-700 tabular-nums">
+                      Range {fmtCents(total.low_cents)} – {fmtCents(total.high_cents)}
+                    </div>
                   </div>
                 ) : null}
               </div>
               <ul className="divide-y divide-emerald-200">
                 {(analysis.recommended_awards ?? []).map((rec) => (
-                  <li key={rec.student_id} className="py-2">
+                  <li key={rec.student_id} className="py-2.5">
                     <div className="flex items-baseline justify-between gap-2 flex-wrap">
                       <div className="font-medium text-emerald-900">{rec.student_name}</div>
-                      <div className="text-sm font-bold text-emerald-900 tabular-nums">{fmtCents(rec.low_cents)} – {fmtCents(rec.high_cents)}</div>
+                      <div className="text-right">
+                        <div className="text-base font-bold text-emerald-900 tabular-nums leading-tight">
+                          {fmtCents(rec.recommended_cents)}
+                        </div>
+                        <div className="text-[10px] text-emerald-700 tabular-nums">
+                          Range {fmtCents(rec.low_cents)} – {fmtCents(rec.high_cents)}
+                        </div>
+                      </div>
                     </div>
-                    <p className="text-[12px] text-slate-700 mt-0.5">{rec.rationale}</p>
+                    <p className="text-[12px] text-slate-700 mt-1">{rec.rationale}</p>
                   </li>
                 ))}
               </ul>
