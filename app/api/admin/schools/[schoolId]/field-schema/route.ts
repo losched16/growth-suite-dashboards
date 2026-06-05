@@ -17,6 +17,10 @@ export async function POST(request: NextRequest, { params }: { params: Params })
     const maxSlots = Number(form.get('max_student_slots') ?? 4);
     const academicYear = String(form.get('default_academic_year') ?? '2026-27').trim();
     const notes = String(form.get('notes') ?? '').trim() || null;
+    // Optional checkbox: "Keep parent-only families (no student data yet)"
+    const allowParentOnly = form.get('allow_parent_only_families') === 'on'
+      || form.get('allow_parent_only_families') === 'true'
+      || form.get('allow_parent_only_families') === '1';
 
     const family_fields = parseStringMap(familyJson, 'family_fields');
     const parent2_fields = parseStringMap(parent2Json, 'parent2_fields');
@@ -36,6 +40,7 @@ export async function POST(request: NextRequest, { params }: { params: Params })
       max_student_slots: maxSlots,
       default_academic_year: academicYear,
       notes,
+      allow_parent_only_families: allowParentOnly,
     });
     return redirect(request, schoolId, { msg: 'Field schema saved.' });
   } catch (err) {

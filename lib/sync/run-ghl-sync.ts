@@ -371,14 +371,18 @@ function mapContactToFamily(
   }
 
   if (students.length === 0) {
-    // Family has no students — skip. (Inquiry-stage families don't belong
-    // in the platform's family graph yet; they're tracked in the inquiry
-    // pipeline instead.)
-    return null;
+    // Family has no students. Default behavior is to skip — inquiry-stage
+    // families belong in the inquiry pipeline, not the family graph. But
+    // schools that import a roster of parents-only (no student data yet)
+    // can flip the allow_parent_only_families flag on their
+    // school_field_schemas row, and we keep the family as a
+    // parent-and-household record. Dashboards will show 0 students until
+    // the school backfills student data on the contact.
+    if (!config.allow_parent_only_families) return null;
   }
 
   const displayName = (() => {
-    const lastName = parent1LastName || students[0].last_name;
+    const lastName = parent1LastName || students[0]?.last_name;
     return lastName ? `${lastName} Family` : `${parent1FirstName} ${parent1LastName}`.trim() || 'Unnamed';
   })();
 
