@@ -613,15 +613,19 @@ interface AnalysisShape {
   concerns?: string[];
   recommended_awards?: Array<{
     student_id: string; student_name: string;
+    unrestricted_recommended_cents?: number;     // optional for legacy rows
     recommended_cents: number;
     low_cents: number; high_cents: number;
     rationale: string;
+    policy_applied?: string | null;
   }>;
   total_award_range?: {
+    unrestricted_recommended_cents?: number;     // optional for legacy rows
     recommended_cents?: number;
     low_cents: number;
     high_cents: number;
   };
+  cost_of_living_assessment?: string | null;
   suggested_decision_note?: string;
   missing_documents?: string[];
   follow_up_questions?: string[];
@@ -767,27 +771,51 @@ function AiAnalysisPanel({
           </div>
 
           {/* Per-student award recommendation — Claude's specific number, plus the range */}
-          {(analysis.recommended_awards ?? []).length > 0 ? (
+          {(analysis.recommended_awards ?? []).length > 0 ? (() => {
+            const familyCapped =
+              total?.unrestricted_recommended_cents != null
+              && total?.recommended_cents != null
+              && total.unrestricted_recommended_cents > total.recommended_cents;
+            return (
             <div className="rounded-md border-2 border-emerald-300 bg-emerald-50/40 p-3 space-y-2">
               <div className="flex items-baseline justify-between flex-wrap gap-2">
                 <div className="text-[10px] uppercase tracking-wide text-emerald-800 font-bold">Recommended award</div>
                 {total ? (
                   <div className="text-right">
+                    {familyCapped ? (
+                      <div className="text-[11px] text-slate-500 tabular-nums leading-tight">
+                        Unrestricted: <span className="line-through">{fmtCents(total.unrestricted_recommended_cents ?? null)}</span>
+                      </div>
+                    ) : null}
                     <div className="text-lg font-bold text-emerald-900 tabular-nums leading-tight">
                       Family total: {fmtCents(total.recommended_cents ?? null)}
                     </div>
                     <div className="text-[10px] text-emerald-700 tabular-nums">
                       Range {fmtCents(total.low_cents)} – {fmtCents(total.high_cents)}
                     </div>
+                    {familyCapped ? (
+                      <div className="mt-1 inline-flex items-center gap-1 rounded-full bg-amber-100 text-amber-900 px-2 py-0.5 text-[10px] font-semibold border border-amber-300">
+                        Capped by school policy
+                      </div>
+                    ) : null}
                   </div>
                 ) : null}
               </div>
               <ul className="divide-y divide-emerald-200">
-                {(analysis.recommended_awards ?? []).map((rec) => (
+                {(analysis.recommended_awards ?? []).map((rec) => {
+                  const studentCapped =
+                    rec.unrestricted_recommended_cents != null
+                    && rec.unrestricted_recommended_cents > rec.recommended_cents;
+                  return (
                   <li key={rec.student_id} className="py-2.5">
                     <div className="flex items-baseline justify-between gap-2 flex-wrap">
                       <div className="font-medium text-emerald-900">{rec.student_name}</div>
                       <div className="text-right">
+                        {studentCapped ? (
+                          <div className="text-[11px] text-slate-500 tabular-nums leading-tight">
+                            Unrestricted: <span className="line-through">{fmtCents(rec.unrestricted_recommended_cents ?? null)}</span>
+                          </div>
+                        ) : null}
                         <div className="text-base font-bold text-emerald-900 tabular-nums leading-tight">
                           {fmtCents(rec.recommended_cents)}
                         </div>
@@ -797,9 +825,24 @@ function AiAnalysisPanel({
                       </div>
                     </div>
                     <p className="text-[12px] text-slate-700 mt-1">{rec.rationale}</p>
+                    {rec.policy_applied ? (
+                      <p className="mt-1.5 rounded border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] text-amber-900">
+                        <span className="font-semibold">Policy cap:</span> {rec.policy_applied}
+                      </p>
+                    ) : null}
                   </li>
-                ))}
+                  );
+                })}
               </ul>
+            </div>
+            );
+          })() : null}
+
+          {/* Cost-of-living read */}
+          {analysis.cost_of_living_assessment ? (
+            <div className="rounded-md border border-sky-200 bg-sky-50/50 px-3 py-2">
+              <div className="text-[10px] uppercase tracking-wide text-sky-800 font-bold">Cost-of-living assessment</div>
+              <p className="mt-1 text-[12.5px] text-slate-800">{analysis.cost_of_living_assessment}</p>
             </div>
           ) : null}
 

@@ -59,6 +59,11 @@ export function SettingsForm({
           decision_letter_template: s.decision_letter_template,
           signature_name: s.signature_name,
           signature_title: s.signature_title,
+          max_award_pct_of_tuition: s.max_award_pct_of_tuition,
+          min_family_contribution_pct: s.min_family_contribution_pct,
+          policy_notes: s.policy_notes,
+          regional_col_multiplier: s.regional_col_multiplier,
+          regional_col_label: s.regional_col_label,
         }),
       });
       const j = await r.json().catch(() => ({}));
@@ -191,6 +196,81 @@ export function SettingsForm({
                 className={`${inputCls} max-w-[140px]`}
               />
             </div>
+          </LabeledInput>
+        </div>
+      </Section>
+
+      {/* Policy caps the AI applies AFTER recommending */}
+      <Section title="Award policy caps" subtitle="Hard ceilings the AI applies AFTER computing its expert recommendation. Lets you say things like 'we never give more than 50% of tuition.' The committee always sees both numbers (unrestricted + post-policy).">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <LabeledInput label="Max award (% of student's tuition)">
+            <div className="flex items-center gap-2">
+              <input
+                type="number" min={0} max={100} step={1}
+                value={s.max_award_pct_of_tuition != null ? Math.round(s.max_award_pct_of_tuition * 100) : ''}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  patch('max_award_pct_of_tuition', v === '' ? null : Math.max(0, Math.min(100, Number(v))) / 100);
+                }}
+                placeholder="e.g. 50"
+                className={`${inputCls} max-w-[100px]`}
+              />
+              <span className="text-sm text-slate-500">%</span>
+              <span className="text-[11px] text-slate-500 italic">Blank = no cap</span>
+            </div>
+          </LabeledInput>
+          <LabeledInput label="Min family contribution (% of tuition)">
+            <div className="flex items-center gap-2">
+              <input
+                type="number" min={0} max={100} step={1}
+                value={s.min_family_contribution_pct != null ? Math.round(s.min_family_contribution_pct * 100) : ''}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  patch('min_family_contribution_pct', v === '' ? null : Math.max(0, Math.min(100, Number(v))) / 100);
+                }}
+                placeholder="e.g. 20"
+                className={`${inputCls} max-w-[100px]`}
+              />
+              <span className="text-sm text-slate-500">%</span>
+              <span className="text-[11px] text-slate-500 italic">Family always pays at least this much</span>
+            </div>
+          </LabeledInput>
+        </div>
+        <div className="mt-3">
+          <LabeledInput label="Policy notes for the AI (free-text)">
+            <textarea
+              value={s.policy_notes ?? ''}
+              onChange={(e) => patch('policy_notes', e.target.value || null)}
+              rows={3}
+              placeholder={'e.g.\n- Faculty children receive a 50% tuition remission, not an FA award\n- Awards above $20K require board approval — flag those in concerns\n- We prioritize sibling-of-existing-student applicants'}
+              className={`${inputCls} text-xs leading-relaxed`}
+            />
+          </LabeledInput>
+        </div>
+      </Section>
+
+      {/* Cost of living */}
+      <Section title="Cost of living context" subtitle="Helps the AI sanity-check the family's reported expenses against typical costs in your region. Leave the multiplier at 1.0 if you don't want it adjusted.">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <LabeledInput label="Regional COL multiplier vs US average">
+            <div className="flex items-center gap-2">
+              <input
+                type="number" min={0.5} max={2.5} step={0.05}
+                value={s.regional_col_multiplier ?? 1.0}
+                onChange={(e) => patch('regional_col_multiplier', Number(e.target.value) || 1.0)}
+                className={`${inputCls} max-w-[100px]`}
+              />
+              <span className="text-[11px] text-slate-500 italic">1.0 = US avg · 1.3 = Phoenix/Denver · 1.6 = Bay Area / NYC</span>
+            </div>
+          </LabeledInput>
+          <LabeledInput label="Regional label">
+            <input
+              type="text"
+              value={s.regional_col_label ?? ''}
+              onChange={(e) => patch('regional_col_label', e.target.value || null)}
+              placeholder="e.g. Phoenix metro — moderate COL"
+              className={inputCls}
+            />
           </LabeledInput>
         </div>
       </Section>

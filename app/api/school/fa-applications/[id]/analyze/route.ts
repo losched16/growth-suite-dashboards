@@ -101,6 +101,12 @@ export async function POST(_req: NextRequest, { params }: { params: Params }) {
     academic_year: app.academic_year,
     school_name: app.school_name,
     required_document_types: settings.required_document_types,
+    max_award_pct_of_tuition: settings.max_award_pct_of_tuition,
+    min_family_contribution_pct: settings.min_family_contribution_pct,
+    max_award_per_student_cents: settings.max_award_per_student_cents,
+    policy_notes: settings.policy_notes,
+    regional_col_multiplier: settings.regional_col_multiplier,
+    regional_col_label: settings.regional_col_label,
     students: students.map((s) => ({
       student_id: s.student_id,
       first_name: s.first_name,

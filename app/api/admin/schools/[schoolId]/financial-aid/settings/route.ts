@@ -60,6 +60,25 @@ export async function PUT(request: NextRequest, { params }: { params: Params }) 
     ? body.decision_letter_template.slice(0, 20_000) : null;
   const sigName  = typeof body.signature_name  === 'string' ? body.signature_name.trim().slice(0, 120) || null : null;
   const sigTitle = typeof body.signature_title === 'string' ? body.signature_title.trim().slice(0, 120) || null : null;
+  // Policy caps + COL. Clamp percentages to [0, 1] (we store as a
+  // fraction not a 0-100 percent) and the COL multiplier to a
+  // reasonable [0.5, 2.5] window so a stray "150" can't break math.
+  function clampPct(v: unknown): number | null {
+    if (v == null || v === '') return null;
+    const n = Number(v);
+    if (!Number.isFinite(n) || n < 0) return null;
+    if (n > 1.5) return null; // probably a typo (someone wrote 50 instead of 0.5)
+    return Math.min(1, n);
+  }
+  const maxAwardPct = clampPct(body.max_award_pct_of_tuition);
+  const minFamilyPct = clampPct(body.min_family_contribution_pct);
+  const policyNotes = typeof body.policy_notes === 'string'
+    ? body.policy_notes.slice(0, 5000) : null;
+  let colMult = Number(body.regional_col_multiplier);
+  if (!Number.isFinite(colMult) || colMult <= 0) colMult = 1.0;
+  colMult = Math.min(2.5, Math.max(0.5, colMult));
+  const colLabel = typeof body.regional_col_label === 'string'
+    ? body.regional_col_label.trim().slice(0, 200) || null : null;
 
   await query(
     `INSERT INTO school_financial_aid_settings
@@ -67,8 +86,11 @@ export async function PUT(request: NextRequest, { params }: { params: Params }) 
         application_deadline, intro_copy_markdown,
         required_document_types, max_award_per_student_cents,
         admin_notify_emails, decision_letter_template,
-        signature_name, signature_title)
-     VALUES ($1,$2,$3,$4,$5,$6,$7::text[],$8,$9::text[],$10,$11,$12)
+        signature_name, signature_title,
+        max_award_pct_of_tuition, min_family_contribution_pct,
+        policy_notes, regional_col_multiplier, regional_col_label)
+     VALUES ($1,$2,$3,$4,$5,$6,$7::text[],$8,$9::text[],$10,$11,$12,
+             $13,$14,$15,$16,$17)
      ON CONFLICT (school_id) DO UPDATE SET
        is_enabled = EXCLUDED.is_enabled,
        active_academic_year = EXCLUDED.active_academic_year,
@@ -81,9 +103,15 @@ export async function PUT(request: NextRequest, { params }: { params: Params }) 
        decision_letter_template = EXCLUDED.decision_letter_template,
        signature_name = EXCLUDED.signature_name,
        signature_title = EXCLUDED.signature_title,
+       max_award_pct_of_tuition = EXCLUDED.max_award_pct_of_tuition,
+       min_family_contribution_pct = EXCLUDED.min_family_contribution_pct,
+       policy_notes = EXCLUDED.policy_notes,
+       regional_col_multiplier = EXCLUDED.regional_col_multiplier,
+       regional_col_label = EXCLUDED.regional_col_label,
        updated_at = now()`,
     [schoolId, isEnabled, academicYear, applicationOpen, deadline, intro,
-     requiredDocs, maxCents, adminEmails, letterTpl, sigName, sigTitle],
+     requiredDocs, maxCents, adminEmails, letterTpl, sigName, sigTitle,
+     maxAwardPct, minFamilyPct, policyNotes, colMult, colLabel],
   );
 
   return NextResponse.json({ ok: true });
