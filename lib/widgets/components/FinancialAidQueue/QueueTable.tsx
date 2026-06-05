@@ -7,7 +7,7 @@
 // application-level decision and the per-student awards atomically.
 
 import { useState } from 'react';
-import { ChevronRight, ChevronDown, FileText, ExternalLink, Users, Printer } from 'lucide-react';
+import { ChevronRight, ChevronDown, FileText, ExternalLink, Users, Printer, Sparkles, Loader2, AlertCircle, CheckCircle2, ChevronUp } from 'lucide-react';
 import type { FaApplicationRow, FaStudentRow } from './fetcher';
 
 const EMDASH = '—';
@@ -283,6 +283,9 @@ function DetailPanel({
           </ul>
         )}
       </div>
+
+      {/* AI committee analysis (top-of-funnel — drives everything below) */}
+      <AiAnalysisPanel applicationId={a.id} initial={a.ai_analysis} analyzedAt={a.ai_analyzed_at} model={a.ai_analysis_model} />
 
       {/* Per-student awards + final decision */}
       <AwardForm app={a} awardFloor={awardFloor} awardCeiling={awardCeiling} />
@@ -588,3 +591,288 @@ function fmtSize(b: number): string {
 // We import this lazily so the FaStudentRow type-only import doesn't
 // drop and cause "unused" warnings. (Type stays in fetcher.ts.)
 export type _StudentRowLocal = FaStudentRow;
+
+// ── Claude-powered FA analysis panel ────────────────────────────────
+// Shown above the AwardForm. If no analysis exists yet, renders a
+// "Generate AI analysis" CTA. Once generated, shows the structured
+// committee briefing: executive summary, financial snapshot, signals,
+// per-student recommendation range, suggested decision-note draft.
+// Operator can regenerate.
+interface AnalysisShape {
+  executive_summary?: string;
+  financial_snapshot?: {
+    annual_income_cents?: number | null;
+    annual_expenses_cents?: number | null;
+    discretionary_capacity_cents?: number | null;
+    savings_runway_months?: number | null;
+    debt_burden_label?: 'low' | 'moderate' | 'high' | 'unknown';
+    housing_burden_label?: 'low' | 'moderate' | 'high' | 'unknown';
+  };
+  demonstrated_need_assessment?: string;
+  positives?: string[];
+  concerns?: string[];
+  recommended_awards?: Array<{
+    student_id: string; student_name: string;
+    low_cents: number; high_cents: number; rationale: string;
+  }>;
+  total_award_range?: { low_cents: number; high_cents: number };
+  suggested_decision_note?: string;
+  missing_documents?: string[];
+  follow_up_questions?: string[];
+}
+
+function AiAnalysisPanel({
+  applicationId, initial, analyzedAt, model,
+}: {
+  applicationId: string;
+  initial: Record<string, unknown> | null;
+  analyzedAt: string | null;
+  model: string | null;
+}) {
+  const [analysis, setAnalysis] = useState<AnalysisShape | null>((initial as AnalysisShape | null) ?? null);
+  const [stamp, setStamp] = useState<string | null>(analyzedAt);
+  const [usedModel, setUsedModel] = useState<string | null>(model);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [open, setOpen] = useState(true);
+
+  async function run() {
+    setBusy(true); setErr(null);
+    try {
+      const r = await fetch(`/api/school/fa-applications/${applicationId}/analyze`, { method: 'POST' });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || !j.analysis) {
+        setErr(j.detail || j.error || `Analysis failed (${r.status})`);
+        return;
+      }
+      setAnalysis(j.analysis);
+      setStamp(j.analyzed_at);
+      setUsedModel(j.model);
+      setOpen(true);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!analysis && !busy && !err) {
+    return (
+      <div className="rounded-lg border-2 border-violet-200 bg-violet-50/40 p-4">
+        <div className="flex items-start gap-3">
+          <Sparkles className="h-5 w-5 text-violet-600 mt-0.5" />
+          <div className="flex-1">
+            <h3 className="text-sm font-semibold text-violet-900">AI committee analysis</h3>
+            <p className="text-[11px] text-violet-800 mt-0.5 mb-2">
+              Claude reads the family&rsquo;s full application + uploaded documents and produces a structured committee briefing with a recommended award range per student. Takes ~10-20 seconds. Result is cached so the committee can re-open without burning tokens.
+            </p>
+            <button
+              type="button"
+              onClick={run}
+              className="inline-flex items-center gap-1.5 rounded-md bg-violet-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-violet-700"
+            >
+              <Sparkles className="h-3.5 w-3.5" /> Generate AI analysis
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (busy) {
+    return (
+      <div className="rounded-lg border border-violet-200 bg-violet-50/40 p-4 flex items-center gap-3">
+        <Loader2 className="h-5 w-5 text-violet-600 animate-spin" />
+        <div>
+          <p className="text-sm font-medium text-violet-900">Claude is reading the application…</p>
+          <p className="text-[11px] text-violet-800">~10-20 seconds. Don&rsquo;t close this row — we&rsquo;ll cache the result when it returns.</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (err) {
+    return (
+      <div className="rounded-lg border border-rose-200 bg-rose-50 p-3 flex items-start gap-2">
+        <AlertCircle className="h-4 w-4 text-rose-700 mt-0.5" />
+        <div className="flex-1">
+          <p className="text-sm font-semibold text-rose-900">Analysis failed</p>
+          <p className="text-[11px] text-rose-800 mt-0.5">{err}</p>
+          <button type="button" onClick={run} className="mt-2 text-[11px] text-rose-700 hover:underline font-medium">Try again</button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!analysis) return null;
+
+  const snap = analysis.financial_snapshot ?? {};
+  const total = analysis.total_award_range;
+
+  return (
+    <div className="rounded-lg border-2 border-violet-200 bg-gradient-to-b from-violet-50/40 to-white overflow-hidden">
+      <header className="flex items-center justify-between gap-3 px-4 py-2.5 bg-violet-100/60 border-b border-violet-200">
+        <div className="flex items-center gap-2">
+          <Sparkles className="h-4 w-4 text-violet-700" />
+          <h3 className="text-sm font-semibold text-violet-900">AI committee analysis</h3>
+          {stamp ? <span className="text-[10px] text-violet-700">· {new Date(stamp).toLocaleString()}{usedModel ? ` · ${usedModel}` : ''}</span> : null}
+        </div>
+        <div className="flex items-center gap-2">
+          <button type="button" onClick={run} className="text-[11px] text-violet-700 hover:underline font-medium inline-flex items-center gap-0.5">
+            <Sparkles className="h-3 w-3" /> Regenerate
+          </button>
+          <button type="button" onClick={() => setOpen((o) => !o)} className="text-violet-700">
+            {open ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+          </button>
+        </div>
+      </header>
+      {open ? (
+        <div className="p-4 space-y-4 text-sm">
+          {/* Executive summary */}
+          {analysis.executive_summary ? (
+            <div>
+              <div className="text-[10px] uppercase tracking-wide text-violet-700 font-bold">Executive summary</div>
+              <p className="mt-1 text-slate-800 leading-relaxed">{analysis.executive_summary}</p>
+            </div>
+          ) : null}
+
+          {/* Financial snapshot — KV grid */}
+          <div className="rounded-md border border-violet-100 bg-white p-3 grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
+            <SnapStat label="Annual income"        v={fmtCents(snap.annual_income_cents)} />
+            <SnapStat label="Annual expenses"      v={fmtCents(snap.annual_expenses_cents)} />
+            <SnapStat label="Discretionary capacity" v={fmtCents(snap.discretionary_capacity_cents)} highlightNegative={true} cents={snap.discretionary_capacity_cents ?? null} />
+            <SnapStat label="Savings runway"       v={snap.savings_runway_months != null ? `${snap.savings_runway_months.toFixed(1)} mo` : EMDASH} />
+            <SnapStat label="Debt burden"          v={snap.debt_burden_label ?? EMDASH} pillTone={snap.debt_burden_label} />
+            <SnapStat label="Housing burden"       v={snap.housing_burden_label ?? EMDASH} pillTone={snap.housing_burden_label} />
+          </div>
+
+          {/* Demonstrated need */}
+          {analysis.demonstrated_need_assessment ? (
+            <div>
+              <div className="text-[10px] uppercase tracking-wide text-violet-700 font-bold">Demonstrated need</div>
+              <p className="mt-1 text-slate-800">{analysis.demonstrated_need_assessment}</p>
+            </div>
+          ) : null}
+
+          {/* Positives + concerns side by side */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <SignalList tone="positive" title="Positives" items={analysis.positives ?? []} />
+            <SignalList tone="concern"  title="Concerns / yellow flags" items={analysis.concerns ?? []} />
+          </div>
+
+          {/* Per-student award recommendation */}
+          {(analysis.recommended_awards ?? []).length > 0 ? (
+            <div className="rounded-md border-2 border-emerald-300 bg-emerald-50/40 p-3 space-y-2">
+              <div className="flex items-baseline justify-between flex-wrap gap-2">
+                <div className="text-[10px] uppercase tracking-wide text-emerald-800 font-bold">Recommended award range</div>
+                {total ? (
+                  <div className="text-sm font-semibold text-emerald-900 tabular-nums">
+                    Family total: {fmtCents(total.low_cents)} – {fmtCents(total.high_cents)}
+                  </div>
+                ) : null}
+              </div>
+              <ul className="divide-y divide-emerald-200">
+                {(analysis.recommended_awards ?? []).map((rec) => (
+                  <li key={rec.student_id} className="py-2">
+                    <div className="flex items-baseline justify-between gap-2 flex-wrap">
+                      <div className="font-medium text-emerald-900">{rec.student_name}</div>
+                      <div className="text-sm font-bold text-emerald-900 tabular-nums">{fmtCents(rec.low_cents)} – {fmtCents(rec.high_cents)}</div>
+                    </div>
+                    <p className="text-[12px] text-slate-700 mt-0.5">{rec.rationale}</p>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+
+          {/* Suggested decision note draft */}
+          {analysis.suggested_decision_note ? (
+            <div className="rounded-md border border-slate-200 bg-white p-3">
+              <div className="flex items-baseline justify-between gap-2">
+                <div className="text-[10px] uppercase tracking-wide text-slate-600 font-bold">Suggested decision note (draft)</div>
+                <button
+                  type="button"
+                  onClick={() => navigator.clipboard.writeText(analysis.suggested_decision_note ?? '')}
+                  className="text-[10px] text-blue-700 hover:underline"
+                >
+                  Copy
+                </button>
+              </div>
+              <p className="mt-1 text-sm text-slate-800 whitespace-pre-wrap italic">{analysis.suggested_decision_note}</p>
+            </div>
+          ) : null}
+
+          {/* Missing docs + follow-up questions */}
+          {((analysis.missing_documents ?? []).length > 0 || (analysis.follow_up_questions ?? []).length > 0) ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {(analysis.missing_documents ?? []).length > 0 ? (
+                <div className="rounded-md border border-amber-200 bg-amber-50/40 p-2">
+                  <div className="text-[10px] uppercase tracking-wide text-amber-800 font-bold">Missing documents</div>
+                  <ul className="mt-1 text-xs text-amber-900 list-disc pl-4">
+                    {(analysis.missing_documents ?? []).map((d, i) => <li key={i}>{d}</li>)}
+                  </ul>
+                </div>
+              ) : null}
+              {(analysis.follow_up_questions ?? []).length > 0 ? (
+                <div className="rounded-md border border-blue-200 bg-blue-50/40 p-2">
+                  <div className="text-[10px] uppercase tracking-wide text-blue-800 font-bold">Follow-up questions</div>
+                  <ul className="mt-1 text-xs text-blue-900 list-disc pl-4">
+                    {(analysis.follow_up_questions ?? []).map((q, i) => <li key={i}>{q}</li>)}
+                  </ul>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
+          <p className="text-[10px] italic text-slate-500 border-t border-slate-100 pt-2">
+            AI-generated analysis. Use as a starting point — the committee decides.
+          </p>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function SnapStat({ label, v, pillTone, highlightNegative, cents }: { label: string; v: string; pillTone?: string; highlightNegative?: boolean; cents?: number | null }) {
+  const negative = highlightNegative && cents != null && cents < 0;
+  const toneBg = pillTone === 'low' ? 'bg-emerald-100 text-emerald-800'
+    : pillTone === 'moderate' ? 'bg-amber-100 text-amber-800'
+    : pillTone === 'high' ? 'bg-rose-100 text-rose-800'
+    : '';
+  return (
+    <div>
+      <div className="text-[10px] uppercase tracking-wide text-slate-500">{label}</div>
+      <div className={`text-sm font-semibold ${negative ? 'text-rose-700' : 'text-slate-900'}`}>
+        {toneBg ? <span className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${toneBg}`}>{v}</span> : v}
+      </div>
+    </div>
+  );
+}
+
+function SignalList({ tone, title, items }: { tone: 'positive' | 'concern'; title: string; items: string[] }) {
+  if (items.length === 0) return null;
+  const bg = tone === 'positive' ? 'border-emerald-200 bg-emerald-50/30' : 'border-amber-200 bg-amber-50/30';
+  const labelColor = tone === 'positive' ? 'text-emerald-800' : 'text-amber-800';
+  const Icon = tone === 'positive' ? CheckCircle2 : AlertCircle;
+  const iconColor = tone === 'positive' ? 'text-emerald-700' : 'text-amber-700';
+  return (
+    <div className={`rounded-md border ${bg} p-3`}>
+      <div className={`text-[10px] uppercase tracking-wide font-bold ${labelColor}`}>{title}</div>
+      <ul className="mt-1.5 space-y-1">
+        {items.map((it, i) => (
+          <li key={i} className="flex items-start gap-1.5 text-xs text-slate-800">
+            <Icon className={`h-3 w-3 mt-0.5 shrink-0 ${iconColor}`} />
+            <span>{it}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function fmtCents(c: number | null | undefined): string {
+  if (c == null) return EMDASH;
+  const dollars = c / 100;
+  const sign = dollars < 0 ? '−' : '';
+  return `${sign}$${Math.abs(dollars).toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
+}

@@ -48,6 +48,10 @@ export interface FaApplicationRow {
   updated_at: string;
   students: FaStudentRow[];
   files: FaFileRow[];
+  // Cached Claude analysis (null if never generated for this app).
+  ai_analysis: Record<string, unknown> | null;
+  ai_analyzed_at: string | null;
+  ai_analysis_model: string | null;
 }
 
 export interface FinancialAidQueueData {
@@ -92,6 +96,9 @@ interface DbRow {
   updated_at: string;
   students_json: FaStudentRow[] | null;
   files_json: FaFileRow[] | null;
+  ai_analysis: Record<string, unknown> | null;
+  ai_analyzed_at: string | null;
+  ai_analysis_model: string | null;
 }
 
 export async function fetcher(
@@ -169,7 +176,8 @@ export async function fetcher(
        a.submitted_at,
        a.updated_at,
        sa.students AS students_json,
-       fa.files AS files_json
+       fa.files AS files_json,
+       a.ai_analysis, a.ai_analyzed_at::text, a.ai_analysis_model
      FROM fa_applications a
      JOIN families f ON f.id = a.family_id
      LEFT JOIN LATERAL (
@@ -215,6 +223,9 @@ export async function fetcher(
       recommended_award: s.recommended_award === null ? null : Number(s.recommended_award),
     })),
     files: r.files_json ?? [],
+    ai_analysis: r.ai_analysis,
+    ai_analyzed_at: r.ai_analyzed_at,
+    ai_analysis_model: r.ai_analysis_model,
   }));
 
   const years = Array.from(new Set(all.map((a) => a.academic_year))).sort().reverse();
