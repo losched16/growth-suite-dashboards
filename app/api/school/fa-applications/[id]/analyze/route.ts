@@ -48,11 +48,25 @@ interface FileRow {
   size_bytes: number;
 }
 
-export async function POST(_req: NextRequest, { params }: { params: Params }) {
+export async function POST(req: NextRequest, { params }: { params: Params }) {
   const { id } = await params;
-  const ck = await cookies();
-  const session = await verifySchoolSession(ck.get(SCHOOL_SESSION_COOKIE)?.value);
-  if (!session) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+
+  // Auth: accept EITHER a school admin session cookie OR an internal
+  // shared-secret header. The internal path is how the parent portal
+  // fires off analysis right after a parent hits Submit — we want the
+  // committee to never see an unanalyzed app on first queue load.
+  let schoolIdFilter: string | null = null;
+  const internalSecret = process.env.INTERNAL_FA_SECRET;
+  const authHeader = req.headers.get('authorization');
+  if (internalSecret && authHeader === `Bearer ${internalSecret}`) {
+    // Internal — trust the caller, scope by the row's own school_id.
+    schoolIdFilter = null;
+  } else {
+    const ck = await cookies();
+    const session = await verifySchoolSession(ck.get(SCHOOL_SESSION_COOKIE)?.value);
+    if (!session) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+    schoolIdFilter = session.school_id;
+  }
 
   // Load the application + scope-check
   const { rows: apps } = await query<AppRow>(
@@ -63,8 +77,9 @@ export async function POST(_req: NextRequest, { params }: { params: Params }) {
        FROM fa_applications a
        JOIN families f ON f.id = a.family_id
        JOIN schools sc ON sc.id = a.school_id
-      WHERE a.id = $1 AND a.school_id = $2`,
-    [id, session.school_id],
+      WHERE a.id = $1
+        AND ($2::uuid IS NULL OR a.school_id = $2)`,
+    [id, schoolIdFilter],
   );
   if (apps.length === 0) return NextResponse.json({ error: 'not_found' }, { status: 404 });
   const app = apps[0];
@@ -84,7 +99,7 @@ export async function POST(_req: NextRequest, { params }: { params: Params }) {
     [id],
   );
 
-  const settings = await getFinancialAidSettings(session.school_id);
+  const settings = await getFinancialAidSettings(app.school_id);
 
   // Pull marital_status out of the new (10-section) shape OR the
   // old (7-section) shape so older drafts don't break.
