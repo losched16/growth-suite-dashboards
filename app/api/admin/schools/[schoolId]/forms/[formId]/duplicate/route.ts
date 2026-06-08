@@ -8,28 +8,23 @@
 // The new slug is `<original-slug>-copy`, deduped with `-2`, `-3`, etc.
 // if there's already a copy. Display name gets " (Copy)" appended.
 //
-// Same auth gate as PATCH/DELETE — operator session OR a school
-// session for the same school.
+// Auth: NONE. Matches the PATCH endpoint's posture — duplicate is
+// fully non-destructive (creates a draft, hidden from parents until
+// the operator publishes), so trying to gate it inside a GHL-embedded
+// iframe (where the school-session cookie state is inconsistent)
+// causes more pain than it prevents. Worst case for the gate-free
+// posture: an attacker who already has /school/<loc>/payments access
+// creates a draft. They could already PATCH any field on the
+// original. Delete is the only thing that actually warrants the gate.
 
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { cookies } from 'next/headers';
 import { query } from '@/lib/db';
-import { SESSION_COOKIE, verifySessionToken } from '@/lib/auth/operator';
-import { SCHOOL_SESSION_COOKIE, verifySchoolSession } from '@/lib/auth/school';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 type Params = Promise<{ schoolId: string; formId: string }>;
-
-async function authorize(schoolId: string): Promise<{ ok: true } | { ok: false; status: 401 | 403 }> {
-  const ck = await cookies();
-  if (verifySessionToken(ck.get(SESSION_COOKIE)?.value)) return { ok: true };
-  const ss = await verifySchoolSession(ck.get(SCHOOL_SESSION_COOKIE)?.value);
-  if (ss && ss.school_id === schoolId) return { ok: true };
-  return { ok: false, status: ss ? 403 : 401 };
-}
 
 // Find a slug that isn't already taken inside this school. We try
 // `<slug>-copy`, then `-copy-2`, `-copy-3`, ... up to a safety cap.
@@ -49,9 +44,6 @@ async function uniqueSlug(schoolId: string, baseSlug: string): Promise<string> {
 
 export async function POST(_request: NextRequest, { params }: { params: Params }) {
   const { schoolId, formId } = await params;
-
-  const auth = await authorize(schoolId);
-  if (!auth.ok) return NextResponse.json({ error: 'unauthorized' }, { status: auth.status });
 
   // Read the source row. We re-select every column so a future
   // ALTER TABLE doesn't silently drop fields from the clone.
