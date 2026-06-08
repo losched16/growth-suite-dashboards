@@ -8,6 +8,7 @@
 import { useState } from 'react';
 import { ChevronRight, ChevronDown, AlertCircle, Download, ShieldCheck } from 'lucide-react';
 import type { StudentRow } from './fetcher';
+import { formatPickupTime } from '@/lib/attendance/pickup-times';
 
 const TZ = 'America/Phoenix';
 const EMDASH = '—';
@@ -42,6 +43,7 @@ export function RosterTable({ rows, dateIso, isToday }: { rows: StudentRow[]; da
             <th className="px-3 py-2 font-medium">Student</th>
             <th className="px-3 py-2 font-medium">Classroom</th>
             <th className="px-3 py-2 font-medium">Status</th>
+            <th className="px-3 py-2 font-medium">Pickup at</th>
             <th className="px-3 py-2 font-medium">In</th>
             <th className="px-3 py-2 font-medium">Out</th>
             <th className="px-3 py-2 font-medium">By</th>
@@ -105,6 +107,15 @@ function Row({
         </td>
         <td className="px-3 py-2 align-top text-xs text-gray-700">{r.classroom ?? EMDASH}</td>
         <td className="px-3 py-2 align-top"><StatusBadge status={r.status} /></td>
+        <td className="px-3 py-2 align-top">
+          {r.pickup_time ? (
+            <span className="inline-block rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-900 whitespace-nowrap tabular-nums">
+              {formatPickupTime(r.pickup_time)}
+            </span>
+          ) : (
+            <span className="text-gray-400">{EMDASH}</span>
+          )}
+        </td>
         <td className="px-3 py-2 align-top text-xs text-gray-700">
           {r.first_check_in_at ? fmtTime(r.first_check_in_at) : EMDASH}
         </td>

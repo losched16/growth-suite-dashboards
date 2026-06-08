@@ -18,6 +18,10 @@ export interface StudentRow {
   picked_up_by_name: string | null;
   curbside: boolean;
   curbside_slot: string | null;
+  // Parent-selected dismissal wave at morning check-in, format 'HH:MM'
+  // (24h). null until they check in. Stored on attendance_events and
+  // surfaced here from the most recent check-in event today.
+  pickup_time: string | null;
   total_minutes: number | null;
   event_count_today: number;
   // Joined string of every parent note left on today's check-in /
@@ -90,6 +94,7 @@ interface DbStudentRow {
   picked_up_by_name: string | null;
   curbside_pickup: boolean | null;
   curbside_slot: string | null;
+  pickup_time: string | null;
   total_minutes: number | null;
   event_count_today: number;
   // Today's parent notes from check-in / check-out events for this
@@ -167,6 +172,16 @@ export async function fetcher(
         WHERE event_type = 'check_out' AND curbside = true
         ORDER BY student_id, performed_at DESC
      ),
+     last_pickup_time AS (
+       -- Parent-selected dismissal wave on the morning check-in. We
+       -- take the latest check_in event with a non-null pickup_time so
+       -- a re-check-in updates the wave.
+       SELECT DISTINCT ON (student_id)
+              student_id, pickup_time
+         FROM today_evs
+        WHERE event_type = 'check_in' AND pickup_time IS NOT NULL
+        ORDER BY student_id, performed_at DESC
+     ),
      last_override AS (
        SELECT DISTINCT ON (student_id)
               student_id,
@@ -190,6 +205,7 @@ export async function fetcher(
        da.picked_up_by_name,
        da.curbside_pickup,
        lcs.curbside_slot,
+       lpt.pickup_time,
        da.total_minutes,
        COALESCE(ec.n, 0) AS event_count_today,
        en.todays_notes,
@@ -201,6 +217,7 @@ export async function fetcher(
      LEFT JOIN ev_counts ec ON ec.student_id = s.id
      LEFT JOIN ev_notes en ON en.student_id = s.id
      LEFT JOIN last_curb_slot lcs ON lcs.student_id = s.id
+     LEFT JOIN last_pickup_time lpt ON lpt.student_id = s.id
      LEFT JOIN last_override lo ON lo.student_id = s.id
      LEFT JOIN LATERAL (
        SELECT first_name, last_name, email
@@ -246,6 +263,7 @@ export async function fetcher(
     picked_up_by_name: r.picked_up_by_name,
     curbside: !!r.curbside_pickup,
     curbside_slot: r.curbside_slot,
+    pickup_time: r.pickup_time,
     total_minutes: r.total_minutes,
     event_count_today: r.event_count_today,
     todays_notes: r.todays_notes,
