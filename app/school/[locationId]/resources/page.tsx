@@ -57,10 +57,29 @@ export default async function SchoolResourcesPage({
   );
 
   // Distinct existing category labels for the suggestion datalist —
-  // makes "use the same category I already use" easier.
-  const categories = Array.from(new Set(
+  // makes "use the same category I already use" easier. We also seed a
+  // set of common starter categories so a brand-new school sees useful
+  // ideas the first time they open the upload form (the datalist shows
+  // both — already-used categories first, then the suggestions). Once
+  // they've used a category once it shows up in the existing list and
+  // the suggestion duplicate is filtered out.
+  const SUGGESTED_CATEGORIES = [
+    'School Calendar',
+    'Parent Handbook',
+    'Newsletter Archive',
+    'Daily Schedules',
+    'Supply Lists',
+    'Celebration of Life Document',
+    'Forms & Reference',
+  ];
+  const existingCategories = Array.from(new Set(
     rows.map((r) => r.category).filter((c): c is string => !!c && c.trim().length > 0),
   )).sort();
+  const seen = new Set(existingCategories.map((c) => c.toLowerCase()));
+  const categories = [
+    ...existingCategories,
+    ...SUGGESTED_CATEGORIES.filter((s) => !seen.has(s.toLowerCase())),
+  ];
 
   // Bucket for display
   const byCat = new Map<string, Row[]>();
@@ -88,8 +107,11 @@ export default async function SchoolResourcesPage({
           </div>
           <p className="text-sm text-gray-600">
             Anything you upload here appears in every parent&apos;s portal under
-            <span className="font-semibold"> Resources</span>. Common uses: school
-            calendar, supply lists, parent handbook, classroom newsletters.
+            <span className="font-semibold"> Resources</span>. Use it for
+            reference docs parents <em>don&apos;t need to sign</em> — school
+            calendar, parent handbook, newsletter archive, daily schedules,
+            supply lists, Celebration of Life document, classroom-specific
+            materials, anything else worth pinning.
           </p>
         </header>
 
