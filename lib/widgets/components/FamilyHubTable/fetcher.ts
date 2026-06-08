@@ -158,10 +158,22 @@ export async function fetcher(
            THEN shp.medical_conditions
            ELSE NULL
          END AS special_instructions_text,
+         -- Legacy fallback: sum of metadata fee fields (only populated
+         -- for tenants whose GHL contact sync writes per-fee columns —
+         -- DGM, Wooster, NLMA). Empty for MCH and any future school
+         -- that goes straight to native tuition.
          COALESCE(NULLIF(s.metadata->>'tuition_fee', '')::numeric, 0)
            + COALESCE(NULLIF(s.metadata->>'extended_day_fee', '')::numeric, 0)
            + COALESCE(NULLIF(s.metadata->>'lunch_fee', '')::numeric, 0)
-           AS estimated_tuition
+           AS legacy_tuition,
+         -- Native source of truth: family_tuition_enrollments. When the
+         -- school manages tuition through the Payments hub (vs. via
+         -- legacy GHL custom fields), this is the live, accurate value
+         -- that drives invoice generation. Prefer it over the metadata
+         -- snapshot — even where both exist, native may differ (e.g.
+         -- split-family per-parent totals).
+         fte.total_annual_cents AS native_total_cents,
+         pp.display_name        AS native_plan_label
        FROM students s
        LEFT JOIN LATERAL (
          SELECT * FROM enrollments e2
@@ -171,6 +183,13 @@ export async function fetcher(
        LEFT JOIN classrooms c ON c.id = e.classroom_id
        LEFT JOIN student_health_profiles shp
          ON shp.student_id = s.id AND shp.school_id = s.school_id
+       LEFT JOIN LATERAL (
+         SELECT total_annual_cents, payment_plan_id
+           FROM family_tuition_enrollments fte2
+          WHERE fte2.student_id = s.id AND fte2.status = 'active'
+          ORDER BY fte2.updated_at DESC LIMIT 1
+       ) fte ON true
+       LEFT JOIN payment_plans pp ON pp.id = fte.payment_plan_id
        WHERE s.school_id = $1 AND s.status = 'active'
      )
      SELECT
@@ -193,9 +212,18 @@ export async function fetcher(
           FROM per_student ps WHERE ps.family_id = f.id) AS programs_array,
        (SELECT array_agg(DISTINCT ps.classroom_name) FILTER (WHERE ps.classroom_name IS NOT NULL)
           FROM per_student ps WHERE ps.family_id = f.id) AS homerooms_array,
-       (SELECT array_agg(DISTINCT ps.metadata->>'payment_plan') FILTER (WHERE ps.metadata->>'payment_plan' IS NOT NULL AND length(ps.metadata->>'payment_plan') > 0)
+       -- Plan label: prefer the legacy GHL-synced metadata field when
+       -- present (preserves the historical display for DGM / Wooster /
+       -- NLMA), fall back to the native enrollment row (covers MCH and
+       -- every future school that goes straight to native tuition).
+       -- Same fallback strategy for total tuition: legacy fee-field sum
+       -- wins when nonzero, native total_annual_cents fills the gap.
+       (SELECT array_agg(DISTINCT COALESCE(NULLIF(ps.metadata->>'payment_plan', ''), ps.native_plan_label))
+          FILTER (WHERE COALESCE(NULLIF(ps.metadata->>'payment_plan', ''), ps.native_plan_label) IS NOT NULL)
           FROM per_student ps WHERE ps.family_id = f.id) AS payment_plans_array,
-       (SELECT sum(ps.estimated_tuition) FROM per_student ps WHERE ps.family_id = f.id) AS total_tuition,
+       (SELECT sum(
+          COALESCE(NULLIF(ps.legacy_tuition, 0), ps.native_total_cents::numeric / 100.0, 0)
+        ) FROM per_student ps WHERE ps.family_id = f.id) AS total_tuition,
        (SELECT bool_or(ps.has_allergy) FROM per_student ps WHERE ps.family_id = f.id) AS has_allergy,
        -- Per-family parent payload for the accordion. Primary first, then by created_at.
        (SELECT json_agg(
@@ -229,7 +257,17 @@ export async function fetcher(
               'has_allergy', ps.has_allergy,
               'allergy_text', ps.allergy_text,
               'special_instructions_text', ps.special_instructions_text,
-              'metadata', ps.metadata
+              -- Backfill payment_plan + total_amount from native
+              -- enrollments only when missing from metadata. Concat
+              -- order matters: synth keys come FIRST, then ps.metadata
+              -- so legacy values WIN on conflict (DGM behavior
+              -- preserved; MCH gets the gap filled in).
+              'metadata', jsonb_strip_nulls(jsonb_build_object(
+                'payment_plan', ps.native_plan_label,
+                'total_amount', CASE WHEN ps.native_total_cents IS NOT NULL
+                                    THEN (ps.native_total_cents::numeric / 100.0)::text
+                                    ELSE NULL END
+              )) || ps.metadata
             )
             ORDER BY COALESCE((ps.metadata->>'ghl_slot')::int, 99), ps.id
           )
