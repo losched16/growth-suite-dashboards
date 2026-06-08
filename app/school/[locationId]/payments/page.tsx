@@ -29,6 +29,7 @@ import { PaymentsHubDiscounts } from './tabs/Discounts';
 import { PaymentsHubForms } from './tabs/Forms';
 import { PaymentsHubSettings } from './tabs/Settings';
 import { PaymentsHubCatalog } from './tabs/Catalog';
+import { PaymentsHubDocuments } from './tabs/Documents';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -44,6 +45,7 @@ const TABS = [
   { value: 'catalog',   label: 'Catalog' },
   { value: 'discounts', label: 'Discounts' },
   { value: 'forms',     label: 'Forms' },
+  { value: 'documents', label: 'Important Docs' },
   { value: 'settings',  label: 'Settings' },
 ] as const;
 
@@ -159,6 +161,7 @@ export default async function PaymentsHubPage({
         {tab === 'catalog'   ? <PaymentsHubCatalog   schoolId={school.id} locationId={locationId} /> : null}
         {tab === 'discounts' ? <PaymentsHubDiscounts schoolId={school.id} locationId={locationId} /> : null}
         {tab === 'forms'     ? <PaymentsHubForms     schoolId={school.id} locationId={locationId} /> : null}
+        {tab === 'documents' ? <PaymentsHubDocuments schoolId={school.id} locationId={locationId} /> : null}
         {tab === 'settings'  ? <PaymentsHubSettings  schoolId={school.id} locationId={locationId} account={account} /> : null}
       </div>
     </div>
