@@ -8,6 +8,7 @@ import { notFound } from 'next/navigation';
 import { FileText, Eye, Edit3, Plus } from 'lucide-react';
 import { query } from '@/lib/db';
 import { DeleteFormButton } from './DeleteFormButton';
+import { DuplicateFormButton } from './DuplicateFormButton';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 30;
@@ -175,6 +176,7 @@ function FormsTable({
                   >
                     live ↗
                   </a>
+                  <DuplicateFormButton schoolId={schoolId} formId={f.id} />
                   <DeleteFormButton
                     schoolId={schoolId}
                     formId={f.id}
