@@ -288,6 +288,7 @@ ${schoolName}`;
           </Link>
           <FormRowActions
             schoolId={schoolId}
+            locationId={locationId}
             formId={form.id}
             displayName={form.display_name}
             slug={form.slug}

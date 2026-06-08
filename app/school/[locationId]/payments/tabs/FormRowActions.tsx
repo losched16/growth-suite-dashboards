@@ -10,12 +10,17 @@
 // destroy data silently.
 
 import { useState } from 'react';
-import { Eye, EyeOff, Trash2, Loader2, AlertTriangle } from 'lucide-react';
+import { Eye, EyeOff, Trash2, Loader2, AlertTriangle, Copy } from 'lucide-react';
 
 export function FormRowActions({
-  schoolId, formId, displayName, slug, isPublished, submissionCount,
+  schoolId, locationId, formId, displayName, slug, isPublished, submissionCount,
 }: {
   schoolId: string;
+  // locationId is optional — when present, we route the duplicate
+  // jump to the school-side editor (/school/<loc>/forms/<id>) so
+  // operators stay inside the embedded GHL chrome. When absent we
+  // fall back to /admin/<schoolId>/forms/<id>.
+  locationId?: string;
   formId: string;
   displayName: string;
   slug: string;
@@ -26,8 +31,34 @@ export function FormRowActions({
   const [togglingPub, setTogglingPub] = useState(false);
   const [openDelete, setOpenDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [duplicating, setDuplicating] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [typed, setTyped] = useState('');
+
+  async function duplicate() {
+    setDuplicating(true); setErr(null);
+    try {
+      const r = await fetch(`/api/admin/schools/${schoolId}/forms/${formId}/duplicate`, {
+        method: 'POST',
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || !j.id) {
+        setErr(j.detail || j.error || `HTTP ${r.status}`);
+        setDuplicating(false);
+        return;
+      }
+      // Jump straight into the editor for the new draft. Stay in the
+      // school-side route if we know the locationId — keeps the
+      // operator inside the embedded GHL chrome.
+      const editorBase = locationId
+        ? `/school/${locationId}/forms`
+        : `/admin/${schoolId}/forms`;
+      window.location.assign(`${editorBase}/${j.id}?msg=${encodeURIComponent('Duplicated — edit and publish when ready')}`);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+      setDuplicating(false);
+    }
+  }
 
   const requireType = submissionCount > 0;
   const canDelete = requireType ? typed.trim() === 'DELETE' : true;
@@ -93,6 +124,16 @@ export function FormRowActions({
       >
         {togglingPub ? <Loader2 className="h-3 w-3 animate-spin" /> : published ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
         {published ? 'Published' : 'Draft'}
+      </button>
+      <button
+        type="button"
+        onClick={duplicate}
+        disabled={duplicating}
+        className="inline-flex items-center gap-1 rounded border border-blue-300 bg-white px-2 py-1 text-[11px] font-medium text-blue-700 hover:bg-blue-50 disabled:opacity-50"
+        title="Duplicate this form into a new draft"
+      >
+        {duplicating ? <Loader2 className="h-3 w-3 animate-spin" /> : <Copy className="h-3 w-3" />}
+        {duplicating ? 'Duplicating…' : 'Duplicate'}
       </button>
       <button
         type="button"
