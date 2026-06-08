@@ -39,12 +39,22 @@ export async function POST(request: NextRequest, { params }: { params: Params })
   const supportEmail = bRows[0]?.support_email ?? 'support@mygrowthsuite.com';
 
   // Build state + redirect URL.
+  //
+  // SINGLE platform-wide callback URL (encoded in the state) rather than
+  // a per-school path: Stripe Connect requires the redirect_uri passed to
+  // OAuth to exactly match one of the URIs registered in your platform's
+  // Dashboard. With one redirect URI configured in Stripe, every school
+  // OAuth-connects through the same endpoint and the schoolId travels
+  // via the HMAC-signed state.
+  //
+  // Stripe Dashboard → Settings → Connect → Onboarding options →
+  //   Standard → Redirect URIs → must include the URL we set below.
   let state: string;
   let authorizeUrl: string;
   try {
     state = signOAuthState(schoolId);
     const origin = request.nextUrl.origin;
-    const redirectUri = `${origin}/api/admin/schools/${schoolId}/payments/connect-oauth/callback`;
+    const redirectUri = `${origin}/api/stripe-connect/callback`;
     authorizeUrl = buildAuthorizeUrl({ state, redirectUri, schoolEmail: supportEmail });
   } catch (err) {
     // Most likely STRIPE_CLIENT_ID isn't configured. Send the operator

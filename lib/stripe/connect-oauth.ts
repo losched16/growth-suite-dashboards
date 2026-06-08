@@ -52,11 +52,25 @@ export function signOAuthState(schoolId: string): string {
 // (bad shape, bad signature, expired). Callers should treat any throw
 // as "redirect back with err=..." — never reveal the specific cause to
 // the user (could leak signing oracle behavior).
-export function verifyOAuthState(state: string, expectedSchoolId: string): void {
+//
+// Two call modes:
+//   - verifyOAuthState(state)              → returns { schoolId }. Used by
+//     the school-agnostic callback (/api/stripe-connect/callback) where
+//     the schoolId is unknown until the state is decoded.
+//   - verifyOAuthState(state, expectedId)  → throws if the decoded id
+//     doesn't match expectedId. Kept for the legacy per-school callback
+//     (/api/admin/schools/{id}/payments/connect-oauth/callback) so a
+//     code stolen from another school's session can't be redeemed there.
+export function verifyOAuthState(
+  state: string,
+  expectedSchoolId?: string,
+): { schoolId: string } {
   const parts = state.split('.');
   if (parts.length !== 3) throw new Error('state shape');
   const [schoolId, expiryStr, sig] = parts;
-  if (schoolId !== expectedSchoolId) throw new Error('state schoolId mismatch');
+  if (expectedSchoolId != null && schoolId !== expectedSchoolId) {
+    throw new Error('state schoolId mismatch');
+  }
   const expected = crypto.createHmac('sha256', stateSecret()).update(`${schoolId}.${expiryStr}`).digest('base64url');
   const a = Buffer.from(sig);
   const b = Buffer.from(expected);
@@ -64,6 +78,7 @@ export function verifyOAuthState(state: string, expectedSchoolId: string): void 
   if (!crypto.timingSafeEqual(a, b)) throw new Error('state sig mismatch');
   const expiry = Number(expiryStr);
   if (!Number.isFinite(expiry) || expiry < Date.now()) throw new Error('state expired');
+  return { schoolId };
 }
 
 // Build the authorize URL Stripe expects. Prefills the school's email
