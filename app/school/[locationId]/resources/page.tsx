@@ -103,15 +103,15 @@ export default async function SchoolResourcesPage({
         <header className="space-y-1">
           <div className="flex items-center gap-2">
             <BookOpen className="h-5 w-5 text-emerald-600" />
-            <h1 className="text-xl font-semibold text-gray-900">Resources for Parents</h1>
+            <h1 className="text-xl font-semibold text-gray-900">Important Documents</h1>
           </div>
           <p className="text-sm text-gray-600">
             Anything you upload here appears in every parent&apos;s portal under
-            <span className="font-semibold"> Resources</span>. Use it for
-            reference docs parents <em>don&apos;t need to sign</em> — school
-            calendar, parent handbook, newsletter archive, daily schedules,
-            supply lists, Celebration of Life document, classroom-specific
-            materials, anything else worth pinning.
+            <span className="font-semibold"> Important Documents</span>. Use it
+            for helpful reference docs parents <em>don&apos;t need to sign</em>
+            — school calendar, parent handbook, newsletter archive, daily
+            schedules, supply lists, Celebration of Life document, classroom-
+            specific materials, anything else worth pinning.
           </p>
         </header>
 
@@ -129,7 +129,7 @@ export default async function SchoolResourcesPage({
         {/* Upload form */}
         <section className="rounded-lg border border-emerald-200 bg-emerald-50/40 p-4">
           <h2 className="text-sm font-semibold text-emerald-900 mb-2 flex items-center gap-1.5">
-            <Upload className="h-4 w-4" /> Upload a new document
+            <Upload className="h-4 w-4" /> Upload an important document
           </h2>
           <form
             action="/api/school/resources/upload"
@@ -203,7 +203,7 @@ export default async function SchoolResourcesPage({
         {rows.length === 0 ? (
           <div className="rounded-lg border border-dashed border-gray-300 bg-white p-8 text-center">
             <FileText className="mx-auto mb-3 h-10 w-10 text-gray-300" />
-            <h3 className="text-base font-semibold text-gray-900">No resources yet</h3>
+            <h3 className="text-base font-semibold text-gray-900">No documents yet</h3>
             <p className="mx-auto mt-2 max-w-md text-sm text-gray-600">
               Upload your first document above. Parents will see it the moment
               you upload — no publish button needed.

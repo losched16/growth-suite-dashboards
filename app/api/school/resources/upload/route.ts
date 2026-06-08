@@ -91,6 +91,6 @@ export async function POST(request: NextRequest) {
   );
 
   return bounce(request, returnTo, {
-    msg: `Uploaded "${title}". Parents will see it in the portal under Resources.`,
+    msg: `Uploaded "${title}". Parents will see it in their portal under Important Documents.`,
   });
 }
