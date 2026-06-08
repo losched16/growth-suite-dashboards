@@ -45,6 +45,12 @@ interface EnrollmentRow {
   student_label: string | null;
   grid_label: string;
   plan_label: string;
+  // Tuition override (migration 050). NULL = no override (default).
+  // 0 = scholarship. >0 = explicit total set by school staff.
+  tuition_override_cents: number | null;
+  tuition_override_reason: string | null;
+  tuition_override_set_by_email: string | null;
+  tuition_override_set_at: string | Date | null;
 }
 
 interface InvoiceRow {
@@ -85,6 +91,8 @@ export default async function PlanDetailPage({
   const { rows: eRows } = await query<EnrollmentRow>(
     `SELECT e.id, e.school_id, e.family_id, e.student_id, e.academic_year, e.status,
             e.total_annual_cents, e.installment_count, e.internal_note,
+            e.tuition_override_cents, e.tuition_override_reason,
+            e.tuition_override_set_by_email, e.tuition_override_set_at,
             COALESCE(NULLIF(f.display_name, ''),
                      CONCAT_WS(' ', p.first_name, p.last_name),
                      '(unnamed family)') AS family_label,
@@ -179,8 +187,17 @@ export default async function PlanDetailPage({
                 {enr.student_label ? `${enr.student_label} · ` : ''}
                 {enr.grid_label} · {enr.plan_label} · {enr.academic_year}
               </p>
-              <div className="mt-2 flex items-center gap-2">
+              <div className="mt-2 flex items-center gap-2 flex-wrap">
                 <StatusPill status={enr.status} />
+                {enr.tuition_override_cents === 0 ? (
+                  <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-800">
+                    🎓 Scholarship
+                  </span>
+                ) : enr.tuition_override_cents != null ? (
+                  <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-blue-800">
+                    ✏️ Custom tuition
+                  </span>
+                ) : null}
                 {enr.internal_note ? (
                   <span className="text-xs text-slate-500 italic">Note: {enr.internal_note}</span>
                 ) : null}
@@ -206,6 +223,22 @@ export default async function PlanDetailPage({
             <>Use <strong>Add charge / credit</strong> for a one-off adjustment (late fee, refund, manual line item).</>,
             <>Set up <strong>split billing</strong> below for divorced / separated families — each parent gets their own invoice and autopay.</>,
           ]}
+        />
+
+        {/* Tuition override / scholarship — set a custom total tuition
+            for this family. Replaces the computed grid+plan+addons math.
+            0 = scholarship (no invoices generated). Use cases:
+            full / partial scholarship, board-approved discount, special
+            adjustment that doesn't fit a discount policy. */}
+        <TuitionOverrideEditor
+          schoolId={schoolId}
+          enrollmentId={enrollmentId}
+          returnTo={returnTo}
+          overrideCents={enr.tuition_override_cents}
+          overrideReason={enr.tuition_override_reason}
+          overrideSetBy={enr.tuition_override_set_by_email}
+          overrideSetAt={toIso(enr.tuition_override_set_at)}
+          currentTotalCents={enr.total_annual_cents}
         />
 
         {/* Billing-split editor — set per-parent shares for divorced /
@@ -555,3 +588,163 @@ function Money({ label, cents, accent }: { label: string; cents: number; accent?
 
 const inputCls =
   'mt-0.5 block w-full rounded border border-slate-300 bg-white px-2 py-1 text-sm focus:border-blue-500 focus:outline-none';
+
+// Per-enrollment tuition override editor. Lets the operator set a
+// custom annual total — typical use cases: scholarship ($0), partial
+// scholarship ($X), board-approved adjustment that doesn't fit a
+// formal discount policy. Setting it regenerates installments.
+//
+// Two states:
+//   - No override active (default): shows the current computed total
+//     and a "Set custom tuition / Apply scholarship" form, collapsed.
+//   - Override active: shows a colored badge with the override + reason
+//     + audit, and a smaller "Edit" / "Remove override" form.
+function TuitionOverrideEditor({
+  schoolId, enrollmentId, returnTo,
+  overrideCents, overrideReason, overrideSetBy, overrideSetAt,
+  currentTotalCents,
+}: {
+  schoolId: string;
+  enrollmentId: string;
+  returnTo: string;
+  overrideCents: number | null;
+  overrideReason: string | null;
+  overrideSetBy: string | null;
+  overrideSetAt: string;
+  currentTotalCents: number;
+}) {
+  const hasOverride = overrideCents != null;
+  const isScholarship = hasOverride && overrideCents === 0;
+  const actionUrl = `/api/admin/schools/${schoolId}/tuition-plans/${enrollmentId}/action`;
+
+  if (hasOverride) {
+    return (
+      <div className={`rounded-xl border-2 p-4 ${isScholarship ? 'border-emerald-300 bg-emerald-50/40' : 'border-blue-300 bg-blue-50/40'}`}>
+        <div className="flex items-start justify-between gap-3 flex-wrap">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${isScholarship ? 'bg-emerald-200 text-emerald-900' : 'bg-blue-200 text-blue-900'}`}>
+                {isScholarship ? '🎓 Scholarship' : '✏️ Custom tuition'}
+              </span>
+              <span className="font-mono text-base font-semibold text-slate-900">
+                ${(overrideCents! / 100).toFixed(2)} / year
+              </span>
+              {!isScholarship ? (
+                <span className="text-xs text-slate-500">(replaces the standard plan amount)</span>
+              ) : null}
+            </div>
+            {overrideReason ? (
+              <p className="mt-1 text-xs text-slate-700">
+                <span className="font-semibold">Reason:</span> {overrideReason}
+              </p>
+            ) : null}
+            <p className="mt-1 text-[11px] text-slate-500">
+              Set {overrideSetAt ? new Date(overrideSetAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : 'recently'}
+              {overrideSetBy ? ` by ${overrideSetBy}` : ''}
+            </p>
+          </div>
+          <details className="group">
+            <summary className="cursor-pointer text-xs font-medium text-slate-600 hover:text-slate-900 list-none inline-flex items-center gap-1">
+              <span className="text-slate-400 group-open:rotate-90 inline-block transition-transform">▸</span>
+              Change or remove
+            </summary>
+            <form action={actionUrl} method="POST" className="mt-2 space-y-2 rounded-md border border-slate-200 bg-white p-3 min-w-[280px]">
+              <input type="hidden" name="action" value="set_tuition_override" />
+              <input type="hidden" name="return_to" value={returnTo} />
+              <label className="block text-xs">
+                <span className="font-medium text-slate-700">New amount ($) — leave blank to clear</span>
+                <input
+                  type="number"
+                  name="override_amount"
+                  step="0.01"
+                  min="0"
+                  defaultValue={(overrideCents! / 100).toFixed(2)}
+                  placeholder="e.g. 5000 or blank to remove"
+                  className={inputCls}
+                />
+              </label>
+              <label className="block text-xs">
+                <span className="font-medium text-slate-700">Reason (optional)</span>
+                <input
+                  type="text"
+                  name="override_reason"
+                  defaultValue={overrideReason ?? ''}
+                  placeholder="e.g. Full scholarship FY26-27"
+                  className={inputCls}
+                />
+              </label>
+              <div className="flex gap-2">
+                <button type="submit" className="rounded-md bg-blue-600 px-3 py-1 text-xs font-semibold text-white hover:bg-blue-700">
+                  Apply
+                </button>
+              </div>
+              <p className="text-[10px] text-slate-500 leading-tight">
+                Blank or &ldquo;clear&rdquo; → reverts to the standard grid + plan total.
+                Changing the amount regenerates the unpaid installments.
+              </p>
+            </form>
+          </details>
+        </div>
+      </div>
+    );
+  }
+
+  // No override active — collapsed form.
+  return (
+    <details className="rounded-xl border border-slate-200 bg-slate-50/40 p-4 group">
+      <summary className="cursor-pointer list-none flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-2">
+          <span className="text-slate-400 group-open:rotate-90 inline-block transition-transform">▸</span>
+          <span className="text-sm font-semibold text-slate-800">Set custom tuition / Apply scholarship</span>
+        </div>
+        <span className="text-xs text-slate-500">
+          Currently: <span className="font-mono">${(currentTotalCents / 100).toFixed(2)}</span> (standard plan)
+        </span>
+      </summary>
+      <form action={actionUrl} method="POST" className="mt-3 space-y-3 border-t border-slate-200 pt-3">
+        <input type="hidden" name="action" value="set_tuition_override" />
+        <input type="hidden" name="return_to" value={returnTo} />
+        <p className="text-xs text-slate-600 leading-snug">
+          Override the standard tuition for this family with a custom amount.
+          Useful for scholarships, financial-aid awards, board-approved discounts,
+          or any one-off adjustment that doesn&apos;t fit a discount policy.
+          Setting <strong>$0</strong> = full scholarship (no invoices generated).
+          The plan&apos;s number of installments + due dates stay the same; the
+          dollar amount is just spread differently.
+        </p>
+        <div className="grid sm:grid-cols-[150px_1fr] gap-3">
+          <label className="block text-xs">
+            <span className="font-medium text-slate-700">Annual tuition ($)</span>
+            <input
+              type="number"
+              name="override_amount"
+              step="0.01"
+              min="0"
+              placeholder="0 for scholarship"
+              required
+              className={inputCls}
+            />
+          </label>
+          <label className="block text-xs">
+            <span className="font-medium text-slate-700">Reason (optional, shown to your records)</span>
+            <input
+              type="text"
+              name="override_reason"
+              placeholder='e.g. "Full scholarship FY26-27", "Hardship discount", "Board-approved waiver"'
+              maxLength={200}
+              className={inputCls}
+            />
+          </label>
+        </div>
+        <div className="flex gap-2">
+          <button type="submit" className="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-blue-700">
+            Apply custom tuition
+          </button>
+          <span className="text-[11px] text-slate-500 self-center">
+            Replaces any unpaid invoices with the new amount.
+          </span>
+        </div>
+      </form>
+    </details>
+  );
+}

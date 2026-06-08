@@ -13,7 +13,7 @@
 // hidden `return_to` so we land back here, not in the operator console.
 
 import Link from 'next/link';
-import { Plus, Trash2, Sparkles, Edit3, X, Pencil } from 'lucide-react';
+import { Plus, Trash2, Sparkles, Edit3, X, Pencil, Search } from 'lucide-react';
 import { query } from '@/lib/db';
 import { HelpCallout } from '@/components/HelpCallout';
 
@@ -27,6 +27,8 @@ interface EnrollmentRow {
   total_annual_cents: number;
   installment_count: number;
   status: string;
+  // Null = standard tuition. 0 = scholarship badge. >0 = custom-tuition badge.
+  tuition_override_cents: number | null;
   invoices_open: number;
   invoices_paid: number;
   amount_paid_cents: number;
@@ -46,8 +48,22 @@ interface PlanTemplateRow {
 }
 
 export async function PaymentsHubPlans({
-  schoolId, locationId, editTemplateId = null,
-}: { schoolId: string; locationId: string; editTemplateId?: string | null }) {
+  schoolId, locationId, editTemplateId = null, familySearch = '',
+}: {
+  schoolId: string;
+  locationId: string;
+  editTemplateId?: string | null;
+  // Substring filter applied to family name / student name / primary
+  // parent name + email. Drives both the SQL WHERE and the search input
+  // (so the input keeps the typed value on rerender). Bound to `?q=`.
+  familySearch?: string;
+}) {
+  // Normalize the search term for case-insensitive matching. Empty
+  // string means "no filter" — handled by passing NULL to the SQL,
+  // which the WHERE branches on.
+  const q = familySearch.trim();
+  const qParam = q ? `%${q.toLowerCase()}%` : null;
+
   const [{ rows: enrollments }, { rows: planTemplates }] = await Promise.all([
     query<EnrollmentRow>(
       `SELECT e.id,
@@ -63,6 +79,7 @@ export async function PaymentsHubPlans({
               e.total_annual_cents,
               e.installment_count,
               e.status,
+              e.tuition_override_cents,
               (SELECT COUNT(*)::int FROM invoices WHERE source = 'tuition_plan'
                 AND source_ref->>'enrollment_id' = e.id::text
                 AND status IN ('open', 'partially_paid')) AS invoices_open,
@@ -78,13 +95,30 @@ export async function PaymentsHubPlans({
          JOIN payment_plans pl ON pl.id = e.payment_plan_id
          LEFT JOIN students st ON st.id = e.student_id
          LEFT JOIN LATERAL (
-           SELECT first_name, last_name FROM parents
+           SELECT first_name, last_name, email FROM parents
             WHERE family_id = f.id AND is_primary = true LIMIT 1
          ) p ON true
         WHERE e.school_id = $1
+          AND ($2::text IS NULL OR (
+            -- family display name
+            lower(COALESCE(f.display_name, '')) LIKE $2
+            -- primary parent first + last
+            OR lower(COALESCE(p.first_name, '')) LIKE $2
+            OR lower(COALESCE(p.last_name, '')) LIKE $2
+            OR lower(COALESCE(p.email, '')) LIKE $2
+            -- student name(s) — match against ANY student in the family,
+            -- not just the one tied to the enrollment, so a parent
+            -- searching by sibling name still finds the enrollment row.
+            OR EXISTS (
+              SELECT 1 FROM students sx
+               WHERE sx.family_id = f.id
+                 AND (lower(sx.first_name) LIKE $2 OR lower(sx.last_name) LIKE $2
+                      OR lower(COALESCE(sx.preferred_name, '')) LIKE $2)
+            )
+          ))
         ORDER BY e.status, e.academic_year DESC, family_label
         LIMIT 200`,
-      [schoolId],
+      [schoolId, qParam],
     ),
     query<PlanTemplateRow>(
       `SELECT pl.id, pl.slug, pl.display_name, pl.description,
@@ -183,8 +217,8 @@ export async function PaymentsHubPlans({
             <h2 className="text-xl font-semibold text-slate-900">Family enrollments</h2>
             <p className="text-sm text-slate-500">
               <strong>Click any row</strong> to open the family&rsquo;s plan editor — change due dates, change amounts,
-              split a single payment into two, reschedule the remaining balance across more (or fewer) months,
-              pause / resume the plan, or add a one-off charge or credit.
+              apply a scholarship, split a single payment into two, reschedule the remaining balance across
+              more (or fewer) months, or pause / resume the plan.
             </p>
           </div>
           {activeTemplateCount > 0 ? (
@@ -201,6 +235,39 @@ export async function PaymentsHubPlans({
           )}
         </div>
 
+        {/* Family search — GET form scoped to the Plans tab so the URL
+            keeps ?tab=plans and the search term as ?q=. Auto-submits on
+            text change (Enter triggers submit; clearing via the X link
+            preserves the tab). */}
+        <form method="GET" className="mb-2 flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2">
+          {/* Preserve tab=plans so the GET submission stays on this tab */}
+          <input type="hidden" name="tab" value="plans" />
+          <Search className="h-4 w-4 text-slate-400 shrink-0" />
+          <input
+            type="search"
+            name="q"
+            defaultValue={q}
+            placeholder="Search families by name, student name, parent name, or email…"
+            className="flex-1 min-w-0 border-0 bg-transparent text-sm focus:outline-none focus:ring-0 placeholder:text-slate-400"
+          />
+          <button type="submit" className="rounded-md bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-200">
+            Search
+          </button>
+          {q ? (
+            <Link
+              href={`/school/${locationId}/payments?tab=plans`}
+              className="rounded-md border border-slate-300 px-2.5 py-1 text-xs text-slate-700 hover:bg-slate-50"
+            >
+              Clear
+            </Link>
+          ) : null}
+        </form>
+        {q ? (
+          <p className="mb-2 text-xs text-slate-500">
+            Showing {enrollments.length} result{enrollments.length === 1 ? '' : 's'} for &ldquo;<span className="font-semibold">{q}</span>&rdquo;.
+          </p>
+        ) : null}
+
         <div className="rounded-lg border border-slate-200 bg-white overflow-hidden">
           <table className="w-full text-sm">
             <thead className="bg-slate-50 border-b border-slate-100 text-left text-[10px] uppercase tracking-wide text-slate-500">
@@ -216,7 +283,11 @@ export async function PaymentsHubPlans({
             <tbody className="divide-y divide-slate-100">
               {enrollments.length === 0 ? (
                 <tr><td colSpan={6} className="p-10 text-center text-sm text-slate-500 italic">
-                  No enrollments yet. Click <strong>Start an enrollment</strong> to set up the first family.
+                  {q ? (
+                    <>No families match &ldquo;<span className="font-semibold">{q}</span>&rdquo;. Try a different search term or <Link href={`/school/${locationId}/payments?tab=plans`} className="text-blue-600 hover:underline">clear the filter</Link>.</>
+                  ) : (
+                    <>No enrollments yet. Click <strong>Start an enrollment</strong> to set up the first family.</>
+                  )}
                 </td></tr>
               ) : enrollments.map((e) => {
                 const pct = e.total_annual_cents > 0 ? Math.round((e.amount_paid_cents / e.total_annual_cents) * 100) : 0;
@@ -225,7 +296,18 @@ export async function PaymentsHubPlans({
                   <tr key={e.id} className="hover:bg-slate-50 cursor-pointer group">
                     <td className="px-4 py-2">
                       <Link href={planHref} className="block">
-                        <div className="text-slate-900 group-hover:text-blue-700">{e.family_label}</div>
+                        <div className="text-slate-900 group-hover:text-blue-700 inline-flex items-center gap-1.5">
+                          {e.family_label}
+                          {e.tuition_override_cents === 0 ? (
+                            <span className="rounded-full bg-emerald-100 px-1.5 py-0 text-[9px] font-semibold uppercase tracking-wide text-emerald-800" title="Scholarship — family owes $0">
+                              🎓 Scholarship
+                            </span>
+                          ) : e.tuition_override_cents != null ? (
+                            <span className="rounded-full bg-blue-100 px-1.5 py-0 text-[9px] font-semibold uppercase tracking-wide text-blue-800" title="Custom tuition set by operator">
+                              ✏️ Custom
+                            </span>
+                          ) : null}
+                        </div>
                         {e.student_label ? <div className="text-[11px] text-slate-500">{e.student_label}</div> : null}
                       </Link>
                     </td>

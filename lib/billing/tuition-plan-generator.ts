@@ -33,6 +33,16 @@ interface GenerateOpts {
   createdByEmail: string;
   // 'open' → parent sees them immediately, 'draft' → operator must send.
   initialStatus?: 'open' | 'draft';
+  // Optional per-enrollment tuition override (scholarship / financial
+  // aid / custom adjustment). When provided, REPLACES the computed
+  // total (grid - plan_discount + addons) and drives the installment
+  // math. 0 = family owes nothing (no invoices materialized, enrollment
+  // is still recorded). null/undefined = no override (compute normally).
+  // The override value + reason + audit columns are persisted to
+  // family_tuition_enrollments so the UI can show "Scholarship" badges
+  // and the next regen picks up the same override automatically.
+  tuitionOverrideCents?: number | null;
+  tuitionOverrideReason?: string | null;
 }
 
 interface GenerateResult {
@@ -102,14 +112,27 @@ export async function generateTuitionEnrollment(opts: GenerateOpts): Promise<Gen
   const discountedTuition = grid.annual_tuition_cents
     - Math.round(grid.annual_tuition_cents * plan.discount_basis_points / 10000);
   const addonTotal = selectedAddons.reduce((s, a) => s + a.amount_cents, 0);
-  const totalAnnualCents = discountedTuition + addonTotal;
+  const computedTotal = discountedTuition + addonTotal;
 
-  if (totalAnnualCents <= 0) {
-    throw new Error('Computed annual total is $0 — nothing to invoice.');
+  // Honor the per-enrollment override when set. 0 is a valid value
+  // (scholarship — family owes nothing). null/undefined → use the
+  // computed total. We don't validate amount > 0 here because the
+  // scholarship case explicitly wants 0.
+  const hasOverride = opts.tuitionOverrideCents != null;
+  const totalAnnualCents = hasOverride
+    ? Math.max(0, opts.tuitionOverrideCents!)
+    : computedTotal;
+
+  if (!hasOverride && totalAnnualCents <= 0) {
+    throw new Error('Computed annual total is $0 — nothing to invoice. (Set a tuition override explicitly if you want a $0 enrollment.)');
   }
   if (plan.installment_count <= 0) {
     throw new Error('Plan has 0 installments — invalid configuration.');
   }
+  // Scholarship / $0 override: skip materializing invoices entirely.
+  // The enrollment row is still upserted so the family shows up in the
+  // Plans tab (with a "Scholarship" badge driven by the override fields).
+  const skipInvoices = hasOverride && totalAnnualCents === 0;
 
   // ── 4. Compute the per-installment dates ─────────────────────────────
   const dueDates = computeDueDates(plan.schedule_template, opts.academicYear, plan.installment_count, plan.first_due_month_day);
@@ -151,16 +174,27 @@ export async function generateTuitionEnrollment(opts: GenerateOpts): Promise<Gen
 
   const result = await withTransaction(async (q) => {
     // Upsert enrollment — replaces a prior enrollment for the same
-    // (family, student, year) if one exists.
+    // (family, student, year) if one exists. The override columns are
+    // EXPLICITLY set (not COALESCE'd) so the operator can clear a
+    // prior scholarship by passing tuitionOverrideCents=null on a
+    // regen — otherwise old overrides would silently linger.
+    const overrideCents = hasOverride ? opts.tuitionOverrideCents ?? null : null;
+    const overrideReason = hasOverride ? (opts.tuitionOverrideReason ?? null) : null;
+    const overrideSetBy = hasOverride ? opts.createdByEmail : null;
+
     const enrIns = await q<{ id: string }>(
       `INSERT INTO family_tuition_enrollments
          (school_id, family_id, student_id, academic_year,
           tuition_grid_id, payment_plan_id,
           annual_tuition_cents, plan_discount_basis_points, addons,
           total_annual_cents, installment_count, schedule,
-          status, internal_note, created_by_email)
+          status, internal_note, created_by_email,
+          tuition_override_cents, tuition_override_reason,
+          tuition_override_set_by_email, tuition_override_set_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10, $11, $12::jsonb,
-               'active', $13, $14)
+               'active', $13, $14,
+               $15, $16, $17,
+               CASE WHEN $15::int IS NULL THEN NULL ELSE now() END)
        ON CONFLICT (school_id, family_id, student_id, academic_year)
        DO UPDATE SET
          tuition_grid_id = EXCLUDED.tuition_grid_id,
@@ -173,6 +207,10 @@ export async function generateTuitionEnrollment(opts: GenerateOpts): Promise<Gen
          schedule = EXCLUDED.schedule,
          status = 'active',
          internal_note = COALESCE(EXCLUDED.internal_note, family_tuition_enrollments.internal_note),
+         tuition_override_cents = EXCLUDED.tuition_override_cents,
+         tuition_override_reason = EXCLUDED.tuition_override_reason,
+         tuition_override_set_by_email = EXCLUDED.tuition_override_set_by_email,
+         tuition_override_set_at = EXCLUDED.tuition_override_set_at,
          updated_at = now()
        RETURNING id`,
       [
@@ -184,6 +222,7 @@ export async function generateTuitionEnrollment(opts: GenerateOpts): Promise<Gen
         JSON.stringify(plan.schedule_template),
         opts.internalNote ?? null,
         opts.createdByEmail,
+        overrideCents, overrideReason, overrideSetBy,
       ],
     );
     const enrollmentId = enrIns.rows[0].id;
@@ -200,6 +239,20 @@ export async function generateTuitionEnrollment(opts: GenerateOpts): Promise<Gen
     );
 
     const invoiceIds: string[] = [];
+
+    // Scholarship / $0 override: skip the entire installment loop. The
+    // enrollment row is recorded (so the family appears in the Plans
+    // tab with a "Scholarship" badge driven by tuition_override_*),
+    // but no invoices materialize because there's nothing to bill.
+    if (skipInvoices) {
+      await q(
+        `UPDATE family_tuition_enrollments
+            SET installments_generated_at = now(), updated_at = now()
+          WHERE id = $1`,
+        [enrollmentId],
+      );
+      return { enrollmentId, invoiceIds };
+    }
 
     // Load split-billing shares for this enrollment ONCE up front. When
     // shares.length === 0 → joint billing (current behavior, one invoice

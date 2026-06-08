@@ -25,6 +25,7 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { query, withTransaction } from '@/lib/db';
 import { authorizeOperatorOrSchool } from '@/lib/auth/dual';
+import { generateTuitionEnrollment } from '@/lib/billing/tuition-plan-generator';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -392,6 +393,74 @@ export async function POST(request: NextRequest, { params }: { params: Params })
         return back(request, fallback, returnTo, {
           msg: `Reschedule applied — $${(totalBalanceCents / 100).toFixed(2)} spread across ${newCount} new installments.`,
         });
+      }
+
+      // ── set_tuition_override ─────────────────────────────────────────
+      // Sets (or clears) a per-enrollment tuition override.
+      //   override_amount = '' or 'clear' → remove override, return to
+      //                                     computed grid+plan+addon total
+      //   override_amount = '0'           → scholarship: family owes $0,
+      //                                     no invoices generated
+      //   override_amount = '5000'        → family owes $5,000 total,
+      //                                     spread across the plan's
+      //                                     installments
+      //
+      // Implementation: load the existing enrollment's tuition_grid_id +
+      // payment_plan_id + addon keys, then re-call the generator with
+      // the new override. The generator handles the rest (upsert
+      // enrollment, void drafts, regenerate invoices — or skip them for
+      // a $0 override).
+      case 'set_tuition_override': {
+        const amountStr = String(fd.get('override_amount') ?? '').trim().toLowerCase();
+        const reason = String(fd.get('override_reason') ?? '').trim() || null;
+
+        const clearing = amountStr === '' || amountStr === 'clear';
+        const overrideCents: number | null = clearing
+          ? null
+          : dollarsToCents(amountStr);
+
+        if (!clearing && overrideCents! < 0) {
+          return back(request, fallback, returnTo, { err: 'Override amount cannot be negative.' });
+        }
+
+        // Pull the existing enrollment config we need to pass back to
+        // the generator so the regen preserves grid/plan/addons.
+        const { rows: cfg } = await query<{
+          tuition_grid_id: string;
+          payment_plan_id: string;
+          academic_year: string;
+          addons: Array<{ key: string }> | null;
+        }>(
+          `SELECT tuition_grid_id, payment_plan_id, academic_year, addons
+             FROM family_tuition_enrollments WHERE id = $1`,
+          [enrollmentId],
+        );
+        if (cfg.length === 0) {
+          return back(request, fallback, returnTo, { err: 'Enrollment not found.' });
+        }
+        const addonKeys = Array.isArray(cfg[0].addons)
+          ? cfg[0].addons.map((a) => a?.key).filter((k): k is string => typeof k === 'string')
+          : [];
+
+        await generateTuitionEnrollment({
+          schoolId,
+          familyId: enr.family_id,
+          studentId: enr.student_id,
+          academicYear: cfg[0].academic_year,
+          tuitionGridId: cfg[0].tuition_grid_id,
+          paymentPlanId: cfg[0].payment_plan_id,
+          addonKeys,
+          createdByEmail: 'operator@growthsuite.local',
+          tuitionOverrideCents: overrideCents,
+          tuitionOverrideReason: clearing ? null : reason,
+        });
+
+        const msg = clearing
+          ? 'Override cleared — tuition reverted to the standard amount and invoices regenerated.'
+          : overrideCents === 0
+            ? `Scholarship applied — family owes $0. ${reason ? `Reason: "${reason}". ` : ''}Existing draft invoices removed.`
+            : `Tuition set to $${(overrideCents! / 100).toFixed(2)}. ${reason ? `Reason: "${reason}". ` : ''}Installments regenerated.`;
+        return back(request, fallback, returnTo, { msg });
       }
 
       default:
