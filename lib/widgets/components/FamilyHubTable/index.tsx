@@ -5,6 +5,7 @@
 // expansion is handled in AccordionTable as a tiny client component
 // that owns just the "which row is open" state.
 
+import { RefreshCw } from 'lucide-react';
 import type { WidgetDefinition, SchoolContext, WidgetSearchParams } from '@/lib/widgets/types';
 import {
   AVAILABLE_FILTERS,
@@ -178,8 +179,29 @@ function Component({
   }
   const exportHref = `/api/export/family-hub/${school.locationId}${exportParams.toString() ? `?${exportParams}` : ''}`;
 
+  // Preserve the iframe URL so the sync POST lands back here with
+  // the success / error flash. The URL we land on is captured from the
+  // current request (browser-visible path), reconstructed from the
+  // school's locationId + the family-hub embed slug.
+  const syncReturnTo = `/school/${school.locationId}/family-hub`;
+  // Inline flash for the sync action's redirect. Read from URL state
+  // so the widget surfaces success/error WITHOUT relying on the host
+  // dashboard page to render its own flash banner.
+  const flashMsg = typeof sp.msg === 'string' ? sp.msg : null;
+  const flashErr = typeof sp.err === 'string' ? sp.err : null;
+
   return (
     <div className="space-y-3">
+      {flashMsg ? (
+        <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+          {flashMsg}
+        </div>
+      ) : null}
+      {flashErr ? (
+        <div className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">
+          {flashErr}
+        </div>
+      ) : null}
       <div className="flex items-baseline justify-between gap-3 flex-wrap">
         <div>
           <h2 className="text-lg font-semibold text-emerald-700">Families</h2>
@@ -188,7 +210,26 @@ function Component({
             {data.stats.students} students · {data.stats.enrolled} enrolled · {data.stats.accepted} accepted · {data.stats.pending} pending
           </p>
         </div>
-        <DownloadCsvButton href={exportHref} label={isFiltered ? 'Download filtered CSV' : 'Download CSV'} />
+        <div className="flex items-center gap-2">
+          {/* GHL → dashboard manual sync. Posts to a school-session
+              endpoint that runs runGhlSync(schoolId) and bounces back
+              here with a success / error flash. Fixes the lag between
+              an operator editing a contact in GHL and the change
+              appearing in the Family Hub (without it the change waits
+              for the daily cron). */}
+          <form action="/api/school/sync-from-ghl" method="POST">
+            <input type="hidden" name="return_to" value={syncReturnTo} />
+            <button
+              type="submit"
+              title="Pull the latest contact data from GHL into the Family Hub. Takes 10-60 seconds."
+              className="inline-flex items-center gap-1.5 rounded-md border border-emerald-300 bg-white px-2.5 py-1.5 text-xs font-medium text-emerald-700 hover:bg-emerald-50"
+            >
+              <RefreshCw className="h-3.5 w-3.5" />
+              Sync from GHL
+            </button>
+          </form>
+          <DownloadCsvButton href={exportHref} label={isFiltered ? 'Download filtered CSV' : 'Download CSV'} />
+        </div>
       </div>
 
       {showStats ? (
