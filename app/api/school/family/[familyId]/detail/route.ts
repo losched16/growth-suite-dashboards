@@ -12,6 +12,7 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { cookies } from 'next/headers';
 import { SCHOOL_SESSION_COOKIE, verifySchoolSession } from '@/lib/auth/school';
+import { SESSION_COOKIE, verifySessionToken } from '@/lib/auth/operator';
 import { query } from '@/lib/db';
 
 export const runtime = 'nodejs';
@@ -22,19 +23,44 @@ type Params = Promise<{ familyId: string }>;
 export async function GET(_request: NextRequest, { params }: { params: Params }) {
   const { familyId } = await params;
   const ck = await cookies();
-  const session = await verifySchoolSession(ck.get(SCHOOL_SESSION_COOKIE)?.value);
-  if (!session) return NextResponse.json({ ok: false, error: 'unauthorized' }, { status: 401 });
 
+  // Auth: school session OR operator (back-office) session.
+  const schoolSession = await verifySchoolSession(ck.get(SCHOOL_SESSION_COOKIE)?.value);
+  const operatorSession = verifySessionToken(ck.get(SESSION_COOKIE)?.value);
+  if (!schoolSession && !operatorSession) {
+    return NextResponse.json({ ok: false, error: 'unauthorized' }, { status: 401 });
+  }
+
+  // Step 1: look up the family by id ALONE so we can give a useful
+  // error when there's a school_id mismatch (most common cause: stale
+  // cookie from testing in a different school's iframe). The cookie
+  // mismatch case was previously masked as "family not found" — same
+  // 404 path the code took for genuinely-missing rows.
   const { rows: famRows } = await query<{
     id: string; display_name: string | null; notes: string | null; status: string;
+    school_id: string;
   }>(
-    `SELECT id, display_name, notes, status FROM families WHERE id = $1 AND school_id = $2`,
-    [familyId, session.school_id],
+    `SELECT id, display_name, notes, status, school_id FROM families WHERE id = $1`,
+    [familyId],
   );
   if (famRows.length === 0) {
     return NextResponse.json({ ok: false, error: 'family not found' }, { status: 404 });
   }
   const family = famRows[0];
+
+  // Step 2: enforce scope. Operator session = back-office cross-school
+  // admin, allow. School session = must match the family's school_id.
+  if (!operatorSession && schoolSession && schoolSession.school_id !== family.school_id) {
+    return NextResponse.json({
+      ok: false,
+      error: 'wrong school',
+      detail: "This family belongs to a different school than your current login. Refresh the page or sign in to the right school.",
+    }, { status: 403 });
+  }
+
+  // schoolId we use downstream for the scoped sub-queries. Always the
+  // family's own school_id once we've confirmed access.
+  const schoolId = family.school_id;
 
   const { rows: parents } = await query<{
     id: string;
@@ -60,7 +86,7 @@ export async function GET(_request: NextRequest, { params }: { params: Params })
        FROM parents p
       WHERE p.family_id = $1 AND p.school_id = $2 AND p.status = 'active'
       ORDER BY p.is_primary DESC, p.first_name`,
-    [familyId, session.school_id],
+    [familyId, schoolId],
   );
 
   const { rows: students } = await query<{
@@ -76,7 +102,7 @@ export async function GET(_request: NextRequest, { params }: { params: Params })
        FROM students s
       WHERE s.family_id = $1 AND s.school_id = $2 AND s.status = 'active'
       ORDER BY s.date_of_birth NULLS LAST`,
-    [familyId, session.school_id],
+    [familyId, schoolId],
   );
 
   // Authorized pickup persons. The pickup_persons table is keyed by the
@@ -94,7 +120,7 @@ export async function GET(_request: NextRequest, { params }: { params: Params })
        JOIN parents p ON p.id = pp.added_by_parent_id
       WHERE p.family_id = $1 AND p.school_id = $2 AND pp.active = true
       ORDER BY pp.name`,
-    [familyId, session.school_id],
+    [familyId, schoolId],
   );
   // Dedupe by name + phone (parents often re-add the same person).
   const seen = new Set<string>();
@@ -119,7 +145,7 @@ export async function GET(_request: NextRequest, { params }: { params: Params })
        JOIN students s ON s.id = r.student_id
       WHERE s.family_id = $1 AND r.school_id = $2 AND r.active = true
       ORDER BY s.first_name, r.created_at`,
-    [familyId, session.school_id],
+    [familyId, schoolId],
   );
 
   // Health profiles per student — emergency contact #1, doctor, hospital,
@@ -149,7 +175,7 @@ export async function GET(_request: NextRequest, { params }: { params: Params })
        FROM student_health_profiles
       WHERE school_id = $1
         AND student_id IN (SELECT id FROM students WHERE family_id = $2 AND school_id = $1 AND status = 'active')`,
-    [session.school_id, familyId],
+    [schoolId, familyId],
   );
 
   // Roster permissions + payment plan + days of attendance + the full
@@ -178,7 +204,46 @@ export async function GET(_request: NextRequest, { params }: { params: Params })
        JOIN students s ON s.id = e.student_id
       WHERE s.family_id = $1 AND s.school_id = $2 AND s.status = 'active'
         AND e.status = 'enrolled'`,
-    [familyId, session.school_id],
+    [familyId, schoolId],
+  );
+
+  // Medical form submissions per student — anything in the school's
+  // 'medical' category, sorted newest-first. Includes form-definition
+  // metadata so the panel can show "Request For Administering
+  // Medication · submitted Mar 4" without an extra round-trip.
+  const { rows: medical_forms } = await query<{
+    submission_id: string;
+    form_definition_id: string;
+    form_display_name: string;
+    form_slug: string;
+    student_id: string;
+    submitted_at: string;
+    status: string;
+    expires_on: string | null;
+  }>(
+    `SELECT s.id AS submission_id,
+            d.id AS form_definition_id,
+            d.display_name AS form_display_name,
+            d.slug AS form_slug,
+            s.student_id,
+            s.submitted_at,
+            s.status,
+            -- Schools that capture expiration on the form typically
+            -- store it in the response JSON under a key like
+            -- 'medication_expiration' or 'expires_on'. Surface either
+            -- so the panel can warn about expired meds. Defensive cast.
+            COALESCE(
+              s.responses->>'medication_expiration',
+              s.responses->>'expires_on',
+              s.responses->>'expiration_date'
+            ) AS expires_on
+       FROM portal_form_submissions s
+       JOIN portal_form_definitions d ON d.id = s.form_definition_id
+      WHERE s.school_id = $1
+        AND d.category = 'medical'
+        AND s.student_id IN (SELECT id FROM students WHERE family_id = $2 AND school_id = $1 AND status = 'active')
+      ORDER BY s.submitted_at DESC NULLS LAST`,
+    [schoolId, familyId],
   );
 
   return NextResponse.json({
@@ -190,5 +255,6 @@ export async function GET(_request: NextRequest, { params }: { params: Params })
     pickup_restrictions,
     health_profiles,
     enrollment_meta,
+    medical_forms,
   });
 }

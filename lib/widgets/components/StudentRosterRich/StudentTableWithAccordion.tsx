@@ -112,6 +112,17 @@ interface EnrollmentMeta {
   tuition: TuitionInfo | null;
 }
 
+interface MedicalForm {
+  submission_id: string;
+  form_definition_id: string;
+  form_display_name: string;
+  form_slug: string;
+  student_id: string;
+  submitted_at: string | null;
+  status: string;
+  expires_on: string | null;
+}
+
 interface FamilyDetail {
   family: { id: string; display_name: string | null; notes: string | null };
   parents: ParentInfo[];
@@ -120,6 +131,7 @@ interface FamilyDetail {
   pickup_restrictions: PickupRestriction[];
   health_profiles: HealthProfile[];
   enrollment_meta: EnrollmentMeta[];
+  medical_forms: MedicalForm[];
 }
 
 export function StudentTableWithAccordion({
@@ -169,6 +181,7 @@ export function StudentTableWithAccordion({
             pickup_restrictions: data.pickup_restrictions ?? [],
             health_profiles: data.health_profiles ?? [],
             enrollment_meta: data.enrollment_meta ?? [],
+            medical_forms: data.medical_forms ?? [],
           },
         }));
       } catch (e) {
@@ -234,7 +247,7 @@ function RowGroup({
       {isOpen ? (
         <tr>
           <td colSpan={columns.length} className="bg-gray-50 border-y border-emerald-200 p-0">
-            <FamilyDetailPanel detail={detail} onClose={onToggle} />
+            <FamilyDetailPanel detail={detail} onClose={onToggle} locationId={locationId} />
           </td>
         </tr>
       ) : null}
@@ -430,10 +443,11 @@ function renderCell(
 }
 
 function FamilyDetailPanel({
-  detail, onClose,
+  detail, onClose, locationId,
 }: {
   detail: FamilyDetail | 'loading' | { err: string } | undefined;
   onClose: () => void;
+  locationId: string;
 }) {
   return (
     <div className="px-6 py-4 space-y-3">
@@ -625,10 +639,18 @@ function FamilyDetailPanel({
             {detail.students.map((st) => {
               const hp = detail.health_profiles.find((h) => h.student_id === st.id);
               const em = detail.enrollment_meta.find((m) => m.student_id === st.id);
-              if (!hp && !em) return null;
+              const medForms = (detail.medical_forms ?? []).filter((f) => f.student_id === st.id);
+              if (!hp && !em && medForms.length === 0) return null;
               const stDisplay = st.preferred_name || st.first_name;
               return (
-                <StudentDetailCard key={st.id} name={`${stDisplay} ${st.last_name}`} hp={hp} em={em} />
+                <StudentDetailCard
+                  key={st.id}
+                  name={`${stDisplay} ${st.last_name}`}
+                  hp={hp}
+                  em={em}
+                  medicalForms={medForms}
+                  locationId={locationId}
+                />
               );
             })}
           </div>
@@ -639,11 +661,13 @@ function FamilyDetailPanel({
 }
 
 function StudentDetailCard({
-  name, hp, em,
+  name, hp, em, medicalForms, locationId,
 }: {
   name: string;
   hp: HealthProfile | undefined;
   em: EnrollmentMeta | undefined;
+  medicalForms: MedicalForm[];
+  locationId: string;
 }) {
   // Render an allergy as a red-tagged callout vs a benign "None on file"
   // — same logic the roster uses for its allergy badge.
@@ -724,6 +748,61 @@ function StudentDetailCard({
                 {hp.emergency_contact_phone ? <> · <a href={`tel:${hp.emergency_contact_phone}`} className="text-blue-600 hover:underline">{hp.emergency_contact_phone}</a></> : null}
               </div>
             ) : null}
+          </div>
+        ) : null}
+
+        {/* Medication-related forms on file. Surfaces every submission
+            categorized 'medical' so the office can see, in a reaction,
+            exactly which forms are authorized + what's expiring. Each
+            row deep-links to the submission so admin can pull the full
+            response (med name, dose, route, prescriber). */}
+        {medicalForms.length > 0 ? (
+          <div className="pt-2 border-t border-slate-100 space-y-1.5">
+            <div className="text-[10px] uppercase tracking-wide text-rose-700 font-semibold flex items-center gap-1">
+              <Heart className="h-3 w-3" /> Medication-related forms on file
+            </div>
+            <ul className="space-y-1">
+              {medicalForms.map((f) => {
+                const sub = f.submitted_at ? new Date(f.submitted_at) : null;
+                const exp = f.expires_on ? new Date(f.expires_on) : null;
+                const now = new Date();
+                const expiresSoon = exp && exp.getTime() - now.getTime() < 30 * 24 * 60 * 60 * 1000 && exp.getTime() > now.getTime();
+                const expired = exp && exp.getTime() < now.getTime();
+                return (
+                  <li
+                    key={f.submission_id}
+                    className={`rounded border px-2 py-1 text-[11px] ${
+                      expired ? 'border-rose-300 bg-rose-50' :
+                      expiresSoon ? 'border-amber-300 bg-amber-50' :
+                      'border-rose-100 bg-rose-50/40'
+                    }`}
+                  >
+                    <div className="flex items-baseline justify-between gap-2 flex-wrap">
+                      <a
+                        href={`/school/${locationId}/forms/${f.form_definition_id}/submissions/${f.submission_id}`}
+                        className="font-semibold text-rose-900 hover:underline"
+                      >
+                        {f.form_display_name}
+                      </a>
+                      {expired ? (
+                        <span className="rounded bg-rose-200 px-1 py-0 text-[9px] font-bold uppercase tracking-wide text-rose-900">
+                          Expired
+                        </span>
+                      ) : expiresSoon ? (
+                        <span className="rounded bg-amber-200 px-1 py-0 text-[9px] font-bold uppercase tracking-wide text-amber-900">
+                          Expires soon
+                        </span>
+                      ) : null}
+                    </div>
+                    <div className="text-[10px] text-slate-600 flex flex-wrap gap-x-2">
+                      {sub ? <span>Submitted {sub.toLocaleDateString()}</span> : null}
+                      {exp ? <span>· Expires {exp.toLocaleDateString()}</span> : null}
+                      <span className="text-slate-400">· {f.form_slug}</span>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
           </div>
         ) : null}
 
