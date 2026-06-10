@@ -23,6 +23,13 @@ interface ConfigRow {
   card_enabled: boolean;
   ach_enabled: boolean;
   invoice_number_prefix: string;
+  ghl_receipt_webhook_url: string | null;
+  // Loaded only to round-trip as hidden inputs — this compact embed
+  // form doesn't edit them, but the shared config endpoint resets any
+  // field absent from the POST, so we echo them back unchanged.
+  autopay_days: number[];
+  late_fee_amount_cents: number;
+  late_fee_grace_days: number;
 }
 
 export async function PaymentsHubSettings({
@@ -30,7 +37,9 @@ export async function PaymentsHubSettings({
 }: { schoolId: string; locationId: string; account: Account | null }) {
   const { rows: cfgRows } = await query<ConfigRow>(
     `SELECT pass_card_fee, pass_ach_fee, processing_fee_label,
-            card_enabled, ach_enabled, invoice_number_prefix
+            card_enabled, ach_enabled, invoice_number_prefix,
+            ghl_receipt_webhook_url,
+            autopay_days, late_fee_amount_cents, late_fee_grace_days
        FROM school_payment_config WHERE school_id = $1`,
     [schoolId],
   );
@@ -39,7 +48,11 @@ export async function PaymentsHubSettings({
     processing_fee_label: 'Processing fee',
     card_enabled: true, ach_enabled: true,
     invoice_number_prefix: 'INV',
+    ghl_receipt_webhook_url: null,
+    autopay_days: [1, 15], late_fee_amount_cents: 0, late_fee_grace_days: 3,
   };
+
+  const settingsReturnTo = `/school/${locationId}/payments?tab=settings`;
 
   return (
     <div className="space-y-4">
@@ -74,6 +87,12 @@ export async function PaymentsHubSettings({
           <h3 className="text-base font-semibold text-slate-900">Billing configuration</h3>
         </div>
         <form action={`/api/admin/schools/${schoolId}/payments/config`} method="POST" className="space-y-3">
+          <input type="hidden" name="return_to" value={settingsReturnTo} />
+          {/* Round-trip fields this compact form doesn't edit so the
+              shared config endpoint doesn't reset them to defaults. */}
+          <input type="hidden" name="autopay_days" value={(cfg.autopay_days ?? [1, 15]).join(', ')} />
+          <input type="hidden" name="late_fee_amount" value={((cfg.late_fee_amount_cents ?? 0) / 100).toFixed(2)} />
+          <input type="hidden" name="late_fee_grace_days" value={String(cfg.late_fee_grace_days ?? 3)} />
           <SettingsGroup title="Payment methods accepted">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <Toggle name="card_enabled" defaultChecked={cfg.card_enabled} label="Credit / debit cards" />
@@ -98,10 +117,44 @@ export async function PaymentsHubSettings({
             </Field>
           </SettingsGroup>
 
+          <SettingsGroup
+            title="Invoice & receipt emails via Growth Suite"
+            description="Paste one Growth Suite workflow Inbound Webhook URL. We send an event when an invoice goes out and when a payment succeeds or fails — you design the actual emails in your own Growth Suite workflow. Leave blank to fall back to the built-in email.">
+            <Field label="Growth Suite inbound webhook URL">
+              <input type="text" name="ghl_receipt_webhook_url" defaultValue={cfg.ghl_receipt_webhook_url ?? ''} placeholder="https://services.leadconnectorhq.com/hooks/…" className={inputCls} />
+            </Field>
+            <div className="mt-2 rounded-md border border-slate-200 bg-slate-50 p-3 text-[11px] text-slate-600 leading-relaxed">
+              <div className="font-semibold text-slate-700 mb-1">How to wire it (one-time, ~3 min):</div>
+              <ol className="list-decimal pl-4 space-y-0.5">
+                <li>In Growth Suite → Automation → create a Workflow.</li>
+                <li>Trigger: <span className="font-mono">Inbound Webhook</span> → copy the URL it generates → paste it above &amp; Save.</li>
+                <li>Click <strong>Send test</strong> below so Growth Suite captures a sample payload.</li>
+                <li>Add an <span className="font-mono">If/Else</span> on the <span className="font-mono">event</span> field, then a <span className="font-mono">Send Email</span> per branch.</li>
+              </ol>
+              <div className="mt-1.5">
+                <span className="font-mono">event</span> is <span className="font-mono">invoice.sent</span> (use <span className="font-mono">pay_url</span> + <span className="font-mono">due_date</span>),{' '}
+                <span className="font-mono">payment.succeeded</span> (<span className="font-mono">receipt_url</span>), or <span className="font-mono">payment.failed</span> (<span className="font-mono">failure_reason</span>).
+              </div>
+              <div className="mt-1.5 font-mono text-[10px] text-slate-500">
+                email · first_name · last_name · amount_formatted · invoice_number · invoice_title · invoice_description · due_date · pay_url · school_name
+              </div>
+            </div>
+          </SettingsGroup>
+
           <button type="submit" className="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">
             Save settings
           </button>
         </form>
+
+        {cfg.ghl_receipt_webhook_url ? (
+          <form action={`/api/admin/schools/${schoolId}/payments/test-receipt-webhook`} method="POST" className="mt-3">
+            <input type="hidden" name="return_to" value={settingsReturnTo} />
+            <button type="submit" className="rounded-md border border-emerald-300 bg-white px-3 py-1.5 text-xs font-medium text-emerald-700 hover:bg-emerald-50">
+              Send test to Growth Suite
+            </button>
+            <span className="ml-2 text-[11px] text-slate-500">Fires a sample <span className="font-mono">invoice.sent</span> so you can confirm the workflow runs.</span>
+          </form>
+        ) : null}
       </section>
 
       {/* Quick links into school-side editors (stay inside the iframe) */}

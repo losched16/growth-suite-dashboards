@@ -11,10 +11,19 @@ export const dynamic = 'force-dynamic';
 
 type Params = Promise<{ schoolId: string }>;
 
-function back(request: NextRequest, schoolId: string, q: { msg?: string; err?: string }) {
+// Validate a school-supplied return path so it can't be an open
+// redirect. Only relative /admin/ or /school/ paths are accepted.
+function safeReturn(returnTo: string | null, fallback: string): string {
+  if (returnTo && /^\/(admin|school)\/[A-Za-z0-9_-]+(\/[^?#]*)?(\?[^#]*)?$/.test(returnTo)) return returnTo;
+  return fallback;
+}
+
+function back(request: NextRequest, schoolId: string, q: { msg?: string; err?: string }, returnTo: string | null = null) {
   const url = request.nextUrl.clone();
-  url.pathname = `/admin/${schoolId}/payments`;
-  url.search = '';
+  const target = safeReturn(returnTo, `/admin/${schoolId}/payments`);
+  const [path, qs] = target.split('?');
+  url.pathname = path;
+  url.search = qs ? `?${qs}` : '';
   if (q.msg) url.searchParams.set('msg', q.msg);
   if (q.err) url.searchParams.set('err', q.err);
   return NextResponse.redirect(url, 303);
@@ -40,6 +49,7 @@ function dollarsToCents(raw: string): number {
 export async function POST(request: NextRequest, { params }: { params: Params }) {
   const { schoolId } = await params;
   const fd = await request.formData();
+  const returnTo = String(fd.get('return_to') ?? '').trim() || null;
 
   try {
     const passCard = fd.get('pass_card_fee') === '1';
@@ -83,9 +93,9 @@ export async function POST(request: NextRequest, { params }: { params: Params })
        cardEnabled, achEnabled, invoicePrefix, ghlWebhookUrl],
     );
 
-    return back(request, schoolId, { msg: 'Billing config saved.' });
+    return back(request, schoolId, { msg: 'Billing config saved.' }, returnTo);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    return back(request, schoolId, { err: `Save failed: ${msg}` });
+    return back(request, schoolId, { err: `Save failed: ${msg}` }, returnTo);
   }
 }

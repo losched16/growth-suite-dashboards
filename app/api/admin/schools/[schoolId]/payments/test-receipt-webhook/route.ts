@@ -16,10 +16,17 @@ export const dynamic = 'force-dynamic';
 
 type Params = Promise<{ schoolId: string }>;
 
-function back(request: NextRequest, schoolId: string, q: { msg?: string; err?: string }) {
+function safeReturn(returnTo: string | null, fallback: string): string {
+  if (returnTo && /^\/(admin|school)\/[A-Za-z0-9_-]+(\/[^?#]*)?(\?[^#]*)?$/.test(returnTo)) return returnTo;
+  return fallback;
+}
+
+function back(request: NextRequest, schoolId: string, q: { msg?: string; err?: string }, returnTo: string | null = null) {
   const url = request.nextUrl.clone();
-  url.pathname = `/admin/${schoolId}/payments`;
-  url.search = '';
+  const target = safeReturn(returnTo, `/admin/${schoolId}/payments`);
+  const [path, qs] = target.split('?');
+  url.pathname = path;
+  url.search = qs ? `?${qs}` : '';
   if (q.msg) url.searchParams.set('msg', q.msg);
   if (q.err) url.searchParams.set('err', q.err);
   return NextResponse.redirect(url, 303);
@@ -27,6 +34,8 @@ function back(request: NextRequest, schoolId: string, q: { msg?: string; err?: s
 
 export async function POST(request: NextRequest, { params }: { params: Params }) {
   const { schoolId } = await params;
+  const fd = await request.formData().catch(() => null);
+  const returnTo = fd ? (String(fd.get('return_to') ?? '').trim() || null) : null;
 
   const { rows } = await query<{ url: string | null; name: string | null }>(
     `SELECT cfg.ghl_receipt_webhook_url AS url, s.name
@@ -37,7 +46,7 @@ export async function POST(request: NextRequest, { params }: { params: Params })
   );
   const row = rows[0];
   if (!row?.url) {
-    return back(request, schoolId, { err: 'No Growth Suite webhook URL configured. Save one first.' });
+    return back(request, schoolId, { err: 'No Growth Suite webhook URL configured. Save one first.' }, returnTo);
   }
 
   const today = new Date();
@@ -83,10 +92,10 @@ export async function POST(request: NextRequest, { params }: { params: Params })
       clearTimeout(timer);
     }
     if (status >= 200 && status < 300) {
-      return back(request, schoolId, { msg: `Test payload sent to Growth Suite (HTTP ${status}). Check your workflow.` });
+      return back(request, schoolId, { msg: `Test payload sent to Growth Suite (HTTP ${status}). Check your workflow.` }, returnTo);
     }
-    return back(request, schoolId, { err: `Growth Suite webhook returned HTTP ${status}. Double-check the URL.` });
+    return back(request, schoolId, { err: `Growth Suite webhook returned HTTP ${status}. Double-check the URL.` }, returnTo);
   } catch (e) {
-    return back(request, schoolId, { err: `Couldn't reach the webhook: ${e instanceof Error ? e.message : String(e)}` });
+    return back(request, schoolId, { err: `Couldn't reach the webhook: ${e instanceof Error ? e.message : String(e)}` }, returnTo);
   }
 }
