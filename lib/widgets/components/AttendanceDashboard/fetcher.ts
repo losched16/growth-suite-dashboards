@@ -48,6 +48,9 @@ export interface EventRow {
   curbside: boolean;
   curbside_slot: string | null;
   notes: string | null;
+  // 'kiosk' when the event came from the front-door PIN kiosk. NULL =
+  // parent portal / admin. Drives the audit badge in the live feed.
+  source: string | null;
 }
 
 export interface PickupPersonRow {
@@ -114,10 +117,12 @@ interface DbEventRow {
   performed_by_parent_first: string | null;
   performed_by_parent_last: string | null;
   performed_by_admin_email: string | null;
+  performed_by_name_snapshot: string | null;
   picked_up_by_name_snapshot: string | null;
   curbside: boolean;
   curbside_slot: string | null;
   notes: string | null;
+  source: string | null;
 }
 
 // YYYY-MM-DD in the given IANA timezone.
@@ -237,8 +242,9 @@ export async function fetcher(
        e.event_type, e.performed_at,
        p.first_name AS performed_by_parent_first, p.last_name AS performed_by_parent_last,
        e.performed_by_admin_email,
+       e.performed_by_name_snapshot,
        e.picked_up_by_name_snapshot,
-       e.curbside, e.curbside_slot, e.notes
+       e.curbside, e.curbside_slot, e.notes, e.source
      FROM attendance_events e
      JOIN students s ON s.id = e.student_id
      LEFT JOIN parents p ON p.id = e.performed_by_parent_id
@@ -301,12 +307,17 @@ export async function fetcher(
     student_last_name: r.student_last_name,
     event_type: r.event_type,
     performed_at: r.performed_at,
-    performed_by_parent_name: [r.performed_by_parent_first, r.performed_by_parent_last].filter(Boolean).join(' ').trim() || null,
+    // Kiosk events by pickup persons have no parent join — fall back
+    // to the name snapshot stamped at event time.
+    performed_by_parent_name: [r.performed_by_parent_first, r.performed_by_parent_last].filter(Boolean).join(' ').trim()
+      || r.performed_by_name_snapshot
+      || null,
     performed_by_admin_email: r.performed_by_admin_email,
     picked_up_by_name: r.picked_up_by_name_snapshot,
     curbside: r.curbside,
     curbside_slot: r.curbside_slot,
     notes: r.notes,
+    source: r.source,
   }));
 
   const isToday = dateIso === today;

@@ -154,7 +154,12 @@ function Component({
                   {e.performed_by_admin_email ? (
                     <span className="ml-auto text-[10px] text-amber-700">admin: {e.performed_by_admin_email}</span>
                   ) : e.performed_by_parent_name ? (
-                    <span className="ml-auto text-[10px] text-gray-500">by {e.performed_by_parent_name}</span>
+                    <span className="ml-auto text-[10px] text-gray-500">
+                      by {e.performed_by_parent_name}
+                      {e.source === 'kiosk' ? (
+                        <span className="ml-1 rounded bg-violet-100 px-1 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-violet-800">kiosk</span>
+                      ) : null}
+                    </span>
                   ) : null}
                 </div>
                 {/* Parent's note for this event — surface inline so the
