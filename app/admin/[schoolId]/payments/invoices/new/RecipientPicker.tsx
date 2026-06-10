@@ -85,7 +85,7 @@ export function RecipientPicker({
         </label>
         <label className="inline-flex items-center gap-1.5">
           <input type="radio" name="recipient_mode" value="anyone" checked={mode === 'anyone'} onChange={() => setMode('anyone')} />
-          Anyone (GHL contact or email)
+          Anyone (contact or email)
         </label>
       </div>
 
@@ -118,7 +118,7 @@ export function RecipientPicker({
                   type="text"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Search GHL contacts by name or email…"
+                  placeholder="Search Growth Suite contacts by name or email…"
                   className="flex-1 text-sm outline-none"
                 />
                 {searching ? <Loader2 className="h-3.5 w-3.5 animate-spin text-zinc-400" /> : null}
@@ -161,7 +161,7 @@ export function RecipientPicker({
             </label>
           </div>
           <p className="text-[11px] text-zinc-500">
-            Pick a GHL contact above, or just type a name + email. The recipient gets a secure pay link — no portal login needed.
+            Pick a Growth Suite contact above, or just type a name + email. The recipient gets a secure pay link — no portal login needed.
           </p>
         </div>
       )}

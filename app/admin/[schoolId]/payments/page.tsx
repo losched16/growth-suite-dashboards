@@ -296,18 +296,18 @@ export default async function PaymentsPage({
 
             <Subsection
               title="Payment receipts via GoHighLevel"
-              hint="Paste a GHL workflow Inbound Webhook URL. On every successful or failed payment we POST the receipt data there, and the school designs the actual email in GHL using their own template. Leave blank to fall back to the built-in Resend email.">
+              hint="Paste a Growth Suite workflow Inbound Webhook URL. On every successful or failed payment we POST the receipt data there, and the school designs the actual email in Growth Suite using their own template. Leave blank to fall back to the built-in email.">
               <Field
                 name="ghl_receipt_webhook_url"
-                label="GHL inbound webhook URL"
+                label="Growth Suite inbound webhook URL"
                 defaultValue={config.ghl_receipt_webhook_url ?? ''}
               />
               <div className="mt-2 rounded-md border border-zinc-200 bg-zinc-50 p-3 text-[11px] text-zinc-600 leading-relaxed">
-                <div className="font-semibold text-zinc-700 mb-1">How to wire it in GHL (one-time, ~3 min):</div>
+                <div className="font-semibold text-zinc-700 mb-1">How to wire it in Growth Suite (one-time, ~3 min):</div>
                 <ol className="list-decimal pl-4 space-y-0.5">
-                  <li>In GHL → Automation → create a Workflow.</li>
+                  <li>In Growth Suite → Automation → create a Workflow.</li>
                   <li>Trigger: <span className="font-mono">Inbound Webhook</span> → copy the URL it generates → paste it above &amp; Save.</li>
-                  <li>Run one test payment (or click Send test below) so GHL captures a sample payload.</li>
+                  <li>Run one test payment (or click Send test below) so Growth Suite captures a sample payload.</li>
                   <li>Add a <span className="font-mono">Send Email</span> action and drop these merge fields into your template:</li>
                 </ol>
                 <div className="mt-1.5 font-mono text-[10px] text-zinc-500">
@@ -346,7 +346,7 @@ export default async function PaymentsPage({
             </Link>
             <Link href={`/admin/${schoolId}/payments/purchases`} className="rounded-md border border-emerald-200 bg-white p-3 hover:border-emerald-400 hover:shadow-sm">
               <div className="text-sm font-semibold text-zinc-900">Product purchases</div>
-              <div className="mt-0.5 text-xs text-zinc-600">Every charge from the product catalog. Refunds, drilldown, GHL link.</div>
+              <div className="mt-0.5 text-xs text-zinc-600">Every charge from the product catalog. Refunds, drilldown, Growth Suite link.</div>
             </Link>
           </div>
         </section>
