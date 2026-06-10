@@ -13,6 +13,7 @@
 //   line_description_<i>, line_quantity_<i>, line_unit_amount_<i>
 //                                  (one set per line, 1..N)
 
+import { randomBytes } from 'node:crypto';
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { query, withTransaction } from '@/lib/db';
@@ -79,14 +80,32 @@ export async function POST(request: NextRequest, { params }: { params: Params })
   // /school/... path so the operator stays inside the iframe.
   const returnTo = String(fd.get('return_to') ?? '').trim() || null;
 
-  const familyId = String(fd.get('family_id') ?? '').trim();
+  // Recipient: EITHER an existing family OR an arbitrary contact
+  // (recipient_email required; name + GHL id optional). The form's
+  // recipient_mode tells us which path the operator chose.
+  const recipientMode = String(fd.get('recipient_mode') ?? 'family').trim();
+  const familyId = recipientMode === 'family'
+    ? (String(fd.get('family_id') ?? '').trim() || null)
+    : null;
+  const recipientName = recipientMode === 'anyone'
+    ? (String(fd.get('recipient_name') ?? '').trim() || null) : null;
+  const recipientEmailRaw = recipientMode === 'anyone'
+    ? String(fd.get('recipient_email') ?? '').trim().toLowerCase() : '';
+  const recipientEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipientEmailRaw) ? recipientEmailRaw : null;
+  const recipientGhlContactId = recipientMode === 'anyone'
+    ? (String(fd.get('recipient_ghl_contact_id') ?? '').trim() || null) : null;
+
   const title = String(fd.get('title') ?? '').trim();
   const description = String(fd.get('description') ?? '').trim() || null;
   const dueDate = String(fd.get('due_date') ?? '').trim();
   const sendNow = fd.get('send_now') === '1';
-  const includesSetupFee = fd.get('includes_platform_setup_fee') === '1';
+  // Setup fee is a family-only concept; never auto-charge a one-off
+  // contact for it.
+  const includesSetupFee = familyId ? fd.get('includes_platform_setup_fee') === '1' : false;
 
-  if (!familyId) return back(request, schoolId, { err: 'Family is required.' }, returnTo);
+  if (!familyId && !recipientEmail) {
+    return back(request, schoolId, { err: 'Pick a family, or enter a valid recipient email.' }, returnTo);
+  }
   if (!title) return back(request, schoolId, { err: 'Title is required.' }, returnTo);
   if (!dueDate) return back(request, schoolId, { err: 'Due date is required.' }, returnTo);
 
@@ -120,25 +139,31 @@ export async function POST(request: NextRequest, { params }: { params: Params })
   const redemptionCode = String(fd.get('redemption_code') ?? '').trim();
   // Resolve student_id for the family: if exactly one active student,
   // attribute the invoice to them so per-student auto rules (e.g.
-  // "applies to a particular child") have the right context.
+  // "applies to a particular child") have the right context. Non-family
+  // invoices have no student + no auto-discount evaluation.
   let studentId: string | null = null;
-  const { rows: stRows } = await query<{ id: string }>(
-    `SELECT id FROM students WHERE family_id = $1 AND status = 'active' ORDER BY first_name LIMIT 2`,
-    [familyId],
-  );
-  if (stRows.length === 1) studentId = stRows[0].id;
+  if (familyId) {
+    const { rows: stRows } = await query<{ id: string }>(
+      `SELECT id FROM students WHERE family_id = $1 AND status = 'active' ORDER BY first_name LIMIT 2`,
+      [familyId],
+    );
+    if (stRows.length === 1) studentId = stRows[0].id;
+  }
 
-  const discountResult = await evaluateDiscounts({
-    schoolId,
-    familyId,
-    studentId,
-    lines: lines.map((l) => ({
-      description: l.description,
-      amount_cents: l.amount_cents,
-      category: l.category,
-    })),
-    redemptionCode: redemptionCode || undefined,
-  });
+  type DiscountEval = Awaited<ReturnType<typeof evaluateDiscounts>>;
+  const discountResult: DiscountEval = familyId
+    ? await evaluateDiscounts({
+        schoolId,
+        familyId,
+        studentId,
+        lines: lines.map((l) => ({
+          description: l.description,
+          amount_cents: l.amount_cents,
+          category: l.category,
+        })),
+        redemptionCode: redemptionCode || undefined,
+      })
+    : ({ total_cents: 0, lines: [], applications: [] } as unknown as DiscountEval);
   const discountTotal = discountResult.total_cents;
 
   // Note: processing fee is computed at parent-pay time (depends on rail).
@@ -158,6 +183,11 @@ export async function POST(request: NextRequest, { params }: { params: Params })
   const invoiceNumberSeq = configRows[0].next > 1 ? configRows[0].next - 1 : 1;
   const invoiceNumber = `${configRows[0].prefix}-${String(invoiceNumberSeq).padStart(6, '0')}`;
 
+  // Public pay token — lets a non-family recipient pay via /pay/<id>?t=<token>
+  // without a portal login. Generated for every invoice (family invoices
+  // also gain a usable public link, harmless since amounts are fixed).
+  const publicPayToken = randomBytes(18).toString('hex');
+
   try {
     const newInvoiceId = await withTransaction(async (q) => {
       const insR = await q<{ id: string }>(
@@ -165,9 +195,10 @@ export async function POST(request: NextRequest, { params }: { params: Params })
            (school_id, family_id, student_id, invoice_number, title, description,
             status, subtotal_cents, platform_fee_cents, discount_total_cents,
             total_cents, due_at, issued_at, source,
-            includes_platform_setup_fee, created_by_email)
+            includes_platform_setup_fee, created_by_email,
+            recipient_name, recipient_email, recipient_ghl_contact_id, public_pay_token)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
-                 'manual', $14, $15)
+                 'manual', $14, $15, $16, $17, $18, $19)
          RETURNING id`,
         [
           schoolId, familyId, studentId, invoiceNumber, title, description,
@@ -177,6 +208,7 @@ export async function POST(request: NextRequest, { params }: { params: Params })
           sendNow ? new Date().toISOString() : null,
           includesSetupFee,
           'operator@growthsuite.local',
+          recipientName, recipientEmail, recipientGhlContactId, publicPayToken,
         ],
       );
       const invoiceId = insR.rows[0].id;
@@ -202,10 +234,13 @@ export async function POST(request: NextRequest, { params }: { params: Params })
           [invoiceId, pos++, d.description, d.amount_cents, d.category, studentId],
         );
       }
-      // Audit rows + bump policy redemption_count.
-      await recordDiscountApplications(
-        schoolId, familyId, invoiceId, discountResult.applications, q,
-      );
+      // Audit rows + bump policy redemption_count. Family-only — a
+      // non-family invoice ran no discount evaluation.
+      if (familyId) {
+        await recordDiscountApplications(
+          schoolId, familyId, invoiceId, discountResult.applications, q,
+        );
+      }
       return invoiceId;
     });
 

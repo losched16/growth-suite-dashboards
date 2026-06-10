@@ -17,8 +17,10 @@ type SearchParams = Promise<{ msg?: string; err?: string }>;
 interface InvoiceRow {
   id: string;
   invoice_number: string;
-  family_id: string;
+  family_id: string | null;
   family_label: string;
+  recipient_email: string | null;
+  public_pay_token: string | null;
   title: string;
   description: string | null;
   status: string;
@@ -82,7 +84,10 @@ export default async function InvoiceDetail({
     `SELECT i.id, i.invoice_number, i.family_id,
             COALESCE(NULLIF(f.display_name, ''),
                      CONCAT_WS(' ', p.first_name, p.last_name),
+                     i.recipient_name,
+                     i.recipient_email,
                      '(unnamed)') AS family_label,
+            i.recipient_email, i.public_pay_token,
             i.title, i.description, i.status,
             i.subtotal_cents, i.platform_fee_cents, i.processing_fee_cents,
             i.discount_total_cents, i.total_cents, i.amount_paid_cents,
@@ -93,7 +98,7 @@ export default async function InvoiceDetail({
             i.autopay_charge_on, i.next_retry_at,
             i.retry_attempt_count, i.last_autopay_attempted_at
        FROM invoices i
-       JOIN families f ON f.id = i.family_id
+       LEFT JOIN families f ON f.id = i.family_id
        LEFT JOIN LATERAL (
          SELECT first_name, last_name FROM parents
          WHERE family_id = i.family_id AND is_primary = true LIMIT 1
@@ -126,8 +131,13 @@ export default async function InvoiceDetail({
     [schoolId, inv.family_id],
   );
 
-  // Parent-pay URL — what the parent clicks in the email.
-  const parentPayUrl = `https://growth-suite-parent-portal.vercel.app/billing/pay/${inv.id}`;
+  // Pay URL — what the recipient clicks. Prefer the public tokenized
+  // link (works for anyone, no login — required for non-family invoices
+  // and convenient for everyone). Falls back to the session pay page.
+  const portalBase = process.env.PARENT_PORTAL_BASE_URL ?? 'https://growth-suite-parent-portal.vercel.app';
+  const parentPayUrl = inv.public_pay_token
+    ? `${portalBase}/pay/invoice/${inv.id}?t=${inv.public_pay_token}`
+    : `${portalBase}/billing/pay/${inv.id}`;
 
   return (
     <main className="flex flex-1 flex-col items-center bg-zinc-50 p-6 dark:bg-black">

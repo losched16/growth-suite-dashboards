@@ -18,8 +18,9 @@ type SearchParams = Promise<{ msg?: string; err?: string }>;
 interface InvoiceRow {
   id: string;
   invoice_number: string;
-  family_id: string;
+  family_id: string | null;
   family_label: string;
+  public_pay_token: string | null;
   title: string;
   description: string | null;
   status: string;
@@ -87,7 +88,10 @@ export default async function InvoiceDetailScoped({
     `SELECT i.id, i.invoice_number, i.family_id,
             COALESCE(NULLIF(f.display_name, ''),
                      CONCAT_WS(' ', p.first_name, p.last_name),
+                     i.recipient_name,
+                     i.recipient_email,
                      '(unnamed)') AS family_label,
+            i.public_pay_token,
             i.title, i.description, i.status,
             i.subtotal_cents, i.platform_fee_cents, i.processing_fee_cents,
             i.discount_total_cents, i.total_cents, i.amount_paid_cents,
@@ -98,7 +102,7 @@ export default async function InvoiceDetailScoped({
             i.autopay_charge_on, i.next_retry_at,
             i.retry_attempt_count, i.last_autopay_attempted_at
        FROM invoices i
-       JOIN families f ON f.id = i.family_id
+       LEFT JOIN families f ON f.id = i.family_id
        LEFT JOIN LATERAL (
          SELECT first_name, last_name FROM parents
          WHERE family_id = i.family_id AND is_primary = true LIMIT 1
@@ -130,7 +134,10 @@ export default async function InvoiceDetailScoped({
     [schoolId, inv.family_id],
   );
 
-  const parentPayUrl = `https://growth-suite-parent-portal.vercel.app/billing/pay/${inv.id}`;
+  const portalBase = process.env.PARENT_PORTAL_BASE_URL ?? 'https://growth-suite-parent-portal.vercel.app';
+  const parentPayUrl = inv.public_pay_token
+    ? `${portalBase}/pay/invoice/${inv.id}?t=${inv.public_pay_token}`
+    : `${portalBase}/billing/pay/${inv.id}`;
   // Bouncing back from action forms (send/void/autopay) — keeps operator
   // inside the iframe. Each form posts this in a hidden field.
   const returnTo = `/school/${locationId}/payments/invoices/${invoiceId}`;

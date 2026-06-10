@@ -9,6 +9,7 @@ import { notFound } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
 import { query } from '@/lib/db';
 import { LineItemsEditor } from './LineItemsEditor';
+import { RecipientPicker } from './RecipientPicker';
 import { loadInvoiceCatalog } from '@/lib/billing/invoice-catalog';
 
 export const dynamic = 'force-dynamic';
@@ -89,17 +90,7 @@ export default async function NewInvoicePage({
           method="POST"
           className="rounded-xl border border-black/10 bg-white p-5 space-y-5"
         >
-          <div>
-            <label className="block">
-              <span className="text-[11px] font-medium uppercase tracking-wide text-zinc-600">Family</span>
-              <select name="family_id" required defaultValue={sp.family ?? ''} className="mt-0.5 w-full rounded border border-zinc-300 px-2 py-1.5 text-sm">
-                <option value="">— select a family —</option>
-                {families.map((f) => (
-                  <option key={f.id} value={f.id}>{f.label}</option>
-                ))}
-              </select>
-            </label>
-          </div>
+          <RecipientPicker schoolId={schoolId} families={families} defaultFamilyId={sp.family ?? ''} />
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <label className="block sm:col-span-2">

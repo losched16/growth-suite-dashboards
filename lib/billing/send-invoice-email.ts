@@ -16,17 +16,13 @@ interface InvoiceRow {
   id: string;
   invoice_number: string;
   school_id: string;
-  family_id: string;
+  family_id: string | null;
+  recipient_email: string | null;
+  public_pay_token: string | null;
   title: string;
   description: string | null;
   total_cents: number;
   due_at: string;
-}
-
-interface ParentRow {
-  email: string;
-  first_name: string;
-  last_name: string;
 }
 
 export interface SendResult {
@@ -36,8 +32,8 @@ export interface SendResult {
 
 export async function sendInvoiceEmail({ invoiceId }: SendArgs): Promise<SendResult> {
   const { rows: invRows } = await query<InvoiceRow>(
-    `SELECT id, invoice_number, school_id, family_id, title, description,
-            total_cents, due_at
+    `SELECT id, invoice_number, school_id, family_id, recipient_email,
+            public_pay_token, title, description, total_cents, due_at
        FROM invoices WHERE id = $1`,
     [invoiceId],
   );
@@ -49,17 +45,27 @@ export async function sendInvoiceEmail({ invoiceId }: SendArgs): Promise<SendRes
   );
   const schoolName = schoolRows[0]?.name ?? 'your school';
 
-  const { rows: parents } = await query<ParentRow>(
-    `SELECT email, first_name, last_name FROM parents
-      WHERE family_id = $1 AND school_id = $2 AND status = 'active' AND email IS NOT NULL`,
-    [inv.family_id, inv.school_id],
-  );
-
-  if (parents.length === 0) {
-    return { sent_to: [], skipped: ['no_parents_with_email'] };
+  // Recipients: a family's active parents, OR — for an invoice sent to
+  // an arbitrary contact — the single recipient_email.
+  let recipients: string[];
+  if (inv.family_id) {
+    const { rows: parents } = await query<{ email: string }>(
+      `SELECT email FROM parents
+        WHERE family_id = $1 AND school_id = $2 AND status = 'active' AND email IS NOT NULL`,
+      [inv.family_id, inv.school_id],
+    );
+    recipients = parents.map((p) => p.email);
+    if (recipients.length === 0) return { sent_to: [], skipped: ['no_parents_with_email'] };
+  } else {
+    recipients = inv.recipient_email ? [inv.recipient_email] : [];
+    if (recipients.length === 0) return { sent_to: [], skipped: ['no_recipient_email'] };
   }
 
-  const payUrl = `${PARENT_PORTAL_BASE}/billing/pay/${inv.id}`;
+  // Public tokenized link — works for both family + non-family
+  // recipients with no portal login required.
+  const payUrl = inv.public_pay_token
+    ? `${PARENT_PORTAL_BASE}/pay/invoice/${inv.id}?t=${inv.public_pay_token}`
+    : `${PARENT_PORTAL_BASE}/billing/pay/${inv.id}`;
   const amount = (inv.total_cents / 100).toFixed(2);
   const dueLabel = new Date(inv.due_at).toLocaleDateString(undefined, {
     weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',
@@ -114,19 +120,13 @@ You can pay by card or by bank account (ACH). All payments processed securely th
 
   const sentTo: string[] = [];
   const skipped: string[] = [];
-  for (const p of parents) {
+  for (const email of recipients) {
     try {
-      await sendBrandedEmail({
-        to: p.email,
-        schoolId: inv.school_id,
-        subject,
-        html,
-        text,
-      });
-      sentTo.push(p.email);
+      await sendBrandedEmail({ to: email, schoolId: inv.school_id, subject, html, text });
+      sentTo.push(email);
     } catch (err) {
-      console.error('[send-invoice-email] failed for', p.email, ':', err);
-      skipped.push(`${p.email}: ${err instanceof Error ? err.message : String(err)}`);
+      console.error('[send-invoice-email] failed for', email, ':', err);
+      skipped.push(`${email}: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
   return { sent_to: sentTo, skipped };
