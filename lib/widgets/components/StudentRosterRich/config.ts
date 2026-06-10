@@ -33,6 +33,7 @@ export const AVAILABLE_COLUMNS = [
   { key: 'homeroom',             label: 'Homeroom' },
   { key: 'lead_teacher',         label: 'Lead teacher' },
   { key: 'schedule',             label: 'Schedule' },
+  { key: 'tuition',              label: 'Tuition' },
   { key: 'status',               label: 'Status' },
   { key: 'allergy',              label: 'Allergy' },
   { key: 'special_instructions', label: 'Special instructions' },
@@ -76,7 +77,7 @@ export interface StudentRosterConfig {
 
 export const studentRosterDefaults: StudentRosterConfig = {
   shown_filters: ['academic_year', 'program', 'homeroom', 'schedule', 'allergies_only', 'iep_504_only'],
-  shown_columns: ['student', 'gender_age', 'program', 'homeroom', 'lead_teacher', 'schedule', 'status', 'allergy', 'special_instructions', 'iep_504', 'documents', 'family'],
+  shown_columns: ['student', 'gender_age', 'program', 'homeroom', 'lead_teacher', 'schedule', 'tuition', 'status', 'allergy', 'special_instructions', 'iep_504', 'documents', 'family'],
   enable_views: ['list', 'grid', 'allergies'],
   page_size: 100,
   drilldown_dashboard_slug: 'family-hub',

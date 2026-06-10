@@ -66,6 +66,7 @@ export interface RosterStudent {
   academic_year: string | null;
   program: string | null;
   homeroom: string | null;
+  tuition: string | null;
   allergy: string | null;
   special_instructions: string | null;
   iep: string | null;
@@ -301,6 +302,12 @@ export async function fetcher(
     const five04 = typeof md.five04_plan === 'string' ? md.five04_plan : null;
     const program = typeof md.program === 'string' ? md.program : null;
     const homeroom = typeof md.homeroom === 'string' ? md.homeroom : null;
+    // Year-specific tuition. metadata already holds THIS student's
+    // year's value (the roster is year-filtered), so toggling the year
+    // dropdown shows the right number. Prefer the descriptive
+    // program_tuition string ("… - $16,250"); fall back to tuition_fee.
+    const tuition = typeof md.program_tuition === 'string' ? md.program_tuition
+      : (md.tuition_fee != null && md.tuition_fee !== '' ? String(md.tuition_fee) : null);
     const lunch = typeof md.organic_lunch === 'string' ? md.organic_lunch : null;
     const lunchLower = (lunch ?? '').toLowerCase();
     // "has lunch" = anything other than declined/blank. Declined values
@@ -339,6 +346,7 @@ export async function fetcher(
       academic_year: r.academic_year,
       program,
       homeroom,
+      tuition,
       allergy,
       special_instructions,
       iep,

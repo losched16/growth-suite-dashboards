@@ -219,6 +219,14 @@ function renderCell(s: RosterStudent, col: ColumnKey, drilldownDashboard: string
     case 'homeroom': return <span className="text-gray-700">{s.homeroom ?? s.classroom_name ?? '—'}</span>;
     case 'lead_teacher': return <span className="text-gray-700">{s.lead_teacher_name ?? '—'}</span>;
     case 'schedule': return <span className="text-gray-700">{s.schedule ?? '—'}</span>;
+    case 'tuition': {
+      if (!s.tuition) return <span className="text-gray-400">—</span>;
+      // Pull the $ amount out of DGM's verbose "… - $16,250" string;
+      // otherwise show the raw value (e.g. a bare fee number).
+      const m = s.tuition.match(/\$[\d,]+(?:\.\d{2})?/);
+      const display = m ? m[0] : (/^\d+(\.\d+)?$/.test(s.tuition) ? `$${Number(s.tuition).toLocaleString()}` : s.tuition);
+      return <span className="text-gray-700 tabular-nums" title={s.tuition}>{display}</span>;
+    }
     case 'status':
       return s.status ? (
         <span className="inline-block rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-emerald-800">
