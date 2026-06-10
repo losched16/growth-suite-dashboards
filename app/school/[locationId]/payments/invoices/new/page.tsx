@@ -13,6 +13,7 @@ import { ArrowLeft } from 'lucide-react';
 import { query } from '@/lib/db';
 import { loadSchoolByLocationId } from '@/lib/dashboards/loader';
 import { LineItemsEditor } from '@/app/admin/[schoolId]/payments/invoices/new/LineItemsEditor';
+import { RecipientPicker } from '@/app/admin/[schoolId]/payments/invoices/new/RecipientPicker';
 import { loadInvoiceCatalog } from '@/lib/billing/invoice-catalog';
 
 export const dynamic = 'force-dynamic';
@@ -99,17 +100,7 @@ export default async function NewInvoiceScoped({
               create. The API validates the path before honoring it. */}
           <input type="hidden" name="return_to" value={returnTo} />
 
-          <div>
-            <label className="block">
-              <span className="text-[11px] font-medium uppercase tracking-wide text-slate-600">Family</span>
-              <select name="family_id" required defaultValue={sp.family ?? ''} className="mt-0.5 w-full rounded border border-slate-300 px-2 py-1.5 text-sm">
-                <option value="">— select a family —</option>
-                {families.map((f) => (
-                  <option key={f.id} value={f.id}>{f.label}</option>
-                ))}
-              </select>
-            </label>
-          </div>
+          <RecipientPicker schoolId={schoolId} families={families} defaultFamilyId={sp.family ?? ''} />
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <label className="block sm:col-span-2">
