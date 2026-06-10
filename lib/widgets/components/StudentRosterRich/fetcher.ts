@@ -49,6 +49,20 @@ function isMeaningfulFlag(v: string | null | undefined): boolean {
   return !['no', 'none', 'n/a', 'na', 'no.', 'none.'].includes(t);
 }
 
+// Age at a specific reference date (e.g. a grade-cutoff date), rendered
+// like "5y 3m" / "8m". Empty when no DOB.
+function ageAtDate(dob: string | null, ref: Date): string {
+  if (!dob) return '';
+  const d = new Date(dob);
+  if (Number.isNaN(d.getTime())) return '';
+  let yrs = ref.getUTCFullYear() - d.getUTCFullYear();
+  let mos = ref.getUTCMonth() - d.getUTCMonth();
+  if (ref.getUTCDate() < d.getUTCDate()) mos--;
+  if (mos < 0) { yrs--; mos += 12; }
+  if (yrs < 0) return ''; // born after the reference date
+  return yrs >= 1 ? `${yrs}y ${Math.max(0, mos)}m` : `${Math.max(0, mos)}m`;
+}
+
 export interface RosterStudent {
   student_id: string;
   family_id: string;
@@ -64,6 +78,9 @@ export interface RosterStudent {
   lead_teacher_name: string | null;
   schedule: string | null;
   academic_year: string | null;
+  // Age at the selected year's grade-cutoff dates (Aug 1 / Jan 1).
+  age_as_of_aug1: string;
+  age_as_of_jan1: string;
   program: string | null;
   homeroom: string | null;
   tuition: string | null;
@@ -197,6 +214,14 @@ export async function fetcher(
     ?? config.default_academic_year
     ?? availableYears[0]
     ?? '').trim();
+
+  // Grade-cutoff reference dates, derived from the selected year:
+  // "2026-27" → Aug 1 2026 and Jan 1 2027. Falls back to the calendar
+  // year if the year string isn't in YYYY-YY form.
+  const ym = /^(\d{4})-\d{2}$/.exec(fYear);
+  const cutoffStartYear = ym ? parseInt(ym[1], 10) : new Date().getFullYear();
+  const augRef = new Date(Date.UTC(cutoffStartYear, 7, 1));      // Aug 1, start year
+  const janRef = new Date(Date.UTC(cutoffStartYear + 1, 0, 1));  // Jan 1, next year
 
   const { rows } = await query<DbRow>(
     `SELECT
@@ -344,6 +369,8 @@ export async function fetcher(
       lead_teacher_name: r.lead_teacher_name,
       schedule: r.schedule,
       academic_year: r.academic_year,
+      age_as_of_aug1: ageAtDate(r.date_of_birth, augRef),
+      age_as_of_jan1: ageAtDate(r.date_of_birth, janRef),
       program,
       homeroom,
       tuition,
