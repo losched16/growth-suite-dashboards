@@ -9,6 +9,7 @@
 import type { ConfigSchema } from '@/lib/widgets/types';
 
 export const AVAILABLE_FILTERS = [
+  { key: 'academic_year', label: 'School year', type: 'select' as const },
   { key: 'program', label: 'Program', type: 'select' as const },
   { key: 'homeroom', label: 'Homeroom', type: 'select' as const },
   { key: 'schedule', label: 'Schedule', type: 'select' as const },
@@ -61,6 +62,9 @@ export interface StudentRosterConfig {
   // multi-classroom teacher groups where students share a program but
   // not a single homeroom. URL `?program=...` still wins.
   default_program_filter?: string;
+  // Academic year the roster defaults to (e.g. '2026-27'). Falls back
+  // to the current year in the fetcher when unset.
+  default_academic_year?: string;
   // Audience for the documents inline cell:
   //   'teacher' → hide documents flagged visible_to_teacher=false
   //   'all'     → show every document (operator view, default)
@@ -71,7 +75,7 @@ export interface StudentRosterConfig {
 }
 
 export const studentRosterDefaults: StudentRosterConfig = {
-  shown_filters: ['program', 'homeroom', 'schedule', 'allergies_only', 'iep_504_only'],
+  shown_filters: ['academic_year', 'program', 'homeroom', 'schedule', 'allergies_only', 'iep_504_only'],
   shown_columns: ['student', 'gender_age', 'program', 'homeroom', 'lead_teacher', 'schedule', 'status', 'allergy', 'special_instructions', 'iep_504', 'documents', 'family'],
   enable_views: ['list', 'grid', 'allergies'],
   page_size: 100,

@@ -114,6 +114,7 @@ export interface StudentRosterData {
   per_page: number;
   page_count: number;
   options: {
+    years: string[];
     programs: string[];
     homerooms: string[];
     schedules: string[];
@@ -176,6 +177,26 @@ export async function fetcher(
   config: StudentRosterConfig,
   searchParams?: WidgetSearchParams,
 ): Promise<StudentRosterData> {
+  // Academic-year scope. Data-driven so it's multi-tenant safe: the
+  // dropdown lists exactly the years this school has, and the default
+  // is the latest one (URL param > widget config > latest available).
+  // When a school has no enrollment years, fYear is '' → no year filter.
+  const { rows: yearRows } = await query<{ academic_year: string | null }>(
+    `SELECT DISTINCT e.academic_year
+       FROM enrollments e JOIN students s ON s.id = e.student_id
+      WHERE s.school_id = $1 AND e.academic_year IS NOT NULL`,
+    [school.schoolId],
+  );
+  const availableYears = yearRows
+    .map((r) => r.academic_year)
+    .filter((y): y is string => !!y)
+    .sort()
+    .reverse();
+  const fYear = ((searchParams ?? {}).academic_year
+    ?? config.default_academic_year
+    ?? availableYears[0]
+    ?? '').trim();
+
   const { rows } = await query<DbRow>(
     `SELECT
        s.id AS student_id,
@@ -204,7 +225,11 @@ export async function fetcher(
      FROM students s
      JOIN families f ON f.id = s.family_id
      LEFT JOIN LATERAL (
-       SELECT * FROM enrollments e2 WHERE e2.student_id = s.id ORDER BY e2.created_at DESC LIMIT 1
+       -- Prefer the enrollment for the selected academic year ($3) so a
+       -- returning student surfaces the right year's row; fall back to
+       -- their most recent enrollment otherwise.
+       SELECT * FROM enrollments e2 WHERE e2.student_id = s.id
+        ORDER BY (e2.academic_year = $3) DESC, e2.created_at DESC LIMIT 1
      ) e ON true
      LEFT JOIN classrooms c ON c.id = e.classroom_id
      LEFT JOIN LATERAL (
@@ -260,7 +285,7 @@ export async function fetcher(
      ORDER BY s.first_name`,
     // Hardcoded DG timezone for now. If a future widget needs to do
     // this for another school, lift to widget config.
-    [school.schoolId, 'America/Phoenix'],
+    [school.schoolId, 'America/Phoenix', fYear],
   );
 
   const all: RosterStudent[] = rows.map((r) => {
@@ -339,6 +364,9 @@ export async function fetcher(
     [...new Set([...vals].filter((v): v is string => !!v && v.trim().length > 0))].sort();
 
   const options = {
+    // Authoritative list of the school's years (newest first), so the
+    // dropdown is stable regardless of the current selection.
+    years: availableYears,
     programs: uniq(all.map((s) => s.program ?? s.classroom_name)),
     homerooms: uniq(all.map((s) => s.homeroom ?? s.classroom_name)),
     schedules: uniq(all.map((s) => s.schedule)),
@@ -367,6 +395,10 @@ export async function fetcher(
   const reEnrolledOnly = sp.re_enrolled_only === '1' || sp.re_enrolled_only === 'true';
 
   const filtered = all.filter((s) => {
+    // Year scope: the enrollment join already surfaced the selected
+    // year's row when the student has one; require it to match so
+    // students without a same-year enrollment fall out of view.
+    if (fYear && (s.academic_year ?? '') !== fYear) return false;
     if (fProg && (s.program ?? s.classroom_name ?? '') !== fProg) return false;
     if (fHome && (s.homeroom ?? s.classroom_name ?? '') !== fHome) return false;
     if (fSched && (s.schedule ?? '') !== fSched) return false;

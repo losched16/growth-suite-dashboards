@@ -45,6 +45,7 @@ function FilterRow({
   view: string;
 }) {
   const selectOpts: Record<string, string[]> = {
+    academic_year: options.years,
     program: options.programs,
     homeroom: options.homerooms,
     schedule: options.schedules,
@@ -80,6 +81,32 @@ function FilterRow({
                 defaultChecked={current[k] === '1' || current[k] === 'true'}
               />
               {meta.label}
+            </label>
+          );
+        }
+        // The school-year filter always scopes to ONE year (no "all"):
+        // default to the current year so the roster opens on the latest
+        // roster, and show long-form labels (2026-2027).
+        if (k === 'academic_year') {
+          const years = selectOpts.academic_year ?? [];
+          const longYear = (y: string) => {
+            const [a, b] = y.split('-');
+            return b && b.length === 2 ? `${a}-20${b}` : y;
+          };
+          if (years.length === 0) return null;
+          const defaultYear = current.academic_year ?? years[0];
+          return (
+            <label key={k} className="text-xs text-gray-600">
+              {meta.label}:{' '}
+              <select
+                name={k}
+                defaultValue={defaultYear}
+                className="rounded-md border border-gray-300 bg-white px-2 py-1 text-sm focus:border-emerald-600 focus:outline-none"
+              >
+                {years.map((o) => (
+                  <option key={o} value={o}>{longYear(o)}</option>
+                ))}
+              </select>
             </label>
           );
         }
