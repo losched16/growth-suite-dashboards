@@ -51,13 +51,22 @@ export async function POST(request: NextRequest, { params }: { params: Params })
     const lateFeeCents = dollarsToCents(String(fd.get('late_fee_amount') ?? '0'));
     const graceDays = parseInt(String(fd.get('late_fee_grace_days') ?? '3'), 10) || 0;
     const invoicePrefix = String(fd.get('invoice_number_prefix') ?? 'INV').trim().toUpperCase().slice(0, 8) || 'INV';
+    // GHL receipt webhook URL — accept only https GHL-ish URLs; blank
+    // clears it (back to Resend fallback). We don't hard-require the
+    // leadconnector host so other GHL white-label domains still work,
+    // but we do require https to avoid pasting a plain-http or junk URL.
+    const ghlWebhookRaw = String(fd.get('ghl_receipt_webhook_url') ?? '').trim();
+    const ghlWebhookUrl = ghlWebhookRaw && /^https:\/\/[^\s]+$/i.test(ghlWebhookRaw)
+      ? ghlWebhookRaw.slice(0, 1000)
+      : null;
 
     await query(
       `INSERT INTO school_payment_config
          (school_id, pass_card_fee, pass_ach_fee, processing_fee_label,
           autopay_days, late_fee_amount_cents, late_fee_grace_days,
-          card_enabled, ach_enabled, invoice_number_prefix)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+          card_enabled, ach_enabled, invoice_number_prefix,
+          ghl_receipt_webhook_url)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
        ON CONFLICT (school_id) DO UPDATE SET
          pass_card_fee = EXCLUDED.pass_card_fee,
          pass_ach_fee = EXCLUDED.pass_ach_fee,
@@ -68,9 +77,10 @@ export async function POST(request: NextRequest, { params }: { params: Params })
          card_enabled = EXCLUDED.card_enabled,
          ach_enabled = EXCLUDED.ach_enabled,
          invoice_number_prefix = EXCLUDED.invoice_number_prefix,
+         ghl_receipt_webhook_url = EXCLUDED.ghl_receipt_webhook_url,
          updated_at = now()`,
       [schoolId, passCard, passAch, feeLabel, days, lateFeeCents, graceDays,
-       cardEnabled, achEnabled, invoicePrefix],
+       cardEnabled, achEnabled, invoicePrefix, ghlWebhookUrl],
     );
 
     return back(request, schoolId, { msg: 'Billing config saved.' });

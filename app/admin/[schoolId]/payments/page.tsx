@@ -33,6 +33,7 @@ interface PaymentConfigRow {
   card_enabled: boolean;
   ach_enabled: boolean;
   invoice_number_prefix: string;
+  ghl_receipt_webhook_url: string | null;
 }
 
 interface TuitionGridRow {
@@ -117,7 +118,8 @@ export default async function PaymentsPage({
     query<PaymentConfigRow>(
       `SELECT pass_card_fee, pass_ach_fee, processing_fee_label,
               autopay_days, late_fee_amount_cents, late_fee_grace_days,
-              card_enabled, ach_enabled, invoice_number_prefix
+              card_enabled, ach_enabled, invoice_number_prefix,
+              ghl_receipt_webhook_url
          FROM school_payment_config WHERE school_id = $1`,
       [schoolId],
     ).then((r) => r.rows),
@@ -204,6 +206,7 @@ export default async function PaymentsPage({
     card_enabled: true,
     ach_enabled: true,
     invoice_number_prefix: 'INV',
+    ghl_receipt_webhook_url: null,
   };
 
   const isConnected = !!account;
@@ -291,10 +294,42 @@ export default async function PaymentsPage({
               <Field name="invoice_number_prefix" label="Invoice prefix (e.g. INV, WOO-)" defaultValue={config.invoice_number_prefix} />
             </Subsection>
 
+            <Subsection
+              title="Payment receipts via GoHighLevel"
+              hint="Paste a GHL workflow Inbound Webhook URL. On every successful or failed payment we POST the receipt data there, and the school designs the actual email in GHL using their own template. Leave blank to fall back to the built-in Resend email.">
+              <Field
+                name="ghl_receipt_webhook_url"
+                label="GHL inbound webhook URL"
+                defaultValue={config.ghl_receipt_webhook_url ?? ''}
+              />
+              <div className="mt-2 rounded-md border border-zinc-200 bg-zinc-50 p-3 text-[11px] text-zinc-600 leading-relaxed">
+                <div className="font-semibold text-zinc-700 mb-1">How to wire it in GHL (one-time, ~3 min):</div>
+                <ol className="list-decimal pl-4 space-y-0.5">
+                  <li>In GHL → Automation → create a Workflow.</li>
+                  <li>Trigger: <span className="font-mono">Inbound Webhook</span> → copy the URL it generates → paste it above &amp; Save.</li>
+                  <li>Run one test payment (or click Send test below) so GHL captures a sample payload.</li>
+                  <li>Add a <span className="font-mono">Send Email</span> action and drop these merge fields into your template:</li>
+                </ol>
+                <div className="mt-1.5 font-mono text-[10px] text-zinc-500">
+                  {'{{'}inboundWebhookRequest.event{'}}'} · email · first_name · last_name · amount_formatted · invoice_number · invoice_title · card_summary · payment_date · school_name · receipt_url · failure_reason
+                </div>
+                <div className="mt-1.5">The <span className="font-mono">event</span> field is <span className="font-mono">payment.succeeded</span> or <span className="font-mono">payment.failed</span> — branch on it in the workflow to send a receipt vs. a payment-failed notice.</div>
+              </div>
+            </Subsection>
+
             <button type="submit" className="rounded-md bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-zinc-800">
               Save billing config
             </button>
           </form>
+
+          {config.ghl_receipt_webhook_url ? (
+            <form action={`/api/admin/schools/${schoolId}/payments/test-receipt-webhook`} method="POST" className="mt-3">
+              <button type="submit" className="rounded-md border border-emerald-300 bg-white px-3 py-1.5 text-xs font-medium text-emerald-700 hover:bg-emerald-50">
+                Send test payload to GHL
+              </button>
+              <span className="ml-2 text-[11px] text-zinc-500">Fires a sample <span className="font-mono">payment.succeeded</span> so you can confirm the workflow runs.</span>
+            </form>
+          ) : null}
         </section>
 
         {/* === QUICK NAV === */}
