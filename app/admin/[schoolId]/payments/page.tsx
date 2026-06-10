@@ -295,8 +295,8 @@ export default async function PaymentsPage({
             </Subsection>
 
             <Subsection
-              title="Payment receipts via GoHighLevel"
-              hint="Paste a Growth Suite workflow Inbound Webhook URL. On every successful or failed payment we POST the receipt data there, and the school designs the actual email in Growth Suite using their own template. Leave blank to fall back to the built-in email.">
+              title="Invoice & receipt emails via Growth Suite"
+              hint="Paste one Growth Suite workflow Inbound Webhook URL. We POST an event when an invoice is sent and when a payment succeeds or fails; the school designs the actual emails in Growth Suite using their own templates. Leave blank to fall back to the built-in email.">
               <Field
                 name="ghl_receipt_webhook_url"
                 label="Growth Suite inbound webhook URL"
@@ -307,13 +307,18 @@ export default async function PaymentsPage({
                 <ol className="list-decimal pl-4 space-y-0.5">
                   <li>In Growth Suite → Automation → create a Workflow.</li>
                   <li>Trigger: <span className="font-mono">Inbound Webhook</span> → copy the URL it generates → paste it above &amp; Save.</li>
-                  <li>Run one test payment (or click Send test below) so Growth Suite captures a sample payload.</li>
-                  <li>Add a <span className="font-mono">Send Email</span> action and drop these merge fields into your template:</li>
+                  <li>Send a test invoice (or click Send test below) so Growth Suite captures a sample payload.</li>
+                  <li>Add an <span className="font-mono">If/Else</span> on the <span className="font-mono">event</span> field, then a <span className="font-mono">Send Email</span> action per branch using these merge fields:</li>
                 </ol>
                 <div className="mt-1.5 font-mono text-[10px] text-zinc-500">
-                  {'{{'}inboundWebhookRequest.event{'}}'} · email · first_name · last_name · amount_formatted · invoice_number · invoice_title · card_summary · payment_date · school_name · receipt_url · failure_reason
+                  {'{{'}inboundWebhookRequest.event{'}}'} · email · first_name · last_name · amount_formatted · invoice_number · invoice_title · invoice_description · due_date · pay_url · card_summary · payment_date · school_name · receipt_url · failure_reason
                 </div>
-                <div className="mt-1.5">The <span className="font-mono">event</span> field is <span className="font-mono">payment.succeeded</span> or <span className="font-mono">payment.failed</span> — branch on it in the workflow to send a receipt vs. a payment-failed notice.</div>
+                <div className="mt-1.5">
+                  <span className="font-mono">event</span> is one of:{' '}
+                  <span className="font-mono">invoice.sent</span> (new invoice — use <span className="font-mono">pay_url</span> + <span className="font-mono">due_date</span>),{' '}
+                  <span className="font-mono">payment.succeeded</span> (receipt — use <span className="font-mono">receipt_url</span>),{' '}
+                  <span className="font-mono">payment.failed</span> (use <span className="font-mono">failure_reason</span>). One workflow, three branches.
+                </div>
               </div>
             </Subsection>
 
@@ -325,9 +330,9 @@ export default async function PaymentsPage({
           {config.ghl_receipt_webhook_url ? (
             <form action={`/api/admin/schools/${schoolId}/payments/test-receipt-webhook`} method="POST" className="mt-3">
               <button type="submit" className="rounded-md border border-emerald-300 bg-white px-3 py-1.5 text-xs font-medium text-emerald-700 hover:bg-emerald-50">
-                Send test payload to GHL
+                Send test payload to Growth Suite
               </button>
-              <span className="ml-2 text-[11px] text-zinc-500">Fires a sample <span className="font-mono">payment.succeeded</span> so you can confirm the workflow runs.</span>
+              <span className="ml-2 text-[11px] text-zinc-500">Fires a sample <span className="font-mono">invoice.sent</span> so you can confirm the workflow runs.</span>
             </form>
           ) : null}
         </section>

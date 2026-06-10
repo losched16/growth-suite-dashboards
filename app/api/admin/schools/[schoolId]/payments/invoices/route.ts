@@ -249,12 +249,17 @@ export async function POST(request: NextRequest, { params }: { params: Params })
     if (sendNow) {
       try {
         const r = await sendInvoiceEmail({ invoiceId: newInvoiceId });
-        emailNote = r.sent_to.length > 0
-          ? ` Emailed to ${r.sent_to.length} parent(s).`
-          : ' (No email — no parents with email on file.)';
+        if (r.ghl_notified) {
+          emailNote = ' Sent to the recipient via your Growth Suite workflow.'
+            + (r.sent_to.length > 0 ? ` Also emailed ${r.sent_to.length}.` : '');
+        } else if (r.sent_to.length > 0) {
+          emailNote = ` Emailed to ${r.sent_to.length} recipient(s).`;
+        } else {
+          emailNote = ' (Created — no delivery channel configured yet. Copy the pay link from the invoice to share it.)';
+        }
       } catch (err) {
         const m = err instanceof Error ? err.message : String(err);
-        emailNote = ` (Email failed: ${m})`;
+        emailNote = ` (Delivery failed: ${m})`;
       }
     }
     const discountNote = discountTotal > 0

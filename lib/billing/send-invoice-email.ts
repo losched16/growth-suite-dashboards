@@ -17,7 +17,9 @@ interface InvoiceRow {
   invoice_number: string;
   school_id: string;
   family_id: string | null;
+  recipient_name: string | null;
   recipient_email: string | null;
+  recipient_ghl_contact_id: string | null;
   public_pay_token: string | null;
   title: string;
   description: string | null;
@@ -28,11 +30,15 @@ interface InvoiceRow {
 export interface SendResult {
   sent_to: string[];
   skipped: string[];
+  // True when the Growth Suite workflow webhook (invoice.sent) fired —
+  // the primary delivery channel when a school has it configured.
+  ghl_notified: boolean;
 }
 
 export async function sendInvoiceEmail({ invoiceId }: SendArgs): Promise<SendResult> {
   const { rows: invRows } = await query<InvoiceRow>(
-    `SELECT id, invoice_number, school_id, family_id, recipient_email,
+    `SELECT id, invoice_number, school_id, family_id, recipient_name,
+            recipient_email, recipient_ghl_contact_id,
             public_pay_token, title, description, total_cents, due_at
        FROM invoices WHERE id = $1`,
     [invoiceId],
@@ -40,25 +46,47 @@ export async function sendInvoiceEmail({ invoiceId }: SendArgs): Promise<SendRes
   const inv = invRows[0];
   if (!inv) throw new Error('Invoice not found');
 
-  const { rows: schoolRows } = await query<{ name: string }>(
-    `SELECT name FROM schools WHERE id = $1`, [inv.school_id],
+  const { rows: schoolRows } = await query<{ name: string; ghl_location_id: string | null }>(
+    `SELECT name, ghl_location_id FROM schools WHERE id = $1`, [inv.school_id],
   );
   const schoolName = schoolRows[0]?.name ?? 'your school';
+  const ghlLocationId = schoolRows[0]?.ghl_location_id ?? '';
 
-  // Recipients: a family's active parents, OR — for an invoice sent to
-  // an arbitrary contact — the single recipient_email.
-  let recipients: string[];
+  // Resolve the primary contact + email recipients. For a family it's
+  // the active parents (primary first); for an arbitrary contact it's
+  // the inline recipient fields.
+  let recipients: string[] = [];
+  let contact = {
+    first_name: '', last_name: '', email: '', phone: '', ghl_contact_id: '',
+  };
   if (inv.family_id) {
-    const { rows: parents } = await query<{ email: string }>(
-      `SELECT email FROM parents
-        WHERE family_id = $1 AND school_id = $2 AND status = 'active' AND email IS NOT NULL`,
+    const { rows: parents } = await query<{
+      first_name: string; last_name: string; email: string | null; phone: string | null;
+      ghl_contact_id: string | null; is_primary: boolean;
+    }>(
+      `SELECT first_name, last_name, email, phone, ghl_contact_id, is_primary
+         FROM parents
+        WHERE family_id = $1 AND school_id = $2 AND status = 'active'
+        ORDER BY is_primary DESC, created_at ASC`,
       [inv.family_id, inv.school_id],
     );
-    recipients = parents.map((p) => p.email);
-    if (recipients.length === 0) return { sent_to: [], skipped: ['no_parents_with_email'] };
+    recipients = parents.map((p) => p.email).filter((e): e is string => !!e);
+    const primary = parents[0];
+    if (primary) {
+      contact = {
+        first_name: primary.first_name ?? '', last_name: primary.last_name ?? '',
+        email: primary.email ?? '', phone: primary.phone ?? '',
+        ghl_contact_id: primary.ghl_contact_id ?? '',
+      };
+    }
   } else {
     recipients = inv.recipient_email ? [inv.recipient_email] : [];
-    if (recipients.length === 0) return { sent_to: [], skipped: ['no_recipient_email'] };
+    const parts = (inv.recipient_name ?? '').trim().split(/\s+/);
+    contact = {
+      first_name: parts[0] ?? '', last_name: parts.slice(1).join(' '),
+      email: inv.recipient_email ?? '', phone: '',
+      ghl_contact_id: inv.recipient_ghl_contact_id ?? '',
+    };
   }
 
   // Public tokenized link — works for both family + non-family
@@ -70,6 +98,62 @@ export async function sendInvoiceEmail({ invoiceId }: SendArgs): Promise<SendRes
   const dueLabel = new Date(inv.due_at).toLocaleDateString(undefined, {
     weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',
   });
+
+  // ── Growth Suite workflow webhook (invoice.sent) ──────────────────
+  // Primary delivery channel when the school has it configured: the
+  // school designs the "new invoice" email in their Growth Suite
+  // workflow. Same webhook URL + flat-payload shape as payment
+  // receipts; the workflow branches on `event`. Fire-and-forget.
+  let ghlNotified = false;
+  const { rows: cfgRows } = await query<{ url: string | null }>(
+    `SELECT ghl_receipt_webhook_url AS url FROM school_payment_config WHERE school_id = $1`,
+    [inv.school_id],
+  );
+  const webhookUrl = cfgRows[0]?.url ?? null;
+  if (webhookUrl) {
+    const payload = {
+      event: 'invoice.sent',
+      contact_id: contact.ghl_contact_id,
+      email: contact.email,
+      phone: contact.phone,
+      first_name: contact.first_name,
+      last_name: contact.last_name,
+      amount_formatted: `$${amount}`,
+      amount_cents: inv.total_cents,
+      invoice_number: inv.invoice_number,
+      invoice_title: inv.title,
+      invoice_description: inv.description ?? '',
+      due_date: dueLabel,
+      due_date_iso: new Date(inv.due_at).toISOString(),
+      pay_url: payUrl,
+      school_name: schoolName,
+      // present-but-empty so one workflow can map a single field set
+      // across invoice.sent / payment.succeeded / payment.failed
+      card_summary: '',
+      payment_date: '',
+      failure_reason: '',
+      school_id: inv.school_id,
+      ghl_location_id: ghlLocationId,
+    };
+    try {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 5000);
+      try {
+        const res = await fetch(webhookUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'User-Agent': 'GrowthSuite-InvoiceWebhook/1' },
+          body: JSON.stringify(payload),
+          signal: ctrl.signal,
+        });
+        ghlNotified = res.ok;
+        if (!res.ok) console.warn(`[send-invoice-email] webhook returned ${res.status}`);
+      } finally {
+        clearTimeout(timer);
+      }
+    } catch (e) {
+      console.warn('[send-invoice-email] webhook failed:', e instanceof Error ? e.message : String(e));
+    }
+  }
 
   const subject = `New invoice from ${schoolName}: ${inv.title} ($${amount})`;
 
@@ -129,7 +213,7 @@ You can pay by card or by bank account (ACH). All payments processed securely th
       skipped.push(`${email}: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
-  return { sent_to: sentTo, skipped };
+  return { sent_to: sentTo, skipped, ghl_notified: ghlNotified };
 }
 
 function escape(s: string): string {

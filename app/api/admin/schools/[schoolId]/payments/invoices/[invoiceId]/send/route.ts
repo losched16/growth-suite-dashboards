@@ -46,17 +46,21 @@ export async function POST(request: NextRequest, { params }: { params: Params })
 
   try {
     const result = await sendInvoiceEmail({ invoiceId });
-    if (result.sent_to.length === 0) {
-      url.searchParams.set('err',
-        `Status updated, but no email was sent — ${result.skipped[0] ?? 'no parents with email on file'}.`);
-    } else {
+    if (result.ghl_notified) {
       url.searchParams.set('msg',
-        `Invoice sent to ${result.sent_to.length} parent(s): ${result.sent_to.join(', ')}.`
+        'Invoice sent via your Growth Suite workflow.'
+        + (result.sent_to.length > 0 ? ` Also emailed ${result.sent_to.length}.` : ''));
+    } else if (result.sent_to.length > 0) {
+      url.searchParams.set('msg',
+        `Invoice sent to ${result.sent_to.length} recipient(s): ${result.sent_to.join(', ')}.`
         + (result.skipped.length > 0 ? ` ${result.skipped.length} failed.` : ''));
+    } else {
+      url.searchParams.set('err',
+        'Status updated, but no delivery channel is set up — connect a Growth Suite workflow webhook (Payments → Settings), or copy the pay link to share it manually.');
     }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    url.searchParams.set('err', `Status updated but email failed: ${msg}`);
+    url.searchParams.set('err', `Status updated but delivery failed: ${msg}`);
   }
   return NextResponse.redirect(url, 303);
 }

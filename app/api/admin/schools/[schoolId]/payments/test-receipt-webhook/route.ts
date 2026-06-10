@@ -37,25 +37,30 @@ export async function POST(request: NextRequest, { params }: { params: Params })
   );
   const row = rows[0];
   if (!row?.url) {
-    return back(request, schoolId, { err: 'No GHL webhook URL configured. Save one first.' });
+    return back(request, schoolId, { err: 'No Growth Suite webhook URL configured. Save one first.' });
   }
 
+  const today = new Date();
   const payload = {
-    event: 'payment.succeeded',
+    event: 'invoice.sent',
     contact_id: '',
-    email: 'test-parent@example.com',
+    email: 'test-recipient@example.com',
     phone: '',
     first_name: 'Test',
-    last_name: 'Parent',
+    last_name: 'Recipient',
     amount_formatted: '$250.00',
     amount_cents: 25000,
     invoice_number: 'TEST-0001',
     invoice_title: 'September Tuition (TEST)',
-    card_summary: 'VISA ····4242',
-    payment_date: new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }),
-    payment_date_iso: new Date().toISOString(),
+    invoice_description: 'Sample invoice for workflow testing',
+    due_date: today.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }),
+    due_date_iso: today.toISOString(),
+    pay_url: 'https://growth-suite-parent-portal.vercel.app/pay/invoice/test?t=sample',
+    card_summary: '',
+    payment_date: '',
+    payment_date_iso: today.toISOString(),
     school_name: row.name ?? 'Your School',
-    receipt_url: 'https://growth-suite-parent-portal.vercel.app/billing/pay/test',
+    receipt_url: 'https://growth-suite-parent-portal.vercel.app/pay/invoice/test?t=sample',
     failure_reason: '',
     school_id: schoolId,
     ghl_location_id: '',
@@ -78,9 +83,9 @@ export async function POST(request: NextRequest, { params }: { params: Params })
       clearTimeout(timer);
     }
     if (status >= 200 && status < 300) {
-      return back(request, schoolId, { msg: `Test payload sent to GHL (HTTP ${status}). Check your workflow in GHL.` });
+      return back(request, schoolId, { msg: `Test payload sent to Growth Suite (HTTP ${status}). Check your workflow.` });
     }
-    return back(request, schoolId, { err: `GHL webhook returned HTTP ${status}. Double-check the URL.` });
+    return back(request, schoolId, { err: `Growth Suite webhook returned HTTP ${status}. Double-check the URL.` });
   } catch (e) {
     return back(request, schoolId, { err: `Couldn't reach the webhook: ${e instanceof Error ? e.message : String(e)}` });
   }
