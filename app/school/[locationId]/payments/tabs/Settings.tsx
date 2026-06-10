@@ -79,6 +79,11 @@ export async function PaymentsHubSettings({
         ) : (
           <InProgressPanel schoolId={schoolId} locationId={locationId} account={account} />
         )}
+        {account && !(account.charges_enabled && account.payouts_enabled) ? (
+          <div className="mt-3 border-t border-slate-100 pt-3">
+            <RefreshStatusButton schoolId={schoolId} returnTo={settingsReturnTo} />
+          </div>
+        ) : null}
       </section>
 
       {/* Billing config */}
@@ -189,6 +194,23 @@ export async function PaymentsHubSettings({
       </section>
       {void locationId}
     </div>
+  );
+}
+
+// On-demand re-pull of Stripe status. After the operator finishes (or
+// continues) onboarding in the Stripe tab, clicking this writes the
+// fresh charges_enabled / payouts_enabled to our DB — so they don't
+// have to wait on (or depend on) the account.updated webhook before
+// the invoice pay page unlocks.
+function RefreshStatusButton({ schoolId, returnTo }: { schoolId: string; returnTo: string }) {
+  return (
+    <form action={`/api/admin/schools/${schoolId}/payments/refresh-account`} method="POST">
+      <input type="hidden" name="return_to" value={returnTo} />
+      <button type="submit" className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50">
+        Refresh Stripe status
+      </button>
+      <span className="ml-2 text-[11px] text-slate-500">Click after you finish Stripe onboarding to sync &amp; unlock payments.</span>
+    </form>
   );
 }
 
