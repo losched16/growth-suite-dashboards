@@ -134,14 +134,30 @@ interface FamilyDetail {
   medical_forms: MedicalForm[];
 }
 
+// Columns whose headers are clickable to sort (server-side via ?sort=&dir=).
+const SORTABLE = new Set<ColumnKey>(['last_name', 'first_name', 'program', 'homeroom', 'schedule', 'status', 'tuition']);
+
 export function StudentTableWithAccordion({
-  rows, columns, locationId, documentsAudience = 'all',
+  rows, columns, locationId, documentsAudience = 'all', current = {},
 }: {
   rows: RosterStudent[];
   columns: ColumnKey[];
   locationId: string;
   documentsAudience?: 'teacher' | 'all';
+  current?: Record<string, string | undefined>;
 }) {
+  // Build a header href that toggles asc/desc on the clicked column and
+  // preserves all existing URL params (filters, year, view, embed).
+  const sortKey = current.sort ?? 'last_name';
+  const sortDesc = current.dir === 'desc';
+  function sortHref(col: string): string {
+    const p = new URLSearchParams();
+    for (const [k, v] of Object.entries(current)) if (v && k !== 'sort' && k !== 'dir' && k !== 'page') p.set(k, v);
+    p.set('sort', col);
+    // toggle direction if already sorting by this column, else asc
+    if (sortKey === col && !sortDesc) p.set('dir', 'desc');
+    return `?${p.toString()}`;
+  }
   const [expanded, setExpanded] = useState<string | null>(null);
   const [details, setDetails] = useState<Record<string, FamilyDetail | 'loading' | { err: string }>>({});
   // Tracks family ids we've started fetching for. Refs are synchronous
@@ -200,7 +216,19 @@ export function StudentTableWithAccordion({
     <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
       <table className="w-full text-sm">
         <thead className="border-b border-gray-100 bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-500">
-          <tr>{columns.map((c) => <th key={c} className="px-3 py-2 font-medium">{AVAILABLE_COLUMNS.find((x) => x.key === c)?.label ?? c}</th>)}</tr>
+          <tr>{columns.map((c) => {
+            const label = AVAILABLE_COLUMNS.find((x) => x.key === c)?.label ?? c;
+            if (!SORTABLE.has(c)) return <th key={c} className="px-3 py-2 font-medium">{label}</th>;
+            const active = sortKey === c;
+            const arrow = active ? (sortDesc ? ' ↓' : ' ↑') : '';
+            return (
+              <th key={c} className="px-3 py-2 font-medium">
+                <a href={sortHref(c)} className={`inline-flex items-center hover:text-gray-900 ${active ? 'text-gray-900' : ''}`} title={`Sort by ${label}`}>
+                  {label}<span className="ml-0.5 text-gray-400">{arrow || ' ↕'}</span>
+                </a>
+              </th>
+            );
+          })}</tr>
         </thead>
         <tbody className="divide-y divide-gray-100">
           {rows.map((s) => {
@@ -285,11 +313,25 @@ function renderCell(
           {s.has_allergy ? <AlertTriangle className="ml-1 inline h-3 w-3 text-rose-600" /> : null}
         </span>
       );
+    case 'last_name': return <span className="font-medium text-gray-900">{s.last_name}</span>;
+    case 'first_name':
+      return (
+        <span className="font-medium text-gray-900">
+          {s.preferred_name ? `${s.preferred_name} (${s.first_name})` : s.first_name}
+          {s.has_allergy ? <AlertTriangle className="ml-1 inline h-3 w-3 text-rose-600" /> : null}
+        </span>
+      );
     case 'gender_age': return <span className="text-gray-700">{(s.gender ?? '—')} · {ageFrom(s.date_of_birth)}</span>;
     case 'program': return <span className="text-gray-700">{s.program ?? s.classroom_name ?? '—'}</span>;
     case 'homeroom': return <span className="text-gray-700">{s.homeroom ?? s.classroom_name ?? '—'}</span>;
     case 'lead_teacher': return <span className="text-gray-700">{s.lead_teacher_name ?? '—'}</span>;
     case 'schedule': return <span className="text-gray-700">{s.schedule ?? '—'}</span>;
+    case 'tuition': {
+      if (!s.tuition) return <span className="text-gray-400">—</span>;
+      const m = s.tuition.match(/\$[\d,]+(?:\.\d{2})?/);
+      const display = m ? m[0] : (/^\d+(\.\d+)?$/.test(s.tuition) ? `$${Number(s.tuition).toLocaleString()}` : s.tuition);
+      return <span className="text-gray-700 tabular-nums" title={s.tuition}>{display}</span>;
+    }
     case 'status':
       return s.status ? (
         <span className="inline-block rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-emerald-800">

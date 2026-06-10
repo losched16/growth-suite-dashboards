@@ -423,6 +423,25 @@ export async function fetcher(
     return true;
   });
 
+  // Sort (server-side so it orders the WHOLE filtered set, not just the
+  // visible page). Default: last name A–Z. Clickable headers set ?sort=&dir=.
+  const sortKey = (sp.sort ?? 'last_name').trim();
+  const sortDesc = sp.dir === 'desc';
+  const sortText = (x: RosterStudent): string => {
+    switch (sortKey) {
+      case 'first_name': return (x.preferred_name || x.first_name || '');
+      case 'last_name': return x.last_name || '';
+      case 'program': return x.program || x.classroom_name || '';
+      case 'homeroom': return x.homeroom || x.classroom_name || '';
+      case 'schedule': return x.schedule || '';
+      case 'status': return x.status || '';
+      case 'tuition': return x.tuition || '';
+      default: return x.last_name || '';
+    }
+  };
+  filtered.sort((a, b) =>
+    sortText(a).localeCompare(sortText(b), undefined, { numeric: true, sensitivity: 'base' }) * (sortDesc ? -1 : 1));
+
   const perPage = Math.max(25, Math.min(1000, Number(sp.per_page) || config.page_size || 100));
   const page = Math.max(1, Number(sp.page) || 1);
   const pageCount = Math.max(1, Math.ceil(filtered.length / perPage));

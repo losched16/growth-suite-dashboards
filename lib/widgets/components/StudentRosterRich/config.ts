@@ -28,6 +28,8 @@ export type FilterKey = typeof AVAILABLE_FILTERS[number]['key'];
 
 export const AVAILABLE_COLUMNS = [
   { key: 'student',              label: 'Student' },
+  { key: 'last_name',            label: 'Last name' },
+  { key: 'first_name',           label: 'First name' },
   { key: 'gender_age',           label: 'Gender / Age' },
   { key: 'program',              label: 'Program' },
   { key: 'homeroom',             label: 'Homeroom' },

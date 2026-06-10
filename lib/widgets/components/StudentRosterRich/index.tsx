@@ -412,6 +412,7 @@ function Component({
           columns={columns}
           locationId={school.locationId}
           documentsAudience={config.documents_audience ?? 'all'}
+          current={sp}
         />
       ) : view === 'grid' ? (
         <GridView rows={data.page_rows} locationId={school.locationId} drilldownDashboard={drilldown} />
