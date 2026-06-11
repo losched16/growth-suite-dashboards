@@ -13,6 +13,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { query } from '@/lib/db';
+import { AVAILABLE_COLUMNS, AVAILABLE_FILTERS } from '@/lib/widgets/components/StudentRosterRich/config';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -21,6 +22,10 @@ interface Body {
   school_id?: string;
   extra_filters?: unknown;
   extra_columns?: unknown;
+  // Built-in roster columns/filters (ordered). Optional — only updated
+  // when provided, so older callers stay compatible.
+  shown_columns?: unknown;
+  shown_filters?: unknown;
 }
 
 export async function POST(request: NextRequest) {
@@ -42,6 +47,22 @@ export async function POST(request: NextRequest) {
   const extraFilters = reqFilters.filter((k) => valid.has(k));
   const extraColumns = reqColumns.filter((k) => valid.has(k));
 
+  // Built-in toggles: validate against the widget's known keys. Only
+  // applied when the body includes them (arrays). A school turning
+  // everything off is allowed for filters, but we require at least one
+  // column so the table can't render headerless.
+  const validCols = new Set(AVAILABLE_COLUMNS.map((c) => c.key as string));
+  const validFils = new Set(AVAILABLE_FILTERS.map((f) => f.key as string));
+  const shownColumns = Array.isArray(body.shown_columns)
+    ? body.shown_columns.map(String).filter((k) => validCols.has(k)).slice(0, 50)
+    : null;
+  const shownFilters = Array.isArray(body.shown_filters)
+    ? body.shown_filters.map(String).filter((k) => validFils.has(k)).slice(0, 50)
+    : null;
+  if (shownColumns !== null && shownColumns.length === 0) {
+    return NextResponse.json({ error: 'need_one_column', detail: 'Keep at least one column on.' }, { status: 400 });
+  }
+
   // Load + update the student-roster widget config in place.
   const { rows } = await query<{ layout: Array<{ widget_id: string; config: Record<string, unknown> }> }>(
     `SELECT layout FROM school_dashboards WHERE school_id = $1 AND dashboard_slug = 'student-roster'`,
@@ -54,7 +75,13 @@ export async function POST(request: NextRequest) {
   let touched = false;
   for (const w of layout) {
     if (w.widget_id === 'student_roster_rich') {
-      w.config = { ...w.config, extra_filters: extraFilters, extra_columns: extraColumns };
+      w.config = {
+        ...w.config,
+        extra_filters: extraFilters,
+        extra_columns: extraColumns,
+        ...(shownColumns !== null ? { shown_columns: shownColumns } : {}),
+        ...(shownFilters !== null ? { shown_filters: shownFilters } : {}),
+      };
       touched = true;
     }
   }

@@ -55,6 +55,9 @@ export default async function RosterSettingsPage({ params }: { params: Params })
   const widget = dashRows[0]?.layout?.find((w) => w.widget_id === 'student_roster_rich');
   const currentFilters = Array.isArray(widget?.config?.extra_filters) ? (widget?.config?.extra_filters as string[]) : [];
   const currentColumns = Array.isArray(widget?.config?.extra_columns) ? (widget?.config?.extra_columns as string[]) : [];
+  // Built-in (static) selections — the school can toggle these too.
+  const currentStaticColumns = Array.isArray(widget?.config?.shown_columns) ? (widget?.config?.shown_columns as string[]) : [];
+  const currentStaticFilters = Array.isArray(widget?.config?.shown_filters) ? (widget?.config?.shown_filters as string[]) : [];
 
   return (
     <main className="flex flex-1 flex-col items-center bg-slate-50 p-6 min-h-screen">
@@ -85,6 +88,8 @@ export default async function RosterSettingsPage({ params }: { params: Params })
             attrs={attrs}
             initialFilters={currentFilters}
             initialColumns={currentColumns}
+            initialStaticColumns={currentStaticColumns}
+            initialStaticFilters={currentStaticFilters}
           />
         )}
       </div>
