@@ -14,6 +14,7 @@ import { cookies } from 'next/headers';
 import { SCHOOL_SESSION_COOKIE, verifySchoolSession } from '@/lib/auth/school';
 import { SESSION_COOKIE, verifySessionToken } from '@/lib/auth/operator';
 import { query } from '@/lib/db';
+import { resolveFamilyGhlAttrs, type ResolvedAttr } from '@/lib/widgets/ghl-attr-resolver';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -239,6 +240,24 @@ export async function GET(_request: NextRequest, { params }: { params: Params })
     [schoolId, familyId],
   );
 
+  // Self-serve extra detail attributes: the school's Customize picks
+  // (detail_attrs on the roster widget config) resolved for this
+  // family from the synced GHL attribute tables.
+  let extra_attrs: ResolvedAttr[] = [];
+  try {
+    const { rows: dashRows } = await query<{ layout: Array<{ widget_id: string; config: Record<string, unknown> }> }>(
+      `SELECT layout FROM school_dashboards WHERE school_id = $1 AND dashboard_slug = 'student-roster'`,
+      [schoolId],
+    );
+    const widget = dashRows[0]?.layout?.find((w) => w.widget_id === 'student_roster_rich');
+    const detailAttrs = Array.isArray(widget?.config?.detail_attrs) ? (widget?.config?.detail_attrs as string[]) : [];
+    if (detailAttrs.length > 0) {
+      extra_attrs = await resolveFamilyGhlAttrs(schoolId, familyId, detailAttrs);
+    }
+  } catch (e) {
+    console.warn('[family/detail] extra attrs failed:', e instanceof Error ? e.message : String(e));
+  }
+
   return NextResponse.json({
     ok: true,
     family,
@@ -249,5 +268,6 @@ export async function GET(_request: NextRequest, { params }: { params: Params })
     health_profiles,
     enrollment_meta,
     medical_forms,
+    extra_attrs,
   });
 }

@@ -54,6 +54,17 @@ export const AVAILABLE_COLUMNS = [
 
 export type ColumnKey = typeof AVAILABLE_COLUMNS[number]['key'];
 
+// Built-in sections of the family detail panel (the row dropdown).
+// Schools toggle these in the Customize builder; undefined config = all on.
+export const DETAIL_SECTIONS = [
+  { key: 'parents',             label: 'Parents (contact info)' },
+  { key: 'students',            label: 'Students in family' },
+  { key: 'authorized_pickups',  label: 'Authorized for pickup' },
+  { key: 'pickup_restrictions', label: 'NOT authorized for pickup' },
+  { key: 'per_student',         label: 'Per-student detail (health, enrollment, medical forms)' },
+] as const;
+export type DetailSectionKey = typeof DETAIL_SECTIONS[number]['key'];
+
 export interface StudentRosterConfig {
   shown_filters: FilterKey[];
   shown_columns: ColumnKey[];
@@ -77,6 +88,11 @@ export interface StudentRosterConfig {
   // students.metadata + the GHL attribute tables.
   extra_filters?: string[];
   extra_columns?: string[];
+  // Row-dropdown (family detail panel) customization:
+  //   detail_sections — which BUILT-IN sections render (undefined = all)
+  //   detail_attrs    — catalog attr_keys shown as extra detail rows
+  detail_sections?: string[];
+  detail_attrs?: string[];
   // Audience for the documents inline cell:
   //   'teacher' → hide documents flagged visible_to_teacher=false
   //   'all'     → show every document (operator view, default)

@@ -132,6 +132,9 @@ interface FamilyDetail {
   health_profiles: HealthProfile[];
   enrollment_meta: EnrollmentMeta[];
   medical_forms: MedicalForm[];
+  // Self-serve extra rows from the school's GHL data (Customize →
+  // Details). Resolved server-side per family.
+  extra_attrs: Array<{ attr_key: string; label: string; value: string }>;
 }
 
 // Columns whose headers are clickable to sort (server-side via ?sort=&dir=).
@@ -147,7 +150,7 @@ function fmtStartDate(v: string | null): string {
 }
 
 export function StudentTableWithAccordion({
-  rows, columns, locationId, documentsAudience = 'all', current = {}, dynamicLabels = {},
+  rows, columns, locationId, documentsAudience = 'all', current = {}, dynamicLabels = {}, detailSections,
 }: {
   rows: RosterStudent[];
   // Static ColumnKeys plus any catalog attr_keys ('tag', 'cf:…') the
@@ -157,6 +160,8 @@ export function StudentTableWithAccordion({
   documentsAudience?: 'teacher' | 'all';
   current?: Record<string, string | undefined>;
   dynamicLabels?: Record<string, string>;
+  // Which built-in detail-panel sections render (undefined = all).
+  detailSections?: string[];
 }) {
   // Build a header href that toggles asc/desc on the clicked column and
   // preserves all existing URL params (filters, year, view, embed).
@@ -210,6 +215,7 @@ export function StudentTableWithAccordion({
             health_profiles: data.health_profiles ?? [],
             enrollment_meta: data.enrollment_meta ?? [],
             medical_forms: data.medical_forms ?? [],
+            extra_attrs: data.extra_attrs ?? [],
           },
         }));
       } catch (e) {
@@ -257,6 +263,7 @@ export function StudentTableWithAccordion({
                 isOpen={isOpen}
                 detail={isOpen ? details[s.family_id] : undefined}
                 onToggle={() => setExpanded(isOpen ? null : s.family_id)}
+                detailSections={detailSections}
               />
             );
           })}
@@ -267,7 +274,7 @@ export function StudentTableWithAccordion({
 }
 
 function RowGroup({
-  s, columns, locationId, documentsAudience, isOpen, detail, onToggle,
+  s, columns, locationId, documentsAudience, isOpen, detail, onToggle, detailSections,
 }: {
   s: RosterStudent;
   columns: string[];
@@ -276,6 +283,7 @@ function RowGroup({
   isOpen: boolean;
   detail: FamilyDetail | 'loading' | { err: string } | undefined;
   onToggle: () => void;
+  detailSections?: string[];
 }) {
   return (
     <>
@@ -289,7 +297,7 @@ function RowGroup({
       {isOpen ? (
         <tr>
           <td colSpan={columns.length} className="bg-gray-50 border-y border-emerald-200 p-0">
-            <FamilyDetailPanel detail={detail} onClose={onToggle} locationId={locationId} />
+            <FamilyDetailPanel detail={detail} onClose={onToggle} locationId={locationId} sections={detailSections} />
           </td>
         </tr>
       ) : null}
@@ -509,12 +517,16 @@ function renderCell(
 }
 
 function FamilyDetailPanel({
-  detail, onClose, locationId,
+  detail, onClose, locationId, sections,
 }: {
   detail: FamilyDetail | 'loading' | { err: string } | undefined;
   onClose: () => void;
   locationId: string;
+  // Built-in sections to render. undefined = all (back-compat for
+  // schools that never customized the dropdown).
+  sections?: string[];
 }) {
+  const show = (key: string) => !sections || sections.includes(key);
   return (
     <div className="px-6 py-4 space-y-3">
       <div className="flex items-baseline justify-between">
@@ -532,7 +544,7 @@ function FamilyDetailPanel({
         <div className="text-sm text-rose-700">Couldn&rsquo;t load family: {detail.err}</div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
-          <div>
+          {show('parents') ? <div>
             <div className="text-[10px] uppercase tracking-wide text-slate-500 font-semibold mb-2">
               Parents ({detail.parents.length})
             </div>
@@ -594,9 +606,9 @@ function FamilyDetailPanel({
                 ))}
               </ul>
             )}
-          </div>
+          </div> : null}
 
-          <div>
+          {show('students') ? <div>
             <div className="text-[10px] uppercase tracking-wide text-slate-500 font-semibold mb-2">
               Students in family ({detail.students.length})
             </div>
@@ -617,13 +629,13 @@ function FamilyDetailPanel({
                 </li>
               ))}
             </ul>
-          </div>
+          </div> : null}
 
           {/* Authorized pickup — who CAN collect the kids in this family.
               Aggregated across every parent in the family (dedup by name
               + phone in the API). Empty-state still renders so a teacher
               never wonders "did this section just not load?" */}
-          <div>
+          {show('authorized_pickups') ? <div>
             <div className="text-[10px] uppercase tracking-wide text-emerald-700 font-semibold mb-2 flex items-center gap-1">
               <UserCheck className="h-3 w-3" />
               Authorized for pickup ({detail.authorized_pickups.length})
@@ -651,13 +663,13 @@ function FamilyDetailPanel({
                 ))}
               </ul>
             )}
-          </div>
+          </div> : null}
 
           {/* Unauthorized pickup — who CANNOT collect this family's kids.
               Per-student because restrictions can target a specific child
               (custody arrangements, etc.). Sensitive — visually
               distinguished from the safe sections. */}
-          <div>
+          {show('pickup_restrictions') ? <div>
             <div className="text-[10px] uppercase tracking-wide text-rose-700 font-semibold mb-2 flex items-center gap-1">
               <ShieldAlert className="h-3 w-3" />
               NOT authorized for pickup ({detail.pickup_restrictions.length})
@@ -682,7 +694,26 @@ function FamilyDetailPanel({
                 ))}
               </ul>
             )}
-          </div>
+          </div> : null}
+
+          {/* Self-serve extras — GHL data the school added via
+              Customize → Details. Family-level (resolved across the
+              family's linked contacts). */}
+          {(detail.extra_attrs ?? []).length > 0 ? (
+            <div className="md:col-span-2">
+              <div className="text-[10px] uppercase tracking-wide text-blue-700 font-semibold mb-2">
+                More from Growth Suite
+              </div>
+              <dl className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-1.5">
+                {detail.extra_attrs.map((a) => (
+                  <div key={a.attr_key} className="rounded border border-blue-100 bg-blue-50/30 px-2 py-1.5">
+                    <dt className="text-[10px] uppercase tracking-wide text-slate-500">{a.label}</dt>
+                    <dd className="text-sm text-slate-900 whitespace-pre-wrap break-words">{a.value}</dd>
+                  </div>
+                ))}
+              </dl>
+            </div>
+          ) : null}
         </div>
       )}
 
@@ -695,7 +726,7 @@ function FamilyDetailPanel({
           plan at a glance. Only renders when there's a matched health
           or enrollment-meta row for a student — older families
           without Final Forms data won't see an empty card. */}
-      {(detail !== undefined && detail !== 'loading' && !('err' in detail)
+      {(show('per_student') && detail !== undefined && detail !== 'loading' && !('err' in detail)
         && (detail.health_profiles.length > 0 || detail.enrollment_meta.length > 0)) ? (
         <div className="mt-4 border-t border-emerald-100 pt-3">
           <div className="text-[11px] uppercase tracking-wide text-emerald-800 font-semibold mb-2">

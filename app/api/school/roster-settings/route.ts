@@ -13,7 +13,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { query } from '@/lib/db';
-import { AVAILABLE_COLUMNS, AVAILABLE_FILTERS } from '@/lib/widgets/components/StudentRosterRich/config';
+import { AVAILABLE_COLUMNS, AVAILABLE_FILTERS, DETAIL_SECTIONS } from '@/lib/widgets/components/StudentRosterRich/config';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -26,6 +26,10 @@ interface Body {
   // when provided, so older callers stay compatible.
   shown_columns?: unknown;
   shown_filters?: unknown;
+  // Row-dropdown customization: catalog attrs shown as extra detail
+  // rows + which built-in sections render.
+  detail_attrs?: unknown;
+  detail_sections?: unknown;
 }
 
 export async function POST(request: NextRequest) {
@@ -63,6 +67,17 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'need_one_column', detail: 'Keep at least one column on.' }, { status: 400 });
   }
 
+  // Row-dropdown picks. detail_attrs validated against the catalog;
+  // detail_sections against the known built-in section keys. Empty
+  // arrays are allowed (a school may strip the dropdown bare).
+  const detailAttrs = Array.isArray(body.detail_attrs)
+    ? body.detail_attrs.map(String).filter((k) => valid.has(k)).slice(0, 50)
+    : null;
+  const validSections = new Set<string>(DETAIL_SECTIONS.map((s) => s.key));
+  const detailSections = Array.isArray(body.detail_sections)
+    ? body.detail_sections.map(String).filter((k) => validSections.has(k)).slice(0, 20)
+    : null;
+
   // Load + update the student-roster widget config in place.
   const { rows } = await query<{ layout: Array<{ widget_id: string; config: Record<string, unknown> }> }>(
     `SELECT layout FROM school_dashboards WHERE school_id = $1 AND dashboard_slug = 'student-roster'`,
@@ -81,6 +96,8 @@ export async function POST(request: NextRequest) {
         extra_columns: extraColumns,
         ...(shownColumns !== null ? { shown_columns: shownColumns } : {}),
         ...(shownFilters !== null ? { shown_filters: shownFilters } : {}),
+        ...(detailAttrs !== null ? { detail_attrs: detailAttrs } : {}),
+        ...(detailSections !== null ? { detail_sections: detailSections } : {}),
       };
       touched = true;
     }

@@ -465,6 +465,7 @@ function Component({
           documentsAudience={config.documents_audience ?? 'all'}
           current={sp}
           dynamicLabels={data.dynamic_labels}
+          detailSections={config.detail_sections}
         />
       ) : view === 'grid' ? (
         <GridView rows={data.page_rows} locationId={school.locationId} drilldownDashboard={drilldown} />

@@ -58,6 +58,9 @@ export default async function RosterSettingsPage({ params }: { params: Params })
   // Built-in (static) selections — the school can toggle these too.
   const currentStaticColumns = Array.isArray(widget?.config?.shown_columns) ? (widget?.config?.shown_columns as string[]) : [];
   const currentStaticFilters = Array.isArray(widget?.config?.shown_filters) ? (widget?.config?.shown_filters as string[]) : [];
+  // Row-dropdown customization. detail_sections undefined = all on.
+  const currentDetailAttrs = Array.isArray(widget?.config?.detail_attrs) ? (widget?.config?.detail_attrs as string[]) : [];
+  const currentDetailSections = Array.isArray(widget?.config?.detail_sections) ? (widget?.config?.detail_sections as string[]) : null;
 
   return (
     <main className="flex flex-1 flex-col items-center bg-slate-50 p-6 min-h-screen">
@@ -90,6 +93,8 @@ export default async function RosterSettingsPage({ params }: { params: Params })
             initialColumns={currentColumns}
             initialStaticColumns={currentStaticColumns}
             initialStaticFilters={currentStaticFilters}
+            initialDetailAttrs={currentDetailAttrs}
+            initialDetailSections={currentDetailSections}
           />
         )}
       </div>

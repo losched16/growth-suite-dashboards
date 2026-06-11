@@ -6,7 +6,7 @@
 
 import { useMemo, useState } from 'react';
 import { Search, Loader2, Check, Tags, GitBranch, ListFilter, LayoutList } from 'lucide-react';
-import { AVAILABLE_COLUMNS, AVAILABLE_FILTERS } from '@/lib/widgets/components/StudentRosterRich/config';
+import { AVAILABLE_COLUMNS, AVAILABLE_FILTERS, DETAIL_SECTIONS } from '@/lib/widgets/components/StudentRosterRich/config';
 import type { CatalogAttr } from './page';
 
 const TYPE_LABEL: Record<string, string> = {
@@ -20,6 +20,7 @@ const TYPE_LABEL: Record<string, string> = {
 export function RosterSettingsClient({
   locationId, schoolId, attrs, initialFilters, initialColumns,
   initialStaticColumns, initialStaticFilters,
+  initialDetailAttrs, initialDetailSections,
 }: {
   locationId: string;
   schoolId: string;
@@ -28,11 +29,17 @@ export function RosterSettingsClient({
   initialColumns: string[];
   initialStaticColumns: string[];
   initialStaticFilters: string[];
+  initialDetailAttrs: string[];
+  // null = never customized → all built-in sections on
+  initialDetailSections: string[] | null;
 }) {
   const [filters, setFilters] = useState<Set<string>>(new Set(initialFilters));
   const [columns, setColumns] = useState<Set<string>>(new Set(initialColumns));
   const [staticCols, setStaticCols] = useState<Set<string>>(new Set(initialStaticColumns));
   const [staticFils, setStaticFils] = useState<Set<string>>(new Set(initialStaticFilters));
+  const [detailAttrs, setDetailAttrs] = useState<Set<string>>(new Set(initialDetailAttrs));
+  const [detailSections, setDetailSections] = useState<Set<string>>(
+    new Set(initialDetailSections ?? DETAIL_SECTIONS.map((s) => s.key)));
   const [search, setSearch] = useState('');
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -82,6 +89,8 @@ export function RosterSettingsClient({
           extra_columns: [...columns],
           shown_columns: ordered(initialStaticColumns, staticCols, AVAILABLE_COLUMNS.map((c) => c.key)),
           shown_filters: ordered(initialStaticFilters, staticFils, AVAILABLE_FILTERS.map((f) => f.key)),
+          detail_attrs: [...detailAttrs],
+          detail_sections: DETAIL_SECTIONS.map((s) => s.key).filter((k) => detailSections.has(k)),
         }),
       });
       const j = await r.json().catch(() => ({}));
@@ -180,6 +189,28 @@ export function RosterSettingsClient({
                 </ul>
               </div>
             </div>
+            {/* Row-dropdown sections — what shows when a row is expanded */}
+            <div className="border-t border-slate-100">
+              <div className="px-4 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                Row dropdown (what shows when you expand a student)
+              </div>
+              <ul className="divide-y divide-slate-50">
+                {DETAIL_SECTIONS.map((s) => (
+                  <li key={s.key} className="flex items-center justify-between gap-3 px-4 py-1.5 hover:bg-slate-50">
+                    <span className={`text-sm ${detailSections.has(s.key) ? 'text-slate-900 font-medium' : 'text-slate-500'}`}>{s.label}</span>
+                    <label className="flex items-center gap-1 text-xs text-slate-600">
+                      <input
+                        type="checkbox"
+                        checked={detailSections.has(s.key)}
+                        onChange={() => toggle(detailSections, setDetailSections, s.key)}
+                        className="h-4 w-4 rounded border-slate-300"
+                      />
+                      On
+                    </label>
+                  </li>
+                ))}
+              </ul>
+            </div>
           </section>
         );
       })()}
@@ -219,6 +250,15 @@ export function RosterSettingsClient({
                     className="h-4 w-4 rounded border-slate-300"
                   />
                   Column
+                </label>
+                <label className="flex items-center gap-1 text-xs text-slate-600 whitespace-nowrap" title="Show in the row dropdown when a student is expanded">
+                  <input
+                    type="checkbox"
+                    checked={detailAttrs.has(a.attr_key)}
+                    onChange={() => toggle(detailAttrs, setDetailAttrs, a.attr_key)}
+                    className="h-4 w-4 rounded border-slate-300"
+                  />
+                  Details
                 </label>
               </li>
             ))}
