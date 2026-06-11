@@ -221,6 +221,11 @@ function renderCell(s: RosterStudent, col: ColumnKey, drilldownDashboard: string
     case 'homeroom': return <span className="text-gray-700">{s.homeroom ?? s.classroom_name ?? '—'}</span>;
     case 'lead_teacher': return <span className="text-gray-700">{s.lead_teacher_name ?? '—'}</span>;
     case 'schedule': return <span className="text-gray-700">{s.schedule ?? '—'}</span>;
+    case 'initial_start_date': {
+      if (!s.initial_start_date) return <span className="text-gray-400">—</span>;
+      const d = new Date(s.initial_start_date.replace(' ', 'T'));
+      return <span className="text-gray-700 tabular-nums whitespace-nowrap">{Number.isNaN(d.getTime()) ? s.initial_start_date : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>;
+    }
     case 'tuition': {
       if (!s.tuition) return <span className="text-gray-400">—</span>;
       // Pull the $ amount out of DGM's verbose "… - $16,250" string;

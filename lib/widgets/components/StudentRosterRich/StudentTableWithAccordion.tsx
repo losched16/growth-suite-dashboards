@@ -135,7 +135,16 @@ interface FamilyDetail {
 }
 
 // Columns whose headers are clickable to sort (server-side via ?sort=&dir=).
-const SORTABLE = new Set<ColumnKey>(['last_name', 'first_name', 'program', 'homeroom', 'schedule', 'status', 'tuition']);
+const SORTABLE = new Set<ColumnKey>(['last_name', 'first_name', 'program', 'homeroom', 'schedule', 'status', 'tuition', 'initial_start_date']);
+
+// "2021-08-09 00:00:00" / ISO → "Aug 9, 2021". Returns the raw value
+// when it isn't a parseable date.
+function fmtStartDate(v: string | null): string {
+  if (!v) return '—';
+  const d = new Date(v.replace(' ', 'T'));
+  if (Number.isNaN(d.getTime())) return v;
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
 
 export function StudentTableWithAccordion({
   rows, columns, locationId, documentsAudience = 'all', current = {},
@@ -328,6 +337,7 @@ function renderCell(
     case 'homeroom': return <span className="text-gray-700">{s.homeroom ?? s.classroom_name ?? '—'}</span>;
     case 'lead_teacher': return <span className="text-gray-700">{s.lead_teacher_name ?? '—'}</span>;
     case 'schedule': return <span className="text-gray-700">{s.schedule ?? '—'}</span>;
+    case 'initial_start_date': return <span className="text-gray-700 tabular-nums whitespace-nowrap">{fmtStartDate(s.initial_start_date)}</span>;
     case 'tuition': {
       if (!s.tuition) return <span className="text-gray-400">—</span>;
       const m = s.tuition.match(/\$[\d,]+(?:\.\d{2})?/);

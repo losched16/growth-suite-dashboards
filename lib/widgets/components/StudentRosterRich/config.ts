@@ -37,6 +37,7 @@ export const AVAILABLE_COLUMNS = [
   { key: 'homeroom',             label: 'Homeroom' },
   { key: 'lead_teacher',         label: 'Lead teacher' },
   { key: 'schedule',             label: 'Schedule' },
+  { key: 'initial_start_date',   label: 'Initial start date' },
   { key: 'tuition',              label: 'Tuition' },
   { key: 'status',               label: 'Status' },
   { key: 'allergy',              label: 'Allergy' },

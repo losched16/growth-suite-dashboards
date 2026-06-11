@@ -84,6 +84,8 @@ export interface RosterStudent {
   program: string | null;
   homeroom: string | null;
   tuition: string | null;
+  // First day at the school (metadata.initial_start_date), raw string.
+  initial_start_date: string | null;
   allergy: string | null;
   special_instructions: string | null;
   iep: string | null;
@@ -340,6 +342,8 @@ export async function fetcher(
     // program_tuition string ("… - $16,250"); fall back to tuition_fee.
     const tuition = typeof md.program_tuition === 'string' ? md.program_tuition
       : (md.tuition_fee != null && md.tuition_fee !== '' ? String(md.tuition_fee) : null);
+    const initialStart = typeof md.initial_start_date === 'string' && md.initial_start_date.trim()
+      ? md.initial_start_date.trim() : null;
     const lunch = typeof md.organic_lunch === 'string' ? md.organic_lunch : null;
     const lunchLower = (lunch ?? '').toLowerCase();
     // "has lunch" = anything other than declined/blank. Declined values
@@ -381,6 +385,7 @@ export async function fetcher(
       program,
       homeroom,
       tuition,
+      initial_start_date: initialStart,
       allergy,
       special_instructions,
       iep,
@@ -470,6 +475,7 @@ export async function fetcher(
       case 'schedule': return x.schedule || '';
       case 'status': return x.status || '';
       case 'tuition': return x.tuition || '';
+      case 'initial_start_date': return x.initial_start_date || '';
       default: return x.last_name || '';
     }
   };
