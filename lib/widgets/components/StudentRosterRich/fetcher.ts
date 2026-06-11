@@ -325,6 +325,13 @@ export async function fetcher(
     const special_instructions = bestText(metadataSpecial, r.hp_medical_conditions);
     const iep = typeof md.iep === 'string' ? md.iep : null;
     const five04 = typeof md.five04_plan === 'string' ? md.five04_plan : null;
+    // Lead teacher: prefer the per-student value from the roster import
+    // (metadata.lead_teacher) — it's the authoritative source and can't
+    // drift when a student changes classrooms. Fall back to the
+    // classroom row's teacher (via enrollment.classroom_id).
+    const leadTeacher = (typeof md.lead_teacher === 'string' && md.lead_teacher.trim())
+      ? md.lead_teacher.trim()
+      : r.lead_teacher_name;
     const program = typeof md.program === 'string' ? md.program : null;
     const homeroom = typeof md.homeroom === 'string' ? md.homeroom : null;
     // Year-specific tuition. metadata already holds THIS student's
@@ -366,7 +373,7 @@ export async function fetcher(
       gender: r.gender,
       status: r.enrollment_status,
       classroom_name: r.classroom_name,
-      lead_teacher_name: r.lead_teacher_name,
+      lead_teacher_name: leadTeacher,
       schedule: r.schedule,
       academic_year: r.academic_year,
       age_as_of_aug1: ageAtDate(r.date_of_birth, augRef),
