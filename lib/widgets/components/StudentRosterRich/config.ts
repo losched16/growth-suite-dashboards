@@ -71,6 +71,12 @@ export interface StudentRosterConfig {
   // Academic year the roster defaults to (e.g. '2026-27'). Falls back
   // to the current year in the fetcher when unset.
   default_academic_year?: string;
+  // Self-serve filters/columns: attr_keys from school_filter_catalog
+  // (e.g. 'tag', 'cf:donor_tier', 'opp_stage'). The school picks these
+  // in the roster-settings builder; the fetcher resolves values via
+  // students.metadata + the GHL attribute tables.
+  extra_filters?: string[];
+  extra_columns?: string[];
   // Audience for the documents inline cell:
   //   'teacher' → hide documents flagged visible_to_teacher=false
   //   'all'     → show every document (operator view, default)

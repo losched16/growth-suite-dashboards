@@ -18,6 +18,7 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { query } from '@/lib/db';
 import { runGhlSync, type SyncResult } from '@/lib/sync/run-ghl-sync';
+import { syncGhlAttributes } from '@/lib/sync/ghl-attributes';
 
 // Vercel cron may take longer than the default Hobby 10s; bump.
 export const maxDuration = 300; // 5 min
@@ -26,6 +27,7 @@ interface SchoolRow {
   id: string;
   name: string;
   ghl_location_id: string;
+  sync_mode: 'snapshot' | 'attributes_only' | 'off';
 }
 
 interface PerSchoolResult {
@@ -72,7 +74,7 @@ function authorize(request: NextRequest): boolean {
 async function runForAll(): Promise<NextResponse> {
   const started = Date.now();
   const { rows: schools } = await query<SchoolRow>(
-    `SELECT id, name, ghl_location_id
+    `SELECT id, name, ghl_location_id, COALESCE(sync_mode, 'snapshot') AS sync_mode
      FROM schools
      WHERE ghl_pit_encrypted IS NOT NULL
      ORDER BY name`,
@@ -83,18 +85,37 @@ async function runForAll(): Promise<NextResponse> {
   let failCount = 0;
 
   for (const s of schools) {
+    if (s.sync_mode === 'off') continue;
     const t0 = Date.now();
     try {
-      const result = await runGhlSync(s.id);
+      // Snapshot mode: full destructive family-graph rebuild from GHL.
+      // attributes_only mode (import-managed rosters like DGM/MCH):
+      // SKIP the destructive sync — their family graph is the source of
+      // truth in OUR db; only the additive attribute layer refreshes.
+      const result = s.sync_mode === 'snapshot' ? await runGhlSync(s.id) : null;
+
+      // Attribute layer (tags / custom-field values / opportunities /
+      // filter catalog) refreshes for every non-off school. Additive,
+      // never touches the family graph.
+      let attrSummary = '';
+      try {
+        const attrs = await syncGhlAttributes(s.id);
+        attrSummary = ` Attributes: ${attrs.tag_rows} tags, ${attrs.field_value_rows} field values, ${attrs.opportunities} opps, ${attrs.catalog_attributes} catalog.`;
+      } catch (attrErr) {
+        attrSummary = ` Attributes FAILED: ${attrErr instanceof Error ? attrErr.message : String(attrErr)}`;
+      }
+
       const dur = Date.now() - t0;
-      const summary = `Synced ${result.families_created} families, ${result.students_created} students, ${result.enrollments_created} enrollments, ${result.classrooms_created} classrooms.`;
+      const summary = (result
+        ? `Synced ${result.families_created} families, ${result.students_created} students, ${result.enrollments_created} enrollments, ${result.classrooms_created} classrooms.`
+        : `Family-graph sync skipped (sync_mode=${s.sync_mode}).`) + attrSummary;
       results.push({
         school_id: s.id,
         name: s.name,
         location_id: s.ghl_location_id,
         ok: true,
         duration_ms: dur,
-        result,
+        result: result ?? undefined,
       });
       // Per-school audit row (so the school admin shows its own cron events)
       await query(

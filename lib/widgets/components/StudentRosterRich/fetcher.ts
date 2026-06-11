@@ -124,6 +124,20 @@ export interface RosterStudent {
   // Surfaced as a chip next to the student name.
   re_enrolled: boolean;
   search_haystack: string;
+  // Self-serve attribute display values, keyed by catalog attr_key
+  // ('tag', 'cf:donor_tier', 'opp_stage', …). Resolved from
+  // students.metadata + the GHL attribute tables via the family's
+  // linked contacts.
+  dynamic: Record<string, string>;
+}
+
+// A dynamic filter the school configured (from school_filter_catalog),
+// shipped to the FilterRow so it can render the right control.
+export interface DynamicFilterDef {
+  attr_key: string;
+  label: string;
+  data_type: string;       // 'select' | 'multi' | 'text' | 'number' | 'date'
+  options: string[];       // choices for select/multi controls
 }
 
 export interface StudentRosterData {
@@ -143,6 +157,10 @@ export interface StudentRosterData {
     lunches: string[];
     attendance_statuses: string[];
   };
+  // Catalog-driven filters the school enabled (renders after the
+  // static filters) + header labels for any dynamic columns.
+  dynamic_filters: DynamicFilterDef[];
+  dynamic_labels: Record<string, string>;
   // For Allergies view
   allergies_by_homeroom: Array<{
     homeroom: string;
@@ -316,6 +334,129 @@ export async function fetcher(
     [school.schoolId, 'America/Phoenix', fYear],
   );
 
+  // ── Self-serve attributes (tags / GHL fields / opportunities) ──────
+  // Attrs in play = whatever the school configured as extra filters or
+  // columns, plus any f_<attr> URL param (so deep links work even
+  // before the config is saved).
+  const spAll = searchParams ?? {};
+  const activeAttrs = new Set<string>([
+    ...(config.extra_filters ?? []),
+    ...(config.extra_columns ?? []),
+  ]);
+  for (const k of Object.keys(spAll)) {
+    if (k.startsWith('f_') && (spAll[k] ?? '').trim()) activeAttrs.add(k.slice(2));
+  }
+
+  interface CatalogRow { attr_key: string; attr_type: string; label: string; data_type: string | null; sample_values: unknown }
+  let catalogRows: CatalogRow[] = [];
+  // contact id → values, loaded only for what's in play
+  const tagsByContact = new Map<string, Set<string>>();
+  const cfvByContact = new Map<string, Map<string, string>>();
+  const oppByContact = new Map<string, { stages: Set<string>; statuses: Set<string>; pipelines: Set<string> }>();
+  // family id → linked GHL contact ids (via parents)
+  const contactsByFamily = new Map<string, string[]>();
+
+  if (activeAttrs.size > 0) {
+    const { rows: cat } = await query<CatalogRow>(
+      `SELECT attr_key, attr_type, label, data_type, sample_values
+         FROM school_filter_catalog WHERE school_id = $1 AND attr_key = ANY($2::text[])`,
+      [school.schoolId, [...activeAttrs]],
+    );
+    catalogRows = cat;
+
+    const { rows: parentLinks } = await query<{ family_id: string; ghl_contact_id: string }>(
+      `SELECT family_id, ghl_contact_id FROM parents
+        WHERE school_id = $1 AND ghl_contact_id IS NOT NULL AND status = 'active'`,
+      [school.schoolId],
+    );
+    for (const pl of parentLinks) {
+      const list = contactsByFamily.get(pl.family_id) ?? [];
+      list.push(pl.ghl_contact_id);
+      contactsByFamily.set(pl.family_id, list);
+    }
+
+    if (activeAttrs.has('tag')) {
+      const { rows: tagRows } = await query<{ ghl_contact_id: string; tag: string }>(
+        `SELECT ghl_contact_id, tag FROM ghl_contact_tags WHERE school_id = $1`,
+        [school.schoolId],
+      );
+      for (const t of tagRows) {
+        const set = tagsByContact.get(t.ghl_contact_id) ?? new Set<string>();
+        set.add(t.tag);
+        tagsByContact.set(t.ghl_contact_id, set);
+      }
+    }
+
+    const cfKeys = [...activeAttrs].filter((a) => a.startsWith('cf:')).map((a) => a.slice(3));
+    if (cfKeys.length > 0) {
+      const { rows: cfvRows } = await query<{ ghl_contact_id: string; field_key: string; value: string }>(
+        `SELECT ghl_contact_id, field_key, value FROM ghl_contact_field_values
+          WHERE school_id = $1 AND field_key = ANY($2::text[])`,
+        [school.schoolId, cfKeys],
+      );
+      for (const r2 of cfvRows) {
+        const m = cfvByContact.get(r2.ghl_contact_id) ?? new Map<string, string>();
+        m.set(r2.field_key, r2.value);
+        cfvByContact.set(r2.ghl_contact_id, m);
+      }
+    }
+
+    if (activeAttrs.has('opp_stage') || activeAttrs.has('opp_status') || activeAttrs.has('pipeline')) {
+      const { rows: oppRows } = await query<{ ghl_contact_id: string | null; stage_name: string | null; status: string | null; pipeline_name: string | null }>(
+        `SELECT ghl_contact_id, stage_name, status, pipeline_name FROM ghl_opportunities WHERE school_id = $1`,
+        [school.schoolId],
+      );
+      for (const o of oppRows) {
+        if (!o.ghl_contact_id) continue;
+        const e = oppByContact.get(o.ghl_contact_id) ?? { stages: new Set<string>(), statuses: new Set<string>(), pipelines: new Set<string>() };
+        if (o.stage_name) e.stages.add(o.stage_name);
+        if (o.status) e.statuses.add(o.status);
+        if (o.pipeline_name) e.pipelines.add(o.pipeline_name);
+        oppByContact.set(o.ghl_contact_id, e);
+      }
+    }
+  }
+
+  // Resolve one student's dynamic display values across their linked
+  // contacts (family parents + the contact stamped on the student).
+  function resolveDynamic(familyId: string, md: Record<string, unknown>): Record<string, string> {
+    if (activeAttrs.size === 0) return {};
+    const contactIds = new Set<string>(contactsByFamily.get(familyId) ?? []);
+    const mdContact = typeof md.ghl_contact_id === 'string' ? md.ghl_contact_id : null;
+    if (mdContact) contactIds.add(mdContact);
+    const out: Record<string, string> = {};
+    for (const attr of activeAttrs) {
+      if (attr === 'tag') {
+        const tags = new Set<string>();
+        for (const cid of contactIds) for (const t of tagsByContact.get(cid) ?? []) tags.add(t);
+        if (tags.size) out.tag = [...tags].sort().join(', ');
+      } else if (attr.startsWith('cf:')) {
+        const key = attr.slice(3);
+        // students.metadata wins (slot-resolved, per-student); contact
+        // value is the fallback (family/contact-level fields).
+        const mdVal = md[key];
+        let v = mdVal != null && String(mdVal).trim() !== '' ? String(mdVal) : '';
+        if (!v) {
+          for (const cid of contactIds) {
+            const cv = cfvByContact.get(cid)?.get(key);
+            if (cv) { v = cv; break; }
+          }
+        }
+        if (v) out[attr] = v;
+      } else if (attr === 'opp_stage' || attr === 'opp_status' || attr === 'pipeline') {
+        const vals = new Set<string>();
+        for (const cid of contactIds) {
+          const e = oppByContact.get(cid);
+          if (!e) continue;
+          const src = attr === 'opp_stage' ? e.stages : attr === 'opp_status' ? e.statuses : e.pipelines;
+          for (const v of src) vals.add(v);
+        }
+        if (vals.size) out[attr] = [...vals].sort().join(', ');
+      }
+    }
+    return out;
+  }
+
   const all: RosterStudent[] = rows.map((r) => {
     const md = r.metadata ?? {};
     const metadataAllergy = typeof md.allergy === 'string' ? md.allergy : null;
@@ -404,6 +545,7 @@ export async function fetcher(
       pickup_restrictions: Array.isArray(r.pickup_restrictions_json) ? r.pickup_restrictions_json : [],
       re_enrolled: r.re_enrolled_flag === true,
       search_haystack: haystack,
+      dynamic: resolveDynamic(r.family_id, md),
     };
   });
 
@@ -441,11 +583,35 @@ export async function fetcher(
   const curbsideOnly = sp.curbside_only === '1' || sp.curbside_only === 'true';
   const reEnrolledOnly = sp.re_enrolled_only === '1' || sp.re_enrolled_only === 'true';
 
+  // Active dynamic filters: f_<attr_key> URL params with a value.
+  const dynFilters: Array<{ attr: string; value: string; exact: boolean }> = [];
+  for (const [k, vRaw] of Object.entries(spAll)) {
+    if (!k.startsWith('f_')) continue;
+    const v = (vRaw ?? '').trim();
+    if (!v) continue;
+    const attr = k.slice(2);
+    const catRow = catalogRows.find((c) => c.attr_key === attr);
+    const dt = catRow?.data_type ?? 'text';
+    dynFilters.push({ attr, value: v, exact: dt === 'select' || dt === 'multi' });
+  }
+
   const filtered = all.filter((s) => {
     // Year scope: the enrollment join already surfaced the selected
     // year's row when the student has one; require it to match so
     // students without a same-year enrollment fall out of view.
     if (fYear && (s.academic_year ?? '') !== fYear) return false;
+    // Self-serve attribute filters. Multi-value attrs (tags, opp
+    // stages) store a comma-joined display string — exact matching
+    // checks set membership; text/number/date use contains.
+    for (const f of dynFilters) {
+      const display = s.dynamic[f.attr] ?? '';
+      if (f.exact) {
+        const parts = display.split(', ').map((p) => p.trim().toLowerCase());
+        if (!parts.includes(f.value.toLowerCase())) return false;
+      } else if (!display.toLowerCase().includes(f.value.toLowerCase())) {
+        return false;
+      }
+    }
     if (fProg && (s.program ?? s.classroom_name ?? '') !== fProg) return false;
     if (fHome && (s.homeroom ?? s.classroom_name ?? '') !== fHome) return false;
     if (fSched && (s.schedule ?? '') !== fSched) return false;
@@ -476,7 +642,10 @@ export async function fetcher(
       case 'status': return x.status || '';
       case 'tuition': return x.tuition || '';
       case 'initial_start_date': return x.initial_start_date || '';
-      default: return x.last_name || '';
+      default:
+        // Dynamic (catalog) columns sort by their display value.
+        if (x.dynamic[sortKey] !== undefined) return x.dynamic[sortKey];
+        return x.last_name || '';
     }
   };
   filtered.sort((a, b) =>
@@ -501,6 +670,25 @@ export async function fetcher(
     .sort((a, b) => a[0].localeCompare(b[0]))
     .map(([homeroom, students]) => ({ homeroom, students }));
 
+  // Catalog-driven filter defs (only the ones the school enabled as
+  // FILTERS — extra_columns don't get controls) + labels for any
+  // dynamic column headers.
+  const dynamic_filters: DynamicFilterDef[] = (config.extra_filters ?? [])
+    .map((attr) => {
+      const cat = catalogRows.find((c) => c.attr_key === attr);
+      if (!cat) return null;
+      const samples = Array.isArray(cat.sample_values) ? (cat.sample_values as unknown[]).map(String) : [];
+      return {
+        attr_key: cat.attr_key,
+        label: cat.label,
+        data_type: cat.data_type ?? 'text',
+        options: samples,
+      };
+    })
+    .filter((x): x is DynamicFilterDef => x !== null);
+  const dynamic_labels: Record<string, string> = {};
+  for (const c of catalogRows) dynamic_labels[c.attr_key] = c.label;
+
   return {
     total_students: all.length,
     filtered,
@@ -509,6 +697,8 @@ export async function fetcher(
     per_page: perPage,
     page_count: pageCount,
     options,
+    dynamic_filters,
+    dynamic_labels,
     allergies_by_homeroom,
   };
 }

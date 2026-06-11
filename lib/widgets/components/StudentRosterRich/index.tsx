@@ -38,11 +38,13 @@ function FilterRow({
   options,
   current,
   view,
+  dynamicFilters = [],
 }: {
   filterKeys: FilterKey[];
   options: StudentRosterData['options'];
   current: WidgetSearchParams;
   view: string;
+  dynamicFilters?: StudentRosterData['dynamic_filters'];
 }) {
   const selectOpts: Record<string, string[]> = {
     academic_year: options.years,
@@ -57,7 +59,8 @@ function FilterRow({
   const isFiltered = ['q', 'program', 'homeroom', 'schedule', 'lead_teacher', 'gender',
                       'allergies_only', 'iep_504_only', 'lunch', 'attendance_status',
                       'lunch_only', 'curbside_only']
-    .some((k) => current[k] && current[k].length > 0);
+    .some((k) => current[k] && current[k].length > 0)
+    || dynamicFilters.some((d) => (current[`f_${d.attr_key}`] ?? '').length > 0);
 
   return (
     <AutoSubmitForm className="flex flex-wrap items-center gap-2 rounded-lg border border-gray-200 bg-white p-3">
@@ -123,6 +126,36 @@ function FilterRow({
                 <option key={o} value={o}>{o}</option>
               ))}
             </select>
+          </label>
+        );
+      })}
+      {/* Self-serve filters the school enabled from their GHL catalog
+          (tags / contact fields / opportunity stages). Param name is
+          f_<attr_key> so the fetcher recognizes them generically. */}
+      {dynamicFilters.map((d) => {
+        const name = `f_${d.attr_key}`;
+        const isSelect = d.data_type === 'select' || d.data_type === 'multi';
+        return (
+          <label key={d.attr_key} className="text-xs text-gray-600">
+            {d.label}:{' '}
+            {isSelect ? (
+              <select
+                name={name}
+                defaultValue={current[name] ?? ''}
+                className="rounded-md border border-gray-300 bg-white px-2 py-1 text-sm focus:border-emerald-600 focus:outline-none"
+              >
+                <option value="">all</option>
+                {d.options.map((o) => <option key={o} value={o}>{o}</option>)}
+              </select>
+            ) : (
+              <input
+                type="text"
+                name={name}
+                defaultValue={current[name] ?? ''}
+                placeholder="contains…"
+                className="w-32 rounded-md border border-gray-300 bg-white px-2 py-1 text-sm focus:border-emerald-600 focus:outline-none"
+              />
+            )}
           </label>
         );
       })}
@@ -387,7 +420,11 @@ function Component({
   if (!enabledViews.includes(view)) view = enabledViews[0];
 
   const filters = config.shown_filters ?? studentRosterDefaults.shown_filters;
-  const columns = config.shown_columns ?? studentRosterDefaults.shown_columns;
+  // Static columns + any catalog attrs the school added as columns.
+  const columns: string[] = [
+    ...(config.shown_columns ?? studentRosterDefaults.shown_columns),
+    ...(config.extra_columns ?? []),
+  ];
   const drilldown = config.drilldown_dashboard_slug ?? 'family-hub';
 
   return (
@@ -406,11 +443,18 @@ function Component({
             label={view === 'allergies' ? 'Print allergies' : view === 'grid' ? 'Print grid' : 'Print roster'}
             title="Print the current view (list / grid / allergies)"
           />
+          <a
+            href={`/school/${school.locationId}/roster-settings`}
+            className="rounded-md border border-gray-300 bg-white px-2 py-1 text-xs text-gray-700 hover:bg-gray-50"
+            title="Pick filters & columns from your tags, contact fields, and opportunity stages"
+          >
+            ⚙ Customize
+          </a>
         </div>
       </div>
 
       <div className="print:hidden">
-        <FilterRow filterKeys={filters} options={data.options} current={sp} view={view} />
+        <FilterRow filterKeys={filters} options={data.options} current={sp} view={view} dynamicFilters={data.dynamic_filters} />
       </div>
 
       {view === 'list' ? (
@@ -420,6 +464,7 @@ function Component({
           locationId={school.locationId}
           documentsAudience={config.documents_audience ?? 'all'}
           current={sp}
+          dynamicLabels={data.dynamic_labels}
         />
       ) : view === 'grid' ? (
         <GridView rows={data.page_rows} locationId={school.locationId} drilldownDashboard={drilldown} />

@@ -108,6 +108,7 @@ const statusSet = new Set();
 const pipeSet = new Set();
 
 const tagRows = [];
+const cfvRows = [];   // [contact_id, field_key, value]
 for (const ct of contacts) {
   for (const tg of ct.tags ?? []) {
     const t = valToStr(tg); if (!t) continue;
@@ -117,6 +118,7 @@ for (const ct of contacts) {
   for (const cf of ct.customFields ?? []) {
     const def = cfDefs.get(cf.id); if (!def) continue;
     const v = valToStr(cf.value); if (!v) continue;
+    cfvRows.push([ct.id, def.key, v.slice(0, 2000)]);
     let entry = cfValues.get(def.key);
     if (!entry) { entry = { def, values: new Set(), count: 0 }; cfValues.set(def.key, entry); }
     entry.count++;
@@ -155,6 +157,7 @@ const client = await pool.connect();
 try {
   await client.query('BEGIN');
   await client.query('DELETE FROM ghl_contact_tags WHERE school_id=$1', [SCHOOL_ID]);
+  await client.query('DELETE FROM ghl_contact_field_values WHERE school_id=$1', [SCHOOL_ID]);
   await client.query('DELETE FROM ghl_opportunities WHERE school_id=$1', [SCHOOL_ID]);
   await client.query('DELETE FROM school_filter_catalog WHERE school_id=$1', [SCHOOL_ID]);
 
@@ -163,6 +166,16 @@ try {
     const chunk = tagRows.slice(i, i + 500);
     const vals = chunk.map((_, j) => `($${j*3+1},$${j*3+2},$${j*3+3})`).join(',');
     await client.query(`INSERT INTO ghl_contact_tags (school_id, ghl_contact_id, tag) VALUES ${vals} ON CONFLICT DO NOTHING`, chunk.flat());
+  }
+  // per-contact custom-field values
+  for (let i = 0; i < cfvRows.length; i += 300) {
+    const chunk = cfvRows.slice(i, i + 300);
+    const vals = chunk.map((_, j) => `($1,$${j*3+2},$${j*3+3},$${j*3+4})`).join(',');
+    await client.query(
+      `INSERT INTO ghl_contact_field_values (school_id, ghl_contact_id, field_key, value) VALUES ${vals}
+       ON CONFLICT (school_id, ghl_contact_id, field_key) DO UPDATE SET value=EXCLUDED.value, synced_at=now()`,
+      [SCHOOL_ID, ...chunk.flat()],
+    );
   }
   // opportunities
   for (const o of opps) {
@@ -197,7 +210,7 @@ try {
     );
   }
   await client.query('COMMIT');
-  console.log(`\nWROTE: ${tagRows.length} tag rows, ${opps.length} opportunities, ${catalog.length} catalog attributes.`);
+  console.log(`\nWROTE: ${tagRows.length} tag rows, ${cfvRows.length} field values, ${opps.length} opportunities, ${catalog.length} catalog attributes.`);
 } catch (e) {
   await client.query('ROLLBACK');
   console.error('FAILED, rolled back:', e.message);

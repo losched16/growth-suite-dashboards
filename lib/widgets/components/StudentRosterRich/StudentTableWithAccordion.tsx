@@ -147,13 +147,16 @@ function fmtStartDate(v: string | null): string {
 }
 
 export function StudentTableWithAccordion({
-  rows, columns, locationId, documentsAudience = 'all', current = {},
+  rows, columns, locationId, documentsAudience = 'all', current = {}, dynamicLabels = {},
 }: {
   rows: RosterStudent[];
-  columns: ColumnKey[];
+  // Static ColumnKeys plus any catalog attr_keys ('tag', 'cf:…') the
+  // school added as columns via the self-serve builder.
+  columns: string[];
   locationId: string;
   documentsAudience?: 'teacher' | 'all';
   current?: Record<string, string | undefined>;
+  dynamicLabels?: Record<string, string>;
 }) {
   // Build a header href that toggles asc/desc on the clicked column and
   // preserves all existing URL params (filters, year, view, embed).
@@ -226,8 +229,10 @@ export function StudentTableWithAccordion({
       <table className="w-full text-sm">
         <thead className="border-b border-gray-100 bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-500">
           <tr>{columns.map((c) => {
-            const label = AVAILABLE_COLUMNS.find((x) => x.key === c)?.label ?? c;
-            if (!SORTABLE.has(c)) return <th key={c} className="px-3 py-2 font-medium">{label}</th>;
+            const label = AVAILABLE_COLUMNS.find((x) => x.key === c)?.label ?? dynamicLabels[c] ?? c;
+            // Dynamic (catalog) columns are always sortable.
+            const sortable = SORTABLE.has(c as ColumnKey) || c in dynamicLabels;
+            if (!sortable) return <th key={c} className="px-3 py-2 font-medium">{label}</th>;
             const active = sortKey === c;
             const arrow = active ? (sortDesc ? ' ↓' : ' ↑') : '';
             return (
@@ -265,7 +270,7 @@ function RowGroup({
   s, columns, locationId, documentsAudience, isOpen, detail, onToggle,
 }: {
   s: RosterStudent;
-  columns: ColumnKey[];
+  columns: string[];
   locationId: string;
   documentsAudience: 'teacher' | 'all';
   isOpen: boolean;
@@ -308,13 +313,17 @@ function renderAllergyCell(s: RosterStudent): React.ReactNode {
 
 function renderCell(
   s: RosterStudent,
-  col: ColumnKey,
+  col: string,
   locationId: string,
   isOpen: boolean,
   onToggleFamily: () => void,
   documentsAudience: 'teacher' | 'all' = 'all',
 ): React.ReactNode {
-  switch (col) {
+  // Dynamic (catalog) column: render the resolved display value.
+  if (s.dynamic && s.dynamic[col] !== undefined) {
+    return <span className="text-gray-700 text-xs whitespace-pre-wrap">{s.dynamic[col]}</span>;
+  }
+  switch (col as ColumnKey) {
     case 'student':
       return (
         <span className="font-medium text-gray-900">
@@ -490,8 +499,11 @@ function renderCell(
       );
     }
   }
-  // Unknown column key — silent fallthrough so the renderer stays
-  // backwards-compatible if config_schema gets new keys.
+  // Dynamic column with no value for this student, or unknown key —
+  // render an em-dash so the table stays aligned.
+  if (col.startsWith('cf:') || col === 'tag' || col === 'opp_stage' || col === 'opp_status' || col === 'pipeline') {
+    return <span className="text-gray-400">—</span>;
+  }
   void locationId;
   return null;
 }
