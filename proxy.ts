@@ -162,6 +162,20 @@ async function guardSchool(request: NextRequest) {
           { status: 404, headers: { 'Content-Type': 'text/plain' } },
         );
       }
+      // Standalone schools: NO auto-mint. The open-URL trust model
+      // (unguessable location id) is replaced by the staff magic-link
+      // session — anonymous hits go to /staff instead. The layout's
+      // own gate then re-checks the session it does have. Operators
+      // pass straight through on their own cookie.
+      if (school.require_staff_login) {
+        if (verifySessionToken(request.cookies.get(OPERATOR_COOKIE)?.value)) {
+          return passThroughWithChrome(request);
+        }
+        const url = request.nextUrl.clone();
+        url.pathname = '/staff';
+        url.search = '';
+        return NextResponse.redirect(url, 303);
+      }
       const jwt = await mintSchoolSession({
         school_id: school.id,
         ghl_location_id: school.ghl_location_id,
