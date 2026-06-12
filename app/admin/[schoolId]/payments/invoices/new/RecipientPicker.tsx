@@ -17,16 +17,23 @@ interface FamilyOption { id: string; label: string }
 interface GhlContact {
   id: string; name: string; first_name: string; last_name: string; email: string; phone: string;
 }
+export interface FamilyMember { id: string; name: string }
 
 export function RecipientPicker({
-  schoolId, families, defaultFamilyId,
+  schoolId, families, defaultFamilyId, studentsByFamily = {}, parentsByFamily = {},
 }: {
   schoolId: string;
   families: FamilyOption[];
   defaultFamilyId: string;
+  // Per-family active students/parents so the operator can attribute
+  // the invoice to a STUDENT and choose which parent receives it.
+  studentsByFamily?: Record<string, FamilyMember[]>;
+  parentsByFamily?: Record<string, FamilyMember[]>;
 }) {
   const [mode, setMode] = useState<'family' | 'anyone'>(defaultFamilyId ? 'family' : 'family');
   const [familyId, setFamilyId] = useState(defaultFamilyId);
+  const famStudents = studentsByFamily[familyId] ?? [];
+  const famParents = parentsByFamily[familyId] ?? [];
 
   // "Anyone" state
   const [search, setSearch] = useState('');
@@ -101,6 +108,34 @@ export function RecipientPicker({
             <option value="">— select a family —</option>
             {families.map((f) => <option key={f.id} value={f.id}>{f.label}</option>)}
           </select>
+          {familyId && (famStudents.length > 0 || famParents.length > 0) ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
+              <label className="block">
+                <span className="text-[10px] uppercase tracking-wide text-zinc-500">Attribute to student</span>
+                <select
+                  name="student_id"
+                  defaultValue={famStudents.length === 1 ? famStudents[0].id : ''}
+                  key={`st-${familyId}`}
+                  className="mt-0.5 w-full rounded border border-zinc-300 px-2 py-1.5 text-sm"
+                >
+                  <option value="">Whole family (no specific student)</option>
+                  {famStudents.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                </select>
+              </label>
+              <label className="block">
+                <span className="text-[10px] uppercase tracking-wide text-zinc-500">Send bill to</span>
+                <select
+                  name="responsible_parent_id"
+                  defaultValue=""
+                  key={`pa-${familyId}`}
+                  className="mt-0.5 w-full rounded border border-zinc-300 px-2 py-1.5 text-sm"
+                >
+                  <option value="">All parents in family</option>
+                  {famParents.map((p) => <option key={p.id} value={p.id}>{p.name} only</option>)}
+                </select>
+              </label>
+            </div>
+          ) : null}
         </>
       ) : (
         <div className="space-y-2">

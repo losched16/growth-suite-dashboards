@@ -17,6 +17,7 @@ interface InvoiceRow {
   invoice_number: string;
   school_id: string;
   family_id: string | null;
+  responsible_parent_id: string | null;
   recipient_name: string | null;
   recipient_email: string | null;
   recipient_ghl_contact_id: string | null;

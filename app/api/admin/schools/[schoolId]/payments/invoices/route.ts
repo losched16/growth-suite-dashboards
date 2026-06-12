@@ -137,17 +137,42 @@ export async function POST(request: NextRequest, { params }: { params: Params })
   // the operator typed. Mirror of the parent-portal form-submission flow
   // so manual invoices honor the same per-school discount rules.
   const redemptionCode = String(fd.get('redemption_code') ?? '').trim();
-  // Resolve student_id for the family: if exactly one active student,
-  // attribute the invoice to them so per-student auto rules (e.g.
-  // "applies to a particular child") have the right context. Non-family
-  // invoices have no student + no auto-discount evaluation.
+  // Student attribution: the operator's explicit pick wins (validated
+  // to belong to the family); otherwise fall back to auto-resolution
+  // (single-active-student families). Non-family invoices have no
+  // student + no auto-discount evaluation.
   let studentId: string | null = null;
   if (familyId) {
-    const { rows: stRows } = await query<{ id: string }>(
-      `SELECT id FROM students WHERE family_id = $1 AND status = 'active' ORDER BY first_name LIMIT 2`,
-      [familyId],
-    );
-    if (stRows.length === 1) studentId = stRows[0].id;
+    const pickedStudent = String(fd.get('student_id') ?? '').trim();
+    if (pickedStudent) {
+      const { rows: ok } = await query<{ id: string }>(
+        `SELECT id FROM students WHERE id = $1 AND family_id = $2 AND school_id = $3`,
+        [pickedStudent, familyId, schoolId],
+      );
+      if (ok.length > 0) studentId = ok[0].id;
+    }
+    if (!studentId) {
+      const { rows: stRows } = await query<{ id: string }>(
+        `SELECT id FROM students WHERE family_id = $1 AND status = 'active' ORDER BY first_name LIMIT 2`,
+        [familyId],
+      );
+      if (stRows.length === 1) studentId = stRows[0].id;
+    }
+  }
+
+  // Recipient choice: bill a SPECIFIC parent (divorced/split households,
+  // or "grandma pays for this one"). Validated to the family; the email
+  // + portal visibility then target only that parent.
+  let responsibleParentId: string | null = null;
+  if (familyId) {
+    const pickedParent = String(fd.get('responsible_parent_id') ?? '').trim();
+    if (pickedParent) {
+      const { rows: ok } = await query<{ id: string }>(
+        `SELECT id FROM parents WHERE id = $1 AND family_id = $2 AND school_id = $3 AND status = 'active'`,
+        [pickedParent, familyId, schoolId],
+      );
+      if (ok.length > 0) responsibleParentId = ok[0].id;
+    }
   }
 
   type DiscountEval = Awaited<ReturnType<typeof evaluateDiscounts>>;
@@ -196,9 +221,10 @@ export async function POST(request: NextRequest, { params }: { params: Params })
             status, subtotal_cents, platform_fee_cents, discount_total_cents,
             total_cents, due_at, issued_at, source,
             includes_platform_setup_fee, created_by_email,
-            recipient_name, recipient_email, recipient_ghl_contact_id, public_pay_token)
+            recipient_name, recipient_email, recipient_ghl_contact_id, public_pay_token,
+            responsible_parent_id)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
-                 'manual', $14, $15, $16, $17, $18, $19)
+                 'manual', $14, $15, $16, $17, $18, $19, $20)
          RETURNING id`,
         [
           schoolId, familyId, studentId, invoiceNumber, title, description,
@@ -209,6 +235,7 @@ export async function POST(request: NextRequest, { params }: { params: Params })
           includesSetupFee,
           'operator@growthsuite.local',
           recipientName, recipientEmail, recipientGhlContactId, publicPayToken,
+          responsibleParentId,
         ],
       );
       const invoiceId = insR.rows[0].id;

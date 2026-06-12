@@ -53,6 +53,22 @@ export default async function NewInvoiceScoped({
     [schoolId],
   );
 
+  // Per-family students + parents for the attribution selects.
+  const { rows: studentRows } = await query<{ family_id: string; id: string; name: string }>(
+    `SELECT family_id, id, CONCAT_WS(' ', COALESCE(NULLIF(preferred_name, ''), first_name), last_name) AS name
+       FROM students WHERE school_id = $1 AND status = 'active' ORDER BY first_name`,
+    [schoolId],
+  );
+  const { rows: parentRows } = await query<{ family_id: string; id: string; name: string }>(
+    `SELECT family_id, id, CONCAT_WS(' ', first_name, last_name) AS name
+       FROM parents WHERE school_id = $1 AND status = 'active' ORDER BY is_primary DESC, first_name`,
+    [schoolId],
+  );
+  const studentsByFamily: Record<string, Array<{ id: string; name: string }>> = {};
+  for (const s of studentRows) (studentsByFamily[s.family_id] ??= []).push({ id: s.id, name: s.name });
+  const parentsByFamily: Record<string, Array<{ id: string; name: string }>> = {};
+  for (const p of parentRows) (parentsByFamily[p.family_id] ??= []).push({ id: p.id, name: p.name });
+
   let setupFeePaid = false;
   if (sp.family) {
     const { rows: fr } = await query<{ paid: boolean }>(
@@ -100,7 +116,13 @@ export default async function NewInvoiceScoped({
               create. The API validates the path before honoring it. */}
           <input type="hidden" name="return_to" value={returnTo} />
 
-          <RecipientPicker schoolId={schoolId} families={families} defaultFamilyId={sp.family ?? ''} />
+          <RecipientPicker
+            schoolId={schoolId}
+            families={families}
+            defaultFamilyId={sp.family ?? ''}
+            studentsByFamily={studentsByFamily}
+            parentsByFamily={parentsByFamily}
+          />
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <label className="block sm:col-span-2">

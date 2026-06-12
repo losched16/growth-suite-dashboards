@@ -11,7 +11,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
 import { query } from '@/lib/db';
-import { RosterImportClient } from './RosterImportClient';
+import { RosterImportClient } from '@/components/roster/RosterImportClient';
 
 export const dynamic = 'force-dynamic';
 

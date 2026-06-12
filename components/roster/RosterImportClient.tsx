@@ -1,15 +1,17 @@
 'use client';
 
-// Client component for the roster importer. Three states:
-//   1. Editing  — paste textarea, Preview button
+// Roster CSV import flow, shared by the operator page
+// (/admin/[schoolId]/roster-import) and the school-facing page
+// (/school/[locationId]/roster-import). Three states:
+//   1. Editing  — upload a .csv or paste, Preview button
 //   2. Previewing — show counts + sample names + errors, Apply / Edit again
-//   3. Applied  — show success summary, link back to /admin/{schoolId}
+//   3. Applied  — show success summary, link onward
 //
 // Preview and apply both POST to the same API endpoint with different
 // op values. No client-side parsing — server is the source of truth.
 
-import { useState } from 'react';
-import { AlertCircle, CheckCircle2, FileText, Loader2, Send } from 'lucide-react';
+import { useRef, useState } from 'react';
+import { AlertCircle, CheckCircle2, Download, FileText, Loader2, Send, Upload } from 'lucide-react';
 
 interface PreviewSample {
   new_families: string[];
@@ -31,23 +33,75 @@ interface ParseError {
   message: string;
 }
 
-export function RosterImportClient({ schoolId }: { schoolId: string }) {
+const TEMPLATE_CSV = [
+  'family_name,primary_parent_first,primary_parent_last,primary_parent_email,primary_parent_phone,second_parent_first,second_parent_last,second_parent_email,second_parent_phone,student_first,student_last,student_dob,classroom,program',
+  'Smith Family,Jane,Smith,jane@example.com,555-555-1234,John,Smith,john@example.com,555-555-5678,Emma,Smith,2020-04-15,Sunflower,Primary',
+  'Smith Family,Jane,Smith,jane@example.com,555-555-1234,John,Smith,john@example.com,555-555-5678,Liam,Smith,2018-09-02,Maple,Lower Elementary',
+].join('\n');
+
+interface Props {
+  schoolId: string;
+  // Defaults preserve the original operator-page behavior.
+  endpoint?: string;
+  doneHref?: string;
+  doneLabel?: string;
+  // School-facing endpoint reads school_id from the form body.
+  sendSchoolId?: boolean;
+}
+
+export function RosterImportClient({
+  schoolId,
+  endpoint,
+  doneHref,
+  doneLabel,
+  sendSchoolId,
+}: Props) {
+  const apiUrl = endpoint ?? `/api/admin/schools/${schoolId}/roster-import`;
+  const finishedHref = doneHref ?? `/admin/${schoolId}`;
+  const finishedLabel = doneLabel ?? 'Back to school';
+
   const [csv, setCsv] = useState<string>('');
+  const [fileName, setFileName] = useState<string | null>(null);
   const [stage, setStage] = useState<'editing' | 'previewing' | 'applying' | 'applied'>('editing');
   const [busy, setBusy] = useState(false);
   const [preview, setPreview] = useState<PreviewData | null>(null);
   const [errors, setErrors] = useState<ParseError[]>([]);
   const [topLevelError, setTopLevelError] = useState<string | null>(null);
   const [appliedResult, setAppliedResult] = useState<{ students_to_create: number; duration_ms: number } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  function buildForm(op: 'preview' | 'apply'): FormData {
+    const fd = new FormData();
+    fd.set('csv', csv);
+    fd.set('op', op);
+    if (sendSchoolId) fd.set('school_id', schoolId);
+    return fd;
+  }
+
+  async function onFilePicked(file: File | undefined) {
+    if (!file) return;
+    const text = await file.text();
+    setCsv(text);
+    setFileName(file.name);
+    setStage('editing');
+    setTopLevelError(null);
+  }
+
+  function downloadTemplate() {
+    const blob = new Blob([TEMPLATE_CSV], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'roster-template.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+  }
 
   async function doPreview() {
     setBusy(true);
     setTopLevelError(null);
     try {
-      const fd = new FormData();
-      fd.set('csv', csv);
-      fd.set('op', 'preview');
-      const r = await fetch(`/api/admin/schools/${schoolId}/roster-import`, { method: 'POST', body: fd });
+      const r = await fetch(apiUrl, { method: 'POST', body: buildForm('preview') });
       const body = await r.json().catch(() => ({}));
       if (!r.ok || !body.ok) {
         setTopLevelError(body.error ?? `HTTP ${r.status}`);
@@ -70,10 +124,7 @@ export function RosterImportClient({ schoolId }: { schoolId: string }) {
     setBusy(true);
     setTopLevelError(null);
     try {
-      const fd = new FormData();
-      fd.set('csv', csv);
-      fd.set('op', 'apply');
-      const r = await fetch(`/api/admin/schools/${schoolId}/roster-import`, { method: 'POST', body: fd });
+      const r = await fetch(apiUrl, { method: 'POST', body: buildForm('apply') });
       const body = await r.json().catch(() => ({}));
       if (!r.ok || !body.ok) {
         setTopLevelError(body.error ?? `HTTP ${r.status}`);
@@ -101,12 +152,12 @@ export function RosterImportClient({ schoolId }: { schoolId: string }) {
           Created <strong>{appliedResult.students_to_create}</strong> new student{appliedResult.students_to_create === 1 ? '' : 's'} (existing records reused). Took {appliedResult.duration_ms}ms.
         </p>
         <div className="flex items-center gap-3 pt-2">
-          <a href={`/admin/${schoolId}`} className="inline-flex items-center gap-1.5 rounded-md bg-emerald-700 px-3 py-1.5 text-sm font-semibold text-white hover:bg-emerald-800">
-            Back to school
+          <a href={finishedHref} className="inline-flex items-center gap-1.5 rounded-md bg-emerald-700 px-3 py-1.5 text-sm font-semibold text-white hover:bg-emerald-800">
+            {finishedLabel}
           </a>
           <button
             type="button"
-            onClick={() => { setCsv(''); setPreview(null); setAppliedResult(null); setStage('editing'); }}
+            onClick={() => { setCsv(''); setFileName(null); setPreview(null); setAppliedResult(null); setStage('editing'); }}
             className="text-xs text-slate-600 hover:text-slate-900 underline"
           >
             Import another CSV
@@ -128,14 +179,39 @@ export function RosterImportClient({ schoolId }: { schoolId: string }) {
       {/* Stage 1: editing */}
       {(stage === 'editing' || stage === 'previewing') ? (
         <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".csv,text/csv"
+              className="hidden"
+              onChange={(e) => onFilePicked(e.target.files?.[0])}
+            />
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            >
+              <Upload className="h-4 w-4" /> Upload CSV file
+            </button>
+            <button
+              type="button"
+              onClick={downloadTemplate}
+              className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            >
+              <Download className="h-4 w-4" /> Download template
+            </button>
+            {fileName ? <span className="text-xs text-slate-500">Loaded: <span className="font-mono">{fileName}</span></span> : null}
+          </div>
+
           <label className="block">
-            <span className="text-sm font-semibold text-slate-900">Paste CSV</span>
+            <span className="text-sm font-semibold text-slate-900">Or paste CSV</span>
             <span className="block text-[11px] text-slate-500 mt-0.5">
               Include the header row. See the expected columns above.
             </span>
             <textarea
               value={csv}
-              onChange={(e) => { setCsv(e.target.value); if (stage === 'previewing') setStage('editing'); }}
+              onChange={(e) => { setCsv(e.target.value); setFileName(null); if (stage === 'previewing') setStage('editing'); }}
               rows={14}
               placeholder="family_name,primary_parent_first,primary_parent_last,primary_parent_email,student_first,student_last,student_dob,classroom,program&#10;Smith Family,Jane,Smith,jane@example.com,Emma,Smith,2020-04-15,Sunflower,Primary"
               className="mt-2 block w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-xs font-mono focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-200"
