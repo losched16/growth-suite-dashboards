@@ -15,6 +15,7 @@ import {
 } from './config';
 import { fetcher, type FamilyHubData } from './fetcher';
 import { DownloadCsvButton } from '@/components/DownloadCsvButton';
+import { SyncGhlButton } from '@/lib/widgets/components/_shared/SyncGhlButton';
 import { AccordionTable } from './AccordionTable';
 import { PreserveEmbedParams, clearHref } from '@/lib/widgets/components/_shared/PreserveEmbedParams';
 import { AutoSubmitForm } from '@/lib/widgets/components/_shared/AutoSubmitForm';
@@ -188,7 +189,10 @@ function Component({
             {data.stats.students} students · {data.stats.enrolled} enrolled · {data.stats.accepted} accepted · {data.stats.pending} pending
           </p>
         </div>
-        <DownloadCsvButton href={exportHref} label={isFiltered ? 'Download filtered CSV' : 'Download CSV'} />
+        <div className="flex items-center gap-2 print:hidden">
+          <SyncGhlButton locationId={school.locationId} />
+          <DownloadCsvButton href={exportHref} label={isFiltered ? 'Download filtered CSV' : 'Download CSV'} />
+        </div>
       </div>
 
       {showStats ? (

@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { LayoutGrid, List as ListIcon, AlertTriangle } from 'lucide-react';
 import { DocumentsCell } from './DocumentsCell';
 import { PrintButton } from '@/lib/widgets/components/_shared/PrintButton';
+import { SyncGhlButton } from '@/lib/widgets/components/_shared/SyncGhlButton';
 import { StudentTableWithAccordion } from './StudentTableWithAccordion';
 import type { WidgetDefinition, SchoolContext, WidgetSearchParams } from '@/lib/widgets/types';
 import {
@@ -438,6 +439,7 @@ function Component({
           </p>
         </div>
         <div className="flex items-center gap-2 print:hidden">
+          <SyncGhlButton locationId={school.locationId} />
           <ViewToggle view={view} current={sp} />
           <PrintButton
             label={view === 'allergies' ? 'Print allergies' : view === 'grid' ? 'Print grid' : 'Print roster'}
