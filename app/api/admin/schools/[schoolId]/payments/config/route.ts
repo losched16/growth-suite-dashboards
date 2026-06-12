@@ -69,14 +69,21 @@ export async function POST(request: NextRequest, { params }: { params: Params })
     const ghlWebhookUrl = ghlWebhookRaw && /^https:\/\/[^\s]+$/i.test(ghlWebhookRaw)
       ? ghlWebhookRaw.slice(0, 1000)
       : null;
+    // Currency (USD/CAD — standalone Canadian schools). Forms that don't
+    // include the field send nothing; pass NULL and COALESCE keeps the
+    // existing value instead of resetting it.
+    const currencyRaw = fd.get('default_currency');
+    const currency = currencyRaw !== null && ['usd', 'cad'].includes(String(currencyRaw).toLowerCase())
+      ? String(currencyRaw).toLowerCase()
+      : null;
 
     await query(
       `INSERT INTO school_payment_config
          (school_id, pass_card_fee, pass_ach_fee, processing_fee_label,
           autopay_days, late_fee_amount_cents, late_fee_grace_days,
           card_enabled, ach_enabled, invoice_number_prefix,
-          ghl_receipt_webhook_url)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+          ghl_receipt_webhook_url, default_currency)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, COALESCE($12, 'usd'))
        ON CONFLICT (school_id) DO UPDATE SET
          pass_card_fee = EXCLUDED.pass_card_fee,
          pass_ach_fee = EXCLUDED.pass_ach_fee,
@@ -88,9 +95,10 @@ export async function POST(request: NextRequest, { params }: { params: Params })
          ach_enabled = EXCLUDED.ach_enabled,
          invoice_number_prefix = EXCLUDED.invoice_number_prefix,
          ghl_receipt_webhook_url = EXCLUDED.ghl_receipt_webhook_url,
+         default_currency = COALESCE($12, school_payment_config.default_currency),
          updated_at = now()`,
       [schoolId, passCard, passAch, feeLabel, days, lateFeeCents, graceDays,
-       cardEnabled, achEnabled, invoicePrefix, ghlWebhookUrl],
+       cardEnabled, achEnabled, invoicePrefix, ghlWebhookUrl, currency],
     );
 
     return back(request, schoolId, { msg: 'Billing config saved.' }, returnTo);

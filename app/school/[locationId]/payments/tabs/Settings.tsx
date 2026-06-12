@@ -24,6 +24,7 @@ interface ConfigRow {
   ach_enabled: boolean;
   invoice_number_prefix: string;
   ghl_receipt_webhook_url: string | null;
+  default_currency: string;
   // Loaded only to round-trip as hidden inputs — this compact embed
   // form doesn't edit them, but the shared config endpoint resets any
   // field absent from the POST, so we echo them back unchanged.
@@ -38,7 +39,7 @@ export async function PaymentsHubSettings({
   const { rows: cfgRows } = await query<ConfigRow>(
     `SELECT pass_card_fee, pass_ach_fee, processing_fee_label,
             card_enabled, ach_enabled, invoice_number_prefix,
-            ghl_receipt_webhook_url,
+            ghl_receipt_webhook_url, default_currency,
             autopay_days, late_fee_amount_cents, late_fee_grace_days
        FROM school_payment_config WHERE school_id = $1`,
     [schoolId],
@@ -49,6 +50,7 @@ export async function PaymentsHubSettings({
     card_enabled: true, ach_enabled: true,
     invoice_number_prefix: 'INV',
     ghl_receipt_webhook_url: null,
+    default_currency: 'usd',
     autopay_days: [1, 15], late_fee_amount_cents: 0, late_fee_grace_days: 3,
   };
 
@@ -119,6 +121,16 @@ export async function PaymentsHubSettings({
           <SettingsGroup title="Invoice numbering">
             <Field label="Invoice prefix">
               <input type="text" name="invoice_number_prefix" defaultValue={cfg.invoice_number_prefix} className={inputCls} />
+            </Field>
+          </SettingsGroup>
+
+          <SettingsGroup title="Currency"
+            description="The currency parents are charged in. Applies to new payments — change this before sending invoices, not mid-cycle.">
+            <Field label="Currency">
+              <select name="default_currency" defaultValue={(cfg.default_currency ?? 'usd').toLowerCase()} className={inputCls}>
+                <option value="usd">USD — US Dollar</option>
+                <option value="cad">CAD — Canadian Dollar</option>
+              </select>
             </Field>
           </SettingsGroup>
 
