@@ -11,6 +11,14 @@ import type { StudentRosterConfig } from './config';
 // "No" we'd rather pick a real description from a fallback source.
 const NULLISH_TEXT = new Set(['', 'no', 'none', 'n/a', 'na', 'no.', 'none.', 'yes', 'yes.']);
 
+// Per-student contact-field slot convention (desert-garden style):
+// slot 1 'student_<base>', slots 2-4 'student_<n>_<base>'. Used to
+// resolve a per-student attr to the ROW student's own slot rather than
+// the contact's slot-1 values (which would repeat a sibling's data).
+const STUDENT_SLOT_KEY_RE = /^student_(?:([2-4])_)?(.+)$/;
+const slotFieldKey = (slot: number, base: string): string =>
+  slot === 1 ? `student_${base}` : `student_${slot}_${base}`;
+
 // Pick the most informative text out of any number of candidates.
 // Priority: longest non-nullish string wins. Falls back to the bare
 // "Yes" / "No" flag if NOTHING has prose, so the caller can still tell
@@ -387,7 +395,19 @@ export async function fetcher(
       }
     }
 
-    const cfKeys = [...activeAttrs].filter((a) => a.startsWith('cf:')).map((a) => a.slice(3));
+    // Per-student slot fields (student_<base> / student_<2-4>_<base>)
+    // resolve to the ROW student's own slot, so picking "Student ID"
+    // never shows a sibling's value. Load every slot variant of any
+    // student_* key in play so the per-slot lookup has data.
+    const cfKeySet = new Set<string>();
+    for (const a of activeAttrs) {
+      if (!a.startsWith('cf:')) continue;
+      const key = a.slice(3);
+      cfKeySet.add(key);
+      const m = STUDENT_SLOT_KEY_RE.exec(key);
+      if (m) for (let sl = 1; sl <= 4; sl++) cfKeySet.add(slotFieldKey(sl, m[2]));
+    }
+    const cfKeys = [...cfKeySet];
     if (cfKeys.length > 0) {
       const { rows: cfvRows } = await query<{ ghl_contact_id: string; field_key: string; value: string }>(
         `SELECT ghl_contact_id, field_key, value FROM ghl_contact_field_values
@@ -432,14 +452,37 @@ export async function fetcher(
         if (tags.size) out.tag = [...tags].sort().join(', ');
       } else if (attr.startsWith('cf:')) {
         const key = attr.slice(3);
-        // students.metadata wins (slot-resolved, per-student); contact
-        // value is the fallback (family/contact-level fields).
-        const mdVal = md[key];
-        let v = mdVal != null && String(mdVal).trim() !== '' ? String(mdVal) : '';
-        if (!v) {
-          for (const cid of contactIds) {
-            const cv = cfvByContact.get(cid)?.get(key);
-            if (cv) { v = cv; break; }
+        const slotMatch = STUDENT_SLOT_KEY_RE.exec(key);
+        let v = '';
+        if (slotMatch) {
+          // Per-student field. The row student's own metadata wins
+          // (the import stores values under the base key; GHL's slot
+          // base 'id' maps to metadata 'unique_id'); the contact-field
+          // fallback reads THIS student's slot, never a sibling's.
+          const base = slotMatch[2];
+          const mdKey = base === 'id' ? 'unique_id' : base;
+          const mdVal = md[mdKey];
+          v = mdVal != null && String(mdVal).trim() !== '' ? String(mdVal) : '';
+          if (!v) {
+            const slot = parseInt(String(md.ghl_slot ?? ''), 10);
+            if (Number.isInteger(slot) && slot >= 1 && slot <= 4) {
+              const sk = slotFieldKey(slot, base);
+              for (const cid of contactIds) {
+                const cv = cfvByContact.get(cid)?.get(sk);
+                if (cv) { v = cv; break; }
+              }
+            }
+          }
+        } else {
+          // Family/contact-level field — metadata first, then any
+          // linked contact's value.
+          const mdVal = md[key];
+          v = mdVal != null && String(mdVal).trim() !== '' ? String(mdVal) : '';
+          if (!v) {
+            for (const cid of contactIds) {
+              const cv = cfvByContact.get(cid)?.get(key);
+              if (cv) { v = cv; break; }
+            }
           }
         }
         if (v) out[attr] = v;
