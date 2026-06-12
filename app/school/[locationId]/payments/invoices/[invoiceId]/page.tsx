@@ -138,6 +138,17 @@ export default async function InvoiceDetailScoped({
   const parentPayUrl = inv.public_pay_token
     ? `${portalBase}/pay/invoice/${inv.id}?t=${inv.public_pay_token}`
     : `${portalBase}/billing/pay/${inv.id}`;
+
+  // Family account credit available (sum of unconsumed credits).
+  let creditAvailable = 0;
+  if (inv.family_id) {
+    const { rows: cr } = await query<{ total: number }>(
+      `SELECT COALESCE(SUM(remaining_cents), 0)::int AS total
+         FROM family_credits WHERE school_id = $1 AND family_id = $2 AND remaining_cents > 0`,
+      [schoolId, inv.family_id],
+    );
+    creditAvailable = cr[0]?.total ?? 0;
+  }
   // Bouncing back from action forms (send/void/autopay) — keeps operator
   // inside the iframe. Each form posts this in a hidden field.
   const returnTo = `/school/${locationId}/payments/invoices/${invoiceId}`;
@@ -251,6 +262,26 @@ export default async function InvoiceDetailScoped({
               lastAttemptedAt={inv.last_autopay_attempted_at}
               methods={methods}
             />
+          ) : null}
+
+          {/* Family credit — apply available account credit to this
+              invoice. Only when there's a family + a balance due. */}
+          {inv.family_id && ['draft', 'open', 'partially_paid'].includes(inv.status) && creditAvailable > 0 ? (
+            <div className="flex items-center justify-between gap-3 rounded-md border border-emerald-200 bg-emerald-50/40 px-3 py-2">
+              <div className="text-sm text-emerald-900">
+                <span className="font-semibold">${(creditAvailable / 100).toFixed(2)} family credit available.</span>
+                <span className="ml-1 text-xs text-emerald-800">Applying covers up to the balance due; leftover credit stays on the account.</span>
+              </div>
+              <form action="/api/school/family-credits" method="POST">
+                <input type="hidden" name="action" value="apply" />
+                <input type="hidden" name="school_id" value={schoolId} />
+                <input type="hidden" name="invoice_id" value={inv.id} />
+                <input type="hidden" name="return_to" value={returnTo} />
+                <button type="submit" className="rounded-md bg-emerald-700 px-3 py-1.5 text-sm font-semibold text-white hover:bg-emerald-800 whitespace-nowrap">
+                  Apply credit
+                </button>
+              </form>
+            </div>
           ) : null}
 
           <div className="flex flex-wrap gap-2 pt-3 border-t border-slate-100">

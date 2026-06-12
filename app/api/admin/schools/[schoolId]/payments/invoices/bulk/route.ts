@@ -1,0 +1,172 @@
+// POST /api/admin/schools/{schoolId}/payments/invoices/bulk
+//
+// Create the SAME invoice (title + line items + due date) for many
+// families at once — e.g. "bill every Lower El family the $35 field
+// trip fee". One invoice per family (a family with three matching
+// students still gets ONE invoice).
+//
+// Audience (form fields audience_type / audience_value):
+//   all              → every family with ≥1 active student
+//   program:<value>  → families with an active student in that program
+//   homeroom:<value> → families with an active student in that homeroom
+//
+// Auto-discount policies are intentionally NOT applied to bulk
+// invoices — bulk is for flat fees; per-family discount math belongs
+// to tuition plans and single invoices.
+//
+// send_now=1 → invoices open + email/GHL-workflow fires per family.
+// Otherwise drafts (review, then send individually or go bulk again).
+
+import { randomBytes } from 'node:crypto';
+import { NextResponse } from 'next/server';
+import type { NextRequest } from 'next/server';
+import { query, withTransaction } from '@/lib/db';
+import { sendInvoiceEmail } from '@/lib/billing/send-invoice-email';
+
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+export const maxDuration = 300;
+
+type Params = Promise<{ schoolId: string }>;
+
+function safeReturn(returnTo: string | null, fallback: string): string {
+  if (returnTo && /^\/(admin|school)\/[A-Za-z0-9_-]+(\/[^?#]*)?(\?[^#]*)?$/.test(returnTo)) return returnTo;
+  return fallback;
+}
+function back(request: NextRequest, schoolId: string, q: { msg?: string; err?: string }, returnTo: string | null) {
+  const url = request.nextUrl.clone();
+  const target = safeReturn(returnTo, `/admin/${schoolId}/payments`);
+  const [path, qs] = target.split('?');
+  url.pathname = path;
+  url.search = qs ? `?${qs}` : '';
+  if (q.msg) url.searchParams.set('msg', q.msg);
+  if (q.err) url.searchParams.set('err', q.err);
+  return NextResponse.redirect(url, 303);
+}
+function dollarsToCents(raw: string): number {
+  const n = parseFloat(raw);
+  if (!Number.isFinite(n) || n < 0) return 0;
+  return Math.round(n * 100);
+}
+
+export async function POST(request: NextRequest, { params }: { params: Params }) {
+  const { schoolId } = await params;
+  const fd = await request.formData();
+  const returnTo = String(fd.get('return_to') ?? '').trim() || null;
+
+  const audienceType = String(fd.get('audience_type') ?? 'all').trim();
+  const audienceValue = String(fd.get('audience_value') ?? '').trim();
+  const title = String(fd.get('title') ?? '').trim();
+  const description = String(fd.get('description') ?? '').trim() || null;
+  const dueDate = String(fd.get('due_date') ?? '').trim();
+  const sendNow = fd.get('send_now') === '1';
+
+  if (!title) return back(request, schoolId, { err: 'Title is required.' }, returnTo);
+  if (!dueDate) return back(request, schoolId, { err: 'Due date is required.' }, returnTo);
+
+  const lines: Array<{ description: string; quantity: number; unit_amount_cents: number; amount_cents: number; category: string | null }> = [];
+  for (let i = 0; i < 50; i++) {
+    const d = String(fd.get(`line_description_${i}`) ?? '').trim();
+    const qn = parseInt(String(fd.get(`line_quantity_${i}`) ?? '0'), 10);
+    const u = dollarsToCents(String(fd.get(`line_unit_amount_${i}`) ?? '0'));
+    const cat = String(fd.get(`line_category_${i}`) ?? '').trim().toLowerCase();
+    if (!d || !qn || u <= 0) continue;
+    lines.push({ description: d, quantity: qn, unit_amount_cents: u, amount_cents: qn * u, category: cat || null });
+  }
+  if (lines.length === 0) return back(request, schoolId, { err: 'Add at least one line item.' }, returnTo);
+  const subtotalCents = lines.reduce((a, l) => a + l.amount_cents, 0);
+
+  // Resolve target families.
+  let familyRows: Array<{ family_id: string }>;
+  if (audienceType === 'program' && audienceValue) {
+    // The picker lists programs AND homerooms in one dropdown — match
+    // the value against either so the operator never has to care which
+    // kind it is.
+    ({ rows: familyRows } = await query<{ family_id: string }>(
+      `SELECT DISTINCT s.family_id FROM students s JOIN families f ON f.id = s.family_id
+        WHERE s.school_id = $1 AND s.status = 'active' AND f.status = 'active'
+          AND (s.metadata->>'program' = $2 OR s.metadata->>'homeroom' = $2)`,
+      [schoolId, audienceValue],
+    ));
+  } else if (audienceType === 'homeroom' && audienceValue) {
+    ({ rows: familyRows } = await query<{ family_id: string }>(
+      `SELECT DISTINCT s.family_id FROM students s JOIN families f ON f.id = s.family_id
+        WHERE s.school_id = $1 AND s.status = 'active' AND f.status = 'active'
+          AND s.metadata->>'homeroom' = $2`,
+      [schoolId, audienceValue],
+    ));
+  } else {
+    ({ rows: familyRows } = await query<{ family_id: string }>(
+      `SELECT DISTINCT s.family_id FROM students s JOIN families f ON f.id = s.family_id
+        WHERE s.school_id = $1 AND s.status = 'active' AND f.status = 'active'`,
+      [schoolId],
+    ));
+  }
+  if (familyRows.length === 0) {
+    return back(request, schoolId, { err: 'No families match that audience.' }, returnTo);
+  }
+
+  const dueAtIso = new Date(dueDate + 'T23:59:59Z').toISOString();
+  const issuedAt = sendNow ? new Date().toISOString() : null;
+  const createdIds: string[] = [];
+
+  try {
+    for (const fam of familyRows) {
+      // Per-invoice number (atomic bump, same scheme as single create).
+      const { rows: cfgRows } = await query<{ prefix: string; next: number }>(
+        `INSERT INTO school_payment_config (school_id) VALUES ($1)
+         ON CONFLICT (school_id) DO UPDATE SET next_invoice_number = school_payment_config.next_invoice_number + 1
+         RETURNING invoice_number_prefix AS prefix, next_invoice_number AS next`,
+        [schoolId],
+      );
+      const seq = cfgRows[0].next > 1 ? cfgRows[0].next - 1 : 1;
+      const invoiceNumber = `${cfgRows[0].prefix}-${String(seq).padStart(6, '0')}`;
+      const token = randomBytes(18).toString('hex');
+
+      const invoiceId = await withTransaction(async (q) => {
+        const ins = await q<{ id: string }>(
+          `INSERT INTO invoices
+             (school_id, family_id, invoice_number, title, description, status,
+              subtotal_cents, platform_fee_cents, discount_total_cents, total_cents,
+              due_at, issued_at, source, includes_platform_setup_fee,
+              created_by_email, public_pay_token)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,0,0,$7,$8,$9,'bulk',false,'operator@growthsuite.local',$10)
+           RETURNING id`,
+          [schoolId, fam.family_id, invoiceNumber, title, description,
+           sendNow ? 'open' : 'draft', subtotalCents, dueAtIso, issuedAt, token],
+        );
+        const id = ins.rows[0].id;
+        let pos = 0;
+        for (const l of lines) {
+          await q(
+            `INSERT INTO invoice_line_items
+               (invoice_id, position, description, quantity, unit_amount_cents, amount_cents, category)
+             VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+            [id, pos++, l.description, l.quantity, l.unit_amount_cents, l.amount_cents, l.category],
+          );
+        }
+        return id;
+      });
+      createdIds.push(invoiceId);
+    }
+
+    // Delivery — best-effort per invoice; failures don't abort the batch.
+    let emailed = 0;
+    if (sendNow) {
+      for (const id of createdIds) {
+        try {
+          const r = await sendInvoiceEmail({ invoiceId: id });
+          if (r.ghl_notified || r.sent_to.length > 0) emailed++;
+        } catch { /* per-invoice best-effort */ }
+      }
+    }
+
+    const msg = sendNow
+      ? `Bulk invoice sent: ${createdIds.length} invoices created, ${emailed} delivered (${(subtotalCents / 100).toLocaleString('en-US', { style: 'currency', currency: 'USD' })} each).`
+      : `Bulk invoice: ${createdIds.length} DRAFT invoices created (${(subtotalCents / 100).toLocaleString('en-US', { style: 'currency', currency: 'USD' })} each). Review them in the Invoices tab, then send.`;
+    return back(request, schoolId, { msg }, returnTo);
+  } catch (err) {
+    const m = err instanceof Error ? err.message : String(err);
+    return back(request, schoolId, { err: `Bulk invoicing failed after ${createdIds.length} invoices: ${m}` }, returnTo);
+  }
+}

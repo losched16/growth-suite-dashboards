@@ -7,9 +7,9 @@ import { query } from '@/lib/db';
 import { HelpCallout } from '@/components/HelpCallout';
 
 export async function PaymentsHubInvoices({
-  schoolId, locationId,
-}: { schoolId: string; locationId: string }) {
-  const { rows: invoices } = await query<{
+  schoolId, locationId, q = '', statusFilter = '',
+}: { schoolId: string; locationId: string; q?: string; statusFilter?: string }) {
+  const { rows: allInvoices } = await query<{
     id: string;
     invoice_number: string;
     title: string;
@@ -25,21 +25,57 @@ export async function PaymentsHubInvoices({
             i.total_cents, i.amount_paid_cents, i.due_at, i.source, i.created_at,
             COALESCE(NULLIF(f.display_name, ''),
                      CONCAT_WS(' ', p.first_name, p.last_name),
+                     i.recipient_name, i.recipient_email,
                      '(unnamed)') AS family_label
        FROM invoices i
-       JOIN families f ON f.id = i.family_id
+       LEFT JOIN families f ON f.id = i.family_id
        LEFT JOIN LATERAL (
          SELECT first_name, last_name FROM parents
           WHERE family_id = i.family_id AND is_primary = true LIMIT 1
        ) p ON true
       WHERE i.school_id = $1
-      ORDER BY i.created_at DESC
-      LIMIT 100`,
+      ORDER BY i.due_at ASC
+      LIMIT 500`,
     [schoolId],
   );
 
-  // KPI strip (mirrors the GHL screenshot's 4-card strip)
-  const kpi = invoices.reduce((acc, inv) => {
+  // Search + status filter (incl. the synthetic 'overdue' status).
+  const now = Date.now();
+  const isOverdue = (inv: typeof allInvoices[number]) =>
+    (inv.status === 'open' || inv.status === 'partially_paid') && new Date(inv.due_at).getTime() < now;
+  const needle = q.trim().toLowerCase();
+  const invoices = allInvoices.filter((inv) => {
+    if (needle && !(`${inv.invoice_number} ${inv.family_label} ${inv.title}`.toLowerCase().includes(needle))) return false;
+    if (statusFilter === 'overdue') return isOverdue(inv);
+    if (statusFilter && inv.status !== statusFilter) return false;
+    return true;
+  });
+  const daysLate = (inv: typeof allInvoices[number]) =>
+    Math.floor((now - new Date(inv.due_at).getTime()) / 86_400_000);
+
+  // Family credits: families for the add form + outstanding balances.
+  const { rows: familyOptions } = await query<{ id: string; label: string }>(
+    `SELECT f.id,
+            COALESCE(NULLIF(f.display_name, ''), CONCAT_WS(' ', p.first_name, p.last_name), '(unnamed)') AS label
+       FROM families f
+       LEFT JOIN LATERAL (SELECT first_name, last_name FROM parents WHERE family_id = f.id AND is_primary = true LIMIT 1) p ON true
+      WHERE f.school_id = $1 AND f.status = 'active'
+      ORDER BY label LIMIT 500`,
+    [schoolId],
+  );
+  const { rows: creditBalances } = await query<{ family_id: string; label: string; remaining: number }>(
+    `SELECT fc.family_id,
+            COALESCE(NULLIF(f.display_name, ''), '(unnamed)') AS label,
+            SUM(fc.remaining_cents)::int AS remaining
+       FROM family_credits fc JOIN families f ON f.id = fc.family_id
+      WHERE fc.school_id = $1 AND fc.remaining_cents > 0
+      GROUP BY 1, 2 ORDER BY remaining DESC`,
+    [schoolId],
+  );
+
+  // KPI strip — computed over ALL invoices so the cards stay stable
+  // while the table below is filtered.
+  const kpi = allInvoices.reduce((acc, inv) => {
     const owed = inv.total_cents - inv.amount_paid_cents;
     if (inv.status === 'draft') { acc.draftN += 1; acc.draftTotal += inv.total_cents; }
     else if (inv.status === 'open' || inv.status === 'partially_paid') {
@@ -60,6 +96,12 @@ export async function PaymentsHubInvoices({
           <p className="text-sm text-slate-500">Create and manage all invoices for your school.</p>
         </div>
         <div className="flex items-center gap-2">
+          <Link
+            href={`/school/${locationId}/payments/invoices/bulk`}
+            className="inline-flex items-center gap-1.5 rounded-md border-2 border-blue-600 bg-white px-4 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-50"
+          >
+            Bulk invoice
+          </Link>
           <Link
             href={`/school/${locationId}/payments/invoices/new`}
             className="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
@@ -85,7 +127,9 @@ export async function PaymentsHubInvoices({
         <KPICard label={`${kpi.draftN} Invoice(s) in Draft`}    value={fmt(kpi.draftTotal)} />
         <KPICard label={`${kpi.dueN} Invoice(s) in Due`}        value={fmt(kpi.dueTotal)} />
         <KPICard label={`${kpi.paidN} Invoice(s) received`}     value={fmt(kpi.paidTotal)} />
-        <KPICard label={`${kpi.overdueN} Invoice(s) Overdue`}   value={fmt(kpi.overdueTotal)} tone={kpi.overdueN > 0 ? 'warn' : undefined} />
+        <Link href={`/school/${locationId}/payments?tab=invoices&status=overdue`} className="block">
+          <KPICard label={`${kpi.overdueN} Invoice(s) Overdue`}   value={fmt(kpi.overdueTotal)} tone={kpi.overdueN > 0 ? 'warn' : undefined} />
+        </Link>
       </div>
 
       {/* Filter bar */}
@@ -94,13 +138,25 @@ export async function PaymentsHubInvoices({
         <div className="relative min-w-[16rem] flex-1">
           <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
           <input
-            type="search" name="q" placeholder="Search invoice #, family, parent…"
+            type="search" name="q" defaultValue={q} placeholder="Search invoice #, family, parent…"
             className="w-full rounded-md border border-slate-300 bg-white pl-7 pr-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
           />
         </div>
+        <select name="status" defaultValue={statusFilter} className="rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm">
+          <option value="">All statuses</option>
+          <option value="overdue">⚠ Overdue</option>
+          <option value="open">Open</option>
+          <option value="partially_paid">Partially paid</option>
+          <option value="paid">Paid</option>
+          <option value="draft">Draft</option>
+          <option value="voided">Voided</option>
+        </select>
         <button type="submit" className="rounded-md bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700">
           Search
         </button>
+        {(q || statusFilter) ? (
+          <Link href={`/school/${locationId}/payments?tab=invoices`} className="text-xs text-slate-500 hover:underline">clear</Link>
+        ) : null}
       </form>
 
       {/* Table */}
@@ -145,8 +201,13 @@ export async function PaymentsHubInvoices({
                     <span className="ml-1 text-[10px] text-amber-700">(${(inv.amount_paid_cents / 100).toFixed(2)} paid)</span>
                   ) : null}
                 </td>
-                <td className="px-4 py-2 text-xs text-slate-500">
+                <td className="px-4 py-2 text-xs text-slate-500 whitespace-nowrap">
                   {new Date(inv.due_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                  {isOverdue(inv) ? (
+                    <span className="ml-1.5 inline-block rounded-full bg-rose-100 px-1.5 py-0.5 text-[10px] font-semibold text-rose-800">
+                      {daysLate(inv)}d late
+                    </span>
+                  ) : null}
                 </td>
                 <td className="px-4 py-2 text-xs">
                   <SourceBadge source={inv.source} />
@@ -155,6 +216,57 @@ export async function PaymentsHubInvoices({
             ))}
           </tbody>
         </table>
+      </div>
+
+      {/* Family credits — issue account credits + see outstanding
+          balances. Credits apply to invoices from the invoice detail
+          page ("Apply credit"). */}
+      <div className="rounded-lg border border-emerald-200 bg-white overflow-hidden">
+        <div className="border-b border-emerald-100 bg-emerald-50/40 px-4 py-2.5 text-sm font-semibold text-emerald-900">
+          Family credits
+        </div>
+        <div className="p-4 grid grid-cols-1 lg:grid-cols-2 gap-5">
+          <form action="/api/school/family-credits" method="POST" className="space-y-2">
+            <input type="hidden" name="action" value="add" />
+            <input type="hidden" name="school_id" value={schoolId} />
+            <input type="hidden" name="return_to" value={`/school/${locationId}/payments?tab=invoices`} />
+            <div className="text-xs font-semibold uppercase tracking-wide text-slate-600">Add a credit</div>
+            <select name="family_id" required className="w-full rounded border border-slate-300 px-2 py-1.5 text-sm">
+              <option value="">— pick a family —</option>
+              {familyOptions.map((f) => <option key={f.id} value={f.id}>{f.label}</option>)}
+            </select>
+            <div className="flex gap-2">
+              <input type="number" name="amount" min="0.01" step="0.01" required placeholder="Amount ($)"
+                className="w-32 rounded border border-slate-300 px-2 py-1.5 text-sm" />
+              <input type="text" name="reason" placeholder="Reason (e.g. withdrawal proration, goodwill)"
+                className="flex-1 rounded border border-slate-300 px-2 py-1.5 text-sm" />
+            </div>
+            <button type="submit" className="rounded-md bg-emerald-700 px-3 py-1.5 text-sm font-semibold text-white hover:bg-emerald-800">
+              Add credit
+            </button>
+            <p className="text-[11px] text-slate-500">
+              Credits sit on the family&apos;s account. Apply them from any open invoice&apos;s detail page —
+              the balance reduces and leftover credit stays for next time.
+            </p>
+          </form>
+          <div>
+            <div className="text-xs font-semibold uppercase tracking-wide text-slate-600 mb-2">
+              Outstanding credit balances ({creditBalances.length})
+            </div>
+            {creditBalances.length === 0 ? (
+              <p className="text-sm text-slate-500 italic">No families currently hold credit.</p>
+            ) : (
+              <ul className="divide-y divide-slate-100 max-h-56 overflow-y-auto">
+                {creditBalances.map((c) => (
+                  <li key={c.family_id} className="flex items-center justify-between py-1.5 text-sm">
+                    <span className="text-slate-900">{c.label}</span>
+                    <span className="font-mono font-semibold text-emerald-700">${(c.remaining / 100).toFixed(2)}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );
