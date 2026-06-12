@@ -19,6 +19,8 @@ interface InvoiceRow {
   invoice_number: string;
   family_id: string | null;
   family_label: string;
+  student_label: string | null;
+  bill_to_label: string | null;
   recipient_email: string | null;
   public_pay_token: string | null;
   title: string;
@@ -87,6 +89,10 @@ export default async function InvoiceDetail({
                      i.recipient_name,
                      i.recipient_email,
                      '(unnamed)') AS family_label,
+            CASE WHEN i.student_id IS NULL THEN NULL
+                 ELSE CONCAT_WS(' ', COALESCE(NULLIF(st.preferred_name, ''), st.first_name), st.last_name) END AS student_label,
+            CASE WHEN i.responsible_parent_id IS NULL THEN NULL
+                 ELSE CONCAT_WS(' ', rp.first_name, rp.last_name) END AS bill_to_label,
             i.recipient_email, i.public_pay_token,
             i.title, i.description, i.status,
             i.subtotal_cents, i.platform_fee_cents, i.processing_fee_cents,
@@ -99,6 +105,8 @@ export default async function InvoiceDetail({
             i.retry_attempt_count, i.last_autopay_attempted_at
        FROM invoices i
        LEFT JOIN families f ON f.id = i.family_id
+       LEFT JOIN students st ON st.id = i.student_id
+       LEFT JOIN parents rp ON rp.id = i.responsible_parent_id
        LEFT JOIN LATERAL (
          SELECT first_name, last_name FROM parents
          WHERE family_id = i.family_id AND is_primary = true LIMIT 1
@@ -159,6 +167,16 @@ export default async function InvoiceDetail({
               <div className="font-mono text-xs text-zinc-500">{inv.invoice_number}</div>
               <h1 className="text-xl font-semibold text-zinc-900 mt-1">{inv.title}</h1>
               <p className="text-sm text-zinc-600 mt-1">{inv.family_label}</p>
+              {inv.student_label ? (
+                <p className="text-xs text-zinc-500 mt-0.5">
+                  Student: <span className="font-medium text-zinc-700">{inv.student_label}</span>
+                </p>
+              ) : null}
+              {inv.bill_to_label ? (
+                <p className="text-xs text-zinc-500 mt-0.5">
+                  Bill to: <span className="font-medium text-zinc-700">{inv.bill_to_label} only</span>
+                </p>
+              ) : null}
             </div>
             <StatusPill status={inv.status} />
           </div>

@@ -1,12 +1,17 @@
 // POST /api/school/family-credits — family credit ledger actions.
 //
-//   action=add    school_id, family_id, amount (dollars), reason
-//                 → adds a credit to the family's account
+//   action=add    school_id, family_id, amount (dollars), reason,
+//                 student_id (optional) → adds a credit, attributed to
+//                 a specific student or to the family as a whole
 //   action=apply  school_id, invoice_id
 //                 → applies available family credit to the invoice:
-//                   consumes credits FIFO, adds ONE negative
-//                   "Account credit" line, reduces total_cents; if the
-//                   balance hits zero the invoice flips to paid.
+//                   consumes credits FIFO within priority tiers —
+//                   credits earmarked for the invoice's student first,
+//                   then family-level (no student) credits, then
+//                   credits earmarked for other students — adds ONE
+//                   negative "Account credit" line, reduces
+//                   total_cents; if the balance hits zero the invoice
+//                   flips to paid.
 //
 // Plain HTML form posts (formData) with return_to redirect, matching
 // the other embedded /school endpoints.
@@ -48,12 +53,27 @@ export async function POST(request: NextRequest) {
     if (!Number.isFinite(amountCents) || amountCents <= 0 || amountCents > 100_000_00) {
       return back(request, { err: 'Enter a credit amount between $0.01 and $100,000.' }, returnTo);
     }
+    // Optional student attribution — validated to the chosen family.
+    let studentId: string | null = null;
+    let studentName = '';
+    const pickedStudent = String(fd.get('student_id') ?? '').trim();
+    if (pickedStudent) {
+      const { rows: st } = await query<{ id: string; name: string }>(
+        `SELECT id, CONCAT_WS(' ', COALESCE(NULLIF(preferred_name, ''), first_name), last_name) AS name
+           FROM students WHERE id = $1 AND family_id = $2 AND school_id = $3`,
+        [pickedStudent, familyId, schoolId],
+      );
+      if (st.length === 0) return back(request, { err: 'That student is not in the selected family.' }, returnTo);
+      studentId = st[0].id;
+      studentName = st[0].name;
+    }
     await query(
-      `INSERT INTO family_credits (school_id, family_id, amount_cents, remaining_cents, reason, created_by_email)
-       VALUES ($1,$2,$3,$3,$4,'operator@growthsuite.local')`,
-      [schoolId, familyId, amountCents, reason],
+      `INSERT INTO family_credits (school_id, family_id, student_id, amount_cents, remaining_cents, reason, created_by_email)
+       VALUES ($1,$2,$3,$4,$4,$5,'operator@growthsuite.local')`,
+      [schoolId, familyId, studentId, amountCents, reason],
     );
-    return back(request, { msg: `Credit of $${(amountCents / 100).toFixed(2)} added to the family's account.` }, returnTo);
+    const who = studentName ? `${studentName}'s account` : `the family's account`;
+    return back(request, { msg: `Credit of $${(amountCents / 100).toFixed(2)} added to ${who}.` }, returnTo);
   }
 
   if (action === 'apply') {
@@ -63,10 +83,10 @@ export async function POST(request: NextRequest) {
     try {
       const applied = await withTransaction(async (q) => {
         const { rows: invRows } = await q<{
-          id: string; family_id: string | null; status: string;
+          id: string; family_id: string | null; student_id: string | null; status: string;
           total_cents: number; amount_paid_cents: number; discount_total_cents: number;
         }>(
-          `SELECT id, family_id, status, total_cents, amount_paid_cents, discount_total_cents
+          `SELECT id, family_id, student_id, status, total_cents, amount_paid_cents, discount_total_cents
              FROM invoices WHERE id = $1 AND school_id = $2 FOR UPDATE`,
           [invoiceId, schoolId],
         );
@@ -77,11 +97,20 @@ export async function POST(request: NextRequest) {
         const owed = inv.total_cents - inv.amount_paid_cents;
         if (owed <= 0) throw new Error('Invoice has no balance due.');
 
+        // Priority: credits earmarked for THIS invoice's student first,
+        // then family-level credits, then other students' credits —
+        // FIFO within each tier.
         const { rows: credits } = await q<{ id: string; remaining_cents: number }>(
           `SELECT id, remaining_cents FROM family_credits
             WHERE school_id = $1 AND family_id = $2 AND remaining_cents > 0
-            ORDER BY created_at FOR UPDATE`,
-          [schoolId, inv.family_id],
+            ORDER BY CASE
+                       WHEN $3::uuid IS NOT NULL AND student_id = $3::uuid THEN 0
+                       WHEN student_id IS NULL THEN 1
+                       ELSE 2
+                     END,
+                     created_at
+            FOR UPDATE`,
+          [schoolId, inv.family_id, inv.student_id],
         );
         const available = credits.reduce((a, c) => a + c.remaining_cents, 0);
         if (available <= 0) throw new Error('No credit available on this family\'s account.');
@@ -99,10 +128,19 @@ export async function POST(request: NextRequest) {
         const { rows: posRows } = await q<{ p: number }>(
           `SELECT COALESCE(MAX(position), -1) + 1 AS p FROM invoice_line_items WHERE invoice_id = $1`, [invoiceId],
         );
+        let lineDesc = 'Account credit applied';
+        if (inv.student_id) {
+          const { rows: st } = await q<{ name: string }>(
+            `SELECT CONCAT_WS(' ', COALESCE(NULLIF(preferred_name, ''), first_name), last_name) AS name
+               FROM students WHERE id = $1`,
+            [inv.student_id],
+          );
+          if (st[0]?.name) lineDesc = `Account credit applied (${st[0].name})`;
+        }
         await q(
           `INSERT INTO invoice_line_items (invoice_id, position, description, quantity, unit_amount_cents, amount_cents, category)
-           VALUES ($1,$2,'Account credit applied',1,$3,$3,'credit')`,
-          [invoiceId, posRows[0].p, -totalApplied],
+           VALUES ($1,$2,$3,1,$4,$4,'credit')`,
+          [invoiceId, posRows[0].p, lineDesc, -totalApplied],
         );
 
         const newTotal = inv.total_cents - totalApplied;

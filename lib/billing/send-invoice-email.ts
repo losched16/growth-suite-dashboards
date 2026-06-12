@@ -38,8 +38,8 @@ export interface SendResult {
 
 export async function sendInvoiceEmail({ invoiceId }: SendArgs): Promise<SendResult> {
   const { rows: invRows } = await query<InvoiceRow>(
-    `SELECT id, invoice_number, school_id, family_id, recipient_name,
-            recipient_email, recipient_ghl_contact_id,
+    `SELECT id, invoice_number, school_id, family_id, responsible_parent_id,
+            recipient_name, recipient_email, recipient_ghl_contact_id,
             public_pay_token, title, description, total_cents, due_at
        FROM invoices WHERE id = $1`,
     [invoiceId],
@@ -61,16 +61,25 @@ export async function sendInvoiceEmail({ invoiceId }: SendArgs): Promise<SendRes
     first_name: '', last_name: '', email: '', phone: '', ghl_contact_id: '',
   };
   if (inv.family_id) {
-    const { rows: parents } = await query<{
+    const { rows: allParents } = await query<{
+      id: string;
       first_name: string; last_name: string; email: string | null; phone: string | null;
       ghl_contact_id: string | null; is_primary: boolean;
     }>(
-      `SELECT first_name, last_name, email, phone, ghl_contact_id, is_primary
+      `SELECT id, first_name, last_name, email, phone, ghl_contact_id, is_primary
          FROM parents
         WHERE family_id = $1 AND school_id = $2 AND status = 'active'
         ORDER BY is_primary DESC, created_at ASC`,
       [inv.family_id, inv.school_id],
     );
+    // When the operator picked who the bill goes to (split households,
+    // "grandma pays for this one"), deliver ONLY to that parent — they
+    // are also the workflow contact. Otherwise: all active parents,
+    // primary as contact.
+    const responsible = inv.responsible_parent_id
+      ? allParents.find((p) => p.id === inv.responsible_parent_id)
+      : undefined;
+    const parents = responsible ? [responsible] : allParents;
     recipients = parents.map((p) => p.email).filter((e): e is string => !!e);
     const primary = parents[0];
     if (primary) {

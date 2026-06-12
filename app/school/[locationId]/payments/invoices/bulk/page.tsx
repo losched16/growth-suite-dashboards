@@ -90,7 +90,8 @@ export default async function BulkInvoicePage({ params, searchParams }: { params
         </div>
         <p className="text-sm text-slate-600 max-w-2xl">
           Send the same invoice to many families at once — a field trip fee, materials fee,
-          yearbook charge. One invoice per family, even when multiple students match.
+          yearbook charge. Bill one invoice per family, or one per student so every charge
+          is attributed to a student record.
         </p>
 
         {sp.err ? (
@@ -148,6 +149,29 @@ export default async function BulkInvoicePage({ params, searchParams }: { params
             </p>
           </fieldset>
 
+          {/* Granularity — schools that run their books on the student
+              record bill one invoice per student. */}
+          <fieldset className="rounded-md border border-slate-200 bg-slate-50/50 p-3 space-y-2">
+            <legend className="px-1 text-sm font-semibold text-slate-800">One invoice per…</legend>
+            <label className="flex items-start gap-2 text-sm">
+              <input type="radio" name="granularity" value="family" defaultChecked className="mt-0.5" />
+              <span>
+                <strong>Family</strong>
+                <span className="ml-2 text-xs text-slate-500">One invoice per family, even when several students match.</span>
+              </span>
+            </label>
+            <label className="flex items-start gap-2 text-sm">
+              <input type="radio" name="granularity" value="student" className="mt-0.5" />
+              <span>
+                <strong>Student</strong>
+                <span className="ml-2 text-xs text-slate-500">
+                  One invoice per matching student, each attributed to that student.
+                  A family with three matching students gets three invoices.
+                </span>
+              </span>
+            </label>
+          </fieldset>
+
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <label className="block sm:col-span-2">
               <span className="text-[11px] font-medium uppercase tracking-wide text-slate-600">Title *</span>
@@ -168,7 +192,7 @@ export default async function BulkInvoicePage({ params, searchParams }: { params
           </label>
 
           <div>
-            <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-600 mb-1">Line items (same for every family)</h3>
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-600 mb-1">Line items (same on every invoice)</h3>
             <LineItemsEditor catalogItems={catalogItems} />
           </div>
 

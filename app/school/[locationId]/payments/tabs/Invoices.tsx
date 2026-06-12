@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Plus, Search } from 'lucide-react';
 import { query } from '@/lib/db';
 import { HelpCallout } from '@/components/HelpCallout';
+import { CreditAddForm } from './CreditAddForm';
 
 export async function PaymentsHubInvoices({
   schoolId, locationId, q = '', statusFilter = '',
@@ -18,6 +19,7 @@ export async function PaymentsHubInvoices({
     amount_paid_cents: number;
     due_at: string;
     family_label: string;
+    student_label: string | null;
     source: string;
     created_at: string;
   }>(
@@ -26,9 +28,12 @@ export async function PaymentsHubInvoices({
             COALESCE(NULLIF(f.display_name, ''),
                      CONCAT_WS(' ', p.first_name, p.last_name),
                      i.recipient_name, i.recipient_email,
-                     '(unnamed)') AS family_label
+                     '(unnamed)') AS family_label,
+            CASE WHEN i.student_id IS NULL THEN NULL
+                 ELSE CONCAT_WS(' ', COALESCE(NULLIF(st.preferred_name, ''), st.first_name), st.last_name) END AS student_label
        FROM invoices i
        LEFT JOIN families f ON f.id = i.family_id
+       LEFT JOIN students st ON st.id = i.student_id
        LEFT JOIN LATERAL (
          SELECT first_name, last_name FROM parents
           WHERE family_id = i.family_id AND is_primary = true LIMIT 1
@@ -45,7 +50,7 @@ export async function PaymentsHubInvoices({
     (inv.status === 'open' || inv.status === 'partially_paid') && new Date(inv.due_at).getTime() < now;
   const needle = q.trim().toLowerCase();
   const invoices = allInvoices.filter((inv) => {
-    if (needle && !(`${inv.invoice_number} ${inv.family_label} ${inv.title}`.toLowerCase().includes(needle))) return false;
+    if (needle && !(`${inv.invoice_number} ${inv.family_label} ${inv.student_label ?? ''} ${inv.title}`.toLowerCase().includes(needle))) return false;
     if (statusFilter === 'overdue') return isOverdue(inv);
     if (statusFilter && inv.status !== statusFilter) return false;
     return true;
@@ -63,13 +68,26 @@ export async function PaymentsHubInvoices({
       ORDER BY label LIMIT 500`,
     [schoolId],
   );
-  const { rows: creditBalances } = await query<{ family_id: string; label: string; remaining: number }>(
+  const { rows: creditStudentRows } = await query<{ family_id: string; id: string; name: string }>(
+    `SELECT family_id, id, CONCAT_WS(' ', COALESCE(NULLIF(preferred_name, ''), first_name), last_name) AS name
+       FROM students WHERE school_id = $1 AND status = 'active' ORDER BY first_name`,
+    [schoolId],
+  );
+  const creditStudentsByFamily: Record<string, Array<{ id: string; name: string }>> = {};
+  for (const s of creditStudentRows) (creditStudentsByFamily[s.family_id] ??= []).push({ id: s.id, name: s.name });
+  // Balances grouped per family + per attributed student, so the list
+  // reads "Smith — Ada Smith: $120 / family: $50".
+  const { rows: creditBalances } = await query<{ family_id: string; label: string; student_name: string | null; remaining: number }>(
     `SELECT fc.family_id,
             COALESCE(NULLIF(f.display_name, ''), '(unnamed)') AS label,
+            CASE WHEN fc.student_id IS NULL THEN NULL
+                 ELSE CONCAT_WS(' ', COALESCE(NULLIF(s.preferred_name, ''), s.first_name), s.last_name) END AS student_name,
             SUM(fc.remaining_cents)::int AS remaining
-       FROM family_credits fc JOIN families f ON f.id = fc.family_id
+       FROM family_credits fc
+       JOIN families f ON f.id = fc.family_id
+       LEFT JOIN students s ON s.id = fc.student_id
       WHERE fc.school_id = $1 AND fc.remaining_cents > 0
-      GROUP BY 1, 2 ORDER BY remaining DESC`,
+      GROUP BY 1, 2, 3 ORDER BY remaining DESC`,
     [schoolId],
   );
 
@@ -192,7 +210,12 @@ export async function PaymentsHubInvoices({
                     {inv.invoice_number}
                   </Link>
                 </td>
-                <td className="px-4 py-2 text-slate-900">{inv.family_label}</td>
+                <td className="px-4 py-2 text-slate-900">
+                  {inv.family_label}
+                  {inv.student_label ? (
+                    <div className="text-[11px] text-slate-500">{inv.student_label}</div>
+                  ) : null}
+                </td>
                 <td className="px-4 py-2 text-slate-700">{inv.title}</td>
                 <td className="px-4 py-2 text-center"><StatusPill status={inv.status} /></td>
                 <td className="px-4 py-2 text-right font-mono">
@@ -226,29 +249,12 @@ export async function PaymentsHubInvoices({
           Family credits
         </div>
         <div className="p-4 grid grid-cols-1 lg:grid-cols-2 gap-5">
-          <form action="/api/school/family-credits" method="POST" className="space-y-2">
-            <input type="hidden" name="action" value="add" />
-            <input type="hidden" name="school_id" value={schoolId} />
-            <input type="hidden" name="return_to" value={`/school/${locationId}/payments?tab=invoices`} />
-            <div className="text-xs font-semibold uppercase tracking-wide text-slate-600">Add a credit</div>
-            <select name="family_id" required className="w-full rounded border border-slate-300 px-2 py-1.5 text-sm">
-              <option value="">— pick a family —</option>
-              {familyOptions.map((f) => <option key={f.id} value={f.id}>{f.label}</option>)}
-            </select>
-            <div className="flex gap-2">
-              <input type="number" name="amount" min="0.01" step="0.01" required placeholder="Amount ($)"
-                className="w-32 rounded border border-slate-300 px-2 py-1.5 text-sm" />
-              <input type="text" name="reason" placeholder="Reason (e.g. withdrawal proration, goodwill)"
-                className="flex-1 rounded border border-slate-300 px-2 py-1.5 text-sm" />
-            </div>
-            <button type="submit" className="rounded-md bg-emerald-700 px-3 py-1.5 text-sm font-semibold text-white hover:bg-emerald-800">
-              Add credit
-            </button>
-            <p className="text-[11px] text-slate-500">
-              Credits sit on the family&apos;s account. Apply them from any open invoice&apos;s detail page —
-              the balance reduces and leftover credit stays for next time.
-            </p>
-          </form>
+          <CreditAddForm
+            schoolId={schoolId}
+            returnTo={`/school/${locationId}/payments?tab=invoices`}
+            familyOptions={familyOptions}
+            studentsByFamily={creditStudentsByFamily}
+          />
           <div>
             <div className="text-xs font-semibold uppercase tracking-wide text-slate-600 mb-2">
               Outstanding credit balances ({creditBalances.length})
@@ -257,9 +263,14 @@ export async function PaymentsHubInvoices({
               <p className="text-sm text-slate-500 italic">No families currently hold credit.</p>
             ) : (
               <ul className="divide-y divide-slate-100 max-h-56 overflow-y-auto">
-                {creditBalances.map((c) => (
-                  <li key={c.family_id} className="flex items-center justify-between py-1.5 text-sm">
-                    <span className="text-slate-900">{c.label}</span>
+                {creditBalances.map((c, i) => (
+                  <li key={`${c.family_id}-${c.student_name ?? 'family'}-${i}`} className="flex items-center justify-between py-1.5 text-sm">
+                    <span className="text-slate-900">
+                      {c.label}
+                      {c.student_name
+                        ? <span className="ml-1.5 text-xs text-slate-500">· {c.student_name}</span>
+                        : <span className="ml-1.5 text-xs text-slate-400">· family</span>}
+                    </span>
                     <span className="font-mono font-semibold text-emerald-700">${(c.remaining / 100).toFixed(2)}</span>
                   </li>
                 ))}

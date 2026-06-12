@@ -2,8 +2,14 @@
 //
 // Create the SAME invoice (title + line items + due date) for many
 // families at once — e.g. "bill every Lower El family the $35 field
-// trip fee". One invoice per family (a family with three matching
-// students still gets ONE invoice).
+// trip fee".
+//
+// Granularity (form field `granularity`):
+//   family  (default) → ONE invoice per family, even with three
+//                       matching students
+//   student           → one invoice per matching active student, each
+//                       stamped with that student_id (schools that run
+//                       their books by the student record)
 //
 // Audience (form fields audience_type / audience_value / family_ids):
 //   all              → every family with ≥1 active student
@@ -69,6 +75,7 @@ export async function POST(request: NextRequest, { params }: { params: Params })
   const description = String(fd.get('description') ?? '').trim() || null;
   const dueDate = String(fd.get('due_date') ?? '').trim();
   const sendNow = fd.get('send_now') === '1';
+  const perStudent = String(fd.get('granularity') ?? 'family').trim() === 'student';
 
   if (!title) return back(request, schoolId, { err: 'Title is required.' }, returnTo);
   if (!dueDate) return back(request, schoolId, { err: 'Due date is required.' }, returnTo);
@@ -85,34 +92,58 @@ export async function POST(request: NextRequest, { params }: { params: Params })
   if (lines.length === 0) return back(request, schoolId, { err: 'Add at least one line item.' }, returnTo);
   const subtotalCents = lines.reduce((a, l) => a + l.amount_cents, 0);
 
-  // Resolve target families.
-  let familyRows: Array<{ family_id: string }>;
+  // Resolve targets. Family mode → one row per family (student_id
+  // null). Student mode → one row per matching active student; for
+  // program/homeroom audiences only the MATCHING students are billed
+  // (siblings outside the program are not).
+  let targets: Array<{ family_id: string; student_id: string | null }>;
   if (audienceType === 'program' && audienceValue) {
     // The picker lists programs AND homerooms in one dropdown — match
     // the value against either so the operator never has to care which
     // kind it is.
-    ({ rows: familyRows } = await query<{ family_id: string }>(
-      `SELECT DISTINCT s.family_id FROM students s JOIN families f ON f.id = s.family_id
-        WHERE s.school_id = $1 AND s.status = 'active' AND f.status = 'active'
-          AND (s.metadata->>'program' = $2 OR s.metadata->>'homeroom' = $2)`,
+    ({ rows: targets } = await query<{ family_id: string; student_id: string | null }>(
+      perStudent
+        ? `SELECT s.family_id, s.id AS student_id FROM students s JOIN families f ON f.id = s.family_id
+            WHERE s.school_id = $1 AND s.status = 'active' AND f.status = 'active'
+              AND (s.metadata->>'program' = $2 OR s.metadata->>'homeroom' = $2)
+            ORDER BY s.first_name`
+        : `SELECT DISTINCT s.family_id, NULL::uuid AS student_id FROM students s JOIN families f ON f.id = s.family_id
+            WHERE s.school_id = $1 AND s.status = 'active' AND f.status = 'active'
+              AND (s.metadata->>'program' = $2 OR s.metadata->>'homeroom' = $2)`,
       [schoolId, audienceValue],
     ));
   } else if (audienceType === 'homeroom' && audienceValue) {
-    ({ rows: familyRows } = await query<{ family_id: string }>(
-      `SELECT DISTINCT s.family_id FROM students s JOIN families f ON f.id = s.family_id
-        WHERE s.school_id = $1 AND s.status = 'active' AND f.status = 'active'
-          AND s.metadata->>'homeroom' = $2`,
+    ({ rows: targets } = await query<{ family_id: string; student_id: string | null }>(
+      perStudent
+        ? `SELECT s.family_id, s.id AS student_id FROM students s JOIN families f ON f.id = s.family_id
+            WHERE s.school_id = $1 AND s.status = 'active' AND f.status = 'active'
+              AND s.metadata->>'homeroom' = $2
+            ORDER BY s.first_name`
+        : `SELECT DISTINCT s.family_id, NULL::uuid AS student_id FROM students s JOIN families f ON f.id = s.family_id
+            WHERE s.school_id = $1 AND s.status = 'active' AND f.status = 'active'
+              AND s.metadata->>'homeroom' = $2`,
       [schoolId, audienceValue],
     ));
   } else if (audienceType === 'tag' && audienceValue) {
-    // Families where ANY active parent's GHL contact carries the tag.
-    ({ rows: familyRows } = await query<{ family_id: string }>(
-      `SELECT DISTINCT p.family_id
-         FROM ghl_contact_tags t
-         JOIN parents p ON p.ghl_contact_id = t.ghl_contact_id AND p.school_id = t.school_id
-         JOIN families f ON f.id = p.family_id
-        WHERE t.school_id = $1 AND lower(t.tag) = lower($2)
-          AND p.status = 'active' AND f.status = 'active'`,
+    // Families where ANY active parent's GHL contact carries the tag —
+    // in student mode, every active student in those families.
+    ({ rows: targets } = await query<{ family_id: string; student_id: string | null }>(
+      perStudent
+        ? `SELECT s.family_id, s.id AS student_id FROM students s
+            WHERE s.school_id = $1 AND s.status = 'active' AND s.family_id IN (
+              SELECT DISTINCT p.family_id
+                FROM ghl_contact_tags t
+                JOIN parents p ON p.ghl_contact_id = t.ghl_contact_id AND p.school_id = t.school_id
+                JOIN families f ON f.id = p.family_id
+               WHERE t.school_id = $1 AND lower(t.tag) = lower($2)
+                 AND p.status = 'active' AND f.status = 'active')
+            ORDER BY s.first_name`
+        : `SELECT DISTINCT p.family_id, NULL::uuid AS student_id
+             FROM ghl_contact_tags t
+             JOIN parents p ON p.ghl_contact_id = t.ghl_contact_id AND p.school_id = t.school_id
+             JOIN families f ON f.id = p.family_id
+            WHERE t.school_id = $1 AND lower(t.tag) = lower($2)
+              AND p.status = 'active' AND f.status = 'active'`,
       [schoolId, audienceValue],
     ));
   } else if (audienceType === 'pick') {
@@ -122,20 +153,29 @@ export async function POST(request: NextRequest, { params }: { params: Params })
     if (picked.length === 0) {
       return back(request, schoolId, { err: 'Check at least one family in the picker.' }, returnTo);
     }
-    ({ rows: familyRows } = await query<{ family_id: string }>(
-      `SELECT id AS family_id FROM families
-        WHERE school_id = $1 AND status = 'active' AND id = ANY($2::uuid[])`,
+    ({ rows: targets } = await query<{ family_id: string; student_id: string | null }>(
+      perStudent
+        ? `SELECT s.family_id, s.id AS student_id FROM students s
+            WHERE s.school_id = $1 AND s.status = 'active' AND s.family_id IN (
+              SELECT id FROM families WHERE school_id = $1 AND status = 'active' AND id = ANY($2::uuid[]))
+            ORDER BY s.first_name`
+        : `SELECT id AS family_id, NULL::uuid AS student_id FROM families
+            WHERE school_id = $1 AND status = 'active' AND id = ANY($2::uuid[])`,
       [schoolId, picked],
     ));
   } else {
-    ({ rows: familyRows } = await query<{ family_id: string }>(
-      `SELECT DISTINCT s.family_id FROM students s JOIN families f ON f.id = s.family_id
-        WHERE s.school_id = $1 AND s.status = 'active' AND f.status = 'active'`,
+    ({ rows: targets } = await query<{ family_id: string; student_id: string | null }>(
+      perStudent
+        ? `SELECT s.family_id, s.id AS student_id FROM students s JOIN families f ON f.id = s.family_id
+            WHERE s.school_id = $1 AND s.status = 'active' AND f.status = 'active'
+            ORDER BY s.first_name`
+        : `SELECT DISTINCT s.family_id, NULL::uuid AS student_id FROM students s JOIN families f ON f.id = s.family_id
+            WHERE s.school_id = $1 AND s.status = 'active' AND f.status = 'active'`,
       [schoolId],
     ));
   }
-  if (familyRows.length === 0) {
-    return back(request, schoolId, { err: 'No families match that audience.' }, returnTo);
+  if (targets.length === 0) {
+    return back(request, schoolId, { err: perStudent ? 'No students match that audience.' : 'No families match that audience.' }, returnTo);
   }
 
   const dueAtIso = new Date(dueDate + 'T23:59:59Z').toISOString();
@@ -143,7 +183,7 @@ export async function POST(request: NextRequest, { params }: { params: Params })
   const createdIds: string[] = [];
 
   try {
-    for (const fam of familyRows) {
+    for (const target of targets) {
       // Per-invoice number (atomic bump, same scheme as single create).
       const { rows: cfgRows } = await query<{ prefix: string; next: number }>(
         `INSERT INTO school_payment_config (school_id) VALUES ($1)
@@ -158,13 +198,13 @@ export async function POST(request: NextRequest, { params }: { params: Params })
       const invoiceId = await withTransaction(async (q) => {
         const ins = await q<{ id: string }>(
           `INSERT INTO invoices
-             (school_id, family_id, invoice_number, title, description, status,
+             (school_id, family_id, student_id, invoice_number, title, description, status,
               subtotal_cents, platform_fee_cents, discount_total_cents, total_cents,
               due_at, issued_at, source, includes_platform_setup_fee,
               created_by_email, public_pay_token)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,0,0,$7,$8,$9,'bulk',false,'operator@growthsuite.local',$10)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,0,0,$8,$9,$10,'bulk',false,'operator@growthsuite.local',$11)
            RETURNING id`,
-          [schoolId, fam.family_id, invoiceNumber, title, description,
+          [schoolId, target.family_id, target.student_id, invoiceNumber, title, description,
            sendNow ? 'open' : 'draft', subtotalCents, dueAtIso, issuedAt, token],
         );
         const id = ins.rows[0].id;
@@ -193,9 +233,10 @@ export async function POST(request: NextRequest, { params }: { params: Params })
       }
     }
 
+    const unit = perStudent ? 'per-student invoices' : 'invoices';
     const msg = sendNow
-      ? `Bulk invoice sent: ${createdIds.length} invoices created, ${emailed} delivered (${(subtotalCents / 100).toLocaleString('en-US', { style: 'currency', currency: 'USD' })} each).`
-      : `Bulk invoice: ${createdIds.length} DRAFT invoices created (${(subtotalCents / 100).toLocaleString('en-US', { style: 'currency', currency: 'USD' })} each). Review them in the Invoices tab, then send.`;
+      ? `Bulk invoice sent: ${createdIds.length} ${unit} created, ${emailed} delivered (${(subtotalCents / 100).toLocaleString('en-US', { style: 'currency', currency: 'USD' })} each).`
+      : `Bulk invoice: ${createdIds.length} DRAFT ${unit} created (${(subtotalCents / 100).toLocaleString('en-US', { style: 'currency', currency: 'USD' })} each). Review them in the Invoices tab, then send.`;
     return back(request, schoolId, { msg }, returnTo);
   } catch (err) {
     const m = err instanceof Error ? err.message : String(err);
