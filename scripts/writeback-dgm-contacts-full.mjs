@@ -130,7 +130,14 @@ for (const p of parents) {
     push(slotKey(slot, 'program'), k.program);
     push(slotKey(slot, 'homeroom'), k.homeroom);
     push(slotKey(slot, 'enrollment_status'), k.enr);
-    if (k.date_of_birth) push(slotKey(slot, 'birth_date'), String(k.date_of_birth).slice(0, 10));
+    if (k.date_of_birth) {
+      // pg returns a Date object — String(Date) is 'Wed May 15 2024…',
+      // which GHL mis-parses. Always emit ISO yyyy-mm-dd.
+      const dob = k.date_of_birth instanceof Date
+        ? k.date_of_birth.toISOString().slice(0, 10)
+        : String(k.date_of_birth).slice(0, 10);
+      push(slotKey(slot, 'birth_date'), dob);
+    }
   });
 
   const body = {};
