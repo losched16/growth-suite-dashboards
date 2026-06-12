@@ -179,14 +179,34 @@ async function resolveSchoolId(locationId: string | null): Promise<string | null
 
 // ─── Handler ─────────────────────────────────────────────────────────
 
+// Static-token auth for GHL Workflow webhooks. Workflow "Custom
+// Webhook" actions can attach a static header but CANNOT compute an
+// HMAC over the body — so the HMAC-only design made the workflow
+// delivery path impossible to configure. A static bearer token in
+// x-webhook-token (constant-time compared against the same
+// GHL_WEBHOOK_SECRET) closes that gap. HMAC paths still work and
+// remain preferred for senders that can sign.
+function verifyStaticToken(provided: string): boolean {
+  const candidates = [process.env.GHL_WEBHOOK_SECRET, process.env.GHL_WEBHOOK_SECRET_PREVIOUS]
+    .filter((s): s is string => !!s && s.length > 0);
+  if (!provided) return false;
+  for (const expected of candidates) {
+    const a = Buffer.from(provided, 'utf8');
+    const b = Buffer.from(expected, 'utf8');
+    if (a.length === b.length && crypto.timingSafeEqual(a, b)) return true;
+  }
+  return false;
+}
+
 export async function POST(request: NextRequest) {
   const rawBody = await request.text();
   const sig = request.headers.get('x-wh-signature')
            ?? request.headers.get('x-webhook-signature')
            ?? request.headers.get('x-ghl-signature')
            ?? '';
+  const staticToken = request.headers.get('x-webhook-token') ?? '';
 
-  if (!verifySignature(rawBody, sig)) {
+  if (!verifySignature(rawBody, sig) && !verifyStaticToken(staticToken)) {
     // Don't burn into the log table on bad signatures — that'd let an
     // attacker flood our DB. Just 401 quickly.
     return NextResponse.json({ error: 'invalid_signature' }, { status: 401 });
