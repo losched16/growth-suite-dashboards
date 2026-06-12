@@ -16,6 +16,7 @@ import { query, withTransaction } from '@/lib/db';
 import { loadGhlClient, type GhlClient } from '@/lib/ghl/client';
 import { searchContacts, type GhlContact } from '@/lib/ghl/contacts';
 import { fetchPipelines, fetchAllOpportunities, buildStageLookup } from '@/lib/ghl/pipelines';
+import { refreshStudentMetadataFromGhl } from './ghl-student-metadata';
 
 export interface AttributeSyncResult {
   contacts: number;
@@ -23,6 +24,7 @@ export interface AttributeSyncResult {
   field_value_rows: number;
   opportunities: number;
   catalog_attributes: number;
+  student_metadata_updated: number;
 }
 
 interface CfDef { key: string; label: string; dataType: string }
@@ -162,11 +164,26 @@ export async function syncGhlAttributes(schoolId: string): Promise<AttributeSync
     }
   });
 
+  // 7. Propagate per-student slot fields (student_<base> /
+  // student_<2-4>_<base>) from the freshly synced field values into
+  // students.metadata — the read-model the roster/finance widgets use.
+  // GHL contact edits reach every dashboard, not just the contact-attr
+  // panels. No-op for students without metadata.ghl_slot. Best-effort:
+  // a propagation failure must not fail the attribute sync itself.
+  let metadataUpdated = 0;
+  try {
+    const r = await refreshStudentMetadataFromGhl(schoolId);
+    metadataUpdated = r.students_updated;
+  } catch (err) {
+    console.warn('[ghl-attributes] student metadata propagation failed:', err instanceof Error ? err.message : String(err));
+  }
+
   return {
     contacts: contacts.length,
     tag_rows: tagRows.length,
     field_value_rows: cfvRows.length,
     opportunities: opps.length,
     catalog_attributes: catalog.length,
+    student_metadata_updated: metadataUpdated,
   };
 }
