@@ -1,6 +1,8 @@
-import { notFound } from 'next/navigation';
-import { headers } from 'next/headers';
+import { notFound, redirect } from 'next/navigation';
+import { headers, cookies } from 'next/headers';
 import { loadSchoolByLocationId, listSchoolDashboards } from '@/lib/dashboards/loader';
+import { SCHOOL_SESSION_COOKIE, verifySchoolSession } from '@/lib/auth/school';
+import { SESSION_COOKIE, verifySessionToken } from '@/lib/auth/operator';
 import { DashboardShell } from '@/components/DashboardShell';
 import { dashboardRegistry } from '@/lib/dashboards/registry';
 
@@ -40,6 +42,21 @@ export default async function SchoolLayout({
     return <div className="min-h-screen bg-gray-50">{children}</div>;
   }
 
+  // Standalone schools: the full-shell experience requires a signed-in
+  // staff session (or an operator session) — anonymous hits bounce to
+  // the magic-link page. Legacy schools keep today's open-URL behavior.
+  const ck = await cookies();
+  const schoolSession = await verifySchoolSession(ck.get(SCHOOL_SESSION_COOKIE)?.value);
+  if (school.require_staff_login) {
+    const operatorSession = verifySessionToken(ck.get(SESSION_COOKIE)?.value);
+    const authorized = operatorSession || (schoolSession && schoolSession.school_id === school.id);
+    if (!authorized) redirect('/staff');
+  }
+  // Show the sign-out control only for staff magic-link sessions.
+  const signedInAs = schoolSession?.via === 'staff' && schoolSession.school_id === school.id
+    ? schoolSession.user_name || schoolSession.user_email
+    : null;
+
   const dashboards = await listSchoolDashboards(school.id, { onlyEnabled: true });
 
   // Build a slug → icon map from the static registry so the nav knows
@@ -57,6 +74,7 @@ export default async function SchoolLayout({
       dashboards={dashboards}
       activeSlug={null /* pages override the highlight via the URL */}
       iconBySlug={iconBySlug}
+      signedInAs={signedInAs}
     >
       {children}
     </DashboardShell>

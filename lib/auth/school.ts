@@ -26,7 +26,7 @@ interface SchoolSessionClaims {
   ghl_location_id: string;
   user_email: string;
   user_name: string;
-  via?: 'ghl' | 'dev';     // audit trail
+  via?: 'ghl' | 'dev' | 'staff';   // audit trail — 'staff' = magic-link login (standalone schools)
 }
 
 interface GhlMenuLinkClaims {

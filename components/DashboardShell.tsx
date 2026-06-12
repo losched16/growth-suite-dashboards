@@ -7,10 +7,13 @@ interface Props {
   dashboards: SchoolDashboardRow[];
   activeSlug: string | null;
   iconBySlug: Record<string, string>;
+  // Shown for staff magic-link sessions (standalone schools) — renders
+  // a sign-out control above the content.
+  signedInAs?: string | null;
   children: React.ReactNode;
 }
 
-export function DashboardShell({ schoolName, locationId, dashboards, activeSlug, iconBySlug, children }: Props) {
+export function DashboardShell({ schoolName, locationId, dashboards, activeSlug, iconBySlug, signedInAs, children }: Props) {
   return (
     <div className="flex min-h-screen bg-gray-50">
       <DashboardNav
@@ -21,6 +24,16 @@ export function DashboardShell({ schoolName, locationId, dashboards, activeSlug,
         iconBySlug={iconBySlug}
       />
       <main className="flex-1 min-w-0 p-6 overflow-x-auto">
+        {signedInAs ? (
+          <div className="mb-3 flex items-center justify-end gap-3 text-xs text-gray-500">
+            <span>Signed in as {signedInAs}</span>
+            <form action="/api/auth/staff/logout" method="POST">
+              <button type="submit" className="rounded border border-gray-300 bg-white px-2 py-1 hover:bg-gray-50">
+                Sign out
+              </button>
+            </form>
+          </div>
+        ) : null}
         {children}
       </main>
     </div>
