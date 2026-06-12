@@ -5,10 +5,14 @@
 // trip fee". One invoice per family (a family with three matching
 // students still gets ONE invoice).
 //
-// Audience (form fields audience_type / audience_value):
+// Audience (form fields audience_type / audience_value / family_ids):
 //   all              → every family with ≥1 active student
-//   program:<value>  → families with an active student in that program
-//   homeroom:<value> → families with an active student in that homeroom
+//   program:<value>  → families with an active student in that
+//                      program OR homeroom (one dropdown serves both)
+//   tag:<value>      → families where any parent's GHL contact carries
+//                      that tag (synced ghl_contact_tags)
+//   pick             → exactly the families checked in the picker
+//                      (family_ids checkboxes)
 //
 // Auto-discount policies are intentionally NOT applied to bulk
 // invoices — bulk is for flat fees; per-family discount math belongs
@@ -55,7 +59,12 @@ export async function POST(request: NextRequest, { params }: { params: Params })
   const returnTo = String(fd.get('return_to') ?? '').trim() || null;
 
   const audienceType = String(fd.get('audience_type') ?? 'all').trim();
-  const audienceValue = String(fd.get('audience_value') ?? '').trim();
+  // The program/homeroom select and the tag select are separate form
+  // fields (two selects can't share a name); read the one that matches
+  // the chosen audience type.
+  const audienceValue = audienceType === 'tag'
+    ? String(fd.get('audience_value_tag') ?? '').trim()
+    : String(fd.get('audience_value') ?? '').trim();
   const title = String(fd.get('title') ?? '').trim();
   const description = String(fd.get('description') ?? '').trim() || null;
   const dueDate = String(fd.get('due_date') ?? '').trim();
@@ -94,6 +103,29 @@ export async function POST(request: NextRequest, { params }: { params: Params })
         WHERE s.school_id = $1 AND s.status = 'active' AND f.status = 'active'
           AND s.metadata->>'homeroom' = $2`,
       [schoolId, audienceValue],
+    ));
+  } else if (audienceType === 'tag' && audienceValue) {
+    // Families where ANY active parent's GHL contact carries the tag.
+    ({ rows: familyRows } = await query<{ family_id: string }>(
+      `SELECT DISTINCT p.family_id
+         FROM ghl_contact_tags t
+         JOIN parents p ON p.ghl_contact_id = t.ghl_contact_id AND p.school_id = t.school_id
+         JOIN families f ON f.id = p.family_id
+        WHERE t.school_id = $1 AND lower(t.tag) = lower($2)
+          AND p.status = 'active' AND f.status = 'active'`,
+      [schoolId, audienceValue],
+    ));
+  } else if (audienceType === 'pick') {
+    // Hand-picked checkboxes — validate every id belongs to this school
+    // and is an active family.
+    const picked = fd.getAll('family_ids').map(String).filter((s) => /^[0-9a-f-]{36}$/i.test(s)).slice(0, 1000);
+    if (picked.length === 0) {
+      return back(request, schoolId, { err: 'Check at least one family in the picker.' }, returnTo);
+    }
+    ({ rows: familyRows } = await query<{ family_id: string }>(
+      `SELECT id AS family_id FROM families
+        WHERE school_id = $1 AND status = 'active' AND id = ANY($2::uuid[])`,
+      [schoolId, picked],
     ));
   } else {
     ({ rows: familyRows } = await query<{ family_id: string }>(

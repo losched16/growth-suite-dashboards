@@ -10,6 +10,7 @@ import { query } from '@/lib/db';
 import { loadSchoolByLocationId } from '@/lib/dashboards/loader';
 import { LineItemsEditor } from '@/app/admin/[schoolId]/payments/invoices/new/LineItemsEditor';
 import { loadInvoiceCatalog } from '@/lib/billing/invoice-catalog';
+import { FamilyPicker } from './FamilyPicker';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 30;
@@ -44,6 +45,31 @@ export default async function BulkInvoicePage({ params, searchParams }: { params
     `SELECT COUNT(DISTINCT s.family_id)::int families, COUNT(*)::int students
        FROM students s JOIN families f ON f.id = s.family_id
       WHERE s.school_id = $1 AND s.status = 'active' AND f.status = 'active'`,
+    [schoolId],
+  );
+
+  // GHL tags with family reach (via parents' linked contacts).
+  const { rows: tags } = await query<{ v: string; families: number }>(
+    `SELECT t.tag v, COUNT(DISTINCT p.family_id)::int families
+       FROM ghl_contact_tags t
+       JOIN parents p ON p.ghl_contact_id = t.ghl_contact_id AND p.school_id = t.school_id
+       JOIN families f ON f.id = p.family_id
+      WHERE t.school_id = $1 AND p.status = 'active' AND f.status = 'active'
+      GROUP BY 1 ORDER BY families DESC, 1`,
+    [schoolId],
+  );
+
+  // Pickable family list with student names for the checkbox picker.
+  const { rows: pickFamilies } = await query<{ id: string; label: string; students: string }>(
+    `SELECT f.id,
+            COALESCE(NULLIF(f.display_name, ''), '(unnamed)') AS label,
+            COALESCE(string_agg(s.first_name, ', ' ORDER BY s.first_name), '') AS students
+       FROM families f
+       LEFT JOIN students s ON s.family_id = f.id AND s.status = 'active'
+      WHERE f.school_id = $1 AND f.status = 'active'
+      GROUP BY f.id
+     HAVING COUNT(s.id) > 0
+      ORDER BY label`,
     [schoolId],
   );
 
@@ -87,7 +113,7 @@ export default async function BulkInvoicePage({ params, searchParams }: { params
             </label>
             <div className="flex items-center gap-2 text-sm">
               <input type="radio" name="audience_type" value="program" id="aud-program" />
-              <label htmlFor="aud-program">By program:</label>
+              <label htmlFor="aud-program">By program / homeroom:</label>
               <select name="audience_value" className="rounded border border-slate-300 px-2 py-1 text-sm" defaultValue="">
                 <option value="">— pick —</option>
                 {programs.map((p) => (
@@ -98,9 +124,27 @@ export default async function BulkInvoicePage({ params, searchParams }: { params
                 ))}
               </select>
             </div>
+            {tags.length > 0 ? (
+              <div className="flex items-center gap-2 text-sm">
+                <input type="radio" name="audience_type" value="tag" id="aud-tag" />
+                <label htmlFor="aud-tag">By Growth Suite tag:</label>
+                <select name="audience_value_tag" className="rounded border border-slate-300 px-2 py-1 text-sm" defaultValue="">
+                  <option value="">— pick a tag —</option>
+                  {tags.map((t) => (
+                    <option key={`t-${t.v}`} value={t.v}>{t.v} ({t.families} families)</option>
+                  ))}
+                </select>
+              </div>
+            ) : null}
+            <div className="space-y-1.5 text-sm">
+              <label className="flex items-center gap-2">
+                <input type="radio" name="audience_type" value="pick" id="aud-pick" />
+                <span>Pick families myself (checkboxes):</span>
+              </label>
+              <FamilyPicker families={pickFamilies} />
+            </div>
             <p className="text-[11px] text-slate-500">
-              The dropdown lists programs first, then homerooms. Pick &ldquo;By program&rdquo; for either —
-              the value decides the audience. (Homeroom values match against homerooms automatically.)
+              Checking any family below automatically switches the audience to &ldquo;Pick families myself.&rdquo;
             </p>
           </fieldset>
 
