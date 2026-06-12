@@ -155,6 +155,28 @@ async function fetchAllOpportunities(pit, locationId) {
   return all;
 }
 
+// Pipelines + their stages. GHL opportunity rows only carry IDs;
+// resolving names requires a separate fetch + maps.
+async function fetchPipelineLookups(pit, locationId) {
+  const res = await fetch(`${GHL_BASE}/opportunities/pipelines?locationId=${encodeURIComponent(locationId)}`, {
+    headers: { Authorization: `Bearer ${pit}`, Version: GHL_VERSION },
+  });
+  if (!res.ok) {
+    console.warn(`[warn] pipelines fetch: ${res.status}`);
+    return { pipelineNameById: new Map(), stageNameById: new Map() };
+  }
+  const data = await res.json();
+  const pipelineNameById = new Map();
+  const stageNameById = new Map();
+  for (const p of data.pipelines ?? []) {
+    pipelineNameById.set(p.id, p.name ?? '');
+    for (const st of (p.stages ?? [])) {
+      stageNameById.set(st.id, st.name ?? '');
+    }
+  }
+  return { pipelineNameById, stageNameById };
+}
+
 // Resolve a single contact's custom field by trying each fallback key.
 // Returns the first non-empty value found.
 function valueOf(contact, fieldIdsByKey, candidates) {
@@ -214,6 +236,10 @@ async function main() {
   const contacts = await fetchAllContacts(pit, locationId);
   console.log(`  ${contacts.length} contacts`);
 
+  console.log('[shrewsbury-export] fetching pipelines + stages…');
+  const { pipelineNameById, stageNameById } = await fetchPipelineLookups(pit, locationId);
+  console.log(`  ${pipelineNameById.size} pipelines, ${stageNameById.size} stages`);
+
   console.log('[shrewsbury-export] fetching opportunities…');
   const opps = await fetchAllOpportunities(pit, locationId);
   console.log(`  ${opps.length} opportunities`);
@@ -255,16 +281,37 @@ async function main() {
       return String(b.updatedAt || '').localeCompare(String(a.updatedAt || ''));
     });
     const bestOpp = oppList[0];
-    row.opp_pipeline      = bestOpp?.pipelineId ? (bestOpp.pipelineName || bestOpp.pipelineId) : '';
-    row.opp_stage         = bestOpp?.pipelineStageName || bestOpp?.stageName || '';
+    const bestStageName = bestOpp ? (stageNameById.get(bestOpp.pipelineStageId) || stageNameById.get(bestOpp.pipelineStageUId) || '') : '';
+    const bestPipelineName = bestOpp ? (pipelineNameById.get(bestOpp.pipelineId) || '') : '';
+    row.opp_pipeline      = bestPipelineName || bestOpp?.pipelineId || '';
+    row.opp_stage         = bestStageName;
     row.opp_status        = bestOpp?.status || '';
     row.opp_value         = bestOpp?.monetaryValue ?? bestOpp?.value ?? '';
+    row.opp_source        = bestOpp?.source || '';
     row.opp_assigned_to   = bestOpp?.assignedTo || '';
     row.opp_created       = bestOpp?.createdAt || '';
     row.opp_updated       = bestOpp?.updatedAt || '';
+    row.opp_last_stage_change = bestOpp?.lastStageChangeAt || '';
     row.opps_total_count  = oppList.length;
-    row.opps_other_stages = oppList.slice(1).map((o) =>
-      `${o.pipelineStageName || o.stageName || '?'} (${o.status || '?'})`).join('; ');
+    row.opps_other_stages = oppList.slice(1).map((o) => {
+      const stage = stageNameById.get(o.pipelineStageId) || stageNameById.get(o.pipelineStageUId) || '?';
+      const pipe  = pipelineNameById.get(o.pipelineId) || '?';
+      return `${pipe} · ${stage} (${o.status || '?'})`;
+    }).join('; ');
+    // Aggregate every stage this contact's opportunities touch — useful
+    // for "show me anyone touching the Re-enrollment pipeline" filtering.
+    row.opp_all_stages = [...new Set(oppList.map((o) =>
+      stageNameById.get(o.pipelineStageId) || stageNameById.get(o.pipelineStageUId) || ''))]
+      .filter(Boolean).join('; ');
+    row.opp_all_pipelines = [...new Set(oppList.map((o) =>
+      pipelineNameById.get(o.pipelineId) || ''))]
+      .filter(Boolean).join('; ');
+    // School-flagged duplicate signal: Shrewsbury's Admissions Pipeline
+    // has a "Duplicate Family Member" stage their team already uses.
+    row.school_flagged_duplicate = oppList.some((o) => {
+      const name = stageNameById.get(o.pipelineStageId) || stageNameById.get(o.pipelineStageUId) || '';
+      return /duplicate/i.test(name);
+    }) ? 'Yes' : '';
 
     rows.push(row);
   }
@@ -317,6 +364,12 @@ async function main() {
       const others = collisions(byName1, name1, r.contact_id);
       if (others.length > 0) { flags.add('parent1_name'); others.forEach((o) => collidesWith.add(o)); }
     }
+    // Add Shrewsbury's own "Duplicate Family Member" stage as a flag —
+    // this is the strongest signal of all: a human at the school
+    // already triaged this and marked it a duplicate.
+    if (r.school_flagged_duplicate === 'Yes') {
+      flags.add('school_marked_duplicate');
+    }
     r.duplicate_flag    = flags.size > 0 ? 'DUP' : '';
     r.duplicate_reasons = [...flags].sort().join(', ');
     r.dup_with_contacts = [...collidesWith].sort().join('; ');
@@ -346,9 +399,11 @@ async function main() {
     'current_school', 'app_submitted_date', 'app_accepted_date', 'app_declined_date',
     'enrollment_start_date', 'admissions_total_fees',
     // Opportunity (best one per contact)
-    'opp_pipeline', 'opp_stage', 'opp_status', 'opp_value', 'opp_assigned_to',
-    'opp_created', 'opp_updated', 'opps_total_count', 'opps_other_stages',
+    'opp_pipeline', 'opp_stage', 'opp_status', 'opp_value', 'opp_source',
+    'opp_assigned_to', 'opp_created', 'opp_updated', 'opp_last_stage_change',
+    'opps_total_count', 'opp_all_pipelines', 'opp_all_stages', 'opps_other_stages',
     // Duplicates
+    'school_flagged_duplicate',
     'duplicate_flag', 'duplicate_reasons', 'dup_with_contacts',
   ];
 
