@@ -226,7 +226,7 @@ export async function PaymentsHubPlans({
               href={`/school/${locationId}/enrollments/start`}
               className="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
             >
-              <Plus className="h-4 w-4" /> Start an enrollment
+              <Plus className="h-4 w-4" /> Enroll a family
             </Link>
           ) : (
             <span className="text-xs text-amber-700 italic">
