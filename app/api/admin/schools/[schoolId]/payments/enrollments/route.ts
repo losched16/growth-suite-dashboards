@@ -83,6 +83,10 @@ export async function POST(request: NextRequest, { params }: { params: Params })
     const addonKeys = fd.getAll('addon_keys').map(String).filter(Boolean);
     const internalNote = String(fd.get('internal_note') ?? '').trim() || undefined;
     const initialStatus = fd.get('initial_status') === 'draft' ? 'draft' : 'open';
+    // School-chosen date the first tuition installment drafts (anchors
+    // the whole schedule). Optional 'YYYY-MM-DD'.
+    const firstDueRaw = String(fd.get('first_due_date') ?? '').trim();
+    const firstDueDate = /^\d{4}-\d{2}-\d{2}$/.test(firstDueRaw) ? firstDueRaw : null;
 
     if (!familyId)       return back(request, schoolId, { err: 'Family is required', href: returnTo });
     if (!academicYear)   return back(request, schoolId, { err: 'Academic year is required', href: returnTo });
@@ -120,8 +124,8 @@ export async function POST(request: NextRequest, { params }: { params: Params })
             tuition_grid_id, payment_plan_id,
             annual_tuition_cents, plan_discount_basis_points, addons,
             total_annual_cents, installment_count, schedule,
-            status, internal_note, created_by_email)
-         VALUES ($1,$2,$3,$4,$5,NULL,$6,0,$7::jsonb,$8,0,NULL,'active',$9,$10)
+            status, internal_note, created_by_email, first_due_date)
+         VALUES ($1,$2,$3,$4,$5,NULL,$6,0,$7::jsonb,$8,0,NULL,'active',$9,$10,$11)
          ON CONFLICT (school_id, family_id, student_id, academic_year)
          DO UPDATE SET
            tuition_grid_id = EXCLUDED.tuition_grid_id,
@@ -134,12 +138,13 @@ export async function POST(request: NextRequest, { params }: { params: Params })
            schedule = NULL,
            status = 'active',
            internal_note = COALESCE(EXCLUDED.internal_note, family_tuition_enrollments.internal_note),
+           first_due_date = EXCLUDED.first_due_date,
            updated_at = now()`,
         [
           schoolId, familyId, studentId, academicYear,
           tuitionGridId, grid.annual_tuition_cents,
           JSON.stringify(selectedAddons), total,
-          internalNote ?? null, 'operator@growthsuite.local',
+          internalNote ?? null, 'operator@growthsuite.local', firstDueDate,
         ],
       );
       return back(request, schoolId, {
@@ -159,6 +164,7 @@ export async function POST(request: NextRequest, { params }: { params: Params })
       internalNote,
       createdByEmail: 'operator@growthsuite.local',
       initialStatus,
+      firstDueDate,
     });
 
     return back(request, schoolId, {

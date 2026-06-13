@@ -54,6 +54,10 @@ export function EnrollmentSetupForm({
   const [gridId, setGridId] = useState('');
   const [planId, setPlanId] = useState(''); // '' = let the parent choose
   const [addonKeys, setAddonKeys] = useState<Set<string>>(new Set());
+  // First tuition payment drafts on this date (school's choice) — anchors
+  // the whole installment schedule. Default July 1 of the academic year.
+  const defaultFirstDue = `${academicYear.split('-')[0]}-07-01`;
+  const [firstDueDate, setFirstDueDate] = useState(defaultFirstDue);
 
   const famStudents = familyId ? (studentsByFamily[familyId] ?? []) : [];
 
@@ -211,6 +215,19 @@ export function EnrollmentSetupForm({
             ? 'You’re setting the plan for them. The parent will see it locked in and must contact the school to change it.'
             : 'The parent picks Annual / Semi-Annual / Monthly in their enrollment agreement — then it locks in.'}
         </p>
+
+        <label className="mt-3 block">
+          <span className={labelCls}>First tuition payment date *</span>
+          <input
+            type="date" name="first_due_date" required value={firstDueDate}
+            onChange={(e) => setFirstDueDate(e.target.value)}
+            className={inputCls + ' max-w-[12rem]'}
+          />
+          <span className="mt-0.5 block text-[11px] text-slate-500">
+            When the first installment drafts. The family signs now but isn&rsquo;t charged tuition until this date
+            (the enrollment deposit is due at signing). Autopay then drafts each installment automatically.
+          </span>
+        </label>
       </div>
 
       {/* Internal note */}

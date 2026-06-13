@@ -43,6 +43,11 @@ interface GenerateOpts {
   // and the next regen picks up the same override automatically.
   tuitionOverrideCents?: number | null;
   tuitionOverrideReason?: string | null;
+  // School-chosen date the FIRST installment drafts ('YYYY-MM-DD').
+  // Anchors the whole schedule (monthly = +1mo each, semi = +6mo each,
+  // annual/single = this date). Overrides the plan's month-day anchor.
+  // null/undefined → fall back to the plan's schedule defaults.
+  firstDueDate?: string | null;
 }
 
 interface GenerateResult {
@@ -135,7 +140,12 @@ export async function generateTuitionEnrollment(opts: GenerateOpts): Promise<Gen
   const skipInvoices = hasOverride && totalAnnualCents === 0;
 
   // ── 4. Compute the per-installment dates ─────────────────────────────
-  const dueDates = computeDueDates(plan.schedule_template, opts.academicYear, plan.installment_count, plan.first_due_month_day);
+  // A school-chosen first_due_date (absolute) anchors the schedule and
+  // wins over the plan's month-day default.
+  const anchor = parseAnchorDate(opts.firstDueDate);
+  const dueDates = anchor
+    ? datesFromAnchor(anchor, plan.schedule_template.kind, plan.installment_count)
+    : computeDueDates(plan.schedule_template, opts.academicYear, plan.installment_count, plan.first_due_month_day);
   if (dueDates.length !== plan.installment_count) {
     throw new Error(`Plan installment_count (${plan.installment_count}) doesn't match generated schedule (${dueDates.length} dates).`);
   }
@@ -164,13 +174,18 @@ export async function generateTuitionEnrollment(opts: GenerateOpts): Promise<Gen
   // school can fully verify its tuition setup against real family data
   // before any real money moves. Operator flips billing_active via the
   // Payments hub "Go live" action; existing drafts then upgrade to open.
-  const { rows: cfgRows } = await query<{ billing_active: boolean }>(
-    `SELECT COALESCE(billing_active, false) AS billing_active
+  const { rows: cfgRows } = await query<{ billing_active: boolean; autopay_default_on: boolean }>(
+    `SELECT COALESCE(billing_active, false) AS billing_active,
+            COALESCE(autopay_default_on, true) AS autopay_default_on
        FROM school_payment_config WHERE school_id = $1`,
     [opts.schoolId],
   );
   const billingActive = cfgRows[0]?.billing_active ?? false;
   const initialStatus = !billingActive ? 'draft' : (opts.initialStatus ?? 'open');
+  // Autopay on by default (school-configurable) — installments are
+  // created autopay-enabled so the moment a family saves a card, the
+  // schedule drafts automatically and the school never hand-invoices.
+  const autopayOn = cfgRows[0]?.autopay_default_on ?? true;
 
   const result = await withTransaction(async (q) => {
     // Upsert enrollment — replaces a prior enrollment for the same
@@ -190,11 +205,11 @@ export async function generateTuitionEnrollment(opts: GenerateOpts): Promise<Gen
           total_annual_cents, installment_count, schedule,
           status, internal_note, created_by_email,
           tuition_override_cents, tuition_override_reason,
-          tuition_override_set_by_email, tuition_override_set_at)
+          tuition_override_set_by_email, tuition_override_set_at, first_due_date)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10, $11, $12::jsonb,
                'active', $13, $14,
                $15, $16, $17,
-               CASE WHEN $15::int IS NULL THEN NULL ELSE now() END)
+               CASE WHEN $15::int IS NULL THEN NULL ELSE now() END, $18)
        ON CONFLICT (school_id, family_id, student_id, academic_year)
        DO UPDATE SET
          tuition_grid_id = EXCLUDED.tuition_grid_id,
@@ -211,6 +226,7 @@ export async function generateTuitionEnrollment(opts: GenerateOpts): Promise<Gen
          tuition_override_reason = EXCLUDED.tuition_override_reason,
          tuition_override_set_by_email = EXCLUDED.tuition_override_set_by_email,
          tuition_override_set_at = EXCLUDED.tuition_override_set_at,
+         first_due_date = COALESCE(EXCLUDED.first_due_date, family_tuition_enrollments.first_due_date),
          updated_at = now()
        RETURNING id`,
       [
@@ -222,7 +238,7 @@ export async function generateTuitionEnrollment(opts: GenerateOpts): Promise<Gen
         JSON.stringify(plan.schedule_template),
         opts.internalNote ?? null,
         opts.createdByEmail,
-        overrideCents, overrideReason, overrideSetBy,
+        overrideCents, overrideReason, overrideSetBy, opts.firstDueDate ?? null,
       ],
     );
     const enrollmentId = enrIns.rows[0].id;
@@ -358,9 +374,11 @@ export async function generateTuitionEnrollment(opts: GenerateOpts): Promise<Gen
               invoice_number, title, description,
               status, subtotal_cents, platform_fee_cents, discount_total_cents,
               total_cents, due_at, issued_at, source, source_ref,
-              includes_platform_setup_fee, created_by_email)
+              includes_platform_setup_fee, created_by_email,
+              autopay_enabled, autopay_charge_on)
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 0, $10,
-                   $11, $12, $13, 'tuition_plan', $14::jsonb, false, $15)
+                   $11, $12, $13, 'tuition_plan', $14::jsonb, false, $15,
+                   $16, $17)
            RETURNING id`,
           [
             opts.schoolId, opts.familyId, opts.studentId, party.parent_id,
@@ -377,6 +395,8 @@ export async function generateTuitionEnrollment(opts: GenerateOpts): Promise<Gen
               ...(party.parent_id ? { share_parent_id: party.parent_id } : {}),
             }),
             opts.createdByEmail,
+            autopayOn,
+            dueDate.toISOString().slice(0, 10),
           ],
         );
         const invoiceId = invIns.rows[0].id;
@@ -482,6 +502,36 @@ function buildInstallmentLines(opts: {
     lines[0].amount_cents = opts.installmentAmount;
   }
   return lines;
+}
+
+// Parse a school-chosen 'YYYY-MM-DD' first-due date into a UTC-noon
+// Date (noon dodges DST/timezone date-shift). Returns null if absent or
+// malformed so the caller falls back to the plan's schedule defaults.
+function parseAnchorDate(s: string | null | undefined): Date | null {
+  if (!s) return null;
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s.trim());
+  if (!m) return null;
+  const d = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3], 12, 0, 0));
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+// Build installment due dates from an ABSOLUTE first-due anchor (the
+// school's chosen first-payment date). monthly = +1 month each, semi =
+// +6 months each, single/annual = the anchor itself. The day-of-month
+// is clamped to each month's length (e.g. anchor 31st → Feb 28).
+function datesFromAnchor(anchor: Date, kind: string, count: number): Date[] {
+  const y = anchor.getUTCFullYear();
+  const mo = anchor.getUTCMonth();   // 0-11
+  const day = anchor.getUTCDate();
+  const at = (monthsOut: number) => {
+    const tgtY = y + Math.floor((mo + monthsOut) / 12);
+    const tgtM = (mo + monthsOut) % 12;
+    const lastDay = new Date(Date.UTC(tgtY, tgtM + 1, 0)).getUTCDate();
+    return new Date(Date.UTC(tgtY, tgtM, Math.min(day, lastDay), 12, 0, 0));
+  };
+  if (kind === 'single') return [anchor];
+  const stepMonths = kind === 'semiannual' ? 6 : 1; // monthly + fallback
+  return Array.from({ length: count }, (_, i) => at(i * stepMonths));
 }
 
 // Given a payment_plans.schedule_template + academic year, return one
