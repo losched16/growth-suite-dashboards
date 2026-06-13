@@ -38,7 +38,8 @@ export default async function RosterSettingsPage({ params }: { params: Params })
     `SELECT attr_key, attr_type, label, data_type, value_count, sample_values
        FROM school_filter_catalog WHERE school_id = $1
       ORDER BY CASE attr_type WHEN 'tag' THEN 0 WHEN 'opportunity_stage' THEN 1
-               WHEN 'opportunity_status' THEN 2 WHEN 'pipeline' THEN 3 ELSE 4 END,
+               WHEN 'opportunity_status' THEN 2 WHEN 'pipeline' THEN 3
+               WHEN 'facts' THEN 4 ELSE 5 END,
                value_count DESC, label`,
     [school.id],
   );

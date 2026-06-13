@@ -119,6 +119,54 @@ export async function syncGhlAttributes(schoolId: string): Promise<AttributeSync
   if (statusSet.size) catalog.push(['opp_status', 'opportunity_status', 'Opportunity status', null, 'select', JSON.stringify([...statusSet].sort()), opps.length]);
   if (pipeSet.size) catalog.push(['pipeline', 'pipeline', 'Pipeline', null, 'select', JSON.stringify([...pipeSet].sort()), opps.length]);
 
+  // FACTS billing attributes — per-student ledger figures imported into
+  // facts_transactions (charges/credits by category + totals). Registered
+  // in the same catalog so the customizer offers them as filters/columns
+  // next to the GHL fields. Only categories with at least one non-zero
+  // value for this school appear.
+  try {
+    const { rows: factsRows } = await query<{
+      charges: Record<string, number> | null;
+      credits: Record<string, number> | null;
+      total_charges_cents: number; total_credits_cents: number;
+      net_charges_cents: number; payments_cents: number;
+      credits_applied_cents: number; remaining_balance_cents: number;
+    }>(
+      `SELECT charges, credits, total_charges_cents, total_credits_cents,
+              net_charges_cents, payments_cents, credits_applied_cents, remaining_balance_cents
+         FROM facts_transactions
+        WHERE school_id = $1 AND student_id IS NOT NULL`,
+      [schoolId],
+    );
+    if (factsRows.length > 0) {
+      const counts = new Map<string, number>();
+      const bump = (k: string, v: unknown) => {
+        if (Number(v)) counts.set(k, (counts.get(k) ?? 0) + 1);
+      };
+      for (const r of factsRows) {
+        for (const [k, v] of Object.entries(r.charges ?? {})) bump(k, v);
+        for (const [k, v] of Object.entries(r.credits ?? {})) bump(k, v);
+        bump('total_charges', r.total_charges_cents);
+        bump('total_credits', r.total_credits_cents);
+        bump('net_charges', r.net_charges_cents);
+        bump('payments', r.payments_cents);
+        bump('credits_applied', r.credits_applied_cents);
+        bump('remaining_balance', r.remaining_balance_cents);
+      }
+      const human = (k: string) => {
+        const t = k.replace(/_/g, ' ');
+        return t.charAt(0).toUpperCase() + t.slice(1);
+      };
+      for (const [k, n] of [...counts.entries()].sort((a, b) => b[1] - a[1])) {
+        catalog.push([`facts:${k}`, 'facts', `${human(k)} (FACTS)`, null, 'number', JSON.stringify([]), n]);
+      }
+    }
+  } catch (err) {
+    // facts_transactions may not exist on fresh databases — the GHL
+    // catalog must still refresh.
+    console.warn('[ghl-attributes] facts catalog skipped:', err instanceof Error ? err.message : String(err));
+  }
+
   // 6. Persist — full refresh of the derived tables in one transaction.
   await withTransaction(async (q) => {
     await q(`DELETE FROM ghl_contact_tags WHERE school_id = $1`, [schoolId]);

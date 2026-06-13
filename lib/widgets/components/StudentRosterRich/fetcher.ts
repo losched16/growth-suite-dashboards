@@ -363,6 +363,9 @@ export async function fetcher(
   const oppByContact = new Map<string, { stages: Set<string>; statuses: Set<string>; pipelines: Set<string> }>();
   // family id → linked GHL contact ids (via parents)
   const contactsByFamily = new Map<string, string[]>();
+  // student id → FACTS ledger figures in cents (charges + credits +
+  // totals merged; split-household second ledgers sum together)
+  const factsByStudent = new Map<string, Map<string, number>>();
 
   if (activeAttrs.size > 0) {
     const { rows: cat } = await query<CatalogRow>(
@@ -435,18 +438,66 @@ export async function fetcher(
         oppByContact.set(o.ghl_contact_id, e);
       }
     }
+
+    // FACTS ledger figures, scoped to the selected school year. A
+    // student with two ledgers (split households) sums across them.
+    if ([...activeAttrs].some((a) => a.startsWith('facts:'))) {
+      const { rows: factsRows } = await query<{
+        student_id: string;
+        charges: Record<string, number> | null;
+        credits: Record<string, number> | null;
+        total_charges_cents: number; total_credits_cents: number;
+        net_charges_cents: number; payments_cents: number;
+        credits_applied_cents: number; remaining_balance_cents: number;
+      }>(
+        `SELECT student_id, charges, credits, total_charges_cents, total_credits_cents,
+                net_charges_cents, payments_cents, credits_applied_cents, remaining_balance_cents
+           FROM facts_transactions
+          WHERE school_id = $1 AND student_id IS NOT NULL
+            AND ($2::text = '' OR academic_year = $2)`,
+        [school.schoolId, fYear ?? ''],
+      );
+      for (const fr of factsRows) {
+        const m = factsByStudent.get(fr.student_id) ?? new Map<string, number>();
+        const add = (k: string, v: unknown) => {
+          const n = Number(v);
+          if (n) m.set(k, (m.get(k) ?? 0) + n);
+        };
+        for (const [k, v] of Object.entries(fr.charges ?? {})) add(k, v);
+        for (const [k, v] of Object.entries(fr.credits ?? {})) add(k, v);
+        add('total_charges', fr.total_charges_cents);
+        add('total_credits', fr.total_credits_cents);
+        add('net_charges', fr.net_charges_cents);
+        add('payments', fr.payments_cents);
+        add('credits_applied', fr.credits_applied_cents);
+        add('remaining_balance', fr.remaining_balance_cents);
+        factsByStudent.set(fr.student_id, m);
+      }
+    }
+  }
+
+  // "$4,950" / "$812.50" — cents to a display dollar string.
+  function fmtFactsCents(c: number): string {
+    const hasCents = c % 100 !== 0;
+    return `$${(c / 100).toLocaleString('en-US', {
+      minimumFractionDigits: hasCents ? 2 : 0,
+      maximumFractionDigits: 2,
+    })}`;
   }
 
   // Resolve one student's dynamic display values across their linked
   // contacts (family parents + the contact stamped on the student).
-  function resolveDynamic(familyId: string, md: Record<string, unknown>): Record<string, string> {
+  function resolveDynamic(studentId: string, familyId: string, md: Record<string, unknown>): Record<string, string> {
     if (activeAttrs.size === 0) return {};
     const contactIds = new Set<string>(contactsByFamily.get(familyId) ?? []);
     const mdContact = typeof md.ghl_contact_id === 'string' ? md.ghl_contact_id : null;
     if (mdContact) contactIds.add(mdContact);
     const out: Record<string, string> = {};
     for (const attr of activeAttrs) {
-      if (attr === 'tag') {
+      if (attr.startsWith('facts:')) {
+        const cents = factsByStudent.get(studentId)?.get(attr.slice(6));
+        if (cents != null) out[attr] = fmtFactsCents(cents);
+      } else if (attr === 'tag') {
         const tags = new Set<string>();
         for (const cid of contactIds) for (const t of tagsByContact.get(cid) ?? []) tags.add(t);
         if (tags.size) out.tag = [...tags].sort().join(', ');
@@ -588,7 +639,7 @@ export async function fetcher(
       pickup_restrictions: Array.isArray(r.pickup_restrictions_json) ? r.pickup_restrictions_json : [],
       re_enrolled: r.re_enrolled_flag === true,
       search_haystack: haystack,
-      dynamic: resolveDynamic(r.family_id, md),
+      dynamic: resolveDynamic(r.student_id, r.family_id, md),
     };
   });
 
@@ -651,8 +702,32 @@ export async function fetcher(
       if (f.exact) {
         const parts = display.split(', ').map((p) => p.trim().toLowerCase());
         if (!parts.includes(f.value.toLowerCase())) return false;
-      } else if (!display.toLowerCase().includes(f.value.toLowerCase())) {
-        return false;
+      } else {
+        // Numeric operators for money/number attrs (FACTS figures,
+        // numeric contact fields): ">0", ">=100", "<5000", "=395".
+        const opMatch = /^(>=|<=|>|<|=)\s*\$?([\d,]+(?:\.\d+)?)$/.exec(f.value);
+        const num = parseFloat(display.replace(/[^0-9.\-]/g, ''));
+        if (opMatch && display !== '' && Number.isFinite(num)) {
+          const target = parseFloat(opMatch[2].replace(/,/g, ''));
+          const op = opMatch[1];
+          const pass = op === '>' ? num > target
+            : op === '>=' ? num >= target
+            : op === '<' ? num < target
+            : op === '<=' ? num <= target
+            : num === target;
+          if (!pass) return false;
+        } else if (opMatch && display === '') {
+          // Operator filter on a student with no value → excluded
+          // (">0" means "has this charge").
+          return false;
+        } else if (
+          !display.toLowerCase().includes(f.value.toLowerCase())
+          // Money displays carry "$" and "," — match bare digits too,
+          // so typing 4950 finds "$4,950".
+          && !display.replace(/[$,]/g, '').toLowerCase().includes(f.value.toLowerCase())
+        ) {
+          return false;
+        }
       }
     }
     if (fProg && (s.program ?? s.classroom_name ?? '') !== fProg) return false;

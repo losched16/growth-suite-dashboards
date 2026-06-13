@@ -202,6 +202,34 @@ try {
   if (statusSet.size) catalog.push(['opp_status', 'opportunity_status', 'Opportunity status', null, 'select', JSON.stringify([...statusSet].sort()), opps.length]);
   if (pipeSet.size) catalog.push(['pipeline', 'pipeline', 'Pipeline', null, 'select', JSON.stringify([...pipeSet].sort()), opps.length]);
 
+  // FACTS billing attrs (mirrors lib/sync/ghl-attributes.ts — this
+  // script rebuilds the catalog wholesale, so it must re-register them
+  // or a manual run would wipe the FACTS filters).
+  try {
+    const { rows: factsRows } = await client.query(
+      `SELECT charges, credits, total_charges_cents, total_credits_cents,
+              net_charges_cents, payments_cents, credits_applied_cents, remaining_balance_cents
+         FROM facts_transactions WHERE school_id = $1 AND student_id IS NOT NULL`, [SCHOOL_ID]);
+    const counts = new Map();
+    const bump = (k, v) => { if (Number(v)) counts.set(k, (counts.get(k) ?? 0) + 1); };
+    for (const r of factsRows) {
+      for (const [k, v] of Object.entries(r.charges ?? {})) bump(k, v);
+      for (const [k, v] of Object.entries(r.credits ?? {})) bump(k, v);
+      bump('total_charges', r.total_charges_cents);
+      bump('total_credits', r.total_credits_cents);
+      bump('net_charges', r.net_charges_cents);
+      bump('payments', r.payments_cents);
+      bump('credits_applied', r.credits_applied_cents);
+      bump('remaining_balance', r.remaining_balance_cents);
+    }
+    const human = (k) => { const t = k.replace(/_/g, ' '); return t.charAt(0).toUpperCase() + t.slice(1); };
+    for (const [k, n] of [...counts.entries()].sort((a, b) => b[1] - a[1])) {
+      catalog.push([`facts:${k}`, 'facts', `${human(k)} (FACTS)`, null, 'number', JSON.stringify([]), n]);
+    }
+  } catch (e) {
+    console.warn('facts catalog skipped:', e.message);
+  }
+
   for (const row of catalog) {
     await client.query(
       `INSERT INTO school_filter_catalog (school_id, attr_key, attr_type, label, ghl_field_id, data_type, sample_values, value_count)

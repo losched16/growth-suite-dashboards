@@ -15,6 +15,7 @@ const TYPE_LABEL: Record<string, string> = {
   opportunity_status: 'Opportunities',
   pipeline: 'Opportunities',
   custom_field: 'Contact fields',
+  facts: 'FACTS billing',
 };
 
 export function RosterSettingsClient({
@@ -65,7 +66,7 @@ export function RosterSettingsClient({
       byGroup.set(g, list);
     }
     // Stable group order
-    return ['Tags', 'Opportunities', 'Contact fields', 'Other']
+    return ['Tags', 'Opportunities', 'FACTS billing', 'Contact fields', 'Other']
       .filter((g) => byGroup.has(g))
       .map((g) => ({ group: g, items: byGroup.get(g)! }));
   }, [attrs, search]);
