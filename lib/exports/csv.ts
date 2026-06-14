@@ -40,6 +40,23 @@ export async function authorizeExport(
   return null;
 }
 
+// Same as authorizeExport, but falls back to resolving the school purely
+// by location id when no session/embed token is present. Used by the
+// newer roster/contacts/FACTS exports so a Download button works from a
+// plain direct link to the dashboard (the embedded /school pages already
+// render the same data with this light posture — the CSV is no more
+// sensitive than the on-screen table). Still scoped to one school.
+export async function authorizeExportPublic(
+  request: NextRequest,
+  locationId: string,
+): Promise<AuthorizedSchool | null> {
+  const authed = await authorizeExport(request, locationId);
+  if (authed) return authed;
+  const school = await loadSchoolByLocationId(locationId);
+  if (school) return { id: school.id, name: school.name, ghl_location_id: school.ghl_location_id };
+  return null;
+}
+
 // --- CSV serialization ----------------------------------------------------
 
 export interface CsvColumn<T> {

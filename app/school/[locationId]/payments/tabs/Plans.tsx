@@ -222,12 +222,21 @@ export async function PaymentsHubPlans({
             </p>
           </div>
           {activeTemplateCount > 0 ? (
-            <Link
-              href={`/school/${locationId}/enrollments/start`}
-              className="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
-            >
-              <Plus className="h-4 w-4" /> Enroll a family
-            </Link>
+            <div className="flex items-center gap-2">
+              <Link
+                href={`/school/${locationId}/payments/bulk-tuition`}
+                className="inline-flex items-center gap-1.5 rounded-md border border-blue-300 bg-white px-4 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-50"
+                title="Set up payment schedules for all already-enrolled students at once, from their imported FACTS data"
+              >
+                <Plus className="h-4 w-4" /> Bulk-schedule from FACTS
+              </Link>
+              <Link
+                href={`/school/${locationId}/enrollments/start`}
+                className="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+              >
+                <Plus className="h-4 w-4" /> Enroll a family
+              </Link>
+            </div>
           ) : (
             <span className="text-xs text-amber-700 italic">
               Add at least one plan template above before enrolling families.

@@ -2,7 +2,7 @@
 // All filters live in the URL.
 
 import Link from 'next/link';
-import { LayoutGrid, List as ListIcon, AlertTriangle } from 'lucide-react';
+import { LayoutGrid, List as ListIcon, AlertTriangle, Download } from 'lucide-react';
 import { DocumentsCell } from './DocumentsCell';
 import { PrintButton } from '@/lib/widgets/components/_shared/PrintButton';
 import { SyncGhlButton } from '@/lib/widgets/components/_shared/SyncGhlButton';
@@ -445,6 +445,18 @@ function Component({
             label={view === 'allergies' ? 'Print allergies' : view === 'grid' ? 'Print grid' : 'Print roster'}
             title="Print the current view (list / grid / allergies)"
           />
+          <a
+            href={(() => {
+              const qs = new URLSearchParams();
+              for (const [k, v] of Object.entries(sp)) if (v && k !== 'view') qs.set(k, String(v));
+              const s = qs.toString();
+              return `/api/export/student-roster/${school.locationId}${s ? `?${s}` : ''}`;
+            })()}
+            className="inline-flex items-center gap-1 rounded-md border border-gray-300 bg-white px-2 py-1 text-xs text-gray-700 hover:bg-gray-50"
+            title="Download the current roster (your columns, in order, with the active filters) as a spreadsheet"
+          >
+            <Download className="h-3 w-3" /> Export CSV
+          </a>
           <a
             href={`/school/${school.locationId}/roster-settings`}
             className="rounded-md border border-gray-300 bg-white px-2 py-1 text-xs text-gray-700 hover:bg-gray-50"
