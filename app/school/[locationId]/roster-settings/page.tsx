@@ -62,6 +62,7 @@ export default async function RosterSettingsPage({ params }: { params: Params })
   // Row-dropdown customization. detail_sections undefined = all on.
   const currentDetailAttrs = Array.isArray(widget?.config?.detail_attrs) ? (widget?.config?.detail_attrs as string[]) : [];
   const currentDetailSections = Array.isArray(widget?.config?.detail_sections) ? (widget?.config?.detail_sections as string[]) : null;
+  const currentColumnOrder = Array.isArray(widget?.config?.column_order) ? (widget?.config?.column_order as string[]) : [];
 
   return (
     <main className="flex flex-1 flex-col items-center bg-slate-50 p-6 min-h-screen">
@@ -96,6 +97,7 @@ export default async function RosterSettingsPage({ params }: { params: Params })
             initialStaticFilters={currentStaticFilters}
             initialDetailAttrs={currentDetailAttrs}
             initialDetailSections={currentDetailSections}
+            initialColumnOrder={currentColumnOrder}
           />
         )}
       </div>

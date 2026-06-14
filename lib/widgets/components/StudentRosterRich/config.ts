@@ -88,6 +88,11 @@ export interface StudentRosterConfig {
   // students.metadata + the GHL attribute tables.
   extra_filters?: string[];
   extra_columns?: string[];
+  // Saved column order (built-in + added keys interleaved). When set, the
+  // roster + CSV export render the enabled columns in this order. Keys
+  // not present here fall to the end; keys here but not enabled are
+  // ignored. Edited via the "Column order" reorder list in Customize.
+  column_order?: string[];
   // Row-dropdown (family detail panel) customization:
   //   detail_sections — which BUILT-IN sections render (undefined = all)
   //   detail_attrs    — catalog attr_keys shown as extra detail rows
@@ -109,6 +114,19 @@ export const studentRosterDefaults: StudentRosterConfig = {
   page_size: 100,
   drilldown_dashboard_slug: 'family-hub',
 };
+
+// Order the set of ENABLED columns by the saved column_order: ordered
+// keys first (those still enabled), then any enabled key not in the
+// saved order, appended in their natural order. Shared by the roster
+// render + the CSV export so the spreadsheet matches the screen.
+export function orderColumns(order: string[] | undefined, enabled: string[]): string[] {
+  if (!order || order.length === 0) return enabled;
+  const enabledSet = new Set(enabled);
+  const orderSet = new Set(order);
+  const front = order.filter((k) => enabledSet.has(k));
+  const rest = enabled.filter((k) => !orderSet.has(k));
+  return [...front, ...rest];
+}
 
 export const studentRosterSchema: ConfigSchema = {
   fields: [

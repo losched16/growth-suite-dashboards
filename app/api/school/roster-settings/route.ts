@@ -30,6 +30,8 @@ interface Body {
   // rows + which built-in sections render.
   detail_attrs?: unknown;
   detail_sections?: unknown;
+  // Saved column display order (built-in + added keys interleaved).
+  column_order?: unknown;
 }
 
 export async function POST(request: NextRequest) {
@@ -78,6 +80,11 @@ export async function POST(request: NextRequest) {
     ? body.detail_sections.map(String).filter((k) => validSections.has(k)).slice(0, 20)
     : null;
 
+  // Column order: any built-in column key OR a valid catalog attr key.
+  const columnOrder = Array.isArray(body.column_order)
+    ? body.column_order.map(String).filter((k) => validCols.has(k) || valid.has(k)).slice(0, 100)
+    : null;
+
   // Load + update the student-roster widget config in place.
   const { rows } = await query<{ layout: Array<{ widget_id: string; config: Record<string, unknown> }> }>(
     `SELECT layout FROM school_dashboards WHERE school_id = $1 AND dashboard_slug = 'student-roster'`,
@@ -98,6 +105,7 @@ export async function POST(request: NextRequest) {
         ...(shownFilters !== null ? { shown_filters: shownFilters } : {}),
         ...(detailAttrs !== null ? { detail_attrs: detailAttrs } : {}),
         ...(detailSections !== null ? { detail_sections: detailSections } : {}),
+        ...(columnOrder !== null ? { column_order: columnOrder } : {}),
       };
       touched = true;
     }

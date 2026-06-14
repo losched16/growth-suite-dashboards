@@ -12,7 +12,7 @@ import {
   type CsvColumn,
 } from '@/lib/exports/csv';
 import { fetcher, type RosterStudent } from '@/lib/widgets/components/StudentRosterRich/fetcher';
-import { studentRosterDefaults, type StudentRosterConfig } from '@/lib/widgets/components/StudentRosterRich/config';
+import { studentRosterDefaults, orderColumns, type StudentRosterConfig } from '@/lib/widgets/components/StudentRosterRich/config';
 import type { WidgetSearchParams } from '@/lib/widgets/types';
 
 type Params = Promise<{ locationId: string }>;
@@ -68,11 +68,11 @@ export async function GET(request: NextRequest, { params }: { params: Params }) 
     sp,
   );
 
-  // Column order = configured built-in columns, then added (dynamic) ones.
-  const orderedKeys = [
+  // Column order = the school's saved order, over the enabled columns.
+  const orderedKeys = orderColumns(config.column_order, [
     ...(config.shown_columns ?? studentRosterDefaults.shown_columns ?? []),
     ...(config.extra_columns ?? []),
-  ];
+  ]);
   const cols: CsvColumn<RosterStudent>[] = orderedKeys.map((key) => {
     const base = BASE[key];
     if (base) return { key, label: base.label, value: base.value };

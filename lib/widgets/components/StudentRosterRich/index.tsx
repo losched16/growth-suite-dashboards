@@ -13,6 +13,7 @@ import {
   AVAILABLE_COLUMNS,
   studentRosterDefaults,
   studentRosterSchema,
+  orderColumns,
   type StudentRosterConfig,
   type FilterKey,
   type ColumnKey,
@@ -421,11 +422,12 @@ function Component({
   if (!enabledViews.includes(view)) view = enabledViews[0];
 
   const filters = config.shown_filters ?? studentRosterDefaults.shown_filters;
-  // Static columns + any catalog attrs the school added as columns.
-  const columns: string[] = [
+  // Static columns + any catalog attrs the school added as columns,
+  // reordered by the school's saved column_order.
+  const columns: string[] = orderColumns(config.column_order, [
     ...(config.shown_columns ?? studentRosterDefaults.shown_columns),
     ...(config.extra_columns ?? []),
-  ];
+  ]);
   const drilldown = config.drilldown_dashboard_slug ?? 'family-hub';
 
   return (
