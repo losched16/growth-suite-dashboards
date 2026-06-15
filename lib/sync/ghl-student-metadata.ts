@@ -59,6 +59,7 @@ export interface MetadataRefreshResult {
   students_updated: number;
   keys_updated: number;
   enrollments_reconciled: number;
+  students_with_conflicts: number;
 }
 
 export async function refreshStudentMetadataFromGhl(schoolId: string): Promise<MetadataRefreshResult> {
@@ -110,6 +111,7 @@ export async function refreshStudentMetadataFromGhl(schoolId: string): Promise<M
     students_updated: 0,
     keys_updated: 0,
     enrollments_reconciled: 0,
+    students_with_conflicts: 0,
   };
 
   for (const s of students) {
@@ -121,15 +123,42 @@ export async function refreshStudentMetadataFromGhl(schoolId: string): Promise<M
     // First non-empty value across the family's contacts, primary
     // parent's contact first (the writeback mirrors slot fields onto
     // every linked parent, so they normally agree — ordering only
-    // matters when the school edited just one contact).
+    // matters when the school edited just one contact). perBase also
+    // tracks every distinct value per field so we can flag co-parent
+    // contacts that DISAGREE (e.g. one says Enrolled, the other Accepted).
     const merged = new Map<string, string>();
+    const perBase = new Map<string, Set<string>>();
     for (const contactId of contactsByFamily.get(s.family_id) ?? []) {
       const bases = bySlot.get(contactId)?.get(slot);
       if (!bases) continue;
       for (const [base, v] of bases) {
         if (!merged.has(base)) merged.set(base, v);
+        const set = perBase.get(base) ?? new Set<string>();
+        set.add(v);
+        perBase.set(base, set);
       }
     }
+
+    // Conflicts = fields where the linked contacts hold different values.
+    // Stored on metadata.ghl_conflicts (or cleared) so the roster + a
+    // cleanup export can surface exactly what to reconcile in GHL.
+    const conflicts: Record<string, string[]> = {};
+    for (const [base, set] of perBase) if (set.size > 1) conflicts[base] = [...set];
+    const hasConflicts = Object.keys(conflicts).length > 0;
+    const prevConf = md.ghl_conflicts ? JSON.stringify(md.ghl_conflicts) : null;
+    const nextConf = hasConflicts ? JSON.stringify(conflicts) : null;
+    if (prevConf !== nextConf) {
+      if (hasConflicts) {
+        await query(
+          `UPDATE students SET metadata = COALESCE(metadata, '{}'::jsonb) || jsonb_build_object('ghl_conflicts', $2::jsonb), updated_at = now() WHERE id = $1`,
+          [s.id, nextConf],
+        );
+      } else {
+        await query(`UPDATE students SET metadata = metadata - 'ghl_conflicts', updated_at = now() WHERE id = $1`, [s.id]);
+      }
+    }
+    if (hasConflicts) result.students_with_conflicts++;
+
     if (merged.size === 0) continue;
 
     // Reconcile the enrollment status enum (read by every dashboard)

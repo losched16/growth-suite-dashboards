@@ -169,6 +169,9 @@ export interface StudentRosterData {
   // static filters) + header labels for any dynamic columns.
   dynamic_filters: DynamicFilterDef[];
   dynamic_labels: Record<string, string>;
+  // Count of active students whose linked Growth Suite contacts disagree
+  // on a field (metadata.ghl_conflicts). Drives the roster warning pill.
+  ghl_conflict_count: number;
   // For Allergies view
   allergies_by_homeroom: Array<{
     homeroom: string;
@@ -807,6 +810,12 @@ export async function fetcher(
   const dynamic_labels: Record<string, string> = {};
   for (const c of catalogRows) dynamic_labels[c.attr_key] = c.label;
 
+  const { rows: confRows } = await query<{ n: number }>(
+    `SELECT COUNT(*)::int AS n FROM students
+      WHERE school_id = $1 AND status = 'active' AND metadata ? 'ghl_conflicts'`,
+    [school.schoolId],
+  );
+
   return {
     total_students: all.length,
     filtered,
@@ -817,6 +826,7 @@ export async function fetcher(
     options,
     dynamic_filters,
     dynamic_labels,
+    ghl_conflict_count: confRows[0]?.n ?? 0,
     allergies_by_homeroom,
   };
 }

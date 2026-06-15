@@ -439,6 +439,15 @@ function Component({
             {data.filtered.length} student{data.filtered.length === 1 ? '' : 's'}
             {data.filtered.length !== data.total_students ? ` (filtered from ${data.total_students})` : ''}
           </p>
+          {data.ghl_conflict_count > 0 ? (
+            <a
+              href={`/api/export/ghl-conflicts/${school.locationId}`}
+              className="mt-1 inline-flex items-center gap-1 rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-800 hover:bg-amber-100 print:hidden"
+              title="Students whose two parent/guardian contacts hold different values for a field. Click to download the list with contact links, then reconcile them in Growth Suite."
+            >
+              <AlertTriangle className="h-3 w-3" /> {data.ghl_conflict_count} contact{data.ghl_conflict_count === 1 ? '' : 's'} disagree — download list
+            </a>
+          ) : null}
         </div>
         <div className="flex items-center gap-2 print:hidden">
           <SyncGhlButton locationId={school.locationId} />
