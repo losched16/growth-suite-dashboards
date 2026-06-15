@@ -12,6 +12,7 @@ export interface InboxRow {
   form_slug: string;
   form_name: string;
   category: string | null;
+  family_id: string | null;
   family_label: string;
   parent_name: string;
   parent_email: string | null;
@@ -64,6 +65,7 @@ export async function fetcher(
        d.display_name AS form_name,
        d.category,
        d.needs_review AS def_needs_review,
+       f.id AS family_id,
        COALESCE(NULLIF(f.display_name, ''),
                 CONCAT_WS(' ', p_lead.first_name, p_lead.last_name),
                 '(unnamed family)') AS family_label,

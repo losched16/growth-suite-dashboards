@@ -32,8 +32,24 @@ function StatusPill({ status, payment }: { status: string; payment: string | nul
 }
 
 function GhlSyncBadge({ syncedAt, error }: { syncedAt: string | null; error: string | null }) {
-  if (error) {
+  // Differentiate "partial sync" (some fields skipped because they don't
+  // exist in the GHL location yet — typically per-student fields for a
+  // family with fewer kids than the template assumes) from a real error
+  // (HTTP failure / auth / network). Wooster's "GHL: error" panic on
+  // Rachel's Enrollment Agreement was actually just one skipped key.
+  const isPartial = !!error && !!syncedAt && /^skipped keys:/i.test(error.trim());
+  if (error && !isPartial) {
     return <span className="text-[10px] text-red-700" title={error}>GHL: error</span>;
+  }
+  if (isPartial) {
+    return (
+      <span
+        className="text-[10px] text-amber-700"
+        title={`${error} (writeback completed; these fields are not configured in your GHL location yet)`}
+      >
+        GHL: partial
+      </span>
+    );
   }
   if (syncedAt) {
     return <span className="text-[10px] text-emerald-700">GHL: synced</span>;
@@ -41,7 +57,7 @@ function GhlSyncBadge({ syncedAt, error }: { syncedAt: string | null; error: str
   return <span className="text-[10px] text-gray-400">GHL: pending</span>;
 }
 
-function PortalFormsInboxComponent({ data }: { data: PortalFormsInboxData }) {
+function PortalFormsInboxComponent({ data, school }: { data: PortalFormsInboxData; school: { locationId: string } }) {
   if (data.rows.length === 0 && data.total_count === 0) {
     return (
       <div className="rounded-lg border border-gray-200 bg-white p-6 text-center text-sm text-gray-500">
@@ -60,7 +76,7 @@ function PortalFormsInboxComponent({ data }: { data: PortalFormsInboxData }) {
         </div>
       </div>
       <ul className="divide-y divide-gray-100">
-        {data.rows.map((r) => <Row key={r.id} r={r} />)}
+        {data.rows.map((r) => <Row key={r.id} r={r} locationId={school.locationId} />)}
       </ul>
     </div>
   );
@@ -71,7 +87,7 @@ function fmtCents(cents: number | null | undefined): string {
   return `$${(cents / 100).toFixed(2)}`;
 }
 
-function Row({ r }: { r: InboxRow }) {
+function Row({ r, locationId }: { r: InboxRow; locationId: string }) {
   return (
     <li className="px-4 py-2.5 flex flex-wrap items-start gap-x-4 gap-y-1">
       <div className="min-w-0 flex-1">
@@ -109,7 +125,17 @@ function Row({ r }: { r: InboxRow }) {
           ) : null}
         </div>
         <div className="text-xs text-gray-600 truncate">
-          {r.family_label}
+          {r.family_id ? (
+            <a
+              href={`/school/${locationId}/families/${r.family_id}/forms?chrome=none`}
+              className="text-emerald-700 hover:underline"
+              title="View all forms this family has submitted"
+            >
+              {r.family_label}
+            </a>
+          ) : (
+            <span>{r.family_label}</span>
+          )}
           {r.student_name ? ` · ${r.student_name}` : ''}
           {' · by '}
           {r.parent_name}

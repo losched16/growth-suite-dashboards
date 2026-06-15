@@ -240,6 +240,52 @@ export async function GET(_request: NextRequest, { params }: { params: Params })
     [schoolId, familyId],
   );
 
+  // Every submitted parent-portal form for this family — both
+  // family-level forms (family_id match) AND per-student forms (any
+  // student in the family). Used by the "Submitted forms" accordion
+  // section so the admin can click a family → instantly see what they
+  // signed, when, and drill into the detail (signature image + all
+  // responses).
+  const { rows: all_submitted_forms } = await query<{
+    submission_id: string;
+    form_definition_id: string;
+    form_display_name: string;
+    form_slug: string;
+    form_category: string | null;
+    student_id: string | null;
+    student_display_name: string | null;
+    submitted_at: string;
+    status: string;
+    is_test: boolean;
+    parent_email: string | null;
+  }>(
+    `SELECT s.id AS submission_id,
+            d.id AS form_definition_id,
+            d.display_name AS form_display_name,
+            d.slug AS form_slug,
+            d.category AS form_category,
+            s.student_id,
+            CASE WHEN s.student_id IS NOT NULL THEN
+              (SELECT COALESCE(NULLIF(st.preferred_name, ''), st.first_name) || ' ' || st.last_name
+                 FROM students st WHERE st.id = s.student_id)
+              ELSE NULL END AS student_display_name,
+            to_char(s.submitted_at, 'YYYY-MM-DD"T"HH24:MI:SSOF') AS submitted_at,
+            s.status,
+            COALESCE(s.is_test, false) AS is_test,
+            (SELECT email FROM parents WHERE id = s.parent_id) AS parent_email
+       FROM portal_form_submissions s
+       JOIN portal_form_definitions d ON d.id = s.form_definition_id
+      WHERE s.school_id = $1
+        AND COALESCE(d.audience, 'parents') = 'parents'
+        AND (
+          s.family_id = $2
+          OR s.student_id IN (SELECT id FROM students WHERE family_id = $2 AND school_id = $1)
+        )
+      ORDER BY s.submitted_at DESC NULLS LAST
+      LIMIT 200`,
+    [schoolId, familyId],
+  );
+
   // Self-serve extra detail attributes: the school's Customize picks
   // (detail_attrs on the roster widget config) resolved for this
   // family from the synced GHL attribute tables.
@@ -268,6 +314,7 @@ export async function GET(_request: NextRequest, { params }: { params: Params })
     health_profiles,
     enrollment_meta,
     medical_forms,
+    all_submitted_forms,
     extra_attrs,
   });
 }
