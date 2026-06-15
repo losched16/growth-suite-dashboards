@@ -33,11 +33,32 @@ const SKIP_BASES = new Set([
   'first_name', 'last_name', 'preferred_name', 'birth_date', 'gender', 'id',
 ]);
 
+// Map the GHL contact's free-text "Student Enrollment Status" to our
+// enrollments.status enum, so the Family Hub / roster / enrollment
+// dashboards (which read enrollments.status) stay consistent with the
+// contact record. Unrecognized values are left alone — we never clobber
+// a real status with a guess.
+function mapEnrollmentStatus(raw: string): string | null {
+  const t = raw.trim().toLowerCase();
+  if (!t) return null;
+  if (/(re-?enroll|^enrolled|currently enrolled)/.test(t)) return 'enrolled';
+  if (t.startsWith('accept')) return 'accepted';
+  if (t.startsWith('pending')) return 'pending';
+  if (t.startsWith('withdraw')) return 'withdrawn';
+  if (t.startsWith('declin')) return 'declined';
+  if (t.startsWith('waitlist')) return 'waitlisted';
+  if (t.startsWith('inquir')) return 'inquiry';
+  if (/tour/.test(t)) return 'tour_scheduled';
+  if (/(applied|application)/.test(t)) return 'application_submitted';
+  return null;
+}
+
 export interface MetadataRefreshResult {
   students_scanned: number;
   students_with_slot: number;
   students_updated: number;
   keys_updated: number;
+  enrollments_reconciled: number;
 }
 
 export async function refreshStudentMetadataFromGhl(schoolId: string): Promise<MetadataRefreshResult> {
@@ -88,6 +109,7 @@ export async function refreshStudentMetadataFromGhl(schoolId: string): Promise<M
     students_with_slot: 0,
     students_updated: 0,
     keys_updated: 0,
+    enrollments_reconciled: 0,
   };
 
   for (const s of students) {
@@ -109,6 +131,26 @@ export async function refreshStudentMetadataFromGhl(schoolId: string): Promise<M
       }
     }
     if (merged.size === 0) continue;
+
+    // Reconcile the enrollment status enum (read by every dashboard)
+    // with the GHL contact's value, so the badge matches the contact
+    // record. Touches only the student's most-recent enrollment, only
+    // when the mapped status actually differs.
+    const ghlEnr = merged.get('enrollment_status');
+    if (ghlEnr) {
+      const mapped = mapEnrollmentStatus(ghlEnr);
+      if (mapped) {
+        const { rowCount } = await query(
+          `UPDATE enrollments e
+              SET status = $2, updated_at = now()
+            WHERE e.student_id = $1
+              AND e.academic_year = (SELECT MAX(academic_year) FROM enrollments WHERE student_id = $1)
+              AND e.status <> $2`,
+          [s.id, mapped],
+        );
+        if (rowCount && rowCount > 0) result.enrollments_reconciled += rowCount;
+      }
+    }
 
     const patch: Record<string, string> = {};
     for (const [base, v] of merged) {
