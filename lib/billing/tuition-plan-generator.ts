@@ -48,6 +48,12 @@ interface GenerateOpts {
   // annual/single = this date). Overrides the plan's month-day anchor.
   // null/undefined → fall back to the plan's schedule defaults.
   firstDueDate?: string | null;
+  // Explicit annual line breakdown (e.g. FACTS categories: Tuition,
+  // Extended Day, fees, minus discounts) that SUM to tuitionOverrideCents.
+  // When provided, each installment's lines are these prorated to the
+  // installment, and the discount engine is skipped (the amounts are
+  // already final). So the parent sees the real breakdown on each invoice.
+  overrideLines?: Array<{ description: string; amount_cents: number; category: string }>;
 }
 
 interface GenerateResult {
@@ -322,39 +328,47 @@ export async function generateTuitionEnrollment(opts: GenerateOpts): Promise<Gen
 
         // Pro-rate each line across this party's portion of the
         // installment so per-line totals sum to partyInstallment exactly.
-        const lines = buildInstallmentLines({
-          gridDisplayName: grid.display_name,
-          tuitionTotal: shares.length > 0
-            ? Math.round((discountedTuition * shareBp[p]) / 10000)
-            : discountedTuition,
-          addons: shares.length > 0
-            ? selectedAddons.map((a) => ({
-                ...a,
-                amount_cents: Math.round((a.amount_cents * shareBp[p]) / 10000),
-              }))
-            : selectedAddons,
-          installmentAmount: partyInstallment,
-          annualTotal: shares.length > 0
-            ? Math.round((totalAnnualCents * shareBp[p]) / 10000)
-            : totalAnnualCents,
-          installmentNumber,
-          installmentCount: plan.installment_count,
-        });
+        // When an explicit breakdown is supplied (FACTS migration), use
+        // it verbatim — prorated to this installment — so the parent sees
+        // Tuition / Extended Day / discounts on every invoice.
+        const lines = opts.overrideLines && opts.overrideLines.length > 0
+          ? prorateOverrideLines(opts.overrideLines, partyInstallment, totalAnnualCents)
+          : buildInstallmentLines({
+              gridDisplayName: grid.display_name,
+              tuitionTotal: shares.length > 0
+                ? Math.round((discountedTuition * shareBp[p]) / 10000)
+                : discountedTuition,
+              addons: shares.length > 0
+                ? selectedAddons.map((a) => ({
+                    ...a,
+                    amount_cents: Math.round((a.amount_cents * shareBp[p]) / 10000),
+                  }))
+                : selectedAddons,
+              installmentAmount: partyInstallment,
+              annualTotal: shares.length > 0
+                ? Math.round((totalAnnualCents * shareBp[p]) / 10000)
+                : totalAnnualCents,
+              installmentNumber,
+              installmentCount: plan.installment_count,
+            });
 
         // Discounts evaluation per-installment. For split billing we
         // evaluate on the party's portion so e.g. a $50 sibling discount
         // gets split proportionally (60% parent pays $30, 40% parent
-        // pays $20). Same downstream policy machinery — no special case.
-        const discountResult = await evaluateDiscounts({
-          schoolId: opts.schoolId,
-          familyId: opts.familyId,
-          studentId: opts.studentId,
-          lines: lines.map((l) => ({
-            description: l.description,
-            amount_cents: l.amount_cents,
-            category: l.category,
-          })),
-        });
+        // pays $20). Skipped when an explicit breakdown is supplied —
+        // those amounts are already net of all discounts.
+        const discountResult = opts.overrideLines && opts.overrideLines.length > 0
+          ? { lines: [], total_cents: 0, applications: [] as Awaited<ReturnType<typeof evaluateDiscounts>>['applications'] }
+          : await evaluateDiscounts({
+              schoolId: opts.schoolId,
+              familyId: opts.familyId,
+              studentId: opts.studentId,
+              lines: lines.map((l) => ({
+                description: l.description,
+                amount_cents: l.amount_cents,
+                category: l.category,
+              })),
+            });
         const subtotalCents = lines.reduce((s, l) => s + l.amount_cents, 0);
         const discountCents = discountResult.total_cents;
         const totalCents = Math.max(0, subtotalCents - discountCents);
@@ -453,6 +467,31 @@ interface LineDraft {
   description: string;
   amount_cents: number;
   category: string;
+}
+
+// Prorate an explicit annual line breakdown (FACTS categories, incl.
+// negative discount lines) down to one installment. Each line scales by
+// installmentAmount / annualTotal; any rounding remainder lands on the
+// largest charge line so the lines sum to installmentAmount exactly.
+function prorateOverrideLines(
+  annual: Array<{ description: string; amount_cents: number; category: string }>,
+  installmentAmount: number,
+  annualTotal: number,
+): LineDraft[] {
+  if (annualTotal <= 0) return [];
+  const out: LineDraft[] = annual.map((l) => ({
+    description: l.description,
+    amount_cents: Math.round((l.amount_cents * installmentAmount) / annualTotal),
+    category: l.category,
+  }));
+  const sum = out.reduce((a, b) => a + b.amount_cents, 0);
+  const diff = installmentAmount - sum;
+  if (diff !== 0 && out.length > 0) {
+    let idx = -1, max = -Infinity;
+    for (let i = 0; i < out.length; i++) if (out[i].amount_cents > max) { max = out[i].amount_cents; idx = i; }
+    out[idx].amount_cents += diff;
+  }
+  return out.filter((l) => l.amount_cents !== 0);
 }
 
 function buildInstallmentLines(opts: {

@@ -66,6 +66,19 @@ export async function POST(request: NextRequest, { params }: { params: Params })
     for (const r of ready) {
       if (done.has(r.student_id)) { skipped++; continue; }
       try {
+        // Carry the FACTS breakdown onto the invoices so the parent sees
+        // Tuition / Extended Day / fees / discounts per installment. A
+        // reconciliation line absorbs any prior payments when scheduling
+        // the remaining balance, so the lines sum to the amount billed.
+        const bdSum = r.breakdown.reduce((a, b) => a + b.amount_cents, 0);
+        const overrideLines = r.breakdown.map((b) => ({
+          description: b.label,
+          amount_cents: b.amount_cents,
+          category: b.kind === 'credit' ? 'plan_discount' : (b.key === 'annual_tuition' ? 'tuition' : 'tuition_addon'),
+        }));
+        if (bdSum !== r.amount_cents) {
+          overrideLines.push({ description: 'Prior payments / credits applied', amount_cents: r.amount_cents - bdSum, category: 'paid_credit' });
+        }
         await generateTuitionEnrollment({
           schoolId,
           familyId: r.family_id,
@@ -77,6 +90,7 @@ export async function POST(request: NextRequest, { params }: { params: Params })
           tuitionOverrideCents: r.amount_cents,
           tuitionOverrideReason: `Migrated from FACTS ${YEAR}`,
           firstDueDate,
+          overrideLines: overrideLines.length ? overrideLines : undefined,
           createdByEmail: 'operator@growthsuite.local',
           initialStatus: 'open',
         });
