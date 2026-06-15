@@ -13,6 +13,22 @@ export interface GhlContact {
   dateUpdated?: string;
 }
 
+// Fetch one contact's full record by id. Returns null when not found
+// or when the API errors out (caller decides whether to retry / log).
+export async function getContact(
+  client: GhlClient,
+  contactId: string,
+): Promise<GhlContact | null> {
+  try {
+    const { data } = await client.axios.get<{ contact?: GhlContact }>(
+      `/contacts/${contactId}`,
+    );
+    return data?.contact ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export interface SearchContactsParams {
   client: GhlClient;
   filters?: Array<Record<string, unknown>>;

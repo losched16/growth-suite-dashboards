@@ -24,6 +24,8 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import crypto from 'node:crypto';
 import { query, withTransaction } from '@/lib/db';
+import { loadGhlClient } from '@/lib/ghl/client';
+import { getContact } from '@/lib/ghl/contacts';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -168,6 +170,143 @@ async function applyToParent(
   });
 }
 
+// Full-sync flow: on a webhook event we don't trust the payload's
+// fields alone — the workflow Custom Webhook can be configured to send
+// only a subset, and Marketplace events can also drop fields. Instead
+// we ask GHL for the full contact record and overwrite all our fields
+// from the source of truth. Makes "GHL is canonical" actually true.
+async function applyFullSync(
+  schoolId: string,
+  contactId: string,
+): Promise<ApplyResult> {
+  return withTransaction(async (q) => {
+    const { rows: existing } = await q<{ id: string; family_id: string; last_name: string | null }>(
+      `SELECT id, family_id, last_name FROM parents
+        WHERE school_id = $1 AND ghl_contact_id = $2 LIMIT 1`,
+      [schoolId, contactId],
+    );
+    if (existing.length === 0) return { rowsAffected: 0, status: 'ignored' };
+    const { id: parentId, family_id: familyId, last_name: oldLastName } = existing[0];
+
+    // Fetch the canonical record from GHL. If the call fails (rate
+    // limit, transient 5xx, deleted contact), fall back to "no-op" so
+    // the webhook still 200s — better to miss this update than to
+    // null-out fields with bad data.
+    const client = await loadGhlClient(schoolId).catch(() => null);
+    if (!client) return { rowsAffected: 0, status: 'ignored' };
+    const ghlContact = await getContact(client, contactId);
+    if (!ghlContact) return { rowsAffected: 0, status: 'ignored' };
+
+    // Index custom field values by field id for lookup.
+    const cfById = new Map<string, unknown>();
+    for (const cf of ghlContact.customFields ?? []) {
+      if (cf.id) cfById.set(cf.id, cf.value);
+    }
+
+    // Resolve the school's GHL custom-field catalog so we can map
+    // student_first_name etc. by NAME instead of by opaque id.
+    const { rows: catalog } = await q<{ field_key: string; ghl_field_id: string }>(
+      `SELECT field_key, ghl_field_id FROM ghl_attributes_catalog
+        WHERE school_id = $1`,
+      [schoolId],
+    );
+    const idByKey = new Map(catalog.map((r) => [r.field_key, r.ghl_field_id]));
+    const cfByKey = (key: string): string | null => {
+      const id = idByKey.get(key);
+      if (!id) return null;
+      const v = cfById.get(id);
+      if (v == null) return null;
+      const s = String(v).trim();
+      return s ? s : null;
+    };
+
+    // 1. Update the parent — basic fields from the top-level GHL record.
+    const firstName = ghlContact.firstName?.trim() || null;
+    const lastName  = ghlContact.lastName?.trim() || null;
+    const email     = ghlContact.email ?? null;
+    const phone     = ghlContact.phone ?? null;
+
+    let rowsAffected = 0;
+    const { rowCount: pCount } = await q(
+      `UPDATE parents
+          SET first_name = COALESCE($3, first_name),
+              last_name  = COALESCE($4, last_name),
+              email      = COALESCE($5, email),
+              phone      = COALESCE($6, phone),
+              updated_at = now()
+        WHERE id = $7 AND school_id = $1 AND ghl_contact_id = $2`,
+      [schoolId, contactId, firstName, lastName, email, phone, parentId],
+    );
+    rowsAffected += pCount ?? 0;
+
+    // 2. Cascade last-name change to students that share the parent's
+    // OLD last name (handles blended families correctly — students with
+    // a different surname are left alone).
+    if (lastName && oldLastName && lastName !== oldLastName) {
+      const { rowCount: sCount } = await q(
+        `UPDATE students
+            SET last_name = $3, updated_at = now()
+          WHERE school_id = $1 AND family_id = $2 AND last_name = $4`,
+        [schoolId, familyId, lastName, oldLastName],
+      );
+      rowsAffected += sCount ?? 0;
+    }
+
+    // 3. Sync per-student custom fields. Wooster (and others) store
+    // student details as numbered slot fields on the parent contact:
+    //   student_first_name, student_last_name, student_date_of_birth,
+    //   student_2_first_name, student_2_last_name, ...
+    // We update the matching student rows in slot order. If the family
+    // has fewer kids than the GHL contact has student slots, the extra
+    // slots are ignored — onboarding/sync flow handles new students.
+    const { rows: kids } = await q<{ id: string; first_name: string; last_name: string }>(
+      `SELECT id, first_name, last_name FROM students
+        WHERE school_id = $1 AND family_id = $2 AND status = 'active'
+        ORDER BY first_name`,
+      [schoolId, familyId],
+    );
+    const slots = [
+      { suffix: '',   index: 0 },
+      { suffix: '_2', index: 1 },
+      { suffix: '_3', index: 2 },
+      { suffix: '_4', index: 3 },
+      { suffix: '_5', index: 4 },
+      { suffix: '_6', index: 5 },
+    ];
+    for (const slot of slots) {
+      const kid = kids[slot.index];
+      if (!kid) continue;
+      const sFirst = cfByKey(`student${slot.suffix}_first_name`);
+      const sLast  = cfByKey(`student${slot.suffix}_last_name`);
+      if (!sFirst && !sLast) continue;
+      const { rowCount: stCount } = await q(
+        `UPDATE students
+            SET first_name = COALESCE($3, first_name),
+                last_name  = COALESCE($4, last_name),
+                updated_at = now()
+          WHERE id = $1 AND school_id = $2`,
+        [kid.id, schoolId, sFirst, sLast],
+      );
+      rowsAffected += stCount ?? 0;
+    }
+
+    // 4. Family display name follows the primary parent's full name
+    //    "FirstName LastName" when the school doesn't set a custom one.
+    //    Only touch when both names are present so we don't blank it.
+    if (firstName && lastName) {
+      const { rowCount: fCount } = await q(
+        `UPDATE families
+            SET display_name = $1, updated_at = now()
+          WHERE id = $2 AND school_id = $3`,
+        [`${firstName} ${lastName}`, familyId, schoolId],
+      );
+      rowsAffected += fCount ?? 0;
+    }
+
+    return { rowsAffected, status: 'applied' };
+  });
+}
+
 async function resolveSchoolId(locationId: string | null): Promise<string | null> {
   if (!locationId) return null;
   const { rows } = await query<{ id: string }>(
@@ -257,9 +396,23 @@ export async function POST(request: NextRequest) {
       && (contact.event_type === 'ContactUpdate' || contact.event_type === 'ContactCreate'
           || contact.event_type.toLowerCase().includes('contact'))) {
     try {
-      const r = await applyToParent(schoolId, contact);
+      // Full-sync path: fetch the canonical contact from GHL and
+      // overwrite all our fields (basic + per-student custom-field
+      // slots + family display name). This is what makes GHL the
+      // source of truth — workflow payload field set doesn't matter.
+      const r = await applyFullSync(schoolId, contact.contact_id);
       status = r.status;
       rowsAffected = r.rowsAffected;
+      // Fallback to the payload-only apply if the full-sync was a
+      // no-op (e.g. GHL API down) AND the payload has real field
+      // values. Better to capture some change than miss it entirely.
+      if (status === 'ignored' && (contact.first_name || contact.last_name || contact.email || contact.phone)) {
+        const fallback = await applyToParent(schoolId, contact);
+        if (fallback.status === 'applied') {
+          status = fallback.status;
+          rowsAffected = fallback.rowsAffected;
+        }
+      }
     } catch (err) {
       status = 'failed';
       errorMessage = err instanceof Error ? err.message : String(err);
