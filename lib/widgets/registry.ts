@@ -28,6 +28,7 @@ import { DonorDashboard } from './components/DonorDashboard';
 import { FinancialAidQueue } from './components/FinancialAidQueue';
 import { AttendanceDashboard } from './components/AttendanceDashboard';
 import { PortalFormsCompletionGrid } from './components/PortalFormsCompletionGrid';
+import { PortalFormsTracker } from './components/PortalFormsTracker';
 import { PortalFormsInbox } from './components/PortalFormsInbox';
 import { PaymentsOverview } from './components/PaymentsOverview';
 import { StudentDocumentsBrowser } from './components/StudentDocumentsBrowser';
@@ -62,6 +63,7 @@ export const widgetRegistry: Record<string, WidgetDefinition<unknown, unknown>> 
   [FinancialAidQueue.id]: FinancialAidQueue as WidgetDefinition<unknown, unknown>,
   [AttendanceDashboard.id]: AttendanceDashboard as WidgetDefinition<unknown, unknown>,
   [PortalFormsCompletionGrid.id]: PortalFormsCompletionGrid as WidgetDefinition<unknown, unknown>,
+  [PortalFormsTracker.id]: PortalFormsTracker as WidgetDefinition<unknown, unknown>,
   [PortalFormsInbox.id]: PortalFormsInbox as WidgetDefinition<unknown, unknown>,
   [PaymentsOverview.id]: PaymentsOverview as WidgetDefinition<unknown, unknown>,
   [StudentDocumentsBrowser.id]: StudentDocumentsBrowser as WidgetDefinition<unknown, unknown>,
