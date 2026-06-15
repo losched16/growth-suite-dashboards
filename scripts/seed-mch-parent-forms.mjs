@@ -81,6 +81,13 @@ const radioF = (key, label, options, opts = {}) => ({
   ...opts,
 });
 const checkboxF = (key, label, opts = {}) => ({ type: 'checkbox', key, label, ...opts });
+// Multi-select checkbox list. `options` is the same shape as radioF —
+// either string[] (auto-keyified) or {value,label}[].
+const multiCheckboxF = (key, label, options, opts = {}) => ({
+  type: 'multi_checkbox', key, label,
+  options: options.map((v) => typeof v === 'string' ? { value: keyify(v), label: v } : v),
+  ...opts,
+});
 // Display-only pre-signed signature block. Renders in script font at
 // the bottom of a form so every parent sees a consistent operator
 // signature without the school having to wet-sign each copy.
@@ -863,6 +870,219 @@ function pottyTrainingAckForm() {
   };
 }
 
+// ────────────────────────────────────────────────────────────────────
+// 11. HOLIDAY QUESTIONNAIRE FOR PARENTS — Celebrating Diversity & Inclusion
+// ────────────────────────────────────────────────────────────────────
+// Per-family (not per-student): a family answers ONE questionnaire
+// even when multiple kids are enrolled. Resubmissions allowed so the
+// office can ask families to update mid-year if culture/preferences
+// change.
+function holidayQuestionnaireForm() {
+  return {
+    slug: 'mch-holiday-questionnaire',
+    display_name: 'Holiday Questionnaire — Celebrating Diversity & Inclusion',
+    description:
+      'Our classroom community is enriched by the many cultures, traditions, languages, ' +
+      'and celebrations represented in our families. Your answers help us respectfully ' +
+      'acknowledge holidays and traditions in ways that support inclusion, understanding, ' +
+      'and Montessori values.',
+    category: 'permission',
+    per_student: false,
+    confirmation_message:
+      'Thank you for helping us create a respectful, inclusive, and joyful learning ' +
+      'environment for every child and family.',
+    field_schema: [
+      blockHeader('Holiday Questionnaire for Parents'),
+      blockParagraph(
+        'Media Children\'s House — Celebrating Diversity & Inclusion',
+        'note',
+      ),
+      blockParagraph(
+        'Dear Families, our classroom community is enriched by the many cultures, traditions, ' +
+        'languages, and celebrations represented in our families. This questionnaire will ' +
+        'help us respectfully acknowledge holidays and traditions in ways that support ' +
+        'inclusion, understanding, and Montessori values.',
+      ),
+
+      blockSection('Family Information'),
+      txt('child_name',
+        'Child\'s name (or names — list all enrolled children)',
+        { required: true, prefill: 'student.full_name',
+          help: 'For multiple children, list all enrolled at MCH.' }),
+      txt('parent_guardian_names',
+        'Parent / Guardian name(s)',
+        { required: true, prefill: 'parent.full_name' }),
+      txt('preferred_languages',
+        'Preferred language(s) spoken at home',
+        { required: true, placeholder: 'e.g. English, Spanish' }),
+
+      blockSection('Celebrations & Traditions'),
+      radioF('celebrates_holidays',
+        'Does your family celebrate any cultural, religious, or seasonal holidays?',
+        ['Yes', 'No'],
+        { required: true }),
+      area('holidays_list',
+        'If yes, please list them',
+        { help: 'List any cultural, religious, or seasonal holidays your family observes.' }),
+      area('meaningful_traditions',
+        'Which holidays or traditions are especially meaningful to your family?',
+        { rows: 3 }),
+      radioF('comfortable_sharing',
+        'Are there any customs, foods, music, clothing, stories, or activities connected to these celebrations that you would be comfortable sharing with the class?',
+        ['Yes', 'No'],
+        { required: true }),
+      area('sharing_description',
+        'If yes, please describe',
+        { rows: 3, help: 'Describe what you\'d be comfortable sharing — recipes, songs, photos, stories, etc.' }),
+
+      blockSection('Participation & Inclusion'),
+      multiCheckboxF('participation_interest',
+        'Would you be interested in any of the following? (Check all that apply)',
+        [
+          'Visiting the classroom to share a tradition or story',
+          'Sharing photos, music, or artifacts',
+          'Helping with a multicultural event',
+          'Sending in a traditional food or recipe',
+          'Not participating at this time',
+        ]),
+      radioF('opt_out_holidays',
+        'Are there any holidays or activities you prefer your child NOT participate in?',
+        ['Yes', 'No'],
+        { required: true }),
+      area('opt_out_explanation',
+        'If yes, please explain',
+        { rows: 3, help: 'Helps our teachers respect your family\'s wishes during classroom celebrations.' }),
+
+      blockSection('Family Values & Perspectives'),
+      area('cultural_understanding',
+        'What would you like teachers and classmates to understand about your family\'s culture or traditions?',
+        { rows: 4 }),
+      area('non_holiday_traditions',
+        'Are there important family traditions that are not tied to a holiday but are meaningful to your family?',
+        { rows: 3 }),
+      area('school_improvement_ideas',
+        'How can our school better support diversity, inclusion, and respect for all families?',
+        { rows: 4 }),
+
+      blockSection('Signature'),
+      blockParagraph(MCH_ESIG_CONSENT, 'note'),
+      txt('parent_signature',
+        'Parent / Guardian — type your full legal name to sign',
+        { required: true, prefill: 'parent.full_name' }),
+      dateF('signature_date',
+        'Date signed',
+        { required: true, prefill: 'today' }),
+    ],
+    notify_emails: [MCH_NOTIFY_EMAIL],
+  };
+}
+
+// ────────────────────────────────────────────────────────────────────
+// 12. VOLUNTEER OPPORTUNITIES 2026
+// ────────────────────────────────────────────────────────────────────
+// Per-family interest survey for MCH's 8 standing volunteer areas
+// (Holiday Parties, Mystery Readers, Concert Assistance, Office/
+// Material Making, Community Service, Gardening, Cultural Studies,
+// Substitute List). Office uses this to build the volunteer roster
+// each year. Resubmissions allowed so families can update mid-year.
+function volunteerOpportunitiesForm() {
+  return {
+    slug: 'mch-volunteer-opportunities-2026',
+    display_name: 'Volunteer Opportunities — 2026-2027',
+    description:
+      'Sign up for the ways you\'d like to support our school community this year. ' +
+      'Even 15 minutes here and there makes a difference — pick as many as you\'d like.',
+    category: 'permission',
+    per_student: false,
+    confirmation_message:
+      'Thanks for offering to help! The MCH office will follow up with details on the ' +
+      'opportunities you selected as each one comes up during the year.',
+    field_schema: [
+      blockHeader('Make a Difference… Volunteer'),
+      blockParagraph(
+        'Are you interested in volunteering at Media Children\'s House? We welcome and ' +
+        'encourage parents and family members to volunteer in a number of areas. Even if ' +
+        'you\'re short on time and only have 15 minutes to share, we can accommodate you! ' +
+        'Here at MCH we believe that parent involvement is an integral part of our community.',
+      ),
+
+      blockSection('Your Information'),
+      txt('parent_name',
+        'Your name',
+        { required: true, prefill: 'parent.full_name' }),
+      txt('parent_email',
+        'Best email to reach you',
+        { required: true, prefill: 'parent.email' }),
+      tel('parent_phone',
+        'Best phone to reach you',
+        { prefill: 'parent.phone',
+          help: 'Optional — we\'ll use email by default.' }),
+
+      blockSection('Volunteer Opportunities',
+        'Select every area you\'re interested in. The office will follow up with details as each one comes up.'),
+      multiCheckboxF('interested_opportunities',
+        'I\'d like to help with: (check all that apply)',
+        [
+          { value: 'holiday_parties',
+            label: 'Holiday Parties — help out in the classrooms during various parties throughout the year' },
+          { value: 'mystery_readers',
+            label: 'Mystery Readers — read to your child\'s class (children won\'t know who is coming until you arrive!)' },
+          { value: 'concert_assistance',
+            label: 'Concert Assistance — set up + break down for the Winter and Spring concerts at the Aston Community Center' },
+          { value: 'office_material_making',
+            label: 'Office / Material Making — cut, laminate, staple, and sort classroom materials (great if school-hours volunteering doesn\'t fit your schedule)' },
+          { value: 'community_service',
+            label: 'Community Service Projects — help coordinate outreach events in our local area' },
+          { value: 'gardening',
+            label: 'Gardening — share your green thumb with the children outdoors' },
+          { value: 'cultural_studies',
+            label: 'Cultural Studies / Lunch Around the World — share an instrument, art, recipe, or travel story with the class' },
+          { value: 'substitute_list',
+            label: 'Substitute List — be a paid temporary sub when a teacher can\'t make it (training provided; criminal background check required)' },
+        ],
+        { required: true,
+          help: 'Pick as many as you\'d like — even a single one helps.' }),
+
+      blockSection('Holiday Parties (optional details)',
+        'If you ticked Holiday Parties above, which holidays interest you most? Skip if you don\'t have a preference.'),
+      multiCheckboxF('holiday_party_interests',
+        'I\'d especially like to help with: (optional)',
+        [
+          'Halloween / Fall Celebration',
+          'Thanksgiving / Harvest Feast',
+          'Winter Holidays / Solstice',
+          'Valentine\'s Day',
+          'Spring Celebration / Earth Day',
+          'End-of-Year Celebration',
+          'No preference — any of them',
+        ]),
+
+      blockSection('Anything Else',
+        'Other ways you\'d like to be involved, or skills / talents we should know about.'),
+      area('skills_to_share',
+        'Skills, talents, or experiences you\'d like to share',
+        { rows: 3,
+          help: 'e.g. "I\'m a nurse and could give a kindergarten-friendly health talk", "I speak Mandarin and could read a children\'s book in it", "I\'m a beekeeper."' }),
+      area('other_notes',
+        'Other notes or questions for the office',
+        { rows: 2 }),
+      txt('best_contact_time',
+        'Best time of day / week to reach you',
+        { placeholder: 'e.g. "Weekdays 9–2", "Anytime"' }),
+
+      blockSection('Signature'),
+      blockParagraph(MCH_ESIG_CONSENT, 'note'),
+      txt('parent_signature',
+        'Parent / Guardian — type your full legal name to sign',
+        { required: true, prefill: 'parent.full_name' }),
+      dateF('signature_date',
+        'Date signed',
+        { required: true, prefill: 'today' }),
+    ],
+    notify_emails: [MCH_NOTIFY_EMAIL],
+  };
+}
+
 // ── Form list ─────────────────────────────────────────────────────
 const FORMS = [
   emergencyContactForm(),
@@ -875,6 +1095,8 @@ const FORMS = [
   parentHandbookAckForm(),
   pressReleaseForm(),
   pottyTrainingAckForm(),
+  holidayQuestionnaireForm(),
+  volunteerOpportunitiesForm(),
 ];
 
 // ── Upsert ─────────────────────────────────────────────────────────
