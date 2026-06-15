@@ -107,6 +107,9 @@ interface DbRow {
   student_count: string;
   student_names: string | null;
   enrollment_status_array: string[] | null;
+  enrolled_count: string | null;
+  accepted_count: string | null;
+  pending_count: string | null;
   programs_array: string[] | null;
   homerooms_array: string[] | null;
   payment_plans_array: string[] | null;
@@ -208,6 +211,12 @@ export async function fetcher(
           FROM per_student ps WHERE ps.family_id = f.id) AS student_names,
        (SELECT array_agg(DISTINCT ps.enrollment_status) FILTER (WHERE ps.enrollment_status IS NOT NULL)
           FROM per_student ps WHERE ps.family_id = f.id) AS enrollment_status_array,
+       -- Actual per-family STUDENT counts by status (not 0/1 flags) so
+       -- the KPI strip and per-family columns reflect every child.
+       (SELECT count(*) FROM per_student ps WHERE ps.family_id = f.id AND ps.enrollment_status = 'enrolled') AS enrolled_count,
+       (SELECT count(*) FROM per_student ps WHERE ps.family_id = f.id AND ps.enrollment_status = 'accepted') AS accepted_count,
+       (SELECT count(*) FROM per_student ps WHERE ps.family_id = f.id
+          AND ps.enrollment_status IN ('pending','application_submitted','tour_scheduled','inquiry','waitlisted')) AS pending_count,
        (SELECT array_agg(DISTINCT ps.metadata->>'program') FILTER (WHERE ps.metadata->>'program' IS NOT NULL AND length(ps.metadata->>'program') > 0)
           FROM per_student ps WHERE ps.family_id = f.id) AS programs_array,
        (SELECT array_agg(DISTINCT ps.classroom_name) FILTER (WHERE ps.classroom_name IS NOT NULL)
@@ -281,9 +290,10 @@ export async function fetcher(
 
   const allFamilies: FamilyRow[] = rows.map((r) => {
     const enrStatuses = r.enrollment_status_array ?? [];
-    const enrolled = enrStatuses.includes('enrolled') ? 1 : 0;
-    const accepted = enrStatuses.includes('accepted') ? 1 : 0;
-    const pending = (enrStatuses.includes('application_submitted') || enrStatuses.includes('tour_scheduled')) ? 1 : 0;
+    // Real per-family student counts (every child counts), not 0/1 flags.
+    const enrolled = Number(r.enrolled_count ?? 0);
+    const accepted = Number(r.accepted_count ?? 0);
+    const pending = Number(r.pending_count ?? 0);
     // Worst-case roll-up label
     const summary = pickWorstStatus(enrStatuses);
 
