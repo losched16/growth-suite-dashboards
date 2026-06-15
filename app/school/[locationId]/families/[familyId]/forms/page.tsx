@@ -163,11 +163,24 @@ export default async function FamilyFormsPage({
         </Link>
 
         <header className="mb-5">
-          <h1 className="text-2xl font-semibold text-slate-900">{familyName} — submitted forms</h1>
-          <p className="text-sm text-slate-500 mt-0.5">
-            {parents.length} parent{parents.length === 1 ? '' : 's'} · {students.length} student{students.length === 1 ? '' : 's'} ·{' '}
-            {submissions.filter((s) => !s.is_test).length} submission{submissions.filter((s) => !s.is_test).length === 1 ? '' : 's'}
-          </p>
+          <div className="flex items-start justify-between gap-3 flex-wrap">
+            <div>
+              <h1 className="text-2xl font-semibold text-slate-900">{familyName} — submitted forms</h1>
+              <p className="text-sm text-slate-500 mt-0.5">
+                {parents.length} parent{parents.length === 1 ? '' : 's'} · {students.length} student{students.length === 1 ? '' : 's'} ·{' '}
+                {submissions.filter((s) => !s.is_test).length} submission{submissions.filter((s) => !s.is_test).length === 1 ? '' : 's'}
+              </p>
+            </div>
+            <a
+              href={`/api/school/family/${familyId}/view-as-parent`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 rounded-md border border-blue-300 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-800 hover:bg-blue-100 print:hidden"
+              title="Sign in as this family's primary parent. Verify prefill and see what they see."
+            >
+              👤 View as parent
+            </a>
+          </div>
           {parents.length > 0 ? (
             <div className="mt-2 flex flex-wrap gap-3 text-xs text-slate-600">
               {parents.map((p) => (

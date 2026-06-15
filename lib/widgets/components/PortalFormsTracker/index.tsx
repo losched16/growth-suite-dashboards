@@ -282,6 +282,15 @@ function Component({
                       {r.family_display_name}
                     </Link>
                     <div className="text-[11px] text-gray-500">{r.primary_parent_email || '—'}</div>
+                    <a
+                      href={`/api/school/family/${r.family_id}/view-as-parent`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-1 inline-flex items-center gap-1 rounded border border-blue-200 bg-blue-50 px-1.5 py-0.5 text-[10px] font-medium text-blue-800 hover:bg-blue-100"
+                      title="Sign in as this family's primary parent in a new tab. Verify prefill + see what they see."
+                    >
+                      👤 View as parent
+                    </a>
                   </td>
                   <td className={`px-3 py-3 align-top font-semibold tabular-nums ${pctColor(r.pct)}`}>
                     {r.pct}%
