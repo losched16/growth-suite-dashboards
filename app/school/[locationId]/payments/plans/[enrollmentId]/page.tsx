@@ -132,6 +132,23 @@ export default async function PlanDetailPage({
     [enrollmentId, schoolId],
   );
 
+  // Annual breakdown: roll the per-installment line items back up by
+  // category (Tuition / Extended Day / discounts / prior payments…) so
+  // staff see what composes the total. Only meaningful when there's more
+  // than one component (FACTS-migrated + add-on plans); a single "Tuition"
+  // line hides the card.
+  const { rows: breakdown } = await query<{ description: string; amount_cents: number }>(
+    `SELECT li.description, SUM(li.amount_cents)::int AS amount_cents
+       FROM invoice_line_items li
+       JOIN invoices i ON i.id = li.invoice_id
+      WHERE i.source = 'tuition_plan'
+        AND i.source_ref->>'enrollment_id' = $1
+        AND i.school_id = $2 AND i.status <> 'voided'
+      GROUP BY li.description
+      ORDER BY SUM(li.amount_cents) DESC`,
+    [enrollmentId, schoolId],
+  );
+
   const paidTotal = invs.reduce((s, i) => s + i.amount_paid_cents, 0);
   const liveInvoices = invs.filter((i) => i.status !== 'voided');
   const expectedTotal = liveInvoices.reduce((s, i) => s + i.total_cents, 0);
@@ -212,6 +229,34 @@ export default async function PlanDetailPage({
             </div>
           </div>
         </div>
+
+        {/* Tuition breakdown — what composes the annual total. Rolled up
+            from the invoice line items, so it matches what the parent
+            sees on each installment. */}
+        {breakdown.length > 1 ? (
+          <div className="rounded-xl border border-slate-200 bg-white p-5">
+            <h2 className="text-sm font-semibold text-slate-900 mb-2">
+              Tuition breakdown <span className="font-normal text-slate-400">— what makes up the annual total</span>
+            </h2>
+            <div className="space-y-1 text-sm max-w-md">
+              {breakdown.map((b) => (
+                <div key={b.description} className="flex justify-between gap-3">
+                  <span className="text-slate-700">{b.description}</span>
+                  <span className={`tabular-nums font-mono ${b.amount_cents < 0 ? 'text-emerald-700' : 'text-slate-900'}`}>
+                    {b.amount_cents < 0 ? '−' : ''}${(Math.abs(b.amount_cents) / 100).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                  </span>
+                </div>
+              ))}
+              <div className="flex justify-between gap-3 border-t border-slate-200 pt-1 font-semibold text-slate-900">
+                <span>Annual total</span>
+                <span className="tabular-nums font-mono">${(enr.total_annual_cents / 100).toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
+              </div>
+            </div>
+            <p className="mt-2 text-[11px] text-slate-500">
+              This same breakdown appears on each installment invoice the parent receives.
+            </p>
+          </div>
+        ) : null}
 
         <HelpCallout
           title="What you can change on a tuition plan"
