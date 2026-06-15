@@ -298,16 +298,29 @@ function ParentBlock({
       <div className="text-gray-900 font-medium">{fullName}</div>
       {parent.email ? <div className="text-gray-700 text-xs truncate">{parent.email}</div> : null}
       {parent.phone ? <div className="text-gray-700 text-xs">{parent.phone}</div> : null}
-      {contactUrl ? (
-        <a
-          href={contactUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="mt-1 inline-flex items-center gap-1 text-[11px] text-emerald-700 hover:text-emerald-900 hover:underline"
-        >
-          Open contact record →
-        </a>
-      ) : null}
+      <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5">
+        {parent.portal_preview_url ? (
+          <a
+            href={parent.portal_preview_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 text-[11px] text-blue-600 hover:text-blue-800 hover:underline"
+            title="Open the parent portal signed in as this parent — see exactly what they see"
+          >
+            👁 View parent portal →
+          </a>
+        ) : null}
+        {contactUrl ? (
+          <a
+            href={contactUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 text-[11px] text-emerald-700 hover:text-emerald-900 hover:underline"
+          >
+            Open contact record →
+          </a>
+        ) : null}
+      </div>
     </div>
   );
 }

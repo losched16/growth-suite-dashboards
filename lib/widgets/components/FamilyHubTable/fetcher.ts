@@ -6,6 +6,7 @@
 import { query } from '@/lib/db';
 import type { SchoolContext, WidgetSearchParams } from '@/lib/widgets/types';
 import type { FamilyHubConfig, SortKey } from './config';
+import { parentPreviewUrl } from '@/lib/billing/parent-preview';
 
 // Per-family parent record exposed to the UI so the accordion can show
 // both parents inline without an extra fetch.
@@ -17,6 +18,9 @@ export interface ParentRecord {
   phone: string | null;
   is_primary: boolean;
   ghl_contact_id: string | null;
+  // Signed link to log into the parent portal AS this parent (admin
+  // preview). Built server-side in the fetcher.
+  portal_preview_url?: string | null;
 }
 
 // Per-family student record (one entry per student). The `metadata` blob
@@ -329,7 +333,7 @@ export async function fetcher(
       total_tuition: Number(r.total_tuition ?? 0),
       has_allergy: !!r.has_allergy,
       search_haystack: haystack,
-      parents: r.parents_json ?? [],
+      parents: (r.parents_json ?? []).map((p) => ({ ...p, portal_preview_url: parentPreviewUrl(p.id) })),
       students: r.students_json ?? [],
     };
   });
