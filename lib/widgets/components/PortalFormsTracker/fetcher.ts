@@ -171,7 +171,11 @@ export async function fetcher(
            FROM portal_form_submissions s
           WHERE s.school_id = $1
             AND COALESCE(s.is_test, false) = false
-            AND s.status IN ('submitted', 'paid', 'pending_payment')
+            -- Count anything that's been "filled out" — including legacy
+            -- imports (status='legacy_imported') from the CSV + GHL
+            -- backfill. Without legacy_imported, Wooster's historical
+            -- data would appear as un-submitted in the tracker.
+            AND s.status IN ('submitted', 'paid', 'pending_payment', 'legacy_imported')
             AND s.form_definition_id = ANY($2::uuid[])
             AND (
               s.family_id = ANY($3::uuid[])
