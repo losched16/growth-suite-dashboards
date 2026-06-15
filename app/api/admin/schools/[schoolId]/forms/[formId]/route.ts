@@ -51,6 +51,8 @@ interface Body {
     confirmation_message?: unknown;
     confirmation_redirect_url?: unknown;
     notify_emails?: unknown;
+    // migration 060 — per-form master switch for notify email fan-out
+    notifications_enabled?: unknown;
     // migration 042 — webhook fan-out (automation triggers)
     webhook_urls?: unknown;
   };
@@ -182,6 +184,10 @@ export async function PATCH(request: NextRequest, { params }: { params: Params }
         .filter((v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v));
       args.push(cleaned);
       sets.push(`notify_emails = $${args.length}::text[]`);
+    }
+    if (body.meta.notifications_enabled !== undefined) {
+      args.push(body.meta.notifications_enabled === true || body.meta.notifications_enabled === 'true');
+      sets.push(`notifications_enabled = $${args.length}::boolean`);
     }
     if (body.meta.webhook_urls !== undefined) {
       const arr = Array.isArray(body.meta.webhook_urls) ? body.meta.webhook_urls : [];

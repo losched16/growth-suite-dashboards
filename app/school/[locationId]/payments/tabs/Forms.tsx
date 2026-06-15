@@ -45,6 +45,8 @@ export async function PaymentsHubForms({
       has_payment: boolean;
       submission_count: number;
       submission_count_this_year: number;
+      notifications_enabled: boolean;
+      notify_emails_count: number;
     }>(
       `SELECT
          d.id, d.slug, d.display_name, d.description, d.category,
@@ -55,7 +57,9 @@ export async function PaymentsHubForms({
            WHERE s.form_definition_id = d.id) AS submission_count,
          (SELECT COUNT(*)::int FROM portal_form_submissions s
            WHERE s.form_definition_id = d.id
-             AND s.submitted_at >= date_trunc('year', now())) AS submission_count_this_year
+             AND s.submitted_at >= date_trunc('year', now())) AS submission_count_this_year,
+         COALESCE(d.notifications_enabled, true) AS notifications_enabled,
+         COALESCE(array_length(d.notify_emails, 1), 0) AS notify_emails_count
        FROM portal_form_definitions d
        WHERE d.school_id = $1
          AND COALESCE(d.audience, 'parents') = 'parents'   -- staff forms have their own UI under /staff-requests
@@ -220,6 +224,8 @@ function FormRow({
     category: string | null; field_count: number; is_active: boolean;
     per_student: boolean; has_payment: boolean;
     submission_count: number; submission_count_this_year: number;
+    notifications_enabled: boolean;
+    notify_emails_count: number;
   };
   schoolId: string;
   locationId: string;
@@ -294,6 +300,8 @@ ${schoolName}`;
             slug={form.slug}
             isPublished={form.is_active}
             submissionCount={form.submission_count}
+            notificationsEnabled={form.notifications_enabled}
+            notifyEmailsCount={form.notify_emails_count}
           />
         </div>
       </div>

@@ -10,10 +10,11 @@
 // destroy data silently.
 
 import { useState } from 'react';
-import { Eye, EyeOff, Trash2, Loader2, AlertTriangle, Copy } from 'lucide-react';
+import { Eye, EyeOff, Trash2, Loader2, AlertTriangle, Copy, Bell, BellOff } from 'lucide-react';
 
 export function FormRowActions({
   schoolId, locationId, formId, displayName, slug, isPublished, submissionCount,
+  notificationsEnabled = true, notifyEmailsCount = 0,
 }: {
   schoolId: string;
   // locationId is optional — when present, we route the duplicate
@@ -26,9 +27,16 @@ export function FormRowActions({
   slug: string;
   isPublished: boolean;
   submissionCount: number;
+  notificationsEnabled?: boolean;
+  // Length of the form's notify_emails array. Used so we can warn the
+  // operator that flipping notifications back ON is a no-op if there's
+  // no one in the list (they'd need to edit the form first).
+  notifyEmailsCount?: number;
 }) {
   const [published, setPublished] = useState(isPublished);
   const [togglingPub, setTogglingPub] = useState(false);
+  const [notifyOn, setNotifyOn] = useState(notificationsEnabled);
+  const [togglingNotify, setTogglingNotify] = useState(false);
   const [openDelete, setOpenDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [duplicating, setDuplicating] = useState(false);
@@ -62,6 +70,29 @@ export function FormRowActions({
 
   const requireType = submissionCount > 0;
   const canDelete = requireType ? typed.trim() === 'DELETE' : true;
+
+  async function toggleNotifications() {
+    const next = !notifyOn;
+    setTogglingNotify(true); setErr(null);
+    try {
+      const r = await fetch(`/api/admin/schools/${schoolId}/forms/${formId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ meta: { notifications_enabled: next } }),
+      });
+      if (!r.ok) {
+        const j = await r.json().catch(() => ({}));
+        setErr(j.detail || j.error || `HTTP ${r.status}`);
+        setTogglingNotify(false);
+        return;
+      }
+      setNotifyOn(next);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setTogglingNotify(false);
+    }
+  }
 
   async function togglePublish() {
     const next = !published;
@@ -124,6 +155,22 @@ export function FormRowActions({
       >
         {togglingPub ? <Loader2 className="h-3 w-3 animate-spin" /> : published ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
         {published ? 'Published' : 'Draft'}
+      </button>
+      <button
+        type="button"
+        onClick={toggleNotifications}
+        disabled={togglingNotify}
+        className={
+          notifyOn
+            ? 'inline-flex items-center gap-1 rounded border border-violet-300 bg-violet-50 px-2 py-1 text-[11px] font-medium text-violet-800 hover:bg-violet-100 disabled:opacity-50'
+            : 'inline-flex items-center gap-1 rounded border border-slate-300 bg-white px-2 py-1 text-[11px] font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50'
+        }
+        title={notifyOn
+          ? `Notifications ON — sending to ${notifyEmailsCount} recipient${notifyEmailsCount === 1 ? '' : 's'} per submission. Click to mute.`
+          : `Notifications muted — submissions don't trigger email sends. Click to re-enable${notifyEmailsCount === 0 ? ' (but the notify list is empty — edit the form to add addresses first)' : ''}.`}
+      >
+        {togglingNotify ? <Loader2 className="h-3 w-3 animate-spin" /> : notifyOn ? <Bell className="h-3 w-3" /> : <BellOff className="h-3 w-3" />}
+        {notifyOn ? `Notify (${notifyEmailsCount})` : 'Muted'}
       </button>
       <button
         type="button"
