@@ -131,7 +131,36 @@ export default async function BulkTuitionPage({ params, searchParams }: { params
                   </td>
                   <td className="px-3 py-2 text-xs text-slate-600">{r.program ?? '—'}</td>
                   <td className="px-3 py-2 text-xs text-slate-700">{r.resolved_plan_label ?? r.plan_label ?? '—'}</td>
-                  <td className="px-3 py-2 text-right font-mono">{r.amount_cents > 0 ? fmt(r.amount_cents) : '—'}</td>
+                  <td className="px-3 py-2 text-right font-mono align-top">
+                    {r.amount_cents > 0 ? (
+                      r.breakdown.length ? (
+                        <details className="text-right">
+                          <summary className="cursor-pointer list-none whitespace-nowrap">
+                            {fmt(r.amount_cents)} <span className="text-[10px] font-sans text-blue-600">▸ breakdown</span>
+                          </summary>
+                          <div className="mt-1 space-y-0.5 text-[11px] font-normal font-sans text-slate-600">
+                            {r.breakdown.map((b) => (
+                              <div key={b.key} className="flex justify-between gap-3">
+                                <span>{b.label}</span>
+                                <span className={b.kind === 'credit' ? 'text-emerald-700' : ''}>
+                                  {b.kind === 'credit' ? '−' : ''}{fmt(Math.abs(b.amount_cents))}
+                                </span>
+                              </div>
+                            ))}
+                            {(() => {
+                              const bdNet = r.breakdown.reduce((a, b) => a + b.amount_cents, 0);
+                              return bdNet !== r.amount_cents ? (
+                                <div className="flex justify-between gap-3"><span>Payments already made</span><span className="text-emerald-700">−{fmt(bdNet - r.amount_cents)}</span></div>
+                              ) : null;
+                            })()}
+                            <div className="flex justify-between gap-3 border-t border-slate-200 pt-0.5 font-semibold text-slate-800">
+                              <span>To schedule</span><span>{fmt(r.amount_cents)}</span>
+                            </div>
+                          </div>
+                        </details>
+                      ) : fmt(r.amount_cents)
+                    ) : '—'}
+                  </td>
                   <td className="px-3 py-2 text-center tabular-nums">{r.installment_count || '—'}</td>
                   <td className="px-3 py-2">
                     {r.ready ? (

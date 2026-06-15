@@ -28,9 +28,27 @@ export interface FactsBulkRow {
   installment_count: number;
   grid_id: string | null;
   amount_cents: number;          // annual total to schedule (from FACTS)
+  // What the tuition is made of (FACTS charge categories, then discounts
+  // as negatives). Charges sum − discounts = net charges. Drives the
+  // admin preview breakdown + the parent invoice line items.
+  breakdown: Array<{ key: string; label: string; amount_cents: number; kind: 'charge' | 'credit' }>;
   ready: boolean;
   reason?: string;               // why it's skipped (when !ready)
 }
+
+// FACTS charge + credit categories in display order, with friendly labels.
+const CHARGE_LABELS: Array<[string, string]> = [
+  ['annual_tuition', 'Tuition'], ['administrative_fee', 'Administrative Fee'],
+  ['extended_day', 'Extended Day'], ['organic_lunch', 'Organic Lunch'],
+  ['enrollment_fee', 'Enrollment Fee'], ['enrichment', 'Enrichment'], ['athletics', 'Athletics'],
+  ['childcare', 'Childcare'], ['sst_tuition', 'SST Tuition'], ['hearing_vision', 'Hearing & Vision'],
+  ['chromebook_fee', 'Chromebook Fee'], ['late_fee', 'Late Fee'], ['late_pickup_fee', 'Late Pickup Fee'],
+  ['not_signed_out_fee', 'Not Signed Out Fee'], ['change_fee', 'Change Fee'], ['withdrawal_fee', 'Withdrawal Fee'],
+];
+const CREDIT_LABELS: Array<[string, string]> = [
+  ['annual_discount', 'Annual Discount'], ['sibling_discount', 'Sibling Discount'],
+  ['employee_discount', 'Employee Discount'], ['financial_aid', 'Financial Aid'], ['miscellaneous', 'Miscellaneous'],
+];
 
 export interface FactsBulkPlan {
   rows: FactsBulkRow[];
@@ -82,8 +100,9 @@ export async function planFactsBulk(
         ORDER BY s.last_name, s.first_name`,
       [schoolId],
     ),
-    query<{ student_id: string; net_charges_cents: number; remaining_balance_cents: number }>(
-      `SELECT student_id, net_charges_cents, remaining_balance_cents
+    query<{ student_id: string; net_charges_cents: number; remaining_balance_cents: number;
+            charges: Record<string, number> | null; credits: Record<string, number> | null }>(
+      `SELECT student_id, net_charges_cents, remaining_balance_cents, charges, credits
          FROM facts_transactions
         WHERE school_id = $1 AND academic_year = $2 AND student_id IS NOT NULL`,
       [schoolId, opts.academicYear],
@@ -101,12 +120,28 @@ export async function planFactsBulk(
     ),
   ]);
 
-  // FACTS amount per student (sum across split-household ledgers).
+  // FACTS amount + line breakdown per student (sum across split ledgers).
   const amtByStudent = new Map<string, number>();
+  const breakdownByStudent = new Map<string, Map<string, number>>();
   for (const f of facts.rows) {
     const v = opts.amountBasis === 'remaining' ? f.remaining_balance_cents : f.net_charges_cents;
     amtByStudent.set(f.student_id, (amtByStudent.get(f.student_id) ?? 0) + (v ?? 0));
+    const bd = breakdownByStudent.get(f.student_id) ?? new Map<string, number>();
+    for (const [k] of CHARGE_LABELS) { const c = Number(f.charges?.[k]); if (c) bd.set(k, (bd.get(k) ?? 0) + c); }
+    for (const [k] of CREDIT_LABELS) { const c = Number(f.credits?.[k]); if (c) bd.set(k, (bd.get(k) ?? 0) - c); }
+    breakdownByStudent.set(f.student_id, bd);
   }
+  const labelOf = new Map([...CHARGE_LABELS, ...CREDIT_LABELS]);
+  const creditKeys = new Set(CREDIT_LABELS.map(([k]) => k));
+  const buildBreakdown = (sid: string) => {
+    const bd = breakdownByStudent.get(sid);
+    if (!bd) return [];
+    const order = [...CHARGE_LABELS.map(([k]) => k), ...CREDIT_LABELS.map(([k]) => k)];
+    return order.filter((k) => bd.has(k)).map((k) => ({
+      key: k, label: labelOf.get(k) ?? k, amount_cents: bd.get(k)!,
+      kind: (creditKeys.has(k) ? 'credit' : 'charge') as 'charge' | 'credit',
+    }));
+  };
   // First grid per grade level (prefer a "School Day" grid when several).
   const gridByGrade = new Map<string, { id: string }>();
   for (const g of grids.rows) {
@@ -119,7 +154,7 @@ export async function planFactsBulk(
       student_id: s.id, family_id: s.family_id, student_name: s.student_name,
       family_label: s.family_label, program: s.program,
       plan_label: s.plan_text ?? '', plan_id: null, resolved_plan_label: null,
-      installment_count: 0, grid_id: null, amount_cents: 0, ready: false,
+      installment_count: 0, grid_id: null, amount_cents: 0, breakdown: buildBreakdown(s.id), ready: false,
     };
     const amount = amtByStudent.get(s.id) ?? 0;
     if (!amtByStudent.has(s.id)) return { ...base, reason: 'No FACTS ledger imported' };
