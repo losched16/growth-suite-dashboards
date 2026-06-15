@@ -204,11 +204,26 @@ export async function POST(request: NextRequest) {
            ?? request.headers.get('x-webhook-signature')
            ?? request.headers.get('x-ghl-signature')
            ?? '';
-  const staticToken = request.headers.get('x-webhook-token') ?? '';
+  // Static token can arrive under several header names depending on how
+  // the operator named the header in the GHL workflow's Custom Webhook
+  // config. Accept the common ones + strip an optional "Bearer " prefix
+  // so a value pasted as "Bearer <secret>" still matches.
+  const staticToken = (
+    request.headers.get('x-webhook-token')
+    ?? request.headers.get('x-api-key')
+    ?? request.headers.get('token')
+    ?? request.headers.get('authorization')
+    ?? ''
+  ).replace(/^Bearer\s+/i, '').trim();
 
   if (!verifySignature(rawBody, sig) && !verifyStaticToken(staticToken)) {
-    // Don't burn into the log table on bad signatures — that'd let an
-    // attacker flood our DB. Just 401 quickly.
+    // Log the rejected attempt so launch-day debugging can SEE whether
+    // GHL is reaching us at all + which headers it sent. We store header
+    // NAMES only (never values — they could contain the real token) and
+    // a short body preview. webhook_id is left NULL so a later retry
+    // with valid auth isn't blocked by the dedup unique index. Best-
+    // effort; never blocks the 401.
+    await logRejected(request, rawBody).catch(() => undefined);
     return NextResponse.json({ error: 'invalid_signature' }, { status: 401 });
   }
 
@@ -270,4 +285,69 @@ export async function POST(request: NextRequest) {
   // Return 200 even on ignored — GHL retries on non-2xx and we don't
   // want a forever-retry loop just because a contact id isn't ours.
   return NextResponse.json({ ok: true, status, rowsAffected });
+}
+
+// Log a rejected (failed-auth) attempt so we can confirm whether GHL is
+// reaching the endpoint during setup. Stores header NAMES + a short
+// body preview — never header values (which carry the token), never the
+// webhook_id (so a fixed-auth retry isn't deduped away).
+async function logRejected(request: NextRequest, rawBody: string): Promise<void> {
+  const headerNames = [...request.headers.keys()].sort().join(', ');
+  let parsed: unknown = null;
+  try { parsed = JSON.parse(rawBody); } catch { /* non-JSON body — keep null */ }
+  const norm = parsed ? normalize(parsed) : null;
+  const schoolId = norm ? await resolveSchoolId(norm.location_id) : null;
+  await query(
+    `INSERT INTO ghl_webhook_log
+        (school_id, event_type, ghl_location_id, ghl_contact_id, payload,
+         status, rows_affected, error_message, webhook_id)
+     VALUES ($1, $2, $3, $4, $5::jsonb, 'rejected', 0, $6, NULL)`,
+    [
+      schoolId,
+      norm?.event_type ?? 'unknown',
+      norm?.location_id ?? null,
+      norm?.contact_id ?? null,
+      JSON.stringify({ header_names: headerNames, body_preview: rawBody.slice(0, 800) }),
+      'auth_failed: no valid HMAC signature and no matching static token',
+    ],
+  );
+}
+
+// GET /api/webhooks/ghl/contact — lightweight self-diagnostic. Safe to
+// open in a browser: reports whether the shared secret is configured and
+// the recent webhook activity (including 'rejected' attempts) WITHOUT
+// revealing the secret or any contact PII. This is the fastest way to
+// answer "is GHL actually reaching us?" while wiring up a new school.
+export async function GET() {
+  const secretConfigured = !!process.env.GHL_WEBHOOK_SECRET || !!process.env.GHL_WEBHOOK_SECRET_PREVIOUS;
+
+  const { rows: counts } = await query<{ status: string; n: number }>(
+    `SELECT status, count(*)::int AS n FROM ghl_webhook_log
+      WHERE received_at > now() - interval '24 hours' GROUP BY status`,
+  ).catch(() => ({ rows: [] as { status: string; n: number }[] }));
+
+  const { rows: recent } = await query<{
+    received_at: string; status: string; event_type: string;
+    ghl_location_id: string | null; rows_affected: number; error_message: string | null;
+  }>(
+    `SELECT received_at, status, event_type, ghl_location_id, rows_affected, error_message
+       FROM ghl_webhook_log ORDER BY received_at DESC LIMIT 10`,
+  ).catch(() => ({ rows: [] }));
+
+  const total = recent.length;
+  const hint = !secretConfigured
+    ? 'GHL_WEBHOOK_SECRET is NOT set in this environment — every request will be rejected. Set it in Vercel and redeploy.'
+    : total === 0
+      ? 'Secret is configured but no webhook has EVER been received. Either the GHL workflow has not fired yet (edit a test contact to trigger it) or the workflow is not posting to this URL. Edit a contact in GHL, then refresh this page.'
+      : recent.every((r) => r.status === 'rejected')
+        ? 'GHL IS reaching us, but every request is being REJECTED — the token/signature does not match. Check the header_names in the rejected log rows and confirm the workflow sends the secret in x-webhook-token (or Authorization: Bearer).'
+        : 'Webhooks are being received and applied. Integration is live.';
+
+  return NextResponse.json({
+    ok: true,
+    secret_configured: secretConfigured,
+    last_24h: Object.fromEntries(counts.map((c) => [c.status, c.n])),
+    recent_events: recent,
+    hint,
+  });
 }
