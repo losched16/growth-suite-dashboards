@@ -8,6 +8,9 @@ export interface SendMessageInput {
   contactId: string;
   body: string;
   type?: string;            // defaults to 'Live_Chat'
+  subject?: string;         // required for Email
+  html?: string;            // HTML body for Email sends
+  emailFrom?: string;       // optional from override for Email
   attachments?: string[];   // public URLs (typically from GHL media)
 }
 
@@ -25,6 +28,9 @@ export async function sendMessage(
     contactId: input.contactId,
     message: input.body,
   };
+  if (input.subject) body.subject = input.subject;
+  if (input.html && input.type === 'Email') body.html = input.html;
+  if (input.emailFrom) body.emailFrom = input.emailFrom;
   if (input.attachments && input.attachments.length > 0) {
     body.attachments = input.attachments;
   }

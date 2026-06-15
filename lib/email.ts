@@ -7,8 +7,26 @@
 
 import { Resend } from 'resend';
 import { query } from '@/lib/db';
+import { sendEmailViaGhl } from '@/lib/email-ghl';
 
 let _resend: Resend | undefined;
+
+// Which provider should a school's transactional email use? Reads
+// school_branding.email_provider (migration 059). Defaults to 'resend'
+// for any school without a row or column value — preserves historical
+// behavior for every tenant that hasn't opted into GHL email.
+async function emailProviderFor(schoolId: string | null): Promise<'resend' | 'ghl'> {
+  if (!schoolId) return 'resend';
+  try {
+    const { rows } = await query<{ email_provider: string | null }>(
+      `SELECT email_provider FROM school_branding WHERE school_id = $1`,
+      [schoolId],
+    );
+    return rows[0]?.email_provider === 'ghl' ? 'ghl' : 'resend';
+  } catch {
+    return 'resend';
+  }
+}
 
 // Returns null when RESEND_API_KEY isn't set — callers should log+skip
 // rather than crash. This lets the demo run without Resend configured.
@@ -66,6 +84,18 @@ export async function sendBrandedEmail(opts: {
   text: string;
   replyToOverride?: string | null;
 }): Promise<void> {
+  // GHL-first when the school opted in. On ANY failure (no PIT, no
+  // matching contact, API error) fall through to Resend so email never
+  // silently stops.
+  if (opts.schoolId && (await emailProviderFor(opts.schoolId)) === 'ghl') {
+    const r = await sendEmailViaGhl({
+      to: opts.to, schoolId: opts.schoolId,
+      subject: opts.subject, html: opts.html, text: opts.text,
+    });
+    if (r.ok) return;
+    console.warn('[email/branded] GHL send failed, falling back to Resend:', r.reason, '(to:', opts.to, ')');
+  }
+
   const c = client();
   if (!c) {
     console.warn('[email/branded] RESEND_API_KEY not set — skipping send to', opts.to, '(subject:', opts.subject, ')');
