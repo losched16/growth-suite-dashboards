@@ -16,6 +16,7 @@ import Link from 'next/link';
 import { Plus, Trash2, Sparkles, Edit3, X, Pencil, Search } from 'lucide-react';
 import { query } from '@/lib/db';
 import { HelpCallout } from '@/components/HelpCallout';
+import { parentPreviewUrl } from '@/lib/billing/parent-preview';
 
 interface EnrollmentRow {
   id: string;
@@ -29,6 +30,7 @@ interface EnrollmentRow {
   status: string;
   // Null = standard tuition. 0 = scholarship badge. >0 = custom-tuition badge.
   tuition_override_cents: number | null;
+  primary_parent_id: string | null;
   invoices_open: number;
   invoices_paid: number;
   amount_paid_cents: number;
@@ -80,6 +82,7 @@ export async function PaymentsHubPlans({
               e.installment_count,
               e.status,
               e.tuition_override_cents,
+              p.id AS primary_parent_id,
               (SELECT COUNT(*)::int FROM invoices WHERE source = 'tuition_plan'
                 AND source_ref->>'enrollment_id' = e.id::text
                 AND status IN ('open', 'partially_paid')) AS invoices_open,
@@ -95,8 +98,8 @@ export async function PaymentsHubPlans({
          JOIN payment_plans pl ON pl.id = e.payment_plan_id
          LEFT JOIN students st ON st.id = e.student_id
          LEFT JOIN LATERAL (
-           SELECT first_name, last_name, email FROM parents
-            WHERE family_id = f.id AND is_primary = true LIMIT 1
+           SELECT id, first_name, last_name, email FROM parents
+            WHERE family_id = f.id AND is_primary = true AND status = 'active' LIMIT 1
          ) p ON true
         WHERE e.school_id = $1
           AND ($2::text IS NULL OR (
@@ -319,6 +322,16 @@ export async function PaymentsHubPlans({
                         </div>
                         {e.student_label ? <div className="text-[11px] text-slate-500">{e.student_label}</div> : null}
                       </Link>
+                      {(() => {
+                        const url = e.primary_parent_id ? parentPreviewUrl(e.primary_parent_id) : null;
+                        return url ? (
+                          <a href={url} target="_blank" rel="noopener noreferrer"
+                            className="mt-0.5 inline-flex items-center gap-1 text-[11px] text-blue-600 hover:text-blue-800 hover:underline"
+                            title="Open the parent portal signed in as this family — see what they see">
+                            👁 View parent portal
+                          </a>
+                        ) : null;
+                      })()}
                     </td>
                     <td className="px-4 py-2 text-xs">
                       <Link href={planHref} className="block">
