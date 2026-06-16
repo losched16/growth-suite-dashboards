@@ -26,6 +26,7 @@ import crypto from 'node:crypto';
 import { query, withTransaction } from '@/lib/db';
 import { loadGhlClient } from '@/lib/ghl/client';
 import { getContact } from '@/lib/ghl/contacts';
+import { loadFieldKeyMap } from '@/lib/ghl/custom-fields-cache';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -204,13 +205,12 @@ async function applyFullSync(
     }
 
     // Resolve the school's GHL custom-field catalog so we can map
-    // student_first_name etc. by NAME instead of by opaque id.
-    const { rows: catalog } = await q<{ field_key: string; ghl_field_id: string }>(
-      `SELECT field_key, ghl_field_id FROM ghl_attributes_catalog
-        WHERE school_id = $1`,
-      [schoolId],
-    );
-    const idByKey = new Map(catalog.map((r) => [r.field_key, r.ghl_field_id]));
+    // student_first_name / parent_2_first_name etc. by NAME instead
+    // of by opaque id. We pull this from GHL directly (cached) — an
+    // older version of this code read from `ghl_attributes_catalog`,
+    // which was never created in prod and meant the entire per-field
+    // cascade silently no-op'd.
+    const idByKey = await loadFieldKeyMap(client).catch(() => new Map<string, string>());
     const cfByKey = (key: string): string | null => {
       const id = idByKey.get(key);
       if (!id) return null;
@@ -288,6 +288,54 @@ async function applyFullSync(
         [kid.id, schoolId, sFirst, sLast],
       );
       rowsAffected += stCount ?? 0;
+    }
+
+    // 3b. Sync parent 2 from custom-field slots on the primary contact.
+    // Wooster's convention is parent_2_first_name / parent_2_last_name /
+    // parent_2_cell_phone live as custom fields on the primary parent's
+    // contact, not as their own GHL contact. The matching local row is
+    // the family's oldest non-primary parent with ghl_contact_id IS NULL
+    // (the slot our backfill + parent-portal "add another parent" form
+    // both populate). If parent_2_* is populated in GHL but no local row
+    // exists yet, auto-create it.
+    const p2First = cfByKey('parent_2_first_name');
+    const p2Last  = cfByKey('parent_2_last_name');
+    const p2Phone = cfByKey('parent_2_cell_phone') ?? cfByKey('parent_2_phone');
+
+    if (p2First || p2Last || p2Phone) {
+      const { rows: secondaryRows } = await q<{ id: string }>(
+        `SELECT id FROM parents
+          WHERE school_id = $1 AND family_id = $2
+            AND is_primary = false AND status = 'active'
+            AND ghl_contact_id IS NULL
+          ORDER BY created_at
+          LIMIT 1`,
+        [schoolId, familyId],
+      );
+
+      if (secondaryRows.length > 0) {
+        const { rowCount: p2Count } = await q(
+          `UPDATE parents
+              SET first_name = COALESCE($3, first_name),
+                  last_name  = COALESCE($4, last_name),
+                  phone      = COALESCE($5, phone),
+                  updated_at = now()
+            WHERE id = $1 AND school_id = $2`,
+          [secondaryRows[0].id, schoolId, p2First, p2Last, p2Phone],
+        );
+        rowsAffected += p2Count ?? 0;
+      } else if (p2First && p2Last) {
+        // Auto-create — only when we have both names. Skips noise from
+        // half-filled GHL records (e.g. only parent_2_cell_phone set).
+        const { rowCount: p2Ins } = await q(
+          `INSERT INTO parents
+             (family_id, school_id, ghl_contact_id, first_name, last_name,
+              email, phone, role, is_primary, status)
+           VALUES ($1, $2, NULL, $3, $4, NULL, $5, 'parent', false, 'active')`,
+          [familyId, schoolId, p2First, p2Last, p2Phone],
+        );
+        rowsAffected += p2Ins ?? 0;
+      }
     }
 
     // 4. Family display name follows the primary parent's full name
