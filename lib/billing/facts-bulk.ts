@@ -52,6 +52,12 @@ const CREDIT_LABELS: Array<[string, string]> = [
   ['employee_discount', 'Employee Discount'], ['financial_aid', 'Financial Aid'], ['miscellaneous', 'Miscellaneous'],
 ];
 
+// One-time fees paid once at enrollment, NOT amortized into the monthly
+// tuition plan. They stay on the family statement (as their own charge with
+// their own paid/owed status) but are excluded from the installment plan,
+// matching how FACTS bills them (a separate "Incidental Expenses" invoice).
+const ONE_TIME_FEE_KEYS = new Set<string>(['enrollment_fee']);
+
 export interface FactsBulkPlan {
   rows: FactsBulkRow[];
   ready_count: number;
@@ -158,7 +164,7 @@ export async function planFactsBulk(
     if (bd) {
       const order = [...CHARGE_LABELS.map(([k]) => k), ...CREDIT_LABELS.map(([k]) => k)];
       for (const k of order) {
-        if (!bd.has(k)) continue;
+        if (!bd.has(k) || ONE_TIME_FEE_KEYS.has(k)) continue;
         lines.push({ key: k, label: labelOf.get(k) ?? k, amount_cents: bd.get(k)!, kind: creditKeys.has(k) ? 'credit' : 'charge' });
       }
     }
@@ -168,6 +174,7 @@ export async function planFactsBulk(
       const pm = paymentsByStudent.get(sid);
       if (pm) {
         for (const [k, label] of CHARGE_LABELS) {
+          if (ONE_TIME_FEE_KEYS.has(k)) continue;
           const paid = pm.get(k);
           if (paid) lines.push({ key: `pay_${k}`, label: `Payment — ${label}`, amount_cents: -paid, kind: 'payment' });
         }
@@ -183,15 +190,19 @@ export async function planFactsBulk(
   }
 
   const rows: FactsBulkRow[] = students.rows.map((s) => {
+    const breakdown = buildBreakdown(s.id);
     const base: FactsBulkRow = {
       student_id: s.id, family_id: s.family_id, student_name: s.student_name,
       family_label: s.family_label, program: s.program,
       plan_label: s.plan_text ?? '', plan_id: null, resolved_plan_label: null,
-      installment_count: 0, grid_id: null, amount_cents: 0, breakdown: buildBreakdown(s.id), ready: false,
+      installment_count: 0, grid_id: null, amount_cents: 0, breakdown, ready: false,
     };
-    const amount = amtByStudent.get(s.id) ?? 0;
+    // Plan total = sum of the breakdown (recurring charges − discounts −
+    // payments). One-time fees are already excluded from the breakdown, so
+    // they don't get amortized into the installments.
+    const amount = breakdown.reduce((a, b) => a + b.amount_cents, 0);
     if (!amtByStudent.has(s.id)) return { ...base, reason: 'No FACTS ledger imported' };
-    if (amount <= 0) return { ...base, amount_cents: amount, reason: 'Nothing owed (amount is $0)' };
+    if (amount <= 0) return { ...base, amount_cents: amount, reason: 'Nothing owed in the payment plan (one-time fees only)' };
     const plan = matchPlan(s.plan_text, plans.rows);
     if (!plan) return { ...base, amount_cents: amount, reason: s.plan_text ? `Unrecognized plan "${s.plan_text}"` : 'No payment plan on record' };
     const grade = gradeForProgram(s.program);

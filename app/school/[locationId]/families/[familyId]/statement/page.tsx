@@ -164,7 +164,7 @@ export default async function FamilyStatementPage({ params }: { params: Params }
                     <tr><td colSpan={5} className="py-1.5 pl-5 text-xs italic text-slate-400">No FACTS charges on record</td></tr>
                   ) : rows.map((r) => (
                     <tr key={r.account_key} className="text-slate-700">
-                      <td className="py-1 pl-5 text-[13px]">{r.account}{r.credits_cents > 0 ? <span className="text-[11px] text-emerald-700"> · incl. discount</span> : null}</td>
+                      <td className="py-1 pl-5 text-[13px]">{r.account}{r.account_key === 'enrollment_fee' ? <span className="text-[11px] text-slate-400"> · one-time</span> : null}{r.credits_cents > 0 ? <span className="text-[11px] text-emerald-700"> · incl. discount</span> : null}</td>
                       <td className="py-1 text-right tabular-nums text-[13px]">{moneyOrBlank(r.charges_cents)}</td>
                       <td className="py-1 text-right tabular-nums text-[13px] text-emerald-700">{moneyOrBlank(r.credits_cents)}</td>
                       <td className="py-1 text-right tabular-nums text-[13px] text-emerald-700">{moneyOrBlank(r.payments_cents)}</td>
@@ -189,7 +189,10 @@ export default async function FamilyStatementPage({ params }: { params: Params }
           </p>
 
           {/* Payment schedule */}
-          <h2 className="mt-6 mb-2 text-sm font-semibold text-slate-900">Payment schedule</h2>
+          <h2 className="mt-6 mb-1 text-sm font-semibold text-slate-900">Payment schedule</h2>
+          <p className="mb-2 text-[11px] text-slate-500">
+            Recurring tuition &amp; fees only. One-time enrollment fees are billed once at enrollment (shown above), not amortized into these installments.
+          </p>
           {scheduleDates.length === 0 ? (
             <p className="text-sm text-slate-500">No payment schedule set up yet.</p>
           ) : (
