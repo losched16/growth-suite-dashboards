@@ -728,6 +728,10 @@ function pressReleaseForm() {
       'enrollment — re-submit only if your preferences change.',
     category: 'permission',
     per_student: true,
+    // Per the school's Form Distribution matrix: Press Release goes to
+    // NEW students only. metadata.is_new = 'new' is set by the importer
+    // for first-year enrollments.
+    applies_to: { metadata_match: { is_new: ['new'] } },
     confirmation_message:
       'Thanks! Your photo / media preferences have been recorded for the duration of your child\'s enrollment.',
     field_schema: [
