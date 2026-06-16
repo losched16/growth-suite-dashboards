@@ -51,11 +51,19 @@ export interface PortalFormsTrackerData {
   forms: FormDef[];
   rows: FamilyRow[];
   stats: {
+    // Family-level counts kept for context / sub-labels.
     enrolled_families: number;
+    families_fully_complete: number;
+    families_in_progress: number;
+    families_not_started: number;
+    // Student-level counts — primary tracking unit. A family with 2 kids
+    // counts as 2 here, and a student is "fully complete" when every
+    // applicable per-student form for them AND every family-level form
+    // for their family has been submitted.
     total_students: number;
-    fully_complete: number;
-    in_progress: number;
-    not_started: number;
+    students_fully_complete: number;
+    students_in_progress: number;
+    students_not_started: number;
   };
   last_loaded_at: string;
 }
@@ -295,12 +303,62 @@ export async function fetcher(
     });
   }
 
+  // Student-based stats. For each enrolled student we sum:
+  //   applicable = (# per-student forms that apply to them)
+  //              + (# family-level forms applicable to their family)
+  //   complete   = (# per-student forms they've submitted)
+  //              + (# family-level forms their family has submitted)
+  //
+  // Joe's framing: a family with 2 enrolled kids counts as 2 in the
+  // stats strip, not 1. One kid done + one not = 1 fully complete +
+  // 1 not started (or in progress, depending on family-level forms).
+  let studentsFullyComplete = 0;
+  let studentsInProgress = 0;
+  let studentsNotStarted = 0;
+  for (const r of rows) {
+    // Family-level totals are constant across all kids in the family.
+    let famApplicable = 0;
+    let famComplete = 0;
+    for (const form of formsForBuild) {
+      if (form.per_student) continue;
+      const cell = r.cells[form.id]?.[0];
+      if (!cell?.applies) continue;
+      famApplicable++;
+      if (cell.complete) famComplete++;
+    }
+
+    for (const student of r.enrolled_students) {
+      let applicable = famApplicable;
+      let complete = famComplete;
+      for (const form of formsForBuild) {
+        if (!form.per_student) continue;
+        const cell = (r.cells[form.id] ?? []).find((c) => c.student_id === student.student_id);
+        if (!cell?.applies) continue;
+        applicable++;
+        if (cell.complete) complete++;
+      }
+      if (applicable === 0) {
+        // No applicable forms → treat as fully complete (nothing to do).
+        studentsFullyComplete++;
+      } else if (complete === 0) {
+        studentsNotStarted++;
+      } else if (complete === applicable) {
+        studentsFullyComplete++;
+      } else {
+        studentsInProgress++;
+      }
+    }
+  }
+
   const stats = {
     enrolled_families: rows.length,
+    families_fully_complete: rows.filter((r) => r.status === 'complete').length,
+    families_in_progress: rows.filter((r) => r.status === 'in_progress').length,
+    families_not_started: rows.filter((r) => r.status === 'not_started').length,
     total_students: rows.reduce((acc, r) => acc + r.enrolled_student_count, 0),
-    fully_complete: rows.filter((r) => r.status === 'complete').length,
-    in_progress: rows.filter((r) => r.status === 'in_progress').length,
-    not_started: rows.filter((r) => r.status === 'not_started').length,
+    students_fully_complete: studentsFullyComplete,
+    students_in_progress: studentsInProgress,
+    students_not_started: studentsNotStarted,
   };
 
   return {

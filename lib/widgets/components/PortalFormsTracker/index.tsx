@@ -124,11 +124,19 @@ function FilterBar({
   );
 }
 
-function StatCard({ value, label, color }: { value: number; label: string; color: string }) {
+function StatCard({ value, label, color, sublabel }: {
+  value: number;
+  label: string;
+  color: string;
+  sublabel?: string;
+}) {
   return (
     <div className="rounded-lg border border-gray-200 bg-white p-4">
       <div className={`text-3xl font-bold tabular-nums ${color}`}>{value}</div>
       <div className="mt-0.5 text-xs uppercase tracking-wide text-gray-500">{label}</div>
+      {sublabel ? (
+        <div className="mt-0.5 text-[10px] text-gray-400 tabular-nums">{sublabel}</div>
+      ) : null}
     </div>
   );
 }
@@ -206,18 +214,40 @@ function Component({
             Portal Forms — {school.schoolName}
           </h2>
           <p className="mt-1 text-xs text-gray-600">
-            {data.stats.total_students} students across {data.stats.enrolled_families} families ·{' '}
+            {data.stats.total_students} enrolled students across {data.stats.enrolled_families} families ·{' '}
             Last loaded {new Date(data.last_loaded_at).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit', second: '2-digit' })}
           </p>
         </div>
       </div>
 
-      {/* Stat cards */}
+      {/* Stat cards — primary unit is STUDENTS (a family with 2 kids
+          counts as 2 here). Family-level counts surface as sub-labels
+          for context. */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <StatCard value={data.stats.enrolled_families} label="Enrolled Families" color="text-emerald-700" />
-        <StatCard value={data.stats.fully_complete} label="Fully Complete" color="text-emerald-600" />
-        <StatCard value={data.stats.in_progress} label="In Progress" color="text-amber-600" />
-        <StatCard value={data.stats.not_started} label="Not Started" color="text-rose-600" />
+        <StatCard
+          value={data.stats.total_students}
+          label="Enrolled Students"
+          color="text-emerald-700"
+          sublabel={`${data.stats.enrolled_families} families`}
+        />
+        <StatCard
+          value={data.stats.students_fully_complete}
+          label="Fully Complete"
+          color="text-emerald-600"
+          sublabel={`${data.stats.families_fully_complete} families`}
+        />
+        <StatCard
+          value={data.stats.students_in_progress}
+          label="In Progress"
+          color="text-amber-600"
+          sublabel={`${data.stats.families_in_progress} families`}
+        />
+        <StatCard
+          value={data.stats.students_not_started}
+          label="Not Started"
+          color="text-rose-600"
+          sublabel={`${data.stats.families_not_started} families`}
+        />
       </div>
 
       {/* Filter bar */}
