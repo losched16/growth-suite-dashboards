@@ -76,10 +76,14 @@ export async function POST(request: NextRequest, { params }: { params: Params })
         const overrideLines = r.breakdown.map((b) => ({
           description: b.label,
           amount_cents: b.amount_cents,
-          category: b.kind === 'credit' ? 'plan_discount' : (b.key === 'annual_tuition' ? 'tuition' : 'tuition_addon'),
+          category: b.kind === 'payment' ? 'paid_credit'
+            : b.kind === 'credit' ? 'plan_discount'
+            : (b.key === 'annual_tuition' ? 'tuition' : 'tuition_addon'),
         }));
+        // Breakdown (charges − discounts − payments) should equal the
+        // remaining amount; absorb any rounding residual.
         if (bdSum !== r.amount_cents) {
-          overrideLines.push({ description: 'Prior payments / credits applied', amount_cents: r.amount_cents - bdSum, category: 'paid_credit' });
+          overrideLines.push({ description: 'Balance adjustment', amount_cents: r.amount_cents - bdSum, category: 'paid_credit' });
         }
         await generateTuitionEnrollment({
           schoolId,

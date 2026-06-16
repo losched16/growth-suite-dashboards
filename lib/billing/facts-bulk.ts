@@ -28,10 +28,12 @@ export interface FactsBulkRow {
   installment_count: number;
   grid_id: string | null;
   amount_cents: number;          // annual total to schedule (from FACTS)
-  // What the tuition is made of (FACTS charge categories, then discounts
-  // as negatives). Charges sum − discounts = net charges. Drives the
-  // admin preview breakdown + the parent invoice line items.
-  breakdown: Array<{ key: string; label: string; amount_cents: number; kind: 'charge' | 'credit' }>;
+  // What the tuition is made of: FACTS charge categories (positive), then
+  // discounts and per-account payments already made in FACTS (negative).
+  // Charges − discounts − payments = remaining balance. Drives the admin
+  // preview breakdown + the parent invoice line items, so every charge,
+  // credit, and payment shows as its own line.
+  breakdown: Array<{ key: string; label: string; amount_cents: number; kind: 'charge' | 'credit' | 'payment' }>;
   ready: boolean;
   reason?: string;               // why it's skipped (when !ready)
 }
@@ -85,7 +87,7 @@ export async function planFactsBulk(
   schoolId: string,
   opts: { amountBasis: AmountBasis; academicYear: string },
 ): Promise<FactsBulkPlan> {
-  const [students, facts, plans, grids] = await Promise.all([
+  const [students, facts, plans, grids, ledgerPay] = await Promise.all([
     query<{
       id: string; family_id: string; student_name: string; family_label: string;
       program: string | null; plan_text: string | null;
@@ -118,6 +120,14 @@ export async function planFactsBulk(
         ORDER BY position`,
       [schoolId, opts.academicYear],
     ),
+    // Per-account payments already collected in FACTS — shown as separate
+    // negative lines so each paid charge (e.g. the enrollment fee) reads
+    // as paid, distinct from discounts.
+    query<{ student_id: string; account_key: string; payments_cents: number }>(
+      `SELECT student_id, account_key, payments_cents FROM facts_account_ledger
+        WHERE school_id = $1 AND academic_year = $2 AND student_id IS NOT NULL AND payments_cents <> 0`,
+      [schoolId, opts.academicYear],
+    ),
   ]);
 
   // FACTS amount + line breakdown per student (sum across split ledgers).
@@ -131,16 +141,39 @@ export async function planFactsBulk(
     for (const [k] of CREDIT_LABELS) { const c = Number(f.credits?.[k]); if (c) bd.set(k, (bd.get(k) ?? 0) - c); }
     breakdownByStudent.set(f.student_id, bd);
   }
+  // Per-account payments already collected in FACTS, summed per student
+  // (sum across split ledgers).
+  const paymentsByStudent = new Map<string, Map<string, number>>();
+  for (const p of ledgerPay.rows) {
+    const m = paymentsByStudent.get(p.student_id) ?? new Map<string, number>();
+    m.set(p.account_key, (m.get(p.account_key) ?? 0) + (p.payments_cents ?? 0));
+    paymentsByStudent.set(p.student_id, m);
+  }
   const labelOf = new Map([...CHARGE_LABELS, ...CREDIT_LABELS]);
   const creditKeys = new Set(CREDIT_LABELS.map(([k]) => k));
-  const buildBreakdown = (sid: string) => {
+  type BreakdownLine = { key: string; label: string; amount_cents: number; kind: 'charge' | 'credit' | 'payment' };
+  const buildBreakdown = (sid: string): BreakdownLine[] => {
+    const lines: BreakdownLine[] = [];
     const bd = breakdownByStudent.get(sid);
-    if (!bd) return [];
-    const order = [...CHARGE_LABELS.map(([k]) => k), ...CREDIT_LABELS.map(([k]) => k)];
-    return order.filter((k) => bd.has(k)).map((k) => ({
-      key: k, label: labelOf.get(k) ?? k, amount_cents: bd.get(k)!,
-      kind: (creditKeys.has(k) ? 'credit' : 'charge') as 'charge' | 'credit',
-    }));
+    if (bd) {
+      const order = [...CHARGE_LABELS.map(([k]) => k), ...CREDIT_LABELS.map(([k]) => k)];
+      for (const k of order) {
+        if (!bd.has(k)) continue;
+        lines.push({ key: k, label: labelOf.get(k) ?? k, amount_cents: bd.get(k)!, kind: creditKeys.has(k) ? 'credit' : 'charge' });
+      }
+    }
+    // Payments are netted out only when billing the remaining balance;
+    // 'net' basis re-bills the full charges so they aren't shown.
+    if (opts.amountBasis === 'remaining') {
+      const pm = paymentsByStudent.get(sid);
+      if (pm) {
+        for (const [k, label] of CHARGE_LABELS) {
+          const paid = pm.get(k);
+          if (paid) lines.push({ key: `pay_${k}`, label: `Payment — ${label}`, amount_cents: -paid, kind: 'payment' });
+        }
+      }
+    }
+    return lines;
   };
   // First grid per grade level (prefer a "School Day" grid when several).
   const gridByGrade = new Map<string, { id: string }>();

@@ -145,8 +145,8 @@ export default async function BulkTuitionPage({ params, searchParams }: { params
                             {r.breakdown.map((b) => (
                               <div key={b.key} className="flex justify-between gap-3">
                                 <span>{b.label}</span>
-                                <span className={b.kind === 'credit' ? 'text-emerald-700' : ''}>
-                                  {b.kind === 'credit' ? '−' : ''}{fmt(Math.abs(b.amount_cents))}
+                                <span className={b.kind !== 'charge' ? 'text-emerald-700' : ''}>
+                                  {b.kind !== 'charge' ? '−' : ''}{fmt(Math.abs(b.amount_cents))}
                                 </span>
                               </div>
                             ))}
