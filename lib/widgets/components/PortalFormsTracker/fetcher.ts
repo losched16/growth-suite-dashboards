@@ -148,7 +148,13 @@ export async function fetcher(
     [school.schoolId],
   );
 
-  // 3. Family metadata + primary parent
+  // 3. Family metadata + primary parent. The optional tag filter
+  // (enrolled_tag / excluded_tag) checks every parent on the family —
+  // include if ANY parent has the enrolled tag, exclude if ANY parent
+  // has the excluded tag. Joe's framing: a withdrawn-tagged contact
+  // anywhere on the family drops the whole family out of the tracker.
+  const enrolledTag = (config.enrolled_tag ?? '').trim().toLowerCase();
+  const excludedTag = (config.excluded_tag ?? '').trim().toLowerCase();
   const { rows: famMeta } = await query<DbFamilyMeta>(
     `SELECT f.id AS family_id,
             f.display_name AS family_display_name,
@@ -161,8 +167,20 @@ export async function fetcher(
         AND EXISTS (
           SELECT 1 FROM students s
            WHERE s.family_id = f.id AND s.school_id = $1 AND s.status = 'active'
-        )`,
-    [school.schoolId],
+        )
+        AND ($2::text = '' OR EXISTS (
+          SELECT 1 FROM parents p
+            JOIN ghl_contact_tags t ON t.ghl_contact_id = p.ghl_contact_id AND t.school_id = $1
+           WHERE p.family_id = f.id AND p.status = 'active'
+             AND lower(t.tag) = $2
+        ))
+        AND ($3::text = '' OR NOT EXISTS (
+          SELECT 1 FROM parents p
+            JOIN ghl_contact_tags t ON t.ghl_contact_id = p.ghl_contact_id AND t.school_id = $1
+           WHERE p.family_id = f.id AND p.status = 'active'
+             AND lower(t.tag) = $3
+        ))`,
+    [school.schoolId, enrolledTag, excludedTag],
   );
 
   // 4. All submissions for these forms (one query, then bucketed in code)

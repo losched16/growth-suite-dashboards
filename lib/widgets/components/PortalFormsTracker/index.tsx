@@ -217,6 +217,22 @@ function Component({
             {data.stats.total_students} enrolled students across {data.stats.enrolled_families} families ·{' '}
             Last loaded {new Date(data.last_loaded_at).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit', second: '2-digit' })}
           </p>
+          {config.enrolled_tag || config.excluded_tag ? (
+            <p className="mt-1 text-[11px] text-gray-500 flex flex-wrap items-center gap-1">
+              <span>Filter:</span>
+              {config.enrolled_tag ? (
+                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-emerald-800">
+                  has tag &ldquo;{config.enrolled_tag}&rdquo;
+                </span>
+              ) : null}
+              {config.excluded_tag ? (
+                <span className="inline-flex items-center gap-1 rounded-full bg-rose-50 px-2 py-0.5 text-rose-800">
+                  no tag &ldquo;{config.excluded_tag}&rdquo;
+                </span>
+              ) : null}
+              <span className="text-gray-400">· tags sync from GHL every 15 min</span>
+            </p>
+          ) : null}
         </div>
       </div>
 

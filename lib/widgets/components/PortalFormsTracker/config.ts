@@ -18,6 +18,16 @@ export interface PortalFormsTrackerConfig {
   drilldown: 'family-forms' | 'family-hub';
   // Category filter: limit to these form categories ([] = all).
   categories?: string[];
+  // Enrollment-tag filter (case-insensitive). When set, the tracker
+  // only shows families where at least one parent's GHL contact has
+  // this tag. Designed for "enrolled - 26/27"-style annual rollover —
+  // bump the value each new school year. Empty / omitted = show all.
+  enrolled_tag?: string;
+  // Exclusion tag (case-insensitive). When a parent's GHL contact has
+  // this tag, the family is hidden from the tracker. Pairs with the
+  // GHL workflow Joe set up: tag a contact "withdrawn" → they fall
+  // out of the dashboards on the next refresh.
+  excluded_tag?: string;
 }
 
 export const portalFormsTrackerDefaults: PortalFormsTrackerConfig = {
@@ -26,10 +36,14 @@ export const portalFormsTrackerDefaults: PortalFormsTrackerConfig = {
   auto_refresh_ms: 60_000,
   drilldown: 'family-forms',
   categories: [],
+  enrolled_tag: 'enrolled - 26/27',
+  excluded_tag: 'withdrawn',
 };
 
 export const portalFormsTrackerSchema: ConfigSchema = {
   fields: [
+    { key: 'enrolled_tag', label: 'Enrolled tag (case-insensitive, leave empty for all families)', type: 'text' },
+    { key: 'excluded_tag', label: 'Excluded tag (e.g. "withdrawn")', type: 'text' },
     { key: 'auto_refresh_ms', label: 'Auto-refresh interval (ms, 0 = off)', type: 'number', min: 0, max: 600_000 },
   ],
 };
