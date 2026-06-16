@@ -1,9 +1,49 @@
 # Making GHL the source of truth for Wooster
 
 Goal: when Wooster admin edits a contact in GHL — name, email, phone,
-custom-field student-slot data — that change shows up in every
-dashboard within seconds, without anyone having to push a "sync"
-button.
+custom-field student-slot data, tags — that change shows up in every
+dashboard, **fast**. No "sync" button. No reload-and-pray. Admin
+brings in a new family on a Monday morning, the dashboards reflect
+that family the same morning.
+
+## Architecture: two channels
+
+Both run automatically. Together they cover every change.
+
+### Channel 1 — Realtime webhook (already-known contacts)
+
+GHL workflow fires our webhook on every contact change. We fetch the
+canonical record from GHL and overwrite the parent / student / family
+rows. Latency: **1–5 seconds** from the change happening in GHL to
+the dashboards reflecting it.
+
+Covers:
+- A parent's name / email / phone changes
+- Any per-student custom field changes (`student_first_name`,
+  `student_2_last_name`, etc.)
+- The family display name auto-updates from the parent's name
+
+### Channel 2 — Periodic cron sync (everything else)
+
+Vercel Cron hits `/api/cron/sync-all` **every 15 minutes** (was every
+2 hours; tightened in the same commit as this doc). For every
+school with `sync_mode='snapshot'` (Wooster is one), the cron:
+
+- Pulls **every contact** from GHL and rebuilds the family graph
+  (creates new families, new students, new parents as needed)
+- Syncs the attribute layer (tags + custom field values +
+  opportunities + filter catalog)
+
+Covers what the webhook can't:
+- **New contacts** added in GHL show up in dashboards within 15 min
+- **Tag changes** propagate (the webhook only handles row updates,
+  not the tag layer)
+- **Pipeline / opportunity stage changes** roll up to the admissions
+  funnel
+- A missed webhook (network blip, GHL outage) is eventually caught
+
+The two channels overlap — same change might land twice — but every
+write is idempotent so no harm done.
 
 This is half code and half configuration. The code shipped in this
 session. The configuration is a one-time setup inside Wooster's GHL
@@ -143,16 +183,26 @@ After setup:
 
 ---
 
-## What's NOT in the realtime sync (yet)
+## What each channel covers
 
-These still need manual sync or are out of scope:
-
-| Field | Why | Fix |
+| Change in GHL | Covered by | Lag |
 |---|---|---|
-| New contacts (someone added in GHL who's not in our DB) | We only update EXISTING parents on webhook | Run the full sync script `node scripts/sync-wooster-from-ghl.mjs` periodically; or build an auto-onboarding path |
-| Contact deletion | Webhook silently ignores | Add a soft-delete path if needed |
-| Tags / custom non-student fields (e.g. `parent_role`, `notes`) | Not in the cascade list | Extend `applyFullSync` to update these per the school's needs |
-| Tuition / billing custom fields | We WRITE these from our side | Keep our side authoritative — GHL is downstream |
+| Existing parent: name / email / phone | Webhook | 1–5 seconds |
+| Existing student: name (via custom-field slot) | Webhook | 1–5 seconds |
+| Family display name auto-refresh | Webhook | 1–5 seconds |
+| **NEW contact added in GHL** | **15-min cron** | ≤ 15 min |
+| Tags added/removed on contact | 15-min cron (attribute layer) | ≤ 15 min |
+| Custom-field catalog changes | 15-min cron (attribute layer) | ≤ 15 min |
+| Pipeline / opportunity stage moves | 15-min cron (admissions funnel) | ≤ 15 min |
+| Contact deletion in GHL | **Not synced** (intentional — keep history) | — |
+
+If 15 min is too slow for new contacts, we can:
+- Drop the cron to every 5 min (8 cron runs / hour vs the current 4)
+- Or extend the webhook to call `runGhlSync` inline when an unknown
+  contact arrives (gives realtime new-contact onboarding, costs a
+  ~10s webhook response)
+
+Both are 1-line changes — say the word.
 
 ---
 
