@@ -28,7 +28,10 @@ export default async function BulkTuitionPage({ params, searchParams }: { params
   if (!school) notFound();
   const schoolId = school.id;
 
-  const amountBasis: AmountBasis = sp.amount_basis === 'remaining' ? 'remaining' : 'net';
+  // Default to 'remaining' so a mid-year migration bills only what the
+  // family still owes after FACTS payments — billing 'net' here re-bills
+  // amounts already collected in FACTS (e.g. enrollment fees / deposits).
+  const amountBasis: AmountBasis = sp.amount_basis === 'net' ? 'net' : 'remaining';
   const firstDue = /^\d{4}-\d{2}-\d{2}$/.test(sp.first_due_date ?? '') ? sp.first_due_date! : '2026-07-01';
 
   const [plan, { rows: cfgRows }] = await Promise.all([
@@ -69,8 +72,8 @@ export default async function BulkTuitionPage({ params, searchParams }: { params
           <label className="block">
             <span className="text-[11px] font-medium uppercase tracking-wide text-slate-600">Amount to schedule</span>
             <select name="amount_basis" defaultValue={amountBasis} className="mt-0.5 w-full rounded border border-slate-300 px-2 py-1.5 text-sm">
-              <option value="net">Net charges (full year, after discounts)</option>
-              <option value="remaining">Remaining balance (net − payments already made)</option>
+              <option value="remaining">Remaining balance — what families still owe after FACTS payments (recommended)</option>
+              <option value="net">Net charges — full year, ignores FACTS payments already made</option>
             </select>
           </label>
           <button type="submit" className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">

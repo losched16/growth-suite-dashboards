@@ -43,7 +43,9 @@ export async function POST(request: NextRequest, { params }: { params: Params })
   const { schoolId } = await params;
   const fd = await request.formData();
   const returnTo = String(fd.get('return_to') ?? '').trim() || undefined;
-  const amountBasis: AmountBasis = String(fd.get('amount_basis') ?? 'net') === 'remaining' ? 'remaining' : 'net';
+  // Default 'remaining' — bill only what families still owe after FACTS
+  // payments, so already-collected amounts aren't re-billed on migration.
+  const amountBasis: AmountBasis = String(fd.get('amount_basis') ?? 'remaining') === 'net' ? 'net' : 'remaining';
   const firstRaw = String(fd.get('first_due_date') ?? '').trim();
   const firstDueDate = /^\d{4}-\d{2}-\d{2}$/.test(firstRaw) ? firstRaw : null;
   if (!firstDueDate) return back(request, schoolId, { err: 'Pick a valid first payment date.', href: returnTo });
