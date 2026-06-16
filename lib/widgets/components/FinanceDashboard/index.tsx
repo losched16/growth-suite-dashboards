@@ -16,6 +16,7 @@ import {
 import { DownloadCsvButton } from '@/components/DownloadCsvButton';
 import { AutoSubmitForm } from '@/lib/widgets/components/_shared/AutoSubmitForm';
 import { PreserveEmbedParams } from '@/lib/widgets/components/_shared/PreserveEmbedParams';
+import { StudentsTable } from './StudentsTable';
 import Link from 'next/link';
 
 function fmt(n: number): string {
@@ -514,49 +515,8 @@ function StudentsTab({ data, school, current }: { data: FinanceData; school: Sch
         <span className="ml-auto text-xs text-gray-500">{rows.length} students · paid {fmtSmall(totalPaid)} · balance {fmtSmall(totalBalance)}</span>
       </AutoSubmitForm>
 
-      <section className="rounded-lg border border-gray-200 bg-white overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead className="bg-gray-50 border-b border-gray-100 text-left text-[11px] uppercase tracking-wide text-gray-500">
-            <tr>
-              <th className="px-3 py-2 font-medium">Student</th>
-              <th className="px-3 py-2 font-medium">Family</th>
-              <th className="px-3 py-2 font-medium">Plan</th>
-              <th className="px-3 py-2 font-medium text-right">Charged</th>
-              <th className="px-3 py-2 font-medium text-right">Paid</th>
-              <th className="px-3 py-2 font-medium text-right">Balance</th>
-              <th className="px-3 py-2 font-medium">Progress</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
-            {rows.length === 0 ? (
-              <tr><td colSpan={7} className="px-3 py-6 text-center text-gray-500">No students match.</td></tr>
-            ) : rows.map((r) => (
-              <tr key={r.student_id}>
-                <td className="px-3 py-2 font-medium text-gray-900">
-                  {r.family_id ? (
-                    <Link href={`/school/${school.locationId}/family-hub/${r.family_id}`} className="text-emerald-700 hover:underline">{r.student_name}</Link>
-                  ) : r.student_name}
-                  {r.program ? <div className="text-[11px] text-gray-500">{r.program}</div> : null}
-                </td>
-                <td className="px-3 py-2 text-gray-700">{r.family}</td>
-                <td className="px-3 py-2 text-xs text-gray-600">{r.plan || '—'}{r.gs_installments > 0 ? <span className="text-gray-400"> · {r.gs_installments} pmts</span> : null}</td>
-                <td className="px-3 py-2 text-right tabular-nums text-gray-700">{fmtSmall(r.charged)}</td>
-                <td className="px-3 py-2 text-right tabular-nums text-emerald-700">{fmtSmall(r.paid)}</td>
-                <td className={`px-3 py-2 text-right tabular-nums font-semibold ${r.balance > 0 ? 'text-amber-700' : 'text-emerald-700'}`}>{fmtSmall(r.balance)}</td>
-                <td className="px-3 py-2">
-                  <div className="flex items-center gap-2">
-                    <div className="h-1.5 w-24 rounded-full bg-gray-200 overflow-hidden">
-                      <div className="h-full bg-emerald-500" style={{ width: `${r.pct_paid}%` }} />
-                    </div>
-                    <span className="text-[11px] text-gray-500 tabular-nums">{r.pct_paid}%</span>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </section>
-      <p className="text-[11px] text-gray-500">Charged / Paid / Balance are actuals from FACTS. “Paid” updates from Growth Suite autopay once you go live. Click a student to open their family record. Showing up to 1,000 students.</p>
+      <StudentsTable rows={rows} locationId={school.locationId} />
+      <p className="text-[11px] text-gray-500">Charged / Paid / Balance are actuals from FACTS. <strong>Click a student</strong> to expand their full account history + payment schedule. “Paid” updates from Growth Suite autopay once you go live. Showing up to 1,000 students.</p>
     </div>
   );
 }

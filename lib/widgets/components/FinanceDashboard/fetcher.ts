@@ -100,6 +100,9 @@ export interface StudentProgressRow {
   gs_installments: number;
   gs_scheduled: number;   // total scheduled in GS plan (dollars)
   gs_first_due: string | null;
+  // Drill-down detail (rendered in the inline accordion).
+  accounts: Array<{ account: string; charged: number; credit: number; paid: number; balance: number }>;
+  schedule: Array<{ label: string; due: string | null; amount: number; status: string; paid: number }>;
 }
 
 // One FACTS ledger line for the "Transactions" tab — every debit/credit/
@@ -595,11 +598,59 @@ async function loadStudentProgress(
       family: r.family, family_id: r.family_id, program: r.program, plan: r.plan,
       charged, credits, paid, balance, pct_paid: pct,
       gs_installments: Number(r.gs_installments), gs_scheduled: c(r.gs_scheduled), gs_first_due: r.gs_first_due,
+      accounts: [], schedule: [],
     };
   });
   if (status === 'balance') out = out.filter((r) => r.balance > 0.005);
   else if (status === 'paid') out = out.filter((r) => r.balance <= 0.005 && r.charged > 0);
   else if (status === 'no_facts') out = out.filter((r) => r.charged === 0);
+
+  // Attach per-student drill-down detail (FACTS account history + the
+  // Growth Suite payment schedule) for the rows we're returning.
+  const ids = out.map((r) => r.student_id);
+  if (ids.length > 0) {
+    const byId = new Map(out.map((r) => [r.student_id, r]));
+    const { rows: acctRows } = await query<{
+      student_id: string; account: string;
+      charges_cents: string; credits_cents: string; payments_cents: string; ending_balance_cents: string;
+    }>(
+      `SELECT student_id, account,
+              charges_cents::text, credits_cents::text, payments_cents::text, ending_balance_cents::text
+         FROM facts_account_ledger
+        WHERE school_id = $1 AND academic_year = $2 AND student_id = ANY($3::uuid[])
+        ORDER BY account`,
+      [schoolId, year, ids],
+    );
+    for (const r of acctRows) {
+      byId.get(r.student_id)?.accounts.push({
+        account: r.account, charged: c(r.charges_cents), credit: c(r.credits_cents),
+        paid: c(r.payments_cents), balance: c(r.ending_balance_cents),
+      });
+    }
+    const { rows: invRows } = await query<{
+      student_id: string; invoice_number: string; due_at: Date | null;
+      total_cents: string; amount_paid_cents: string; status: string;
+    }>(
+      `SELECT student_id, invoice_number, due_at, total_cents::text, amount_paid_cents::text, status
+         FROM invoices
+        WHERE school_id = $1 AND source = 'tuition_plan' AND voided_at IS NULL
+          AND student_id = ANY($2::uuid[])
+        ORDER BY due_at`,
+      [schoolId, ids],
+    );
+    for (const r of invRows) {
+      const total = c(r.total_cents), paid = c(r.amount_paid_cents);
+      const st = r.status === 'paid' || (total > 0 && paid >= total) ? 'Paid'
+        : paid > 0 ? 'Partial'
+        : r.status === 'draft' ? 'Scheduled (draft)'
+        : 'Scheduled';
+      byId.get(r.student_id)?.schedule.push({
+        label: r.invoice_number,
+        due: r.due_at ? r.due_at.toISOString().slice(0, 10) : null,
+        amount: total, status: st, paid,
+      });
+    }
+  }
   return out;
 }
 
