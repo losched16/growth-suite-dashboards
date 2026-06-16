@@ -81,7 +81,51 @@ export interface FactsActuals {
   imported_at: string | null;
 }
 
+// One row per active student for the "Students & Families" tab: their
+// FACTS charged / paid / remaining (the actual cash position) plus their
+// Growth Suite plan + go-forward schedule, so the CFO sees payment
+// progress per family in one place.
+export interface StudentProgressRow {
+  student_id: string;
+  student_name: string;
+  family: string;
+  family_id: string | null;
+  program: string;
+  plan: string;
+  charged: number;        // FACTS charges (dollars)
+  credits: number;        // discounts/credits applied
+  paid: number;           // cash collected in FACTS
+  balance: number;        // remaining owed
+  pct_paid: number;       // 0–100 of net
+  gs_installments: number;
+  gs_scheduled: number;   // total scheduled in GS plan (dollars)
+  gs_first_due: string | null;
+}
+
+// One FACTS ledger line for the "Transactions" tab — every debit/credit/
+// payment, by account, filterable.
+export interface TransactionRow {
+  student_name: string;
+  family: string;
+  family_id: string | null;
+  account: string;
+  account_key: string;
+  charged: number;
+  credit: number;
+  paid: number;
+  balance: number;
+}
+
 export interface FinanceData {
+  // Active tab + filter state (drives the tabbed Finance Hub).
+  fin_tab: 'overview' | 'students' | 'transactions';
+  q: string;
+  acct: string;
+  status: string;
+  // Per-tab payloads (only the active tab's is populated).
+  students: StudentProgressRow[] | null;
+  transactions: TransactionRow[] | null;
+  account_options: Array<{ key: string; label: string }>;
   // Top-line cards
   total_revenue: number;
   total_discounts: number;
@@ -182,12 +226,20 @@ function pickProgramGroup(programName: string, groups: ProgramGroup[]): string {
   return 'Other';
 }
 
+const FINANCE_YEAR = '2026-27';
+
 export async function fetcher(
   school: SchoolContext,
   config: FinanceDashboardConfig,
-  _searchParams?: WidgetSearchParams,
+  searchParams?: WidgetSearchParams,
 ): Promise<FinanceData> {
   const groups = config.program_groups ?? [];
+  const tabRaw = (searchParams?.fintab ?? 'overview').trim();
+  const fin_tab: FinanceData['fin_tab'] =
+    tabRaw === 'students' ? 'students' : tabRaw === 'transactions' ? 'transactions' : 'overview';
+  const q = (searchParams?.q ?? '').trim();
+  const acct = (searchParams?.acct ?? '').trim();
+  const status = (searchParams?.status ?? '').trim();
 
   // Bridge JOIN: pull the active enrollment + grid program label so the
   // widget surfaces native-tuition data when student.metadata is empty.
@@ -340,15 +392,26 @@ export async function fetcher(
   const totalAids = financialAid + referralCredit + esa + stoOrig + stoSwitcher + stoCorp + stoOther;
   const net = totalRevenue - totalDiscounts - totalAids;
 
-  // FACTS actuals — picks the most-recently-imported term automatically.
-  const facts = await loadFactsActuals(school.schoolId);
+  // FACTS actuals for the current year — from the per-account ledger we
+  // imported (all matched to students). This is the source of truth for
+  // actual cash position (charged / collected / outstanding).
+  const facts = await loadFactsActuals(school.schoolId, FINANCE_YEAR);
 
   // Live payments — aggregates from the platform's own invoices +
   // family_tuition_enrollments tables. Independent of FACTS; native
   // tenants (MCH and forward) populate this from day one.
   const livePayments = await loadLivePayments(school.schoolId);
 
+  // Per-tab payloads — only fetch the active tab's heavier data set.
+  const students = fin_tab === 'students'
+    ? await loadStudentProgress(school.schoolId, FINANCE_YEAR, q, status) : null;
+  const transactions = fin_tab === 'transactions'
+    ? await loadTransactions(school.schoolId, FINANCE_YEAR, acct, q) : null;
+
   return {
+    fin_tab, q, acct, status,
+    students, transactions,
+    account_options: ACCOUNT_OPTIONS,
     facts,
     live_payments: livePayments,
     total_revenue: totalRevenue,
@@ -384,109 +447,193 @@ export async function fetcher(
   };
 }
 
-// Load actual financial figures imported from FACTS Management. Picks
-// the most-recently-imported term automatically (so re-importing newer
-// terms surfaces them without code changes). Returns null if no FACTS
-// data has been imported for this school.
-async function loadFactsActuals(schoolId: string): Promise<FactsActuals | null> {
-  const { rows: termRows } = await query<{ term: string }>(
-    `SELECT term FROM facts_balances
-     WHERE school_id = $1
-     GROUP BY term
-     ORDER BY MAX(imported_at) DESC
-     LIMIT 1`,
-    [schoolId],
-  );
-  if (termRows.length === 0) return null;
-  const term = termRows[0].term;
+// FACTS accounts in display order — also powers the Transactions filter.
+const ACCOUNT_OPTIONS: Array<{ key: string; label: string }> = [
+  { key: 'annual_tuition', label: 'Tuition' },
+  { key: 'enrollment_fee', label: 'Enrollment Fee' },
+  { key: 'administrative_fee', label: 'Administrative Fee' },
+  { key: 'extended_day', label: 'Extended Day' },
+  { key: 'organic_lunch', label: 'Lunch' },
+  { key: 'chromebook_fee', label: 'Chromebook Fee' },
+  { key: 'withdrawal_fee', label: 'Withdrawal Fee' },
+];
 
-  const { rows: aggRows } = await query<{
-    rows: string;
-    matched: string;
-    charges: string | null;
-    credits: string | null;
-    payments: string | null;
-    amt_due: string | null;
-    credit_bal: string | null;
-    delinquent: string | null;
-    imported_at: Date | null;
-    paid_in_full: string;
-    owes_under_500: string;
-    owes_500_2000: string;
-    owes_2000_5000: string;
-    owes_over_5000: string;
-    delinquent_count: string;
+// Actual cash position for the year from the FACTS per-account ledger
+// (facts_account_ledger) — every charge / credit / payment, all matched
+// to a student. Outstanding A/R = sum of remaining (ending) balances.
+// Returns null if nothing has been imported for the year.
+async function loadFactsActuals(schoolId: string, year: string): Promise<FactsActuals | null> {
+  const { rows: agg } = await query<{
+    rows: string; matched: string;
+    charges: string | null; credits: string | null; payments: string | null; amt_due: string | null;
+    paid_in_full: string; owes_under_500: string; owes_500_2000: string;
+    owes_2000_5000: string; owes_over_5000: string;
   }>(
-    `SELECT
-       count(*)::text AS rows,
-       count(*) FILTER (WHERE matched_student_id IS NOT NULL)::text AS matched,
-       sum(charges)::text AS charges,
-       sum(credits)::text AS credits,
-       sum(payments)::text AS payments,
-       sum(remaining_amount_due)::text AS amt_due,
-       sum(remaining_credit_balance)::text AS credit_bal,
-       sum(delinquent_balance)::text AS delinquent,
-       MAX(imported_at) AS imported_at,
-       count(*) FILTER (WHERE remaining_amount_due = 0)::text AS paid_in_full,
-       count(*) FILTER (WHERE remaining_amount_due > 0 AND remaining_amount_due <= 500)::text AS owes_under_500,
-       count(*) FILTER (WHERE remaining_amount_due > 500 AND remaining_amount_due <= 2000)::text AS owes_500_2000,
-       count(*) FILTER (WHERE remaining_amount_due > 2000 AND remaining_amount_due <= 5000)::text AS owes_2000_5000,
-       count(*) FILTER (WHERE remaining_amount_due > 5000)::text AS owes_over_5000,
-       count(*) FILTER (WHERE delinquent_balance > 0)::text AS delinquent_count
-     FROM facts_balances
-     WHERE school_id = $1 AND term = $2`,
-    [schoolId, term],
+    `WITH stu AS (
+       SELECT l.student_id,
+              SUM(l.charges_cents) ch, SUM(l.credits_cents) cr,
+              SUM(l.payments_cents) pay, SUM(l.ending_balance_cents) bal
+         FROM facts_account_ledger l
+        WHERE l.school_id = $1 AND l.academic_year = $2
+        GROUP BY l.student_id)
+     SELECT count(*)::text AS rows,
+            count(*) FILTER (WHERE student_id IS NOT NULL)::text AS matched,
+            COALESCE(SUM(ch),0)::text AS charges,
+            COALESCE(SUM(cr),0)::text AS credits,
+            COALESCE(SUM(pay),0)::text AS payments,
+            COALESCE(SUM(bal),0)::text AS amt_due,
+            count(*) FILTER (WHERE bal <= 0)::text AS paid_in_full,
+            count(*) FILTER (WHERE bal > 0 AND bal <= 50000)::text AS owes_under_500,
+            count(*) FILTER (WHERE bal > 50000 AND bal <= 200000)::text AS owes_500_2000,
+            count(*) FILTER (WHERE bal > 200000 AND bal <= 500000)::text AS owes_2000_5000,
+            count(*) FILTER (WHERE bal > 500000)::text AS owes_over_5000
+       FROM stu`,
+    [schoolId, year],
   );
-  const a = aggRows[0];
+  const a = agg[0];
+  if (!a || Number(a.rows) === 0) return null;
 
-  const { rows: topRows } = await query<{
-    customer_name: string;
-    facts_student_name: string;
-    charges: string;
-    payments: string;
-    remaining_amount_due: string;
-    delinquent_balance: string;
-    matched_family_id: string | null;
+  const { rows: imp } = await query<{ imported_at: Date | null }>(
+    `SELECT MAX(imported_at) AS imported_at FROM facts_account_ledger WHERE school_id = $1 AND academic_year = $2`,
+    [schoolId, year],
+  );
+
+  const { rows: top } = await query<{
+    first_name: string; last_name: string; preferred_name: string | null;
+    family_id: string | null; family: string; ch: string; pay: string; bal: string;
   }>(
-    `SELECT customer_name, facts_student_name, charges, payments,
-            remaining_amount_due, delinquent_balance, matched_family_id
-     FROM facts_balances
-     WHERE school_id = $1 AND term = $2 AND remaining_amount_due > 0
-     ORDER BY remaining_amount_due DESC
-     LIMIT 25`,
-    [schoolId, term],
+    `SELECT s.first_name, s.last_name, s.preferred_name, s.family_id,
+            COALESCE(f.display_name,'') AS family,
+            SUM(l.charges_cents)::text AS ch, SUM(l.payments_cents)::text AS pay,
+            SUM(l.ending_balance_cents)::text AS bal
+       FROM facts_account_ledger l
+       JOIN students s ON s.id = l.student_id
+       LEFT JOIN families f ON f.id = s.family_id
+      WHERE l.school_id = $1 AND l.academic_year = $2
+      GROUP BY s.id, s.first_name, s.last_name, s.preferred_name, s.family_id, f.display_name
+     HAVING SUM(l.ending_balance_cents) > 0
+      ORDER BY SUM(l.ending_balance_cents) DESC
+      LIMIT 25`,
+    [schoolId, year],
   );
 
+  const c = (s: string | null) => Number(s ?? 0) / 100;
   return {
-    term,
+    term: year === '2026-27' ? '2026-2027' : year,
     has_data: true,
     rows: Number(a.rows),
     matched_to_students: Number(a.matched),
-    charges: Number(a.charges ?? 0),
-    credits: Number(a.credits ?? 0),
-    payments: Number(a.payments ?? 0),
-    amount_due: Number(a.amt_due ?? 0),
-    credit_balance: Number(a.credit_bal ?? 0),
-    delinquent_balance: Number(a.delinquent ?? 0),
+    charges: c(a.charges),
+    credits: c(a.credits),
+    payments: c(a.payments),
+    amount_due: c(a.amt_due),
+    credit_balance: 0,
+    delinquent_balance: 0,
     ar_buckets: {
       paid_in_full: Number(a.paid_in_full),
       owes_under_500: Number(a.owes_under_500),
       owes_500_2000: Number(a.owes_500_2000),
       owes_2000_5000: Number(a.owes_2000_5000),
       owes_over_5000: Number(a.owes_over_5000),
-      delinquent_count: Number(a.delinquent_count),
+      delinquent_count: 0,
     },
-    top_delinquent: topRows.map((r) => ({
-      customer_name: r.customer_name,
-      student_name: r.facts_student_name,
-      charges: Number(r.charges),
-      payments: Number(r.payments),
-      amount_due: Number(r.remaining_amount_due),
-      delinquent_balance: Number(r.delinquent_balance),
-      matched_family_id: r.matched_family_id,
+    top_delinquent: top.map((r) => ({
+      customer_name: r.family || `${r.first_name} ${r.last_name}`,
+      student_name: `${(r.preferred_name && r.preferred_name.trim()) || r.first_name} ${r.last_name}`,
+      charges: c(r.ch), payments: c(r.pay), amount_due: c(r.bal),
+      delinquent_balance: 0, matched_family_id: r.family_id,
     })),
-    imported_at: a.imported_at ? a.imported_at.toISOString() : null,
+    imported_at: imp[0]?.imported_at ? imp[0].imported_at.toISOString() : null,
   };
+}
+
+// "Students & Families" tab — per active student: FACTS charged / paid /
+// remaining + their Growth Suite plan + go-forward schedule. Optional
+// name search (q) and balance filter (status).
+async function loadStudentProgress(
+  schoolId: string, year: string, q: string, status: string,
+): Promise<StudentProgressRow[]> {
+  const like = q ? `%${q}%` : null;
+  const { rows } = await query<{
+    id: string; first_name: string; last_name: string; preferred_name: string | null;
+    family_id: string | null; family: string; program: string; plan: string;
+    gs_first_due: string | null; charged: string; credits: string; paid: string;
+    balance: string; gs_installments: string; gs_scheduled: string;
+  }>(
+    `SELECT s.id, s.first_name, s.last_name, s.preferred_name, s.family_id,
+            COALESCE(f.display_name,'') AS family,
+            COALESCE(s.metadata->>'program_name','') AS program,
+            COALESCE((SELECT pp.display_name FROM family_tuition_enrollments e
+                        LEFT JOIN payment_plans pp ON pp.id = e.payment_plan_id
+                       WHERE e.student_id = s.id AND e.academic_year = $2 AND e.payment_plan_id IS NOT NULL
+                       LIMIT 1), '') AS plan,
+            (SELECT to_char(MIN(e.first_due_date),'YYYY-MM-DD') FROM family_tuition_enrollments e
+              WHERE e.student_id = s.id AND e.academic_year = $2) AS gs_first_due,
+            COALESCE((SELECT SUM(l.charges_cents) FROM facts_account_ledger l WHERE l.student_id = s.id AND l.academic_year = $2),0)::text AS charged,
+            COALESCE((SELECT SUM(l.credits_cents) FROM facts_account_ledger l WHERE l.student_id = s.id AND l.academic_year = $2),0)::text AS credits,
+            COALESCE((SELECT SUM(l.payments_cents) FROM facts_account_ledger l WHERE l.student_id = s.id AND l.academic_year = $2),0)::text AS paid,
+            COALESCE((SELECT SUM(l.ending_balance_cents) FROM facts_account_ledger l WHERE l.student_id = s.id AND l.academic_year = $2),0)::text AS balance,
+            COALESCE((SELECT COUNT(*) FROM invoices i WHERE i.student_id = s.id AND i.source = 'tuition_plan' AND i.voided_at IS NULL),0)::text AS gs_installments,
+            COALESCE((SELECT SUM(li.amount_cents) FROM invoices i JOIN invoice_line_items li ON li.invoice_id = i.id
+                       WHERE i.student_id = s.id AND i.source = 'tuition_plan' AND i.voided_at IS NULL),0)::text AS gs_scheduled
+       FROM students s
+       JOIN families f ON f.id = s.family_id
+      WHERE s.school_id = $1 AND s.status = 'active'
+        AND ($3::text IS NULL OR s.first_name ILIKE $3 OR s.last_name ILIKE $3 OR f.display_name ILIKE $3)
+      ORDER BY s.last_name, s.first_name
+      LIMIT 1000`,
+    [schoolId, year, like],
+  );
+  const c = (v: string) => Number(v ?? 0) / 100;
+  let out: StudentProgressRow[] = rows.map((r) => {
+    const charged = c(r.charged), credits = c(r.credits), paid = c(r.paid), balance = c(r.balance);
+    const net = Math.max(0, charged - credits);
+    const pct = net > 0 ? Math.min(100, Math.round((paid / net) * 100)) : (paid > 0 ? 100 : 0);
+    return {
+      student_id: r.id,
+      student_name: `${(r.preferred_name && r.preferred_name.trim()) || r.first_name} ${r.last_name}`.trim(),
+      family: r.family, family_id: r.family_id, program: r.program, plan: r.plan,
+      charged, credits, paid, balance, pct_paid: pct,
+      gs_installments: Number(r.gs_installments), gs_scheduled: c(r.gs_scheduled), gs_first_due: r.gs_first_due,
+    };
+  });
+  if (status === 'balance') out = out.filter((r) => r.balance > 0.005);
+  else if (status === 'paid') out = out.filter((r) => r.balance <= 0.005 && r.charged > 0);
+  else if (status === 'no_facts') out = out.filter((r) => r.charged === 0);
+  return out;
+}
+
+// "Transactions" tab — every FACTS ledger line, filterable by account and
+// student name.
+async function loadTransactions(
+  schoolId: string, year: string, acct: string, q: string,
+): Promise<TransactionRow[]> {
+  const like = q ? `%${q}%` : null;
+  const acctKey = ACCOUNT_OPTIONS.some((o) => o.key === acct) ? acct : null;
+  const { rows } = await query<{
+    student_name: string | null; account: string; account_key: string;
+    charges_cents: string; credits_cents: string; payments_cents: string; ending_balance_cents: string;
+    family_id: string | null; family: string;
+  }>(
+    `SELECT l.student_name, l.account, l.account_key,
+            l.charges_cents::text, l.credits_cents::text, l.payments_cents::text, l.ending_balance_cents::text,
+            s.family_id, COALESCE(f.display_name,'') AS family
+       FROM facts_account_ledger l
+       LEFT JOIN students s ON s.id = l.student_id
+       LEFT JOIN families f ON f.id = s.family_id
+      WHERE l.school_id = $1 AND l.academic_year = $2
+        AND ($3::text IS NULL OR l.account_key = $3)
+        AND ($4::text IS NULL OR l.student_name ILIKE $4)
+      ORDER BY l.student_name, l.account
+      LIMIT 1000`,
+    [schoolId, year, acctKey, like],
+  );
+  const c = (v: string) => Number(v ?? 0) / 100;
+  return rows.map((r) => ({
+    student_name: r.student_name ?? '', family: r.family, family_id: r.family_id,
+    account: r.account, account_key: r.account_key,
+    charged: c(r.charges_cents), credit: c(r.credits_cents), paid: c(r.payments_cents), balance: c(r.ending_balance_cents),
+  }));
 }
 
 // Native (non-FACTS) cash + contracted figures. Aggregates from the

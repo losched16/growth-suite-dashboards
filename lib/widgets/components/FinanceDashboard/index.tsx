@@ -3,14 +3,19 @@
 // and sports breakdowns, discounts, aid + credits, recipient lists,
 // "actual cash data coming with Smart Payments" placeholder.
 
-import type { WidgetDefinition, SchoolContext } from '@/lib/widgets/types';
+import type { WidgetDefinition, SchoolContext, WidgetSearchParams } from '@/lib/widgets/types';
 import {
   financeDashboardDefaults,
   financeDashboardSchema,
   type FinanceDashboardConfig,
 } from './config';
-import { fetcher, type FinanceData, type RecipientRow, type FactsActuals, type LivePayments } from './fetcher';
+import {
+  fetcher, type FinanceData, type RecipientRow, type FactsActuals, type LivePayments,
+  type StudentProgressRow, type TransactionRow,
+} from './fetcher';
 import { DownloadCsvButton } from '@/components/DownloadCsvButton';
+import { AutoSubmitForm } from '@/lib/widgets/components/_shared/AutoSubmitForm';
+import { PreserveEmbedParams } from '@/lib/widgets/components/_shared/PreserveEmbedParams';
 import Link from 'next/link';
 
 function fmt(n: number): string {
@@ -108,49 +113,49 @@ function Component({
   school,
   config,
   data,
+  searchParams,
 }: {
   school: SchoolContext;
   config: FinanceDashboardConfig;
   data: FinanceData;
+  searchParams?: WidgetSearchParams;
 }) {
-  const showPlaceholder = config.show_actual_payments_placeholder !== false;
   const showRecipients = config.show_recipient_lists !== false;
+  const current = searchParams ?? {};
 
   const exportBase = `/api/export/finance/${school.locationId}`;
 
   return (
-    <div className="space-y-6">
-      <div>
-        <div className="flex items-start justify-between gap-3 flex-wrap">
-          <div>
-            <h2 className="text-2xl font-bold text-emerald-800">
-              Financial Reports — {school.schoolName}
-            </h2>
-            <p className="mt-1 text-sm text-gray-600">
-              {data.student_count} students · contracted amounts from each student&apos;s enrollment record
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <DownloadCsvButton href={exportBase} label="Per-student CSV" />
-            <DownloadCsvButton href={`${exportBase}?type=program`} label="By program" size="xs" />
-            <DownloadCsvButton href={`${exportBase}?type=enrichment`} label="By enrichment" size="xs" />
-            <DownloadCsvButton href={`${exportBase}?type=sport`} label="By sport" size="xs" />
-            <DownloadCsvButton href={`${exportBase}?type=fin_aid`} label="Fin Aid list" size="xs" />
-            <DownloadCsvButton href={`${exportBase}?type=esa`} label="ESA list" size="xs" />
-            <DownloadCsvButton href={`${exportBase}?type=sto`} label="STO list" size="xs" />
-            <span className="mx-1 h-5 w-px bg-gray-300" aria-hidden />
-            <span className="text-[11px] font-medium text-gray-500">FACTS reconciliation:</span>
-            <DownloadCsvButton href={`/api/export/facts-ledger/${school.locationId}`} label="Per-account ledger" size="xs" />
-            <DownloadCsvButton href={`/api/export/facts/${school.locationId}`} label="Per-student rollup" size="xs" />
-          </div>
+    <div className="space-y-5">
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <h2 className="text-2xl font-bold text-emerald-800">Finance Hub — {school.schoolName}</h2>
+          <p className="mt-1 text-sm text-gray-600">
+            2026–2027 school year · actual cash from FACTS + Growth Suite billing · {data.student_count} active students
+          </p>
         </div>
-        <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-          <strong>Note:</strong> All figures here are <em>projected/contracted</em> revenue from
-          enrollment data — not actual cash received. A/R aging, bank balances, returned
-          payments, and payment-method issues will appear here once Smart Payments / accounting
-          integration is wired in.
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-[11px] font-medium text-gray-500">Download:</span>
+          <DownloadCsvButton href={`/api/export/facts-ledger/${school.locationId}`} label="Transactions (by account)" size="xs" />
+          <DownloadCsvButton href={`/api/export/facts/${school.locationId}`} label="Per-student rollup" size="xs" />
+          <DownloadCsvButton href={exportBase} label="Contracted revenue" size="xs" />
         </div>
       </div>
+
+      <TabNav active={data.fin_tab} current={current} />
+
+      {data.fin_tab === 'students' ? <StudentsTab data={data} school={school} current={current} /> : null}
+      {data.fin_tab === 'transactions' ? <TransactionsTab data={data} school={school} current={current} /> : null}
+
+      {data.fin_tab === 'overview' ? (
+      <div className="space-y-5">
+        {data.facts ? <FactsActualsSection facts={data.facts} school={school} /> : null}
+        {data.live_payments ? <LivePaymentsSection live={data.live_payments} /> : null}
+        <BillingActions school={school} />
+        <div className="rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-[11px] text-gray-600">
+          The tables below are <em>contracted / projected</em> revenue from enrollment records (full-year totals).
+          Actual cash charged and collected to date is in the cards above.
+        </div>
 
       {/* Top-line */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -267,36 +272,8 @@ function Component({
         </div>
       ) : null}
 
-      {/* Live cash data from our own invoices + enrollments tables.
-          Renders for any tenant on the native tuition stack (MCH and
-          forward). DGM may have this too if they've started running
-          tuition through the platform; otherwise their FACTS section
-          below covers them. */}
-      {data.live_payments ? <LivePaymentsSection live={data.live_payments} /> : null}
-
-      {/* FACTS actuals — replaces the Coming Soon section once data is imported */}
-      {data.facts ? <FactsActualsSection facts={data.facts} school={school} /> : (showPlaceholder ? (
-        <Section title="Actual payment data (FACTS import pending)">
-          <div className="px-4 py-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 text-xs">
-            {[
-              'A/R Aging',
-              'Credit Balances',
-              'Payments received',
-              'Delinquent balances',
-              'Top outstanding accounts',
-              'Returned / invalid payment methods',
-            ].map((label) => (
-              <div key={label} className="rounded-md border border-dashed border-gray-300 bg-white px-3 py-2 text-gray-500">
-                {label} <span className="ml-1 italic text-gray-400">— coming</span>
-              </div>
-            ))}
-          </div>
-          <div className="px-4 pb-3 text-[11px] text-gray-500">
-            To populate: drop FACTS Customer / Student / Balances exports into{' '}
-            <code className="font-mono">scripts/import-facts.py</code> for this school.
-          </div>
-        </Section>
-      ) : null)}
+      </div>
+      ) : null}
     </div>
   );
 }
@@ -382,10 +359,10 @@ function FactsActualsSection({ facts, school }: { facts: FactsActuals; school: S
       <div className="rounded-lg border-2 border-emerald-300 bg-emerald-50 p-4">
         <div className="flex items-baseline justify-between gap-3 flex-wrap">
           <div>
-            <h2 className="text-lg font-bold text-emerald-900">💰 Actual cash flow — {facts.term}</h2>
+            <h2 className="text-lg font-bold text-emerald-900">💰 Actual cash position — {facts.term}</h2>
             <p className="mt-0.5 text-xs text-emerald-800">
-              From FACTS Management · {facts.rows} balance rows, {facts.matched_to_students} matched to our students
-              {facts.imported_at ? ` · imported ${new Date(facts.imported_at).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' })}` : ''}
+              Imported FACTS charges &amp; payments · {facts.matched_to_students} students, all matched
+              {facts.imported_at ? ` · updated ${new Date(facts.imported_at).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' })}` : ''}
             </p>
           </div>
         </div>
@@ -393,14 +370,14 @@ function FactsActualsSection({ facts, school }: { facts: FactsActuals; school: S
 
       {/* Big-number cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <BigCard label="Total charged" value={fmt(facts.charges)} accent="emerald" sub="this school year" />
-        <BigCard label="Total payments received" value={fmt(facts.payments)} accent="emerald" sub={`${collectionRate.toFixed(1)}% collection rate`} />
-        <BigCard label="Outstanding A/R" value={fmt(facts.amount_due)} accent="amber" sub={`${facts.ar_buckets.delinquent_count + facts.ar_buckets.owes_under_500 + facts.ar_buckets.owes_500_2000 + facts.ar_buckets.owes_2000_5000 + facts.ar_buckets.owes_over_5000} accounts`} />
-        <BigCard label="Delinquent balance" value={fmt(facts.delinquent_balance)} accent="rose" sub={`${facts.ar_buckets.delinquent_count} delinquent accounts`} />
+        <BigCard label="Total charged" value={fmt(facts.charges)} accent="emerald" sub="2026–2027 to date" />
+        <BigCard label="Collected to date" value={fmt(facts.payments)} accent="emerald" sub={`${collectionRate.toFixed(1)}% of charges`} />
+        <BigCard label="Outstanding balance" value={fmt(facts.amount_due)} accent="amber" sub={`${facts.ar_buckets.owes_under_500 + facts.ar_buckets.owes_500_2000 + facts.ar_buckets.owes_2000_5000 + facts.ar_buckets.owes_over_5000} families owe`} />
+        <BigCard label="Credits & discounts" value={fmt(facts.credits)} accent="rose" sub="applied to accounts" />
       </div>
 
-      {/* A/R aging buckets */}
-      <Section title="A/R Aging (by outstanding amount)">
+      {/* Outstanding-balance buckets */}
+      <Section title="Outstanding balances — families by amount owed">
         <thead className="bg-gray-50 border-b border-gray-100 text-left text-[11px] uppercase tracking-wide text-gray-500">
           <tr>
             <th className="px-3 py-2 font-medium">Bucket</th>
@@ -413,7 +390,6 @@ function FactsActualsSection({ facts, school }: { facts: FactsActuals; school: S
           <tr><td className="px-3 py-2 text-gray-700">Owes $500–$2,000</td><td className="px-3 py-2 text-right tabular-nums">{facts.ar_buckets.owes_500_2000}</td></tr>
           <tr><td className="px-3 py-2 text-amber-700">Owes $2,000–$5,000</td><td className="px-3 py-2 text-right tabular-nums text-amber-700">{facts.ar_buckets.owes_2000_5000}</td></tr>
           <tr><td className="px-3 py-2 text-rose-700 font-medium">Owes over $5,000</td><td className="px-3 py-2 text-right tabular-nums font-medium text-rose-700">{facts.ar_buckets.owes_over_5000}</td></tr>
-          <tr className="bg-rose-50"><td className="px-3 py-2 text-rose-800 font-semibold">Delinquent (legally overdue)</td><td className="px-3 py-2 text-right tabular-nums font-semibold text-rose-800">{facts.ar_buckets.delinquent_count}</td></tr>
         </tbody>
       </Section>
 
@@ -434,7 +410,6 @@ function FactsActualsSection({ facts, school }: { facts: FactsActuals; school: S
                 <th className="px-3 py-2 font-medium text-right">Charged</th>
                 <th className="px-3 py-2 font-medium text-right">Paid</th>
                 <th className="px-3 py-2 font-medium text-right">Outstanding</th>
-                <th className="px-3 py-2 font-medium text-right">Delinquent</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -453,7 +428,6 @@ function FactsActualsSection({ facts, school }: { facts: FactsActuals; school: S
                   <td className="px-3 py-2 text-right tabular-nums text-gray-700">{fmt(r.charges)}</td>
                   <td className="px-3 py-2 text-right tabular-nums text-gray-700">{fmt(r.payments)}</td>
                   <td className={`px-3 py-2 text-right tabular-nums font-semibold ${r.amount_due > 5000 ? 'text-rose-700' : 'text-amber-700'}`}>{fmt(r.amount_due)}</td>
-                  <td className="px-3 py-2 text-right tabular-nums text-rose-700">{r.delinquent_balance > 0 ? fmt(r.delinquent_balance) : '—'}</td>
                 </tr>
               ))}
             </tbody>
@@ -464,14 +438,203 @@ function FactsActualsSection({ facts, school }: { facts: FactsActuals; school: S
   );
 }
 
+// ── Finance Hub tabs ──────────────────────────────────────────────────
+
+const FIN_TABS: Array<{ key: FinanceData['fin_tab']; label: string }> = [
+  { key: 'overview', label: 'Overview' },
+  { key: 'students', label: 'Students & Families' },
+  { key: 'transactions', label: 'Transactions' },
+];
+
+function tabHref(current: WidgetSearchParams, tab: string): string {
+  const keep: Record<string, string> = {};
+  if (current.chrome) keep.chrome = current.chrome;
+  if (current.embed_token) keep.embed_token = current.embed_token;
+  keep.fintab = tab;
+  return `?${new URLSearchParams(keep).toString()}`;
+}
+
+function TabNav({ active, current }: { active: FinanceData['fin_tab']; current: WidgetSearchParams }) {
+  return (
+    <div className="flex items-center gap-1 border-b border-gray-200">
+      {FIN_TABS.map((t) => (
+        <a
+          key={t.key}
+          href={tabHref(current, t.key)}
+          className={`px-4 py-2 text-sm font-medium -mb-px border-b-2 ${
+            active === t.key
+              ? 'border-emerald-600 text-emerald-800'
+              : 'border-transparent text-gray-500 hover:text-gray-800'
+          }`}
+        >
+          {t.label}
+        </a>
+      ))}
+    </div>
+  );
+}
+
+function BillingActions({ school }: { school: SchoolContext }) {
+  const base = `/school/${school.locationId}/payments`;
+  const link = 'rounded-md border border-emerald-300 bg-white px-3 py-1.5 text-xs font-medium text-emerald-800 hover:bg-emerald-100';
+  return (
+    <div className="flex flex-wrap items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50/60 px-3 py-2.5">
+      <span className="text-xs font-semibold text-emerald-900">Billing:</span>
+      <Link href={`${base}?tab=plans`} className={link}>Tuition plans &amp; schedules</Link>
+      <Link href={`${base}/bulk-tuition`} className={link}>Schedule tuition (bulk)</Link>
+      <Link href={`${base}?tab=invoices`} className={link}>Invoices</Link>
+      <Link href={`${base}?tab=settings`} className={link}>Payment settings</Link>
+    </div>
+  );
+}
+
+function StudentsTab({ data, school, current }: { data: FinanceData; school: SchoolContext; current: WidgetSearchParams }) {
+  const rows = data.students ?? [];
+  const totalPaid = rows.reduce((a, r) => a + r.paid, 0);
+  const totalBalance = rows.reduce((a, r) => a + r.balance, 0);
+  return (
+    <div className="space-y-3">
+      <AutoSubmitForm className="flex flex-wrap items-end gap-2">
+        <PreserveEmbedParams current={current} />
+        <input type="hidden" name="fintab" value="students" />
+        <label className="block">
+          <span className="text-[10px] uppercase tracking-wide text-gray-500">Search student or family</span>
+          <input type="text" name="q" defaultValue={data.q} placeholder="Name…" className="mt-0.5 block w-56 rounded border border-gray-300 px-2 py-1.5 text-sm" />
+        </label>
+        <label className="block">
+          <span className="text-[10px] uppercase tracking-wide text-gray-500">Show</span>
+          <select name="status" defaultValue={data.status} className="mt-0.5 block rounded border border-gray-300 px-2 py-1.5 text-sm">
+            <option value="">All students</option>
+            <option value="balance">Has a balance</option>
+            <option value="paid">Paid in full</option>
+            <option value="no_facts">No FACTS history</option>
+          </select>
+        </label>
+        <noscript><button type="submit" className="rounded bg-emerald-600 px-3 py-1.5 text-sm text-white">Apply</button></noscript>
+        <span className="ml-auto text-xs text-gray-500">{rows.length} students · paid {fmtSmall(totalPaid)} · balance {fmtSmall(totalBalance)}</span>
+      </AutoSubmitForm>
+
+      <section className="rounded-lg border border-gray-200 bg-white overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="bg-gray-50 border-b border-gray-100 text-left text-[11px] uppercase tracking-wide text-gray-500">
+            <tr>
+              <th className="px-3 py-2 font-medium">Student</th>
+              <th className="px-3 py-2 font-medium">Family</th>
+              <th className="px-3 py-2 font-medium">Plan</th>
+              <th className="px-3 py-2 font-medium text-right">Charged</th>
+              <th className="px-3 py-2 font-medium text-right">Paid</th>
+              <th className="px-3 py-2 font-medium text-right">Balance</th>
+              <th className="px-3 py-2 font-medium">Progress</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {rows.length === 0 ? (
+              <tr><td colSpan={7} className="px-3 py-6 text-center text-gray-500">No students match.</td></tr>
+            ) : rows.map((r) => (
+              <tr key={r.student_id}>
+                <td className="px-3 py-2 font-medium text-gray-900">
+                  {r.family_id ? (
+                    <Link href={`/school/${school.locationId}/family-hub/${r.family_id}`} className="text-emerald-700 hover:underline">{r.student_name}</Link>
+                  ) : r.student_name}
+                  {r.program ? <div className="text-[11px] text-gray-500">{r.program}</div> : null}
+                </td>
+                <td className="px-3 py-2 text-gray-700">{r.family}</td>
+                <td className="px-3 py-2 text-xs text-gray-600">{r.plan || '—'}{r.gs_installments > 0 ? <span className="text-gray-400"> · {r.gs_installments} pmts</span> : null}</td>
+                <td className="px-3 py-2 text-right tabular-nums text-gray-700">{fmtSmall(r.charged)}</td>
+                <td className="px-3 py-2 text-right tabular-nums text-emerald-700">{fmtSmall(r.paid)}</td>
+                <td className={`px-3 py-2 text-right tabular-nums font-semibold ${r.balance > 0 ? 'text-amber-700' : 'text-emerald-700'}`}>{fmtSmall(r.balance)}</td>
+                <td className="px-3 py-2">
+                  <div className="flex items-center gap-2">
+                    <div className="h-1.5 w-24 rounded-full bg-gray-200 overflow-hidden">
+                      <div className="h-full bg-emerald-500" style={{ width: `${r.pct_paid}%` }} />
+                    </div>
+                    <span className="text-[11px] text-gray-500 tabular-nums">{r.pct_paid}%</span>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </section>
+      <p className="text-[11px] text-gray-500">Charged / Paid / Balance are actuals from FACTS. “Paid” updates from Growth Suite autopay once you go live. Click a student to open their family record. Showing up to 1,000 students.</p>
+    </div>
+  );
+}
+
+function TransactionsTab({ data, school, current }: { data: FinanceData; school: SchoolContext; current: WidgetSearchParams }) {
+  const rows = data.transactions ?? [];
+  const tot = rows.reduce((acc, r) => { acc.ch += r.charged; acc.cr += r.credit; acc.pay += r.paid; acc.bal += r.balance; return acc; }, { ch: 0, cr: 0, pay: 0, bal: 0 });
+  return (
+    <div className="space-y-3">
+      <AutoSubmitForm className="flex flex-wrap items-end gap-2">
+        <PreserveEmbedParams current={current} />
+        <input type="hidden" name="fintab" value="transactions" />
+        <label className="block">
+          <span className="text-[10px] uppercase tracking-wide text-gray-500">Account</span>
+          <select name="acct" defaultValue={data.acct} className="mt-0.5 block rounded border border-gray-300 px-2 py-1.5 text-sm">
+            <option value="">All accounts</option>
+            {data.account_options.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
+          </select>
+        </label>
+        <label className="block">
+          <span className="text-[10px] uppercase tracking-wide text-gray-500">Search student</span>
+          <input type="text" name="q" defaultValue={data.q} placeholder="Name…" className="mt-0.5 block w-56 rounded border border-gray-300 px-2 py-1.5 text-sm" />
+        </label>
+        <noscript><button type="submit" className="rounded bg-emerald-600 px-3 py-1.5 text-sm text-white">Apply</button></noscript>
+        <a href={`/api/export/facts-ledger/${school.locationId}`} className="ml-auto rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50">Download all (CSV)</a>
+      </AutoSubmitForm>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+        <Card label="Charged" value={fmtSmall(tot.ch)} />
+        <Card label="Credits" value={fmtSmall(tot.cr)} />
+        <Card label="Paid" value={fmtSmall(tot.pay)} accent="emerald" />
+        <Card label="Balance" value={fmtSmall(tot.bal)} accent="amber" />
+      </div>
+
+      <section className="rounded-lg border border-gray-200 bg-white overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="bg-gray-50 border-b border-gray-100 text-left text-[11px] uppercase tracking-wide text-gray-500">
+            <tr>
+              <th className="px-3 py-2 font-medium">Student</th>
+              <th className="px-3 py-2 font-medium">Family</th>
+              <th className="px-3 py-2 font-medium">Account</th>
+              <th className="px-3 py-2 font-medium text-right">Charged</th>
+              <th className="px-3 py-2 font-medium text-right">Credit</th>
+              <th className="px-3 py-2 font-medium text-right">Paid</th>
+              <th className="px-3 py-2 font-medium text-right">Balance</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {rows.length === 0 ? (
+              <tr><td colSpan={7} className="px-3 py-6 text-center text-gray-500">No transactions match.</td></tr>
+            ) : rows.map((r, i) => (
+              <tr key={i}>
+                <td className="px-3 py-2 text-gray-900">{r.student_name}</td>
+                <td className="px-3 py-2 text-gray-600">{r.family}</td>
+                <td className="px-3 py-2 text-gray-700">{r.account}</td>
+                <td className="px-3 py-2 text-right tabular-nums text-gray-700">{r.charged ? fmtSmall(r.charged) : '—'}</td>
+                <td className="px-3 py-2 text-right tabular-nums text-gray-500">{r.credit ? fmtSmall(r.credit) : '—'}</td>
+                <td className="px-3 py-2 text-right tabular-nums text-emerald-700">{r.paid ? fmtSmall(r.paid) : '—'}</td>
+                <td className={`px-3 py-2 text-right tabular-nums font-medium ${r.balance > 0 ? 'text-amber-700' : 'text-gray-400'}`}>{r.balance ? fmtSmall(r.balance) : '—'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </section>
+      <p className="text-[11px] text-gray-500">FACTS ledger lines for 2026–2027 — every charge, credit, and payment by account. Showing up to 1,000 rows; use Download for the full set.</p>
+    </div>
+  );
+}
+
 export const FinanceDashboard: WidgetDefinition<FinanceDashboardConfig, FinanceData> = {
   id: 'finance_dashboard',
-  display_name: 'Financial Reports',
-  description: 'Top-line revenue, tuition by program, discounts, aid, and recipient lists.',
+  display_name: 'Finance Hub',
+  description: 'Cash position, student payment progress, and transactions — actuals from FACTS + Growth Suite billing.',
   category: 'billing',
   default_config: financeDashboardDefaults,
   config_schema: financeDashboardSchema,
   default_size: { w: 12, h: 12 },
   Component,
   dataFetcher: fetcher,
+  searchParamsAffectFetch: true,
 };
