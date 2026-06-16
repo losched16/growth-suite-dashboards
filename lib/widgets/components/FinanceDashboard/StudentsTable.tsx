@@ -176,9 +176,14 @@ function StudentDetail({ row, locationId }: { row: StudentProgressRow; locationI
       </div>
 
       {row.family_id ? (
-        <Link href={`/school/${locationId}/family-hub/${row.family_id}`} className="inline-block text-xs text-emerald-700 hover:underline">
-          Open full family record →
-        </Link>
+        <div className="flex flex-wrap gap-x-5 gap-y-1">
+          <Link href={`/school/${locationId}/families/${row.family_id}/statement`} className="inline-block text-xs font-medium text-emerald-700 hover:underline">
+            View account statement &amp; schedule →
+          </Link>
+          <Link href={`/school/${locationId}/family-hub/${row.family_id}`} className="inline-block text-xs text-emerald-700 hover:underline">
+            Open full family record →
+          </Link>
+        </div>
       ) : null}
     </div>
   );
