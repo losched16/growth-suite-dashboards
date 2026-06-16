@@ -1147,7 +1147,13 @@ async function main() {
           SET display_name = $3, description = $4, category = $5, per_student = $6,
               field_schema = $7::jsonb, notify_emails = $8::text[],
               confirmation_message = $9, audience = 'parents',
-              applies_to = $10::jsonb,
+              -- COALESCE: only overwrite applies_to from code when the
+              -- form object DECLARES a rule. Forms with data-driven
+              -- rules set out-of-band (e.g. the Child Health Report's
+              -- hand-picked student_ids allowlist) have no applies_to
+              -- in code, so $10 is NULL and the existing DB rule is
+              -- preserved across re-seeds.
+              applies_to = COALESCE($10::jsonb, applies_to),
               needs_review = false, is_active = true,
               updated_at = now()
         WHERE school_id = $1 AND slug = $2`,
