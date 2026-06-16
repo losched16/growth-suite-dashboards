@@ -138,6 +138,10 @@ function Component({
             <DownloadCsvButton href={`${exportBase}?type=fin_aid`} label="Fin Aid list" size="xs" />
             <DownloadCsvButton href={`${exportBase}?type=esa`} label="ESA list" size="xs" />
             <DownloadCsvButton href={`${exportBase}?type=sto`} label="STO list" size="xs" />
+            <span className="mx-1 h-5 w-px bg-gray-300" aria-hidden />
+            <span className="text-[11px] font-medium text-gray-500">FACTS reconciliation:</span>
+            <DownloadCsvButton href={`/api/export/facts-ledger/${school.locationId}`} label="Per-account ledger" size="xs" />
+            <DownloadCsvButton href={`/api/export/facts/${school.locationId}`} label="Per-student rollup" size="xs" />
           </div>
         </div>
         <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
