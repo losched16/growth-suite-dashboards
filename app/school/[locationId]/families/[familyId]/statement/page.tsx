@@ -15,6 +15,7 @@ import { ArrowLeft } from 'lucide-react';
 import { query } from '@/lib/db';
 import { loadSchoolByLocationId } from '@/lib/dashboards/loader';
 import { PrintButton } from './PrintButton';
+import { PaymentSchedule, type SchedLine, type SchedRow, type SchedStudent } from './PaymentSchedule';
 
 export const dynamic = 'force-dynamic';
 
@@ -68,7 +69,7 @@ export default async function FamilyStatementPage({ params }: { params: Params }
   const studentIds = students.map((s) => s.id);
   const customerName = parentRows[0]?.nm || familyName;
 
-  const [ledger, invoices] = studentIds.length === 0 ? [[], []] : await Promise.all([
+  const [ledger, invoices, lineItems] = studentIds.length === 0 ? [[], [], []] : await Promise.all([
     query<LedgerRow>(
       `SELECT student_id, account, account_key, charges_cents, credits_cents, payments_cents, ending_balance_cents
          FROM facts_account_ledger
@@ -82,6 +83,13 @@ export default async function FamilyStatementPage({ params }: { params: Params }
         ORDER BY due_at`,
       [school.id, studentIds],
     ).then((r) => r.rows),
+    query<{ student_id: string; due_at: Date | null; description: string; amount_cents: number }>(
+      `SELECT i.student_id, i.due_at, li.description, li.amount_cents
+         FROM invoices i JOIN invoice_line_items li ON li.invoice_id = i.id
+        WHERE i.school_id = $1 AND i.source = 'tuition_plan' AND i.voided_at IS NULL AND i.student_id = ANY($2::uuid[])
+        ORDER BY i.due_at, li.position`,
+      [school.id, studentIds],
+    ).then((r) => r.rows),
   ]);
 
   // Group statement rows by student.
@@ -93,17 +101,33 @@ export default async function FamilyStatementPage({ params }: { params: Params }
   const fam = { a: 0, cr: 0, p: 0, r: 0 };
   for (const r of ledger) { fam.a += r.charges_cents; fam.cr += r.credits_cents; fam.p += r.payments_cents; fam.r += r.ending_balance_cents; }
 
-  // Build payment schedule: due date → per-student amount.
+  // Build payment schedule: due date → per-student amount + fee breakdown
+  // (from the installment's line items, so each payment can show what it's
+  // made of).
   const dateKey = (d: Date | null) => (d ? d.toISOString().slice(0, 10) : '—');
   const schedStudents = students.filter((s) => invoices.some((i) => i.student_id === s.id));
-  const byDate = new Map<string, Map<string, number>>();
-  for (const i of invoices) {
-    const k = dateKey(i.due_at);
-    const m = byDate.get(k) ?? new Map<string, number>();
-    m.set(i.student_id, (m.get(i.student_id) ?? 0) + i.total_cents);
-    byDate.set(k, m);
+  const schedColumns = schedStudents.map((s) => ({ id: s.id, name: studentName(s) }));
+
+  // date → student_id → { total, lines }
+  const sched = new Map<string, Map<string, { total: number; lines: SchedLine[] }>>();
+  for (const li of lineItems) {
+    const dk = dateKey(li.due_at);
+    const dm = sched.get(dk) ?? new Map<string, { total: number; lines: SchedLine[] }>();
+    const sm = dm.get(li.student_id) ?? { total: 0, lines: [] };
+    sm.lines.push({ description: li.description, amount: li.amount_cents });
+    sm.total += li.amount_cents;
+    dm.set(li.student_id, sm); sched.set(dk, dm);
   }
-  const scheduleDates = [...byDate.keys()].sort();
+  const schedRows: SchedRow[] = [...sched.keys()].sort().map((date) => {
+    const dm = sched.get(date)!;
+    const rowStudents: SchedStudent[] = schedStudents
+      .filter((s) => dm.has(s.id))
+      .map((s) => ({ id: s.id, name: studentName(s), total: dm.get(s.id)!.total, lines: dm.get(s.id)!.lines }));
+    return { date, students: rowStudents, total: rowStudents.reduce((a, b) => a + b.total, 0) };
+  });
+  const schedTotals: Record<string, number> = {};
+  for (const c of schedColumns) schedTotals[c.id] = schedRows.reduce((a, r) => a + (r.students.find((x) => x.id === c.id)?.total ?? 0), 0);
+  const schedGrand = schedRows.reduce((a, r) => a + r.total, 0);
   const anyDraft = invoices.some((i) => i.status === 'draft');
 
   const backHref = `/school/${locationId}/finance?fintab=students`;
@@ -193,43 +217,13 @@ export default async function FamilyStatementPage({ params }: { params: Params }
           <p className="mb-2 text-[11px] text-slate-500">
             Recurring tuition &amp; fees only. One-time enrollment fees are billed once at enrollment (shown above), not amortized into these installments.
           </p>
-          {scheduleDates.length === 0 ? (
+          {schedRows.length === 0 ? (
             <p className="text-sm text-slate-500">No payment schedule set up yet.</p>
           ) : (
-            <table className="w-full text-sm">
-              <thead className="border-b border-slate-200 text-[11px] uppercase tracking-wide text-slate-500">
-                <tr>
-                  <th className="py-1.5 text-left font-medium">Due date</th>
-                  {schedStudents.map((s) => (
-                    <th key={s.id} className="py-1.5 text-right font-medium">{studentName(s)}</th>
-                  ))}
-                  <th className="py-1.5 text-right font-medium">Payment</th>
-                </tr>
-              </thead>
-              <tbody>
-                {scheduleDates.map((d) => {
-                  const m = byDate.get(d)!;
-                  const total = [...m.values()].reduce((a, b) => a + b, 0);
-                  return (
-                    <tr key={d} className="border-t border-slate-100 text-slate-700">
-                      <td className="py-1.5 tabular-nums">{d}</td>
-                      {schedStudents.map((s) => (
-                        <td key={s.id} className="py-1.5 text-right tabular-nums text-[13px]">{m.has(s.id) ? money(m.get(s.id)!) : '—'}</td>
-                      ))}
-                      <td className="py-1.5 text-right tabular-nums font-semibold text-slate-900">{money(total)}</td>
-                    </tr>
-                  );
-                })}
-                <tr className="border-t-2 border-slate-300 text-sm font-bold text-slate-900">
-                  <td className="py-2">Total scheduled</td>
-                  {schedStudents.map((s) => {
-                    const t = invoices.filter((i) => i.student_id === s.id).reduce((a, b) => a + b.total_cents, 0);
-                    return <td key={s.id} className="py-2 text-right tabular-nums">{money(t)}</td>;
-                  })}
-                  <td className="py-2 text-right tabular-nums">{money(invoices.reduce((a, b) => a + b.total_cents, 0))}</td>
-                </tr>
-              </tbody>
-            </table>
+            <>
+              <PaymentSchedule rows={schedRows} columns={schedColumns} totals={schedTotals} grandTotal={schedGrand} />
+              <p className="mt-1 text-[11px] text-slate-500 print:hidden">Click a payment date to see the fee breakdown that makes it up.</p>
+            </>
           )}
           {anyDraft ? (
             <p className="mt-1.5 text-[11px] text-amber-700">
