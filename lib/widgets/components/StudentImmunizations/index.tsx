@@ -13,6 +13,7 @@ import { query } from '@/lib/db';
 import type { WidgetDefinition, SchoolContext, ConfigSchema, WidgetSearchParams } from '@/lib/widgets/types';
 import { Syringe, Printer, AlertTriangle, ShieldCheck } from 'lucide-react';
 import { PrintButton } from '../_shared/PrintButton';
+import { ImmunizationEditor } from './Editor';
 import {
   VACCINES, type VaccineCode, type ReportContext, type DoseStatus,
 } from '@/lib/immunizations/schedule';
@@ -40,7 +41,7 @@ interface StudentMeta {
 interface Data {
   asOf: string;
   rooms: string[];
-  students: Array<{ meta: StudentMeta; status: StudentStatus; doses: DoseRow[] }>;
+  students: Array<{ meta: StudentMeta; status: StudentStatus; doses: DoseRow[]; flags: VaccineFlag[]; profile: ImmunizationProfile | null }>;
   reports: Partial<Record<ReportContext, NcReport>>;
   childCareSummary: ReturnType<typeof buildChildCareSummary>;
 }
@@ -83,7 +84,7 @@ async function fetcher(school: SchoolContext): Promise<Data> {
       `SELECT student_id, vaccine_code, exemption, immunity_documented, not_required
          FROM student_vaccine_flags WHERE school_id = $1`, [school.schoolId]),
     query<ImmunizationProfile & { student_id: string }>(
-      `SELECT student_id, certificate_on_file, all_vaccine_exemption, in_process, report_context_override
+      `SELECT student_id, certificate_on_file, all_vaccine_exemption, in_process, in_process_note, report_context_override
          FROM student_immunization_profile WHERE school_id = $1`, [school.schoolId]),
   ]);
 
@@ -111,7 +112,7 @@ async function fetcher(school: SchoolContext): Promise<Data> {
       flags: flagsByStudent.get(meta.student_id) ?? [],
       profile: profileByStudent.get(meta.student_id) ?? null,
     };
-    return { meta, status: computeStudent(input, asOf), doses: input.doses };
+    return { meta, status: computeStudent(input, asOf), doses: input.doses, flags: input.flags, profile: input.profile };
   });
 
   const allStatuses = computed.map((c) => c.status);
@@ -438,7 +439,7 @@ function ChildCareSummary({ data }: { data: Data }) {
 function StudentDetail({ data, studentId, backHref }: { data: Data; studentId: string; backHref: string }) {
   const entry = data.students.find((s) => s.meta.student_id === studentId);
   if (!entry) return <p className="text-sm text-slate-500">Student not found. <a href={backHref} className="text-violet-700 underline">Back</a></p>;
-  const { meta, status, doses } = entry;
+  const { meta, status, doses, flags, profile } = entry;
   const dosesByV = new Map<string, DoseRow[]>();
   for (const d of doses) {
     if (!dosesByV.has(d.vaccine_code)) dosesByV.set(d.vaccine_code, []);
@@ -486,6 +487,18 @@ function StudentDetail({ data, studentId, backHref }: { data: Data; studentId: s
             </div>
           );
         })}
+      </div>
+
+      <div className="border-t border-slate-200 pt-3 print:hidden">
+        <h4 className="text-sm font-semibold text-slate-800 mb-1">Edit records</h4>
+        <p className="text-[11px] text-slate-500 mb-2">Enter dose dates, mark exemptions or documented immunity, or flag a missing certificate. Saving recomputes the grid and the NC reports.</p>
+        <ImmunizationEditor
+          studentId={studentId}
+          vaccines={status.vaccines.map((v) => v.vaccine)}
+          initialDoses={doses}
+          initialFlags={flags}
+          initialProfile={profile}
+        />
       </div>
     </div>
   );

@@ -30,6 +30,7 @@ export interface ImmunizationProfile {
   certificate_on_file: boolean;
   all_vaccine_exemption: 'none' | 'medical' | 'religious';
   in_process: boolean;
+  in_process_note?: string | null;
   report_context_override: ReportContext | null;
 }
 export interface StudentImmunizationInput {
