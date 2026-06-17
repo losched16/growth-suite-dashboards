@@ -264,10 +264,11 @@ function act90Form() {
     category: 'enrollment',
     per_student: true,
     // Kindergarten-only: Act 195/90 textbook loan is a K-12 entitlement.
-    // PA does not require it for Primary or Young Community kids — and
-    // MCH was sending it to every family, creating noise. Restrict to
-    // students enrolled in the dedicated Kindergarten tuition grid.
-    applies_to: { tuition_grid_match: ['kindergarten'] },
+    // MCH has no kindergarten program/grid (K is the oldest year of the
+    // Primary classroom), so the K cohort is a hand-picked roster the
+    // school supplies — set out-of-band as applies_to.student_ids via
+    // scripts/set-mch-kindergarten-forms.mjs. No applies_to here so the
+    // seed's COALESCE preserves that data-driven list on re-seed.
     confirmation_message:
       'Thanks! Your Act 90 / 195 textbook loan request has been received. MCH will ' +
       'forward the request to your local public school district.',
@@ -545,10 +546,11 @@ function dentalExamForm() {
     category: 'medical',
     per_student: true,
     // Kindergarten-only: PA Department of Health Act 28 dental exam
-    // requirement is for K + 3rd grade. MCH only enrolls through K,
-    // so this form should appear for K students only. Primary +
-    // Young Community kids don't need it.
-    applies_to: { tuition_grid_match: ['kindergarten'] },
+    // requirement is for K + 3rd grade. MCH's K cohort is a hand-picked
+    // roster (no kindergarten grid in the data) supplied by the school
+    // and set out-of-band as applies_to.student_ids via
+    // scripts/set-mch-kindergarten-forms.mjs. No applies_to here so the
+    // seed's COALESCE preserves that list on re-seed.
     confirmation_message:
       'Thanks! Your dental exam form has been received and added to your child\'s file.',
     field_schema: [
