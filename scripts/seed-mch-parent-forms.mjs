@@ -332,19 +332,27 @@ function dhsAgreementForm() {
       blockHeader('DHS Agreement — Extended Care Fee'),
       blockParagraph('55 PA Code Ch. 3270.123 & .181(C); 3280.123 & .181(c); 3290.123 & .181(c).', 'note'),
 
-      blockSection('Care Fee'),
+      blockSection('Care Fee',
+        'Pre-filled from your enrollment paperwork. Contact the office if anything looks wrong.'),
       blockParagraph(
         'Services included: Childcare, after-school snack, developmentally appropriate activities, ' +
         'and diapering for toddlers. Payment due on the 15th of each month, July through April.',
       ),
-      txt('fee_amount',  'Fee amount ($)',
-        { required: true, placeholder: 'e.g. $400' }),
+      txt('fee_amount',  'Extended care fee — annual ($)',
+        { prefill: 'enrollment.extended_care_dollars', readOnly: true,
+          help: 'Your annual extended-care fee, from your enrollment record. Blank if you have no separate extended-care fee.' }),
       txt('per_payment', 'Per payment ($)',
-        { required: true, placeholder: 'e.g. $40' }),
+        { prefill: 'enrollment.extended_care_monthly_dollars', readOnly: true,
+          help: 'Annual extended-care fee ÷ 10 monthly payments (July–April).' }),
 
-      blockSection('Schedule'),
-      timeF('arrival_time',   'Child\'s arrival time',   { required: true }),
-      timeF('departure_time', 'Child\'s departure time', { required: true }),
+      blockSection('Days & Hours of Attendance',
+        'Your child\'s scheduled days and arrival / departure times, from your enrollment paperwork.'),
+      txt('attendance_days', 'Days of attendance',
+        { required: true, prefill: 'enrollment.schedule_days', readOnly: true }),
+      txt('arrival_time',   'Child\'s arrival time',
+        { required: true, prefill: 'enrollment.arrival_time', readOnly: true }),
+      txt('departure_time', 'Child\'s departure time',
+        { required: true, prefill: 'enrollment.departure_time', readOnly: true }),
       blockParagraph(
         'Late fees: $1.00 per minute after 10 minutes past scheduled pick-up. $35.00 flat fee after 5:30 PM.',
         'warning',
@@ -1160,7 +1168,11 @@ async function main() {
               -- in code, so $10 is NULL and the existing DB rule is
               -- preserved across re-seeds.
               applies_to = COALESCE($10::jsonb, applies_to),
-              needs_review = false, is_active = true,
+              needs_review = false,
+              -- Do NOT force is_active=true on re-seed: an admin may have
+              -- deactivated a form out-of-band (e.g. the Summer-Camp DHS
+              -- form, which MCH wants off). Re-seeding refreshes content
+              -- but must respect that choice. (INSERT still activates.)
               updated_at = now()
         WHERE school_id = $1 AND slug = $2`,
       [MCH_SCHOOL_ID, f.slug, f.display_name, f.description, f.category, f.per_student,
