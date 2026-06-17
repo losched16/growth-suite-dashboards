@@ -16,7 +16,11 @@
 
 import { readFileSync } from 'node:fs';
 import crypto from 'node:crypto';
+import { promisify } from 'node:util';
 import pg from 'pg';
+
+const scrypt = promisify(crypto.scrypt);
+const DEMO_PASSWORD = 'GrowthSuite2026';
 
 const envText = readFileSync('.env.local', 'utf8');
 for (const line of envText.split('\n')) {
@@ -146,9 +150,31 @@ async function main() {
       );
     }
 
+    // Restore the demo parent login (roster re-syncs clear the password).
+    // Pick a primary parent whose child now has immunization data.
+    const demo = (await c.query(
+      `SELECT p.id, p.email, f.display_name
+         FROM parents p JOIN families f ON f.id = p.family_id
+        WHERE p.school_id = $1 AND p.email IS NOT NULL AND p.is_primary = true
+          AND EXISTS (SELECT 1 FROM student_immunization_profile ip
+                        JOIN students s ON s.id = ip.student_id
+                       WHERE s.family_id = f.id)
+        ORDER BY p.last_name LIMIT 1`,
+      [SCHOOL_ID],
+    )).rows[0];
+    let demoLogin = null;
+    if (demo) {
+      const salt = crypto.randomBytes(16).toString('hex');
+      const buf = await scrypt(DEMO_PASSWORD, salt, 32);
+      await c.query('UPDATE parents SET password_hash=$1, password_set_at=now() WHERE id=$2',
+        [salt + ':' + buf.toString('hex'), demo.id]);
+      demoLogin = { email: demo.email, family: demo.display_name };
+    }
+
     await c.query('COMMIT');
     console.log(`Seeded immunization records for ${seeded} real students. Plan mix:`, counts);
     console.log('Provisioned dashboards: immunization, document-tracker.');
+    if (demoLogin) console.log(`Demo parent login → ${demoLogin.email} / ${DEMO_PASSWORD}  (family: ${demoLogin.family})`);
   } catch (e) {
     await c.query('ROLLBACK'); throw e;
   } finally {
