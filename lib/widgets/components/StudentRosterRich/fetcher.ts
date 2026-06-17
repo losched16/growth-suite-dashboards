@@ -342,11 +342,17 @@ export async function fetcher(
        -- Optional: restrict to accepted/enrolled stages for schools whose
        -- roster is still an admissions pipeline ($4 NULL = show all).
        AND ($4::text[] IS NULL OR s.metadata->>'ghl_stage_name' = ANY($4))
-     ORDER BY s.first_name`,
+       -- Optional: only students whose current enrollment is 'enrolled'
+       -- ($5 = config.enrolled_only). NULL/none enrollment is excluded.
+       AND ($5::boolean IS NOT TRUE OR e.status = 'enrolled')
+     -- s.id tiebreaker keeps the order stable across renders (first_name
+     -- isn't unique), so paginating can never repeat or drop a student.
+     ORDER BY s.first_name, s.id`,
     // Hardcoded DG timezone for now. If a future widget needs to do
     // this for another school, lift to widget config.
     [school.schoolId, 'America/Phoenix', fYear,
-     (config.enrolled_stage_names && config.enrolled_stage_names.length > 0) ? config.enrolled_stage_names : null],
+     (config.enrolled_stage_names && config.enrolled_stage_names.length > 0) ? config.enrolled_stage_names : null,
+     config.enrolled_only === true],
   );
 
   // ── Self-serve attributes (tags / GHL fields / opportunities) ──────
@@ -558,7 +564,15 @@ export async function fetcher(
     return out;
   }
 
-  const all: RosterStudent[] = rows.map((r) => {
+  // Defensive: one roster row per student, always. The query is already
+  // one-row-per-student, but this guarantees the invariant so a future
+  // join change can never surface a student twice.
+  const seenStudentIds = new Set<string>();
+  const all: RosterStudent[] = rows.filter((r) => {
+    if (seenStudentIds.has(r.student_id)) return false;
+    seenStudentIds.add(r.student_id);
+    return true;
+  }).map((r) => {
     const md = r.metadata ?? {};
     const metadataAllergy = typeof md.allergy === 'string' ? md.allergy : null;
     const metadataSpecial = typeof md.special_instructions === 'string' ? md.special_instructions : null;

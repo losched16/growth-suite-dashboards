@@ -104,6 +104,11 @@ export interface StudentRosterConfig {
   // shows only accepted/enrolled kids, not every prospective applicant.
   // Unset/empty = show all active students (default, unchanged behavior).
   enrolled_stage_names?: string[];
+  // When true, restrict the roster to students whose current-year
+  // enrollment status is 'enrolled' — hides applicants/pending/accepted
+  // (and students with no enrollment) so the roster is purely the enrolled
+  // student body. Default false = show all active students.
+  enrolled_only?: boolean;
   // Audience for the documents inline cell:
   //   'teacher' → hide documents flagged visible_to_teacher=false
   //   'all'     → show every document (operator view, default)
