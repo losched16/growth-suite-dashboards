@@ -97,10 +97,13 @@ export async function POST(request: NextRequest) {
 
   const token = crypto.randomBytes(24).toString('base64url');
   const expires = new Date(Date.now() + TOKEN_TTL_MS).toISOString();
+  // multi_use=true: reusable within the 20-min window so a repeat click
+  // (or the browser re-issuing the navigation) doesn't land on a
+  // password screen.
   await query(
     `INSERT INTO parent_magic_link_tokens
-       (token, email, school_id, parent_id, expires_at, request_ip, request_user_agent)
-     VALUES ($1, $2, $3, $4, $5, 'view-as-parent', $6)`,
+       (token, email, school_id, parent_id, expires_at, request_ip, request_user_agent, multi_use)
+     VALUES ($1, $2, $3, $4, $5, 'view-as-parent', $6, true)`,
     [token, email, session.school_id, parentId, expires, `operator:${session.user_email ?? 'school'}`],
   );
 
