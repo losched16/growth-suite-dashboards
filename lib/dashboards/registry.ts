@@ -36,6 +36,7 @@ import { FinancialAidQueue } from '@/lib/widgets/components/FinancialAidQueue';
 import { financialAidQueueDefaults } from '@/lib/widgets/components/FinancialAidQueue/config';
 import { AttendanceDashboard } from '@/lib/widgets/components/AttendanceDashboard';
 import { attendanceDashboardDefaults } from '@/lib/widgets/components/AttendanceDashboard/config';
+import { StudentImmunizations } from '@/lib/widgets/components/StudentImmunizations';
 import type { DashboardDefinition } from './types';
 import type { WidgetInstance } from '@/lib/widgets/types';
 
@@ -166,6 +167,17 @@ export const dashboardRegistry: Record<string, DashboardDefinition> = {
     icon: 'UserCheck',
     default_layout: [
       instance(AttendanceDashboard.id, attendanceDashboardDefaults, 18),
+    ],
+  },
+  immunization: {
+    slug: 'immunization',
+    display_name: 'Immunization Tracker',
+    description:
+      'Per-classroom dose grid with due/overdue flags, full per-child dose ' +
+      'history, and the auto-filled NC Annual reports (Child Care / Kindergarten / 7th Grade).',
+    icon: 'Syringe',
+    default_layout: [
+      instance(StudentImmunizations.id, { default_room_filter: '' }, 16),
     ],
   },
 };

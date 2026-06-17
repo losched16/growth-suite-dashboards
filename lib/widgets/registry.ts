@@ -36,6 +36,7 @@ import { ClassroomHotLunch } from './components/ClassroomHotLunch';
 import { ClassroomParentContacts } from './components/ClassroomParentContacts';
 import { ClassroomPickupRestrictions } from './components/ClassroomPickupRestrictions';
 import { ClassroomAllergies } from './components/ClassroomAllergies';
+import { StudentImmunizations } from './components/StudentImmunizations';
 
 // Use unknown for the value type so widgets with different config/data
 // shapes can coexist in one map. Lookups cast back at the use site.
@@ -71,6 +72,7 @@ export const widgetRegistry: Record<string, WidgetDefinition<unknown, unknown>> 
   [ClassroomParentContacts.id]: ClassroomParentContacts as WidgetDefinition<unknown, unknown>,
   [ClassroomPickupRestrictions.id]: ClassroomPickupRestrictions as WidgetDefinition<unknown, unknown>,
   [ClassroomAllergies.id]: ClassroomAllergies as WidgetDefinition<unknown, unknown>,
+  [StudentImmunizations.id]: StudentImmunizations as WidgetDefinition<unknown, unknown>,
 };
 
 export function getWidget(widgetId: string): WidgetDefinition<unknown, unknown> | null {
