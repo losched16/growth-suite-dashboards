@@ -243,16 +243,33 @@ function FamilyDetailPanel({
           {family.total_tuition > 0 ? (
             <div className="text-xs text-gray-600">Tuition: ${family.total_tuition.toLocaleString()}</div>
           ) : null}
-          {primary?.ghl_contact_id ? (
-            <a
-              href={`${crmAppBase}/v2/location/${locationId}/contacts/detail/${primary.ghl_contact_id}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="mt-2 inline-flex items-center gap-1 rounded-md bg-emerald-600 px-2.5 py-1 text-xs font-semibold text-white shadow-sm hover:bg-emerald-700"
-            >
-              Open Full Contact Record →
-            </a>
-          ) : null}
+          <div className="mt-2 flex flex-wrap gap-2">
+            {primary?.ghl_contact_id ? (
+              <a
+                href={`${crmAppBase}/v2/location/${locationId}/contacts/detail/${primary.ghl_contact_id}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 rounded-md bg-emerald-600 px-2.5 py-1 text-xs font-semibold text-white shadow-sm hover:bg-emerald-700"
+              >
+                Open Full Contact Record →
+              </a>
+            ) : null}
+            {/* View this family's parent portal exactly as the parent
+                sees it — opens in a new tab, logged in as the primary
+                parent. Posts to a school-session endpoint that mints a
+                short-lived login token; no password needed. */}
+            <form action="/api/school/view-as-parent" method="POST" target="_blank">
+              <input type="hidden" name="family_id" value={family.family_id} />
+              <input type="hidden" name="return_to" value={`/school/${locationId}/family-hub`} />
+              <button
+                type="submit"
+                title="Open this family's parent portal as the parent sees it (new tab)"
+                className="inline-flex items-center gap-1 rounded-md border border-emerald-300 bg-white px-2.5 py-1 text-xs font-semibold text-emerald-700 hover:bg-emerald-50"
+              >
+                View as parent ↗
+              </button>
+            </form>
+          </div>
         </div>
 
         {primary ? <ParentBlock label="Parent 1" parent={primary} locationId={locationId} crmAppBase={crmAppBase} /> : <div />}
