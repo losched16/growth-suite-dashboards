@@ -98,6 +98,12 @@ export interface StudentRosterConfig {
   //   detail_attrs    — catalog attr_keys shown as extra detail rows
   detail_sections?: string[];
   detail_attrs?: string[];
+  // Restrict the roster to students whose GHL opportunity stage is in
+  // this list (matched against students.metadata.ghl_stage_name). Used by
+  // schools whose roster is still an admissions pipeline so the dashboard
+  // shows only accepted/enrolled kids, not every prospective applicant.
+  // Unset/empty = show all active students (default, unchanged behavior).
+  enrolled_stage_names?: string[];
   // Audience for the documents inline cell:
   //   'teacher' → hide documents flagged visible_to_teacher=false
   //   'all'     → show every document (operator view, default)

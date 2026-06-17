@@ -339,10 +339,14 @@ export async function fetcher(
           AND active     = true
      ) pr ON true
      WHERE s.school_id = $1 AND s.status = 'active'
+       -- Optional: restrict to accepted/enrolled stages for schools whose
+       -- roster is still an admissions pipeline ($4 NULL = show all).
+       AND ($4::text[] IS NULL OR s.metadata->>'ghl_stage_name' = ANY($4))
      ORDER BY s.first_name`,
     // Hardcoded DG timezone for now. If a future widget needs to do
     // this for another school, lift to widget config.
-    [school.schoolId, 'America/Phoenix', fYear],
+    [school.schoolId, 'America/Phoenix', fYear,
+     (config.enrolled_stage_names && config.enrolled_stage_names.length > 0) ? config.enrolled_stage_names : null],
   );
 
   // ── Self-serve attributes (tags / GHL fields / opportunities) ──────
