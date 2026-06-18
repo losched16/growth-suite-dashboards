@@ -13,6 +13,7 @@ import { notFound } from 'next/navigation';
 import { ArrowLeft, FileText, Eye, Printer, CheckCircle2 } from 'lucide-react';
 import { loadSchoolByLocationId } from '@/lib/dashboards/loader';
 import { query } from '@/lib/db';
+import { deriveEmbedToken } from '@/lib/auth/embed';
 
 export const dynamic = 'force-dynamic';
 
@@ -57,24 +58,19 @@ function fmtDateTime(iso: string): string {
   });
 }
 
-type SearchParams = Promise<{ embed_token?: string; chrome?: string }>;
-
 export default async function FamilyFormsPage({
   params,
-  searchParams,
-}: {
-  params: Params;
-  searchParams?: SearchParams;
-}) {
+}: { params: Params }) {
   const { locationId, familyId } = await params;
-  const sp = (await (searchParams ?? Promise.resolve({}))) as { embed_token?: string };
-  const viewAsParentHref = (() => {
-    const url = `/api/school/family/${familyId}/view-as-parent`;
-    return sp.embed_token ? `${url}?embed_token=${encodeURIComponent(sp.embed_token)}` : url;
-  })();
 
   const school = await loadSchoolByLocationId(locationId);
   if (!school) notFound();
+
+  // Re-derive the embed_token so the "View as parent" button works
+  // when opened in a new tab (where partitioned iframe cookies don't
+  // attach). Same HMAC the iframe itself uses on first load.
+  const viewAsParentHref =
+    `/api/school/family/${familyId}/view-as-parent?embed_token=${encodeURIComponent(deriveEmbedToken(school.ghl_location_id))}`;
 
   // Family — scope to this school's families only.
   const { rows: familyRows } = await query<FamilyRow>(

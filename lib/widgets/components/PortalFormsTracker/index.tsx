@@ -18,6 +18,7 @@ import {
 } from './fetcher';
 import { PreserveEmbedParams, clearHref } from '@/lib/widgets/components/_shared/PreserveEmbedParams';
 import { AutoSubmitForm } from '@/lib/widgets/components/_shared/AutoSubmitForm';
+import { deriveEmbedToken } from '@/lib/auth/embed';
 
 const STATUS_FILTERS = [
   { key: 'all', label: 'All families' },
@@ -38,16 +39,21 @@ function pctColor(pct: number): string {
   return 'text-rose-600';
 }
 
-// Build the "View as parent" URL with embed_token forwarded from the
-// embedded iframe — without it the route returns 401 because Joe
-// doesn't have an operator/school session cookie inside the GHL
-// iframe (third-party cookie context). The embed_token is HMAC over
-// the locationId so the route can verify which school is calling.
-function viewAsParentHref(familyId: string, sp: WidgetSearchParams): string {
-  const url = `/api/school/family/${familyId}/view-as-parent`;
-  const q = new URLSearchParams();
-  if (sp.embed_token) q.set('embed_token', sp.embed_token);
-  return q.toString() ? `${url}?${q}` : url;
+// Build the "View as parent" URL with a deterministic embed_token so
+// the route can authenticate without depending on cookies. Cookies
+// don't survive the new-tab open from inside the GHL iframe — they're
+// set as partitioned + SameSite=None, which means they only attach in
+// the original iframe context, not in a new tab opened from it. The
+// embed_token is HMAC(secret, locationId), the same token the iframe
+// itself uses on first load; the view-as-parent route verifies it
+// against the family's school's locationId.
+//
+// We re-derive here rather than reading from sp.embed_token because
+// the proxy strips embed_token off the URL after minting the session
+// cookie, so sp doesn't carry it through.
+function viewAsParentHref(familyId: string, locationId: string): string {
+  const token = deriveEmbedToken(locationId);
+  return `/api/school/family/${familyId}/view-as-parent?embed_token=${encodeURIComponent(token)}`;
 }
 
 function applyFiltersSort(
@@ -341,7 +347,7 @@ function Component({
                     </Link>
                     <div className="text-[11px] text-gray-500">{r.primary_parent_email || '—'}</div>
                     <a
-                      href={viewAsParentHref(r.family_id, sp)}
+                      href={viewAsParentHref(r.family_id, school.locationId)}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="mt-1 inline-flex items-center gap-1 rounded border border-blue-200 bg-blue-50 px-1.5 py-0.5 text-[10px] font-medium text-blue-800 hover:bg-blue-100"
