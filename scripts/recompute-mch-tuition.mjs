@@ -37,6 +37,16 @@ const K_LIST = new Set(['thea bailey','elynn dipasquale','gytha kalasunas','rory
 // Violet Sekel = full scholarship (show value, owe $0).
 const SCHOLARSHIP = new Set(['violet sekel']);
 
+// Per-student extended-care fee overrides (cents). Used when the standard
+// (tier × school-days) calc doesn't apply because the child attends
+// extended care on FEWER days than they attend school. School-confirmed:
+// the Quintans siblings have extended care only 2 days/week (despite a
+// 5-day split schedule), so each is a flat $1,725 — not the 5-day rate.
+const EXT_OVERRIDE = new Map([
+  ['alina quintans', 172500],
+  ['siena quintans', 172500],
+]);
+
 const EXT = { '1':{2:97500,3:136500,4:172000,5:202500}, '2':{2:172500,3:230000,4:286500,5:330000}, '3':{2:230000,3:313000,4:357000,5:400000}, '4':{2:285000,3:357000,4:404000,5:467500} };
 function extTier(raw){ const s=String(raw??'').toLowerCase(); if(!s||s==='0'||s==='none')return null; if(s.includes('1 hour or less'))return '1'; if(s.includes('1 hours, up to 2')||(s.includes('1 hour')&&s.includes('2 hours')))return '2'; if(s.includes('2 hours')&&s.includes('3 hours'))return '3'; if(s.includes('more than 3'))return '4'; return null; }
 function parseDays(raw, times){ let s=String(raw??'').toUpperCase(); let hf=s.includes('FULL')?'full':(s.includes('HAL')?'half':null);
@@ -90,7 +100,8 @@ async function main(){
     if(!gr.length){ preview.push(`  ?? ${r.name} — grid not found: ${gname}`); continue; }
     const base=gr[0].annual_tuition_cents, gridId=gr[0].id;
     const tier=extTier(r.extcare); const eff=count===4?5:count;
-    const ext = tier ? (EXT[tier]?.[eff]??0) : 0;
+    const ext = EXT_OVERRIDE.has(key) ? EXT_OVERRIDE.get(key) : (tier ? (EXT[tier]?.[eff]??0) : 0);
+    const extLabel = EXT_OVERRIDE.has(key) ? 'Extended care (2 days/week)' : `Extended care (${r.extcare})`;
     const isScholar=SCHOLARSHIP.has(key);
     const isSibling = /%|-10/.test(r.sibling||'');
     // Flat deposit rule (school-confirmed): every student gets a $400
@@ -101,7 +112,7 @@ async function main(){
 
     // Build the breakdown.
     const addons=[];
-    if(ext>0) addons.push({key:'extended_care',label:`Extended care (${r.extcare})`,amount_cents:ext});
+    if(ext>0) addons.push({key:'extended_care',label:extLabel,amount_cents:ext});
     if(deposit>0) addons.push({key:'deposit',label:'Deposit (paid)',amount_cents:-deposit});
     let subtotal = base - deposit + ext;
     let sibAmt=0;
