@@ -114,11 +114,17 @@ async function main(){
     const addons=[];
     if(ext>0) addons.push({key:'extended_care',label:extLabel,amount_cents:ext});
     if(deposit>0) addons.push({key:'deposit',label:'Deposit (paid)',amount_cents:-deposit});
-    let subtotal = base - deposit + ext;
+    // Paid-in-full discount: 3% off BASE TUITION, annual (1-installment)
+    // plans only. School-confirmed; applies to base tuition only — not
+    // extended care, deposit, or dev fee. Computed independently of the
+    // sibling discount (no compounding): each comes off its own basis.
+    const promptPay = (e.installment_count===1 && !isScholar) ? Math.round(base*0.03) : 0;
+    if(promptPay>0) addons.push({key:'prompt_pay_discount',label:'Paid-in-full discount (3%)',amount_cents:-promptPay});
+    const subtotal = base - deposit + ext;
     let sibAmt=0;
-    if(isSibling){ const after=Math.round(subtotal*0.9); sibAmt=subtotal-after; subtotal=after; addons.push({key:'sibling_discount',label:'Sibling discount (10%)',amount_cents:-sibAmt}); }
+    if(isSibling){ sibAmt = subtotal - Math.round(subtotal*0.9); addons.push({key:'sibling_discount',label:'Sibling discount (10%)',amount_cents:-sibAmt}); }
     addons.push({key:'development_fee',label:`Development fee`,amount_cents:devFee});
-    let total = subtotal + devFee;
+    let total = subtotal - sibAmt - promptPay + devFee;
     if(isScholar){ addons.push({key:'scholarship',label:'Full scholarship',amount_cents:-total}); }
     const owed = isScholar ? 0 : total;
 
