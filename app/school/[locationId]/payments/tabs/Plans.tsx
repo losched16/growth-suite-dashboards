@@ -45,6 +45,7 @@ interface EnrollmentRow {
   status: string;
   // Null = standard tuition. 0 = scholarship badge. >0 = custom-tuition badge.
   tuition_override_cents: number | null;
+  tuition_override_reason: string | null;
   primary_parent_id: string | null;
   invoices_open: number;
   invoices_paid: number;
@@ -98,6 +99,7 @@ export async function PaymentsHubPlans({
               e.installment_count,
               e.status,
               e.tuition_override_cents,
+              e.tuition_override_reason,
               p.id AS primary_parent_id,
               (SELECT COUNT(*)::int FROM invoices WHERE source = 'tuition_plan'
                 AND source_ref->>'enrollment_id' = e.id::text
@@ -326,7 +328,15 @@ export async function PaymentsHubPlans({
                       <Link href={planHref} className="block">
                         <div className="text-slate-900 group-hover:text-blue-700 inline-flex items-center gap-1.5">
                           {e.family_label}
-                          {e.tuition_override_cents === 0 ? (
+                          {e.tuition_override_cents === 0
+                            && (e.tuition_override_reason ?? '').startsWith('Migrated from FACTS') ? (
+                            // $0 remaining because the family PAID IN FULL in
+                            // FACTS — NOT a scholarship. The migration anchored
+                            // the plan to the remaining balance ($0).
+                            <span className="rounded-full bg-emerald-100 px-1.5 py-0 text-[9px] font-semibold uppercase tracking-wide text-emerald-800" title="Paid in full in FACTS — $0 tuition remaining">
+                              ✓ Paid in full
+                            </span>
+                          ) : e.tuition_override_cents === 0 ? (
                             <span className="rounded-full bg-emerald-100 px-1.5 py-0 text-[9px] font-semibold uppercase tracking-wide text-emerald-800" title="Scholarship — family owes $0">
                               🎓 Scholarship
                             </span>

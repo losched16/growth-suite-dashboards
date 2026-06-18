@@ -234,7 +234,15 @@ export default async function PlanDetailPage({
               </p>
               <div className="mt-2 flex items-center gap-2 flex-wrap">
                 <StatusPill status={enr.status} />
-                {enr.tuition_override_cents === 0 ? (
+                {enr.tuition_override_cents === 0
+                  && (enr.tuition_override_reason ?? '').startsWith('Migrated from FACTS') ? (
+                  // $0 remaining because the family PAID IN FULL in FACTS —
+                  // not a scholarship. The migration anchored the plan to the
+                  // remaining balance ($0).
+                  <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-800" title="Paid in full in FACTS — $0 tuition remaining">
+                    ✓ Paid in full
+                  </span>
+                ) : enr.tuition_override_cents === 0 ? (
                   <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-800">
                     🎓 Scholarship
                   </span>
