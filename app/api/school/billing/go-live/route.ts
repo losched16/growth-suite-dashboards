@@ -85,7 +85,7 @@ export async function POST(request: NextRequest) {
                 issued_at = COALESCE(issued_at, now()),
                 updated_at = now()
           WHERE school_id = $1
-            AND source = 'tuition_plan'
+            AND source IN ('tuition_plan', 'enrollment_fee')
             AND status = 'draft'
         RETURNING id`,
         [session.school_id],
