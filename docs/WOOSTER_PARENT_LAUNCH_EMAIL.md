@@ -15,47 +15,57 @@ but with a soft "if anything is red, please get it in" cue.
 
 **From:** `Montessori School of Wooster <noreply@mail.woomontessori.org>`
 **Reply-To:** `woomontessori@woomontessori.org`
-**Subject:** Your Wooster Family Portal is ready
+**Subject:** Your Wooster Family Portal is ready — a simpler home for everything
 
 **Body:**
 
 ```
 Hi {{contact.first_name}},
 
-Quick note that the Montessori School of Wooster's new Family Portal
-is live. Your account is set up — everything we have on file for your
-family is already inside, including the forms many of you have already
-submitted.
+For the last few years, Wooster paperwork has lived in a handful of
+places — Final Forms, separate sign-up links, paper handouts — and
+we know it hasn't always been easy to remember where to go for what.
+
+We're bringing all of it under one roof this year. Meet the new
+Wooster Family Portal: one login for your whole family, every form
+and family record in one place, and everything you've already
+submitted is already there waiting for you.
 
 Sign in here:
 
   → https://family.woomontessori.org/login
 
-(Enter the email this message was sent to. We'll email you a one-time
-sign-in link. Click it, set a password, and you're in.)
+(Enter the email this message was sent to, click "Continue," and set
+a password the first time. That's the only step you'll need to take
+to get in.)
 
-What you'll find inside:
+What's better about it:
 
-  • Your family record — your kids, classrooms, schedules,
-    contact info, and the other parent's info (if applicable)
-  • Forms — every required form for the year, with a green check
-    next to anything you've already submitted
-  • Emergency contacts — up to 5 family-level contacts, per-student
-    if you want different ones for each kid
-  • Authorized pickup people — grandparents, nannies, family friends
-    who can come pick up your students
-  • Media permission and other school agreements
+  • One URL — no more hunting for the right form link in an old email
+  • One login per parent — set a password once, you're in any time after
+  • Everything pre-filled — your past submissions carry over, you just
+    confirm or update what's changed
+  • You can see what's done — every form has a green check when complete,
+    so it's easy to spot what (if anything) is still needed
+  • Updates land instantly — change a phone, an emergency contact, or a
+    pickup person once and the office sees it right away
 
-If everything in your account is green, you're all set — nothing else
-to do. Use the portal whenever you need to update an address, add a
-pickup person, or print a copy of a form you submitted.
+What stays the same:
+
+  • The forms themselves — same questions, same fields
+  • Your data — everything you submitted in past years carried over
+  • Who you contact — the office is still woomontessori@woomontessori.org
+    or (330) 264-8666
+
+If everything in your account is green, you're already set. Just
+bookmark the portal for when you need to update something during the year.
 
 If something is yellow or red, please take a few minutes to wrap it up
-so we have everything we need for the start of the year.
+so we have everything we need for the start of school.
 
-Questions? Reply to this email or call the office at (330) 264-8666.
+Thanks for your patience as we make this transition — we think you'll
+find it a lot easier.
 
-Looking forward to a great year,
 The Wooster team
 ```
 
