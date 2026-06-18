@@ -57,10 +57,21 @@ function fmtDateTime(iso: string): string {
   });
 }
 
+type SearchParams = Promise<{ embed_token?: string; chrome?: string }>;
+
 export default async function FamilyFormsPage({
   params,
-}: { params: Params }) {
+  searchParams,
+}: {
+  params: Params;
+  searchParams?: SearchParams;
+}) {
   const { locationId, familyId } = await params;
+  const sp = (await (searchParams ?? Promise.resolve({}))) as { embed_token?: string };
+  const viewAsParentHref = (() => {
+    const url = `/api/school/family/${familyId}/view-as-parent`;
+    return sp.embed_token ? `${url}?embed_token=${encodeURIComponent(sp.embed_token)}` : url;
+  })();
 
   const school = await loadSchoolByLocationId(locationId);
   if (!school) notFound();
@@ -172,7 +183,7 @@ export default async function FamilyFormsPage({
               </p>
             </div>
             <a
-              href={`/api/school/family/${familyId}/view-as-parent`}
+              href={viewAsParentHref}
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-1.5 rounded-md border border-blue-300 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-800 hover:bg-blue-100 print:hidden"

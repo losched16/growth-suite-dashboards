@@ -38,6 +38,18 @@ function pctColor(pct: number): string {
   return 'text-rose-600';
 }
 
+// Build the "View as parent" URL with embed_token forwarded from the
+// embedded iframe — without it the route returns 401 because Joe
+// doesn't have an operator/school session cookie inside the GHL
+// iframe (third-party cookie context). The embed_token is HMAC over
+// the locationId so the route can verify which school is calling.
+function viewAsParentHref(familyId: string, sp: WidgetSearchParams): string {
+  const url = `/api/school/family/${familyId}/view-as-parent`;
+  const q = new URLSearchParams();
+  if (sp.embed_token) q.set('embed_token', sp.embed_token);
+  return q.toString() ? `${url}?${q}` : url;
+}
+
 function applyFiltersSort(
   rows: FamilyRow[],
   sp: WidgetSearchParams,
@@ -329,7 +341,7 @@ function Component({
                     </Link>
                     <div className="text-[11px] text-gray-500">{r.primary_parent_email || '—'}</div>
                     <a
-                      href={`/api/school/family/${r.family_id}/view-as-parent`}
+                      href={viewAsParentHref(r.family_id, sp)}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="mt-1 inline-flex items-center gap-1 rounded border border-blue-200 bg-blue-50 px-1.5 py-0.5 text-[10px] font-medium text-blue-800 hover:bg-blue-100"

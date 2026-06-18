@@ -28,9 +28,26 @@ import { query } from '@/lib/db';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const PARENT_PORTAL_BASE = process.env.PARENT_PORTAL_BASE_URL
+const PARENT_PORTAL_BASE_FALLBACK = process.env.PARENT_PORTAL_BASE_URL
   ?? process.env.PARENT_PORTAL_BASE
   ?? 'https://growth-suite-parent-portal.vercel.app';
+
+// Per-school override: use the school's branded custom_host (e.g.
+// portal.woomontessori.org) when one is set, so the impersonation
+// cookie + branding match the parent's normal URL.
+async function parentPortalBaseFor(schoolId: string): Promise<string> {
+  try {
+    const { rows } = await query<{ custom_host: string | null }>(
+      `SELECT custom_host FROM school_branding WHERE school_id = $1`,
+      [schoolId],
+    );
+    const host = rows[0]?.custom_host?.trim();
+    if (host) return `https://${host}`;
+  } catch {
+    // fall through
+  }
+  return PARENT_PORTAL_BASE_FALLBACK;
+}
 
 const TOKEN_TTL_MS = 20 * 60 * 1000; // 20 minutes
 
@@ -107,6 +124,7 @@ export async function POST(request: NextRequest) {
     [token, email, session.school_id, parentId, expires, `operator:${session.user_email ?? 'school'}`],
   );
 
-  const verifyUrl = `${PARENT_PORTAL_BASE}/api/auth/verify?token=${encodeURIComponent(token)}`;
+  const base = await parentPortalBaseFor(session.school_id);
+  const verifyUrl = `${base}/api/auth/verify?token=${encodeURIComponent(token)}`;
   return NextResponse.redirect(verifyUrl, 303);
 }

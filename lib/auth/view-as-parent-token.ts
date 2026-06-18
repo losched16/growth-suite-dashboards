@@ -17,6 +17,7 @@
 // but long enough that the admin can click it.
 
 import crypto from 'node:crypto';
+import { query } from '@/lib/db';
 
 const TOKEN_TTL_S = 5 * 60;
 
@@ -38,13 +39,23 @@ export interface ViewAsParentPayload {
 
 // Mint the URL the admin should be redirected to. The parent-portal
 // side validates + mints a parent session.
-export function mintViewAsParentUrl(opts: {
+//
+// Base URL precedence:
+//   1. opts.parentPortalBase if explicitly passed
+//   2. school_branding.custom_host for the school (e.g. portal.woomontessori.org)
+//      — so the impersonation cookie + branding match the parent's normal URL
+//   3. PARENT_PORTAL_BASE_URL env fallback
+//   4. The Vercel default
+//
+// Async because we hit the DB for the custom_host lookup; small price
+// for landing on the school's branded subdomain.
+export async function mintViewAsParentUrl(opts: {
   parentId: string;
   schoolId: string;
   parentPortalBase?: string;
   /** Page to land on after the parent session is minted. */
   next?: string;
-}): string {
+}): Promise<string> {
   const exp = Math.floor(Date.now() / 1000) + TOKEN_TTL_S;
   const payload: ViewAsParentPayload = {
     parent_id: opts.parentId,
@@ -54,9 +65,21 @@ export function mintViewAsParentUrl(opts: {
   const encoded = Buffer.from(JSON.stringify(payload), 'utf8').toString('base64url');
   const token = `${encoded}.${sign(encoded)}`;
 
-  const base = opts.parentPortalBase
-    ?? process.env.PARENT_PORTAL_BASE_URL
-    ?? 'https://growth-suite-parent-portal.vercel.app';
+  let base = opts.parentPortalBase;
+  if (!base) {
+    try {
+      const { rows } = await query<{ custom_host: string | null }>(
+        `SELECT custom_host FROM school_branding WHERE school_id = $1`,
+        [opts.schoolId],
+      );
+      const host = rows[0]?.custom_host?.trim();
+      if (host) base = `https://${host}`;
+    } catch {
+      // fall through to env / default
+    }
+  }
+  base ??= process.env.PARENT_PORTAL_BASE_URL ?? 'https://growth-suite-parent-portal.vercel.app';
+
   const u = new URL(`${base}/api/admin-impersonate`);
   u.searchParams.set('token', token);
   if (opts.next) u.searchParams.set('next', opts.next);
