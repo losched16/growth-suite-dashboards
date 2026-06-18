@@ -25,6 +25,7 @@ interface LedgerRow {
   charges_cents: number;
   credits_cents: number;
   payments_cents: number;
+  credits_applied_cents: number;
   ending_balance_cents: number;
 }
 
@@ -43,7 +44,7 @@ export async function GET(request: NextRequest, { params }: { params: Params }) 
                  THEN CONCAT_WS(' ', COALESCE(NULLIF(s.preferred_name, ''), s.first_name), s.last_name)
                  ELSE NULL END AS gs_student,
             l.beginning_balance_cents, l.charges_cents, l.credits_cents,
-            l.payments_cents, l.ending_balance_cents
+            l.payments_cents, l.credits_applied_cents, l.ending_balance_cents
        FROM facts_account_ledger l
        LEFT JOIN students s ON s.id = l.student_id
       WHERE l.school_id = $1 AND l.academic_year = $2
@@ -60,6 +61,7 @@ export async function GET(request: NextRequest, { params }: { params: Params }) 
     { key: 'charges', label: 'Charges', value: (r) => dollars(r.charges_cents) },
     { key: 'credits', label: 'Credits', value: (r) => dollars(r.credits_cents) },
     { key: 'payments', label: 'Payments', value: (r) => dollars(r.payments_cents) },
+    { key: 'credits_applied', label: 'Credits Applied', value: (r) => dollars(r.credits_applied_cents) },
     { key: 'ending', label: 'Ending Balance', value: (r) => dollars(r.ending_balance_cents) },
   ];
 

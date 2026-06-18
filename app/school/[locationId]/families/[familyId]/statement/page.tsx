@@ -36,7 +36,8 @@ const orderIdx = (k: string) => { const i = ACCT_ORDER.indexOf(k); return i === 
 
 interface LedgerRow {
   student_id: string; account: string; account_key: string;
-  charges_cents: number; credits_cents: number; payments_cents: number; ending_balance_cents: number;
+  charges_cents: number; credits_cents: number; payments_cents: number;
+  credits_applied_cents: number; ending_balance_cents: number;
 }
 interface InvRow { student_id: string; due_at: Date | null; total_cents: number; status: string; }
 
@@ -71,7 +72,8 @@ export default async function FamilyStatementPage({ params }: { params: Params }
 
   const [ledger, invoices, lineItems] = studentIds.length === 0 ? [[], [], []] : await Promise.all([
     query<LedgerRow>(
-      `SELECT student_id, account, account_key, charges_cents, credits_cents, payments_cents, ending_balance_cents
+      `SELECT student_id, account, account_key, charges_cents, credits_cents, payments_cents,
+              credits_applied_cents, ending_balance_cents
          FROM facts_account_ledger
         WHERE school_id = $1 AND academic_year = $2 AND student_id = ANY($3::uuid[])`,
       [school.id, YEAR, studentIds],
@@ -98,8 +100,8 @@ export default async function FamilyStatementPage({ params }: { params: Params }
     const arr = byStudent.get(r.student_id) ?? [];
     arr.push(r); byStudent.set(r.student_id, arr);
   }
-  const fam = { a: 0, cr: 0, p: 0, r: 0 };
-  for (const r of ledger) { fam.a += r.charges_cents; fam.cr += r.credits_cents; fam.p += r.payments_cents; fam.r += r.ending_balance_cents; }
+  const fam = { a: 0, cr: 0, p: 0, ca: 0, r: 0 };
+  for (const r of ledger) { fam.a += r.charges_cents; fam.cr += r.credits_cents; fam.p += r.payments_cents; fam.ca += r.credits_applied_cents; fam.r += r.ending_balance_cents; }
 
   // Build payment schedule: due date → per-student amount + fee breakdown
   // (from the installment's line items, so each payment can show what it's
@@ -167,14 +169,15 @@ export default async function FamilyStatementPage({ params }: { params: Params }
                 <th className="py-1.5 text-right font-medium">Assessed</th>
                 <th className="py-1.5 text-right font-medium">Credits</th>
                 <th className="py-1.5 text-right font-medium">Payments</th>
+                <th className="py-1.5 text-right font-medium">Credits applied</th>
                 <th className="py-1.5 text-right font-medium">Remaining</th>
               </tr>
             </thead>
             {students.map((s) => {
               const rows = (byStudent.get(s.id) ?? []).slice().sort((a, b) => orderIdx(a.account_key) - orderIdx(b.account_key));
               const sub = rows.reduce((acc, r) => {
-                acc.a += r.charges_cents; acc.cr += r.credits_cents; acc.p += r.payments_cents; acc.r += r.ending_balance_cents; return acc;
-              }, { a: 0, cr: 0, p: 0, r: 0 });
+                acc.a += r.charges_cents; acc.cr += r.credits_cents; acc.p += r.payments_cents; acc.ca += r.credits_applied_cents; acc.r += r.ending_balance_cents; return acc;
+              }, { a: 0, cr: 0, p: 0, ca: 0, r: 0 });
               return (
                 <tbody key={s.id}>
                   <tr className="border-t border-slate-100 bg-slate-50">
@@ -182,16 +185,18 @@ export default async function FamilyStatementPage({ params }: { params: Params }
                     <td className="py-1.5 text-right tabular-nums font-semibold">{money(sub.a)}</td>
                     <td className="py-1.5 text-right tabular-nums font-semibold text-emerald-700">{moneyOrBlank(sub.cr)}</td>
                     <td className="py-1.5 text-right tabular-nums font-semibold text-emerald-700">{moneyOrBlank(sub.p)}</td>
+                    <td className="py-1.5 text-right tabular-nums font-semibold text-blue-700">{moneyOrBlank(sub.ca)}</td>
                     <td className="py-1.5 text-right tabular-nums font-semibold text-slate-900">{money(sub.r)}</td>
                   </tr>
                   {rows.length === 0 ? (
-                    <tr><td colSpan={5} className="py-1.5 pl-5 text-xs italic text-slate-400">No FACTS charges on record</td></tr>
+                    <tr><td colSpan={6} className="py-1.5 pl-5 text-xs italic text-slate-400">No FACTS charges on record</td></tr>
                   ) : rows.map((r) => (
                     <tr key={r.account_key} className="text-slate-700">
                       <td className="py-1 pl-5 text-[13px]">{r.account}{r.account_key === 'enrollment_fee' ? <span className="text-[11px] text-slate-400"> · one-time</span> : null}{r.credits_cents > 0 ? <span className="text-[11px] text-emerald-700"> · incl. discount</span> : null}</td>
                       <td className="py-1 text-right tabular-nums text-[13px]">{moneyOrBlank(r.charges_cents)}</td>
                       <td className="py-1 text-right tabular-nums text-[13px] text-emerald-700">{moneyOrBlank(r.credits_cents)}</td>
                       <td className="py-1 text-right tabular-nums text-[13px] text-emerald-700">{moneyOrBlank(r.payments_cents)}</td>
+                      <td className="py-1 text-right tabular-nums text-[13px] text-blue-700">{moneyOrBlank(r.credits_applied_cents)}</td>
                       <td className="py-1 text-right tabular-nums text-[13px]">{money(r.ending_balance_cents)}</td>
                     </tr>
                   ))}
@@ -204,12 +209,13 @@ export default async function FamilyStatementPage({ params }: { params: Params }
                 <td className="py-2 text-right tabular-nums">{money(fam.a)}</td>
                 <td className="py-2 text-right tabular-nums text-emerald-700">{moneyOrBlank(fam.cr)}</td>
                 <td className="py-2 text-right tabular-nums text-emerald-700">{moneyOrBlank(fam.p)}</td>
+                <td className="py-2 text-right tabular-nums text-blue-700">{moneyOrBlank(fam.ca)}</td>
                 <td className="py-2 text-right tabular-nums">{money(fam.r)}</td>
               </tr>
             </tbody>
           </table>
           <p className="mt-1.5 text-[11px] text-slate-500">
-            Assessed = total charged · Credits = discounts applied · Payments = collected in FACTS to date · Remaining = balance carried into Growth Suite billing.
+            Assessed = total charged · Credits = discounts applied · Payments = cash collected in FACTS · Credits applied = account credits applied to the balance · Remaining = balance carried into Growth Suite billing.
           </p>
 
           {/* Payment schedule */}
