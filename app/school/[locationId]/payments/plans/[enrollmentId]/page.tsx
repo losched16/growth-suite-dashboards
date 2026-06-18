@@ -69,6 +69,14 @@ interface InvoiceRow {
   title: string;
 }
 
+interface FeeLine {
+  id: string;
+  position: number;
+  description: string;
+  amount_cents: number;
+  category: string | null;
+}
+
 // Coerce a value that node-postgres returned for a date/timestamptz
 // column into an ISO string. Handles Date, string, and null.
 function toIso(v: string | Date | null | undefined): string {
@@ -148,6 +156,26 @@ export default async function PlanDetailPage({
       ORDER BY SUM(li.amount_cents) DESC`,
     [enrollmentId, schoolId],
   );
+
+  // Per-installment fee lines — so each scheduled payment can show (and
+  // edit) the fees that compose it (Tuition / Extended Day / Lunch /
+  // discounts / prior-payment credits …). Keyed by invoice_id.
+  const { rows: lineRows } = await query<FeeLine & { invoice_id: string }>(
+    `SELECT li.invoice_id, li.id, li.position, li.description, li.amount_cents, li.category
+       FROM invoice_line_items li
+       JOIN invoices i ON i.id = li.invoice_id
+      WHERE i.source = 'tuition_plan'
+        AND i.source_ref->>'enrollment_id' = $1
+        AND i.school_id = $2 AND i.status <> 'voided'
+      ORDER BY li.invoice_id, li.position, li.id`,
+    [enrollmentId, schoolId],
+  );
+  const linesByInvoice = new Map<string, FeeLine[]>();
+  for (const r of lineRows) {
+    const arr = linesByInvoice.get(r.invoice_id);
+    const fl: FeeLine = { id: r.id, position: r.position, description: r.description, amount_cents: r.amount_cents, category: r.category };
+    if (arr) arr.push(fl); else linesByInvoice.set(r.invoice_id, [fl]);
+  }
 
   const paidTotal = invs.reduce((s, i) => s + i.amount_paid_cents, 0);
   const liveInvoices = invs.filter((i) => i.status !== 'voided');
@@ -253,7 +281,10 @@ export default async function PlanDetailPage({
               </div>
             </div>
             <p className="mt-2 text-[11px] text-slate-500">
-              This same breakdown appears on each installment invoice the parent receives.
+              Each installment below carries its own copy of these fees — expand{' '}
+              <span className="font-medium text-slate-600">Fee breakdown</span> on any installment to
+              see the per-payment amounts, or click <span className="font-medium text-slate-600">Edit</span>{' '}
+              to change individual fees on that payment.
             </p>
           </div>
         ) : null}
@@ -424,6 +455,7 @@ export default async function PlanDetailPage({
                   <RowOrForm
                     key={i.id}
                     inv={i}
+                    lines={linesByInvoice.get(i.id) ?? []}
                     editing={editing}
                     splitting={splitting}
                     isEditable={isEditable}
@@ -444,9 +476,10 @@ export default async function PlanDetailPage({
 }
 
 function RowOrForm({
-  inv, editing, splitting, isEditable, schoolId, locationId, enrollmentId, returnTo, selfHref,
+  inv, lines, editing, splitting, isEditable, schoolId, locationId, enrollmentId, returnTo, selfHref,
 }: {
   inv: InvoiceRow;
+  lines: FeeLine[];
   editing: boolean;
   splitting: boolean;
   isEditable: boolean;
@@ -460,31 +493,84 @@ function RowOrForm({
   const amountDollars = (inv.total_cents / 100).toFixed(2);
 
   if (editing) {
+    const hasLines = lines.length > 0;
     return (
       <tr className="bg-blue-50/40">
         <td colSpan={7} className="px-4 py-3">
-          <form action={`/api/admin/schools/${schoolId}/tuition-plans/${enrollmentId}/action`} method="POST" className="flex flex-wrap items-end gap-3">
+          <form action={`/api/admin/schools/${schoolId}/tuition-plans/${enrollmentId}/action`} method="POST" className="space-y-3">
             <input type="hidden" name="action" value="edit_installment" />
             <input type="hidden" name="invoice_id" value={inv.id} />
             <input type="hidden" name="return_to" value={returnTo} />
-            <div className="text-xs text-slate-600">
-              Editing <span className="font-mono">{inv.invoice_number}</span>
-              {inv.installment_number ? ` (installment #${inv.installment_number})` : ''}
+
+            <div className="flex flex-wrap items-end justify-between gap-3">
+              <div className="text-xs text-slate-600">
+                Editing <span className="font-mono">{inv.invoice_number}</span>
+                {inv.installment_number ? ` (installment #${inv.installment_number})` : ''}
+              </div>
+              <label className="block">
+                <span className="block text-[10px] font-medium uppercase tracking-wide text-slate-600">Due date</span>
+                <input type="date" name="due_date" defaultValue={dueIso} required className={inputCls} />
+              </label>
             </div>
-            <label className="block">
-              <span className="block text-[10px] font-medium uppercase tracking-wide text-slate-600">Due date</span>
-              <input type="date" name="due_date" defaultValue={dueIso} required className={inputCls} />
-            </label>
-            <label className="block">
-              <span className="block text-[10px] font-medium uppercase tracking-wide text-slate-600">Amount ($)</span>
-              <input type="number" step="0.01" min="0" name="amount" defaultValue={amountDollars} required className={inputCls} />
-            </label>
-            <button type="submit" className="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-blue-700">
-              Save changes
-            </button>
-            <Link href={selfHref} className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50">
-              Cancel
-            </Link>
+
+            {hasLines ? (
+              // Per-fee editor: one input per fee on this installment. Edit
+              // only the fees you need — the rest stay as-is — and the
+              // installment total is recomputed from the lines on save.
+              <div className="rounded-md border border-slate-200 bg-white p-3">
+                <div className="mb-2 text-[10px] font-medium uppercase tracking-wide text-slate-500">
+                  Fees on this installment — edit any line; leave one blank to keep it unchanged
+                </div>
+                <div className="max-w-lg space-y-1.5">
+                  {lines.map((l) => {
+                    const isCredit = l.amount_cents < 0;
+                    return (
+                      <div key={l.id} className="flex items-center justify-between gap-3">
+                        <span className={`text-xs ${isCredit ? 'text-emerald-700' : 'text-slate-700'}`}>
+                          {l.description}
+                          {isCredit ? (
+                            <span className="ml-1 rounded bg-emerald-50 px-1 text-[9px] font-semibold uppercase tracking-wide text-emerald-600">credit</span>
+                          ) : null}
+                        </span>
+                        <div className="flex items-center gap-1">
+                          <span className="text-xs text-slate-400">$</span>
+                          <input
+                            type="number"
+                            step="0.01"
+                            name={`line_${l.id}`}
+                            defaultValue={(l.amount_cents / 100).toFixed(2)}
+                            aria-label={`${l.description} amount`}
+                            className="w-28 rounded border border-slate-300 bg-white px-2 py-1 text-right font-mono text-sm tabular-nums focus:border-blue-500 focus:outline-none"
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="mt-2 flex max-w-lg justify-between gap-3 border-t border-slate-200 pt-1.5 text-xs font-semibold text-slate-900">
+                  <span>Current installment total</span>
+                  <span className="font-mono tabular-nums">${amountDollars}</span>
+                </div>
+                <p className="mt-1 max-w-lg text-[10px] leading-tight text-slate-500">
+                  On save, the new total is the sum of the fees above. Credit / discount lines
+                  are negative and reduce the total — type a negative value to change one.
+                </p>
+              </div>
+            ) : (
+              <label className="block">
+                <span className="block text-[10px] font-medium uppercase tracking-wide text-slate-600">Amount ($)</span>
+                <input type="number" step="0.01" min="0" name="amount" defaultValue={amountDollars} required className={inputCls} />
+              </label>
+            )}
+
+            <div className="flex gap-2">
+              <button type="submit" className="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-blue-700">
+                Save changes
+              </button>
+              <Link href={selfHref} className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50">
+                Cancel
+              </Link>
+            </div>
           </form>
         </td>
       </tr>
@@ -547,49 +633,87 @@ function RowOrForm({
     );
   }
 
+  // Show the fee-breakdown toggle only when there's more than one fee to
+  // break out, and not on voided rows (nothing to act on).
+  const showBreakdown = lines.length > 1 && inv.status !== 'voided';
+
   return (
-    <tr className={inv.status === 'voided' ? 'text-slate-400' : ''}>
-      <td className="px-4 py-2 tabular-nums text-xs">{inv.installment_number ?? '—'}</td>
-      <td className="px-4 py-2">
-        <Link href={`/school/${locationId}/payments/invoices/${inv.id}`} className="font-mono text-xs text-blue-600 hover:underline">
-          {inv.invoice_number}
-        </Link>
-      </td>
-      <td className="px-4 py-2 text-xs text-slate-600">
-        {new Date(toIso(inv.due_at)).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
-      </td>
-      <td className="px-4 py-2 text-right font-mono text-sm">${(inv.total_cents / 100).toFixed(2)}</td>
-      <td className="px-4 py-2 text-right font-mono text-xs text-emerald-700">
-        {inv.amount_paid_cents > 0 ? `$${(inv.amount_paid_cents / 100).toFixed(2)}` : '—'}
-      </td>
-      <td className="px-4 py-2 text-center">
-        <InvStatusPill status={inv.status} />
-      </td>
-      <td className="px-4 py-2 text-right whitespace-nowrap">
-        {isEditable ? (
-          <div className="inline-flex items-center gap-1">
-            <Link
-              href={`${selfHref}?edit=${inv.id}`}
-              className="inline-flex items-center gap-1 rounded border border-slate-300 bg-white px-2 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-50"
-            >
-              <Edit3 className="h-3 w-3" /> Edit
-            </Link>
-            <Link
-              href={`${selfHref}?split=${inv.id}`}
-              className="inline-flex items-center gap-1 rounded border border-violet-300 bg-white px-2 py-1 text-[11px] font-medium text-violet-700 hover:bg-violet-50"
-            >
-              <Scissors className="h-3 w-3" /> Split
-            </Link>
-          </div>
-        ) : inv.status === 'voided' ? (
-          <span className="text-[10px] italic text-slate-400" title={inv.voided_reason ?? ''}>voided</span>
-        ) : (
-          <Link href={`/school/${locationId}/payments/invoices/${inv.id}`} className="text-[11px] text-slate-500 hover:text-slate-700 underline">
-            view
+    <>
+      <tr className={inv.status === 'voided' ? 'text-slate-400' : ''}>
+        <td className="px-4 py-2 tabular-nums text-xs">{inv.installment_number ?? '—'}</td>
+        <td className="px-4 py-2">
+          <Link href={`/school/${locationId}/payments/invoices/${inv.id}`} className="font-mono text-xs text-blue-600 hover:underline">
+            {inv.invoice_number}
           </Link>
-        )}
-      </td>
-    </tr>
+        </td>
+        <td className="px-4 py-2 text-xs text-slate-600">
+          {new Date(toIso(inv.due_at)).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+        </td>
+        <td className="px-4 py-2 text-right font-mono text-sm">${(inv.total_cents / 100).toFixed(2)}</td>
+        <td className="px-4 py-2 text-right font-mono text-xs text-emerald-700">
+          {inv.amount_paid_cents > 0 ? `$${(inv.amount_paid_cents / 100).toFixed(2)}` : '—'}
+        </td>
+        <td className="px-4 py-2 text-center">
+          <InvStatusPill status={inv.status} />
+        </td>
+        <td className="px-4 py-2 text-right whitespace-nowrap">
+          {isEditable ? (
+            <div className="inline-flex items-center gap-1">
+              <Link
+                href={`${selfHref}?edit=${inv.id}`}
+                className="inline-flex items-center gap-1 rounded border border-slate-300 bg-white px-2 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-50"
+              >
+                <Edit3 className="h-3 w-3" /> Edit
+              </Link>
+              <Link
+                href={`${selfHref}?split=${inv.id}`}
+                className="inline-flex items-center gap-1 rounded border border-violet-300 bg-white px-2 py-1 text-[11px] font-medium text-violet-700 hover:bg-violet-50"
+              >
+                <Scissors className="h-3 w-3" /> Split
+              </Link>
+            </div>
+          ) : inv.status === 'voided' ? (
+            <span className="text-[10px] italic text-slate-400" title={inv.voided_reason ?? ''}>voided</span>
+          ) : (
+            <Link href={`/school/${locationId}/payments/invoices/${inv.id}`} className="text-[11px] text-slate-500 hover:text-slate-700 underline">
+              view
+            </Link>
+          )}
+        </td>
+      </tr>
+
+      {/* Per-installment fee breakdown — collapsed by default so the table
+          stays compact, expands in place to show the fees that compose
+          this scheduled payment (same lines the parent sees + that the
+          Edit form lets you change individually). */}
+      {showBreakdown ? (
+        <tr className="bg-slate-50/40">
+          <td />
+          <td colSpan={6} className="px-4 pb-2 pt-0">
+            <details className="group">
+              <summary className="inline-flex cursor-pointer list-none items-center gap-1 text-[11px] text-slate-500 hover:text-slate-700">
+                <span className="inline-block text-slate-400 transition-transform group-open:rotate-90">▸</span>
+                Fee breakdown ({lines.length} items)
+              </summary>
+              <div className="mt-1.5 ml-4 max-w-md space-y-0.5">
+                {lines.map((l) => (
+                  <div key={l.id} className="flex justify-between gap-3 text-[11px]">
+                    <span className="text-slate-600">{l.description}</span>
+                    <span className={`font-mono tabular-nums ${l.amount_cents < 0 ? 'text-emerald-700' : 'text-slate-700'}`}>
+                      {l.amount_cents < 0 ? '−' : ''}${(Math.abs(l.amount_cents) / 100).toFixed(2)}
+                    </span>
+                  </div>
+                ))}
+                <div className="flex justify-between gap-3 border-t border-slate-200 pt-1 text-[11px] font-semibold text-slate-800">
+                  <span>Installment total</span>
+                  <span className="font-mono tabular-nums">${(inv.total_cents / 100).toFixed(2)}</span>
+                </div>
+              </div>
+            </details>
+          </td>
+        </tr>
+      ) : null}
+    </>
   );
 }
 

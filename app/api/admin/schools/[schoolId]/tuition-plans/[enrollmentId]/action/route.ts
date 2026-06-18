@@ -41,6 +41,14 @@ function dollarsToCents(s: string): number {
   return Math.round(n * 100);
 }
 
+// Like dollarsToCents but preserves sign — used when editing individual
+// fee lines, where credit / discount lines are legitimately negative.
+function dollarsToCentsSigned(s: string): number {
+  const n = parseFloat(s);
+  if (!Number.isFinite(n)) return 0;
+  return Math.round(n * 100);
+}
+
 function back(
   request: NextRequest,
   fallbackPath: string,
@@ -145,14 +153,20 @@ export async function POST(request: NextRequest, { params }: { params: Params })
       }
 
       // ── edit_installment ─────────────────────────────────────────────
+      // Two modes:
+      //   • Per-fee mode (preferred): the form posts one `line_<lineId>`
+      //     field per fee on the installment. We update each line, keep
+      //     untouched ones, and recompute the invoice total as the sum of
+      //     the lines — so the fee breakdown the parent sees is preserved.
+      //   • Single-amount mode (fallback, for installments that carry just
+      //     one consolidated line): the form posts a single `amount` and we
+      //     rewrite the invoice to one line, matching the old behavior.
       case 'edit_installment': {
         const invoiceId = String(fd.get('invoice_id') ?? '').trim();
         const dueDate = String(fd.get('due_date') ?? '').trim();
-        const amountCents = dollarsToCents(String(fd.get('amount') ?? '0'));
 
         if (!invoiceId) return back(request, fallback, returnTo, { err: 'invoice_id missing.' });
         if (!dueDate)   return back(request, fallback, returnTo, { err: 'Due date required.' });
-        if (amountCents <= 0) return back(request, fallback, returnTo, { err: 'Amount must be > 0.' });
 
         // Verify the invoice belongs to this enrollment + is editable.
         const { rows: iRows } = await query<{
@@ -176,6 +190,68 @@ export async function POST(request: NextRequest, { params }: { params: Params })
         if (inv.amount_paid_cents > 0) {
           return back(request, fallback, returnTo, { err: 'Invoice already has a payment recorded. Void it instead of editing.' });
         }
+
+        const perLineKeys = Array.from(fd.keys()).filter((k) => k.startsWith('line_'));
+
+        if (perLineKeys.length > 0) {
+          // Per-fee edit. Load the current lines so we can keep categories,
+          // descriptions, student_id, and any line the operator didn't touch.
+          const { rows: existingLines } = await query<{
+            id: string; description: string; category: string | null;
+            amount_cents: number; student_id: string | null;
+          }>(
+            `SELECT id, description, category, amount_cents, student_id
+               FROM invoice_line_items WHERE invoice_id = $1 ORDER BY position`,
+            [invoiceId],
+          );
+          if (existingLines.length === 0) {
+            return back(request, fallback, returnTo, { err: 'No fee lines found on this installment.' });
+          }
+
+          let chargeCents = 0;   // sum of positive (charge) lines
+          let creditCents = 0;   // sum of negative (credit/discount) lines
+          const updates: Array<{ id: string; cents: number }> = [];
+          for (const ln of existingLines) {
+            const raw = fd.get(`line_${ln.id}`);
+            // Blank input = leave this fee unchanged. A typed value (incl. 0
+            // or a negative for a credit) overrides it.
+            const cents = raw != null && String(raw).trim() !== ''
+              ? dollarsToCentsSigned(String(raw))
+              : ln.amount_cents;
+            updates.push({ id: ln.id, cents });
+            if (cents >= 0) chargeCents += cents; else creditCents += cents;
+          }
+          const newTotal = chargeCents + creditCents;
+          if (newTotal <= 0) {
+            return back(request, fallback, returnTo, { err: 'The fees must add up to more than $0 for this installment.' });
+          }
+
+          await withTransaction(async (q) => {
+            for (const u of updates) {
+              await q(
+                `UPDATE invoice_line_items
+                    SET amount_cents = $1, unit_amount_cents = $1, quantity = 1
+                  WHERE id = $2`,
+                [u.cents, u.id],
+              );
+            }
+            await q(
+              `UPDATE invoices
+                  SET subtotal_cents = $1, discount_total_cents = $2,
+                      total_cents = $3, platform_fee_cents = 0, processing_fee_cents = 0,
+                      due_at = $4::date, updated_at = now()
+                WHERE id = $5`,
+              // discount_total_cents stored as a positive magnitude.
+              [chargeCents, -creditCents, newTotal, dueDate, invoiceId],
+            );
+          });
+
+          return back(request, fallback, returnTo, { msg: 'Installment fees updated.' });
+        }
+
+        // Single-amount fallback.
+        const amountCents = dollarsToCents(String(fd.get('amount') ?? '0'));
+        if (amountCents <= 0) return back(request, fallback, returnTo, { err: 'Amount must be > 0.' });
 
         await withTransaction(async (q) => {
           await q(

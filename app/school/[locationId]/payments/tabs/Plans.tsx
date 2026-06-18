@@ -16,10 +16,25 @@ import Link from 'next/link';
 import { Plus, Trash2, Sparkles, Edit3, X, Pencil, Search } from 'lucide-react';
 import { query } from '@/lib/db';
 import { HelpCallout } from '@/components/HelpCallout';
-import { parentPreviewUrl } from '@/lib/billing/parent-preview';
+import { deriveEmbedToken } from '@/lib/auth/embed';
+
+// "View parent portal" link. Uses the magic-link view-as-parent route
+// (keyed by family) carrying a deterministic embed_token, NOT the old
+// HMAC preview-parent link. The HMAC link depended on ENCRYPTION_KEY
+// being kept in sync across BOTH Vercel projects; when it drifted, the
+// portal rejected the signature and bounced admins to the login screen.
+// The embed_token is verified inside the dashboards route (HMAC of the
+// locationId), so there's no cross-project secret to keep in sync, and
+// it survives the new-tab open from the GHL iframe where the partitioned
+// session cookie does not.
+function viewAsParentHref(familyId: string, locationId: string): string {
+  const token = deriveEmbedToken(locationId);
+  return `/api/school/family/${familyId}/view-as-parent?embed_token=${encodeURIComponent(token)}`;
+}
 
 interface EnrollmentRow {
   id: string;
+  family_id: string;
   family_label: string;
   student_label: string | null;
   academic_year: string;
@@ -69,6 +84,7 @@ export async function PaymentsHubPlans({
   const [{ rows: enrollments }, { rows: planTemplates }] = await Promise.all([
     query<EnrollmentRow>(
       `SELECT e.id,
+              e.family_id,
               COALESCE(NULLIF(f.display_name, ''),
                        CONCAT_WS(' ', p.first_name, p.last_name),
                        '(unnamed)') AS family_label,
@@ -322,16 +338,13 @@ export async function PaymentsHubPlans({
                         </div>
                         {e.student_label ? <div className="text-[11px] text-slate-500">{e.student_label}</div> : null}
                       </Link>
-                      {(() => {
-                        const url = e.primary_parent_id ? parentPreviewUrl(e.primary_parent_id) : null;
-                        return url ? (
-                          <a href={url} target="_blank" rel="noopener noreferrer"
-                            className="mt-0.5 inline-flex items-center gap-1 text-[11px] text-blue-600 hover:text-blue-800 hover:underline"
-                            title="Open the parent portal signed in as this family — see what they see">
-                            👁 View parent portal
-                          </a>
-                        ) : null;
-                      })()}
+                      {e.primary_parent_id ? (
+                        <a href={viewAsParentHref(e.family_id, locationId)} target="_blank" rel="noopener noreferrer"
+                          className="mt-0.5 inline-flex items-center gap-1 text-[11px] text-blue-600 hover:text-blue-800 hover:underline"
+                          title="Open the parent portal signed in as this family — see what they see">
+                          👁 View parent portal
+                        </a>
+                      ) : null}
                     </td>
                     <td className="px-4 py-2 text-xs">
                       <Link href={planHref} className="block">

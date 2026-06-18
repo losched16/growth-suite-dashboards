@@ -118,17 +118,32 @@ function mapAdminPathToSchoolPath(adminPath: string, locationId: string): string
 }
 
 async function guardSchool(request: NextRequest) {
+  const urlLocationId = extractLocationId(request);
+
   // ── Cookie check (wrapped) ─────────────────────────────────────────
   // verifySchoolSession can throw on a malformed/expired JWT. If it
   // does, we DON'T want the whole iframe to die — we want to fall
   // through to the auto-mint path below. Browsers occasionally serve
   // up a stale cookie after a deploy (signing key rotation, partition
   // gap, whatever); the right move is to just mint a fresh one.
+  //
+  // CRITICAL: the cookie's school must match the locationId in the URL.
+  // The /school/* iframe cookie is Partitioned by the GHL *top-level*
+  // domain, so an operator/staffer who opened School A then navigates to
+  // School B (a different GHL sub-account, same partition) still carries
+  // A's cookie. Pages render fine — they scope by the URL locationId —
+  // but every mutation POST to /api/admin/schools/{B}/... then 403s with
+  // forbidden_cross_school because the action routes compare the cookie's
+  // school_id to the path's schoolId. So when the cookie is for a
+  // DIFFERENT location, fall through and re-mint for the current one
+  // (same unguessable-locationId trust model as a cold load).
   try {
     const sessionToken = request.cookies.get(SCHOOL_SESSION_COOKIE)?.value;
     if (sessionToken) {
       const session = await verifySchoolSession(sessionToken);
-      if (session) return passThroughWithChrome(request);
+      if (session && (!urlLocationId || session.ghl_location_id === urlLocationId)) {
+        return passThroughWithChrome(request);
+      }
     }
   } catch (e) {
     // eslint-disable-next-line no-console

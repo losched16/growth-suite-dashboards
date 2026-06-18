@@ -6,7 +6,7 @@
 import { query } from '@/lib/db';
 import type { SchoolContext, WidgetSearchParams } from '@/lib/widgets/types';
 import type { FamilyHubConfig, SortKey } from './config';
-import { parentPreviewUrl } from '@/lib/billing/parent-preview';
+import { deriveEmbedToken } from '@/lib/auth/embed';
 
 // Per-family parent record exposed to the UI so the accordion can show
 // both parents inline without an extra fetch.
@@ -292,6 +292,14 @@ export async function fetcher(
     [school.schoolId],
   );
 
+  // Deterministic per-school embed token for the "View parent portal"
+  // links. The view-as-parent route verifies it (HMAC of the locationId),
+  // so the preview works in the new tab where the partitioned school
+  // cookie isn't sent — and with no shared cross-project secret to drift
+  // (the old HMAC preview-parent link broke admins to the login screen
+  // whenever ENCRYPTION_KEY fell out of sync between the two projects).
+  const embedToken = deriveEmbedToken(school.locationId);
+
   const allFamilies: FamilyRow[] = rows.map((r) => {
     const enrStatuses = r.enrollment_status_array ?? [];
     // Real per-family student counts (every child counts), not 0/1 flags.
@@ -333,7 +341,13 @@ export async function fetcher(
       total_tuition: Number(r.total_tuition ?? 0),
       has_allergy: !!r.has_allergy,
       search_haystack: haystack,
-      parents: (r.parents_json ?? []).map((p) => ({ ...p, portal_preview_url: parentPreviewUrl(p.id) })),
+      // Both parents see the same family portal — point every parent's
+      // preview at the family-level magic-link route (logs in as the
+      // family's primary parent).
+      parents: (r.parents_json ?? []).map((p) => ({
+        ...p,
+        portal_preview_url: `/api/school/family/${r.family_id}/view-as-parent?embed_token=${encodeURIComponent(embedToken)}`,
+      })),
       students: r.students_json ?? [],
     };
   });
