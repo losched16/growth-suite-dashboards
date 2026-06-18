@@ -8,6 +8,11 @@ export interface PortalFormsInboxConfig {
   academic_year: string;
   category_filter: string;          // empty = all
   status_filter: string;            // 'all' | 'submitted' | 'pending_payment' | 'voided'
+  // Tag-based family filters — mirrors PortalFormsTracker so both
+  // widgets on the same dashboard agree on what counts as "enrolled."
+  // Empty = no filter.
+  enrolled_tag?: string;
+  excluded_tag?: string;
 }
 
 export const portalFormsInboxDefaults: PortalFormsInboxConfig = {
@@ -15,6 +20,8 @@ export const portalFormsInboxDefaults: PortalFormsInboxConfig = {
   academic_year: '2025-26',
   category_filter: '',
   status_filter: 'all',
+  enrolled_tag: 'enrolled - 26/27',
+  excluded_tag: 'withdrawn',
 };
 
 export const portalFormsInboxSchema: ConfigSchema = {

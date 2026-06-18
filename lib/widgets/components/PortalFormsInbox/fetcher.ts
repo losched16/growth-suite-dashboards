@@ -56,6 +56,34 @@ export async function fetcher(
     : `('${config.status_filter.replace(/'/g, '')}')`; // narrow allow-list
 
   const catFilter = (config.category_filter ?? '').trim().toLowerCase();
+  const enrolledTag = (config.enrolled_tag ?? '').trim().toLowerCase();
+  const excludedTag = (config.excluded_tag ?? '').trim().toLowerCase();
+
+  // Build optional tag-filter clauses + positional param indexes.
+  // Params are: $1=school, $2=year, $3=catFilter, $4=limit; then
+  // $5/$6 used by the optional tag clauses below.
+  const params: unknown[] = [school.schoolId, config.academic_year, catFilter, limit];
+  let enrolledTagIdx: number | null = null;
+  let excludedTagIdx: number | null = null;
+  if (enrolledTag) { params.push(enrolledTag); enrolledTagIdx = params.length; }
+  if (excludedTag) { params.push(excludedTag); excludedTagIdx = params.length; }
+
+  const tagInclude = enrolledTagIdx !== null
+    ? `AND EXISTS (
+         SELECT 1 FROM parents pt
+           JOIN ghl_contact_tags t ON t.ghl_contact_id = pt.ghl_contact_id AND t.school_id = s.school_id
+          WHERE pt.family_id = f.id AND pt.status = 'active'
+            AND lower(t.tag) = $${enrolledTagIdx}
+       )`
+    : '';
+  const tagExclude = excludedTagIdx !== null
+    ? `AND NOT EXISTS (
+         SELECT 1 FROM parents pt
+           JOIN ghl_contact_tags t ON t.ghl_contact_id = pt.ghl_contact_id AND t.school_id = s.school_id
+          WHERE pt.family_id = f.id AND pt.status = 'active'
+            AND lower(t.tag) = $${excludedTagIdx}
+       )`
+    : '';
 
   const rowsRes = await query<InboxRow & { def_needs_review: boolean }>(
     `SELECT
@@ -103,9 +131,11 @@ export async function fetcher(
        AND s.academic_year = $2
        AND s.status IN ${statusClause}
        AND ($3 = '' OR LOWER(d.category) = $3)
+       ${tagInclude}
+       ${tagExclude}
      ORDER BY s.submitted_at DESC
      LIMIT $4`,
-    [school.schoolId, config.academic_year, catFilter, limit],
+    params,
   );
 
   const rows: InboxRow[] = rowsRes.rows.map((r) => ({
