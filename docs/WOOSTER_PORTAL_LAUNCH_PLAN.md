@@ -49,7 +49,7 @@ Setting up your account takes 60 seconds:
   3. We'll send you a one-time sign-in link — click it, set a password,
      and you're in
 
-  → https://growth-suite-parent-portal.vercel.app/login
+  → https://family.woomontessori.org/login
 
 Questions? Reply to this email or call the office at (330) XXX-XXXX.
 

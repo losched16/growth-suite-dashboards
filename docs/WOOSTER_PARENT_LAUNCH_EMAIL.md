@@ -29,7 +29,7 @@ submitted.
 
 Sign in here:
 
-  → https://family.mygrowthsuite.com/login
+  → https://family.woomontessori.org/login
 
 (Enter the email this message was sent to. We'll email you a one-time
 sign-in link. Click it, set a password, and you're in.)
@@ -81,7 +81,7 @@ Wooster Family Portal a week ago, and we don't see you in there yet.
 
 It's a 60-second setup:
 
-  1. Open https://family.mygrowthsuite.com/login
+  1. Open https://family.woomontessori.org/login
   2. Enter this email address — we send a one-time sign-in link
   3. Click the link in your inbox, set a password, you're in
 
@@ -111,7 +111,7 @@ Hi {{contact.first_name}},
 Thanks for setting up your portal account. Looking at your family
 record, we still have a few forms outstanding:
 
-→ https://family.mygrowthsuite.com/home
+→ https://family.woomontessori.org/home
 
 Whatever shows yellow or red on your Home page is what we still need.
 Each form takes 2-5 minutes — most info will pre-fill from what you

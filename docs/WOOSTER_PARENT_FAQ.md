@@ -28,7 +28,7 @@ each year. This guide walks through everything inside.
 
 - **Same device:** the portal keeps you signed in for a few weeks.
   You can just open the link.
-- **New device or signed out:** go to <https://family.mygrowthsuite.com/login>,
+- **New device or signed out:** go to <https://family.woomontessori.org/login>,
   enter your email, click the link we send you, and you're back.
 - **Forgot your password?** Same flow — enter your email, we email a
   link, click it, set a new password.
@@ -185,7 +185,7 @@ Check spam first. If it's not there:
   file. Email the office to check.
 - Ask the office to resend the welcome workflow from their dashboard.
 - As a workaround, anyone with an email on file can sign in directly
-  at <https://family.mygrowthsuite.com/login> — typing their email
+  at <https://family.woomontessori.org/login> — typing their email
   triggers a fresh sign-in link.
 
 ### "I see a duplicate student or a misspelled name"

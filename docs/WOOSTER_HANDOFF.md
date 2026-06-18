@@ -61,8 +61,8 @@ Current footprint as of this handoff:
 
 | What | URL |
 |---|---|
-| Parent portal home | `https://growth-suite-parent-portal.vercel.app` |
-| Direct form link (template) | `https://growth-suite-parent-portal.vercel.app/forms-v2/<slug>` — see the form list below for slugs |
+| Parent portal home | `https://family.woomontessori.org` |
+| Direct form link (template) | `https://family.woomontessori.org/forms-v2/<slug>` — see the form list below for slugs |
 
 Parents log in with their **email** + a **password** they set themselves
 (first-time visitors hit a "set your password" flow).
@@ -192,7 +192,7 @@ required form) and a feed of recent submissions.
 ## Parent portal — what parents see
 
 When a Wooster parent goes to
-`https://growth-suite-parent-portal.vercel.app` and logs in, they land
+`https://family.woomontessori.org` and logs in, they land
 on **their home page** which shows:
 
 - A **"Pending forms" banner** if any required forms haven't been
