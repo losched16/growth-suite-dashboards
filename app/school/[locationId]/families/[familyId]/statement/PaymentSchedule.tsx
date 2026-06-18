@@ -25,7 +25,14 @@ export function PaymentSchedule({
   grandTotal: number;
 }) {
   // Open the first row by default so the breakdown is visible immediately.
-  const [open, setOpen] = useState<string | null>(rows[0]?.date ?? null);
+  // Every payment's account breakdown is shown by default (matches the
+  // FACTS schedule); a date can be clicked to collapse it to just totals.
+  const [open, setOpen] = useState<Set<string>>(() => new Set(rows.map((r) => r.date)));
+  const toggle = (date: string) => setOpen((prev) => {
+    const next = new Set(prev);
+    if (next.has(date)) next.delete(date); else next.add(date);
+    return next;
+  });
 
   return (
     <table className="w-full text-sm">
@@ -37,10 +44,10 @@ export function PaymentSchedule({
         </tr>
       </thead>
       {rows.map((r) => {
-        const isOpen = open === r.date;
+        const isOpen = open.has(r.date);
         return (
           <tbody key={r.date}>
-            <tr className="cursor-pointer border-t border-slate-100 text-slate-700 hover:bg-slate-50" onClick={() => setOpen(isOpen ? null : r.date)}>
+            <tr className="cursor-pointer border-t border-slate-100 text-slate-700 hover:bg-slate-50" onClick={() => toggle(r.date)}>
               <td className="py-1.5 tabular-nums">
                 <span className="mr-1 inline-block align-middle text-slate-400 print:hidden">
                   {isOpen ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}

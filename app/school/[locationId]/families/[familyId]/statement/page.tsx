@@ -222,7 +222,7 @@ export default async function FamilyStatementPage({ params }: { params: Params }
           ) : (
             <>
               <PaymentSchedule rows={schedRows} columns={schedColumns} totals={schedTotals} grandTotal={schedGrand} />
-              <p className="mt-1 text-[11px] text-slate-500 print:hidden">Click a payment date to see the fee breakdown that makes it up.</p>
+              <p className="mt-1 text-[11px] text-slate-500 print:hidden">Each payment is itemized by account below. Click a date to collapse it.</p>
             </>
           )}
           {anyDraft ? (
