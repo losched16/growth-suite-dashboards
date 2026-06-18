@@ -355,13 +355,38 @@ async function applyFullSync(
   });
 }
 
-async function resolveSchoolId(locationId: string | null): Promise<string | null> {
-  if (!locationId) return null;
-  const { rows } = await query<{ id: string }>(
-    `SELECT id FROM schools WHERE ghl_location_id = $1 LIMIT 1`,
-    [locationId],
-  );
-  return rows[0]?.id ?? null;
+// Resolve which school a webhook event belongs to.
+//
+// Preferred: locationId in the payload (set by GHL workflows that
+// include `{{location.id}}` in their Custom Webhook body).
+//
+// Fallback: many GHL workflow templates ship a minimal body —
+// `{id, name, email, phone}` with no locationId — because the
+// builder UI suggests those fields by default. When that happens we
+// look up which school owns the contact_id (every parent row has a
+// school_id) and proceed. Without this fallback, the entire sync
+// path is silently skipped for any workflow that uses the default
+// body, which is exactly what Wooster had: 100% of recent events
+// landed as `ignored, rows=0`.
+async function resolveSchoolId(
+  locationId: string | null,
+  contactId: string | null = null,
+): Promise<string | null> {
+  if (locationId) {
+    const { rows } = await query<{ id: string }>(
+      `SELECT id FROM schools WHERE ghl_location_id = $1 LIMIT 1`,
+      [locationId],
+    );
+    if (rows[0]) return rows[0].id;
+  }
+  if (contactId) {
+    const { rows } = await query<{ school_id: string }>(
+      `SELECT school_id FROM parents WHERE ghl_contact_id = $1 LIMIT 1`,
+      [contactId],
+    );
+    if (rows[0]) return rows[0].school_id;
+  }
+  return null;
 }
 
 // ─── Handler ─────────────────────────────────────────────────────────
@@ -432,7 +457,7 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  const schoolId = await resolveSchoolId(contact.location_id);
+  const schoolId = await resolveSchoolId(contact.location_id, contact.contact_id);
 
   // Persist the event regardless of whether we apply it — gives us
   // forensics for "why didn't X change land?" cases.
@@ -497,7 +522,7 @@ async function logRejected(request: NextRequest, rawBody: string): Promise<void>
   let parsed: unknown = null;
   try { parsed = JSON.parse(rawBody); } catch { /* non-JSON body — keep null */ }
   const norm = parsed ? normalize(parsed) : null;
-  const schoolId = norm ? await resolveSchoolId(norm.location_id) : null;
+  const schoolId = norm ? await resolveSchoolId(norm.location_id, norm.contact_id) : null;
   await query(
     `INSERT INTO ghl_webhook_log
         (school_id, event_type, ghl_location_id, ghl_contact_id, payload,
