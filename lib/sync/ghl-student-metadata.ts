@@ -53,6 +53,81 @@ function mapEnrollmentStatus(raw: string): string | null {
   return null;
 }
 
+// Real-time variant used by the GHL contact webhook: propagate ONE
+// contact's freshly-fetched custom fields into the students.metadata of
+// ONE family, so an edit in the GHL contact record reflects on every
+// dashboard within seconds instead of waiting for the 15-min cron. Same
+// slot logic + enrollment-status reconciliation as the full refresh, but
+// reads from the live contact (idByKey + cfById passed by the webhook)
+// rather than the ghl_contact_field_values mirror (which is still stale
+// at webhook time). `q` is the caller's transaction handle.
+export async function propagateContactFieldsToFamilyMetadata(
+  q: typeof query,
+  schoolId: string,
+  familyId: string,
+  idByKey: Map<string, string>,    // field_key  → field_id
+  cfById: Map<string, unknown>,    // field_id   → value
+): Promise<{ students_updated: number; keys_updated: number; enrollments_reconciled: number }> {
+  // Build slot → base → value from the live contact's fields.
+  const bySlot = new Map<number, Map<string, string>>();
+  for (const [key, id] of idByKey) {
+    const m = SLOT_KEY_RE.exec(key);
+    if (!m) continue;
+    const slot = m[1] ? parseInt(m[1], 10) : 1;
+    const base = m[2];
+    if (!base || SKIP_BASES.has(base)) continue;
+    const raw = cfById.get(id);
+    const v = raw == null ? '' : String(raw).trim();
+    if (!v) continue;
+    let bases = bySlot.get(slot);
+    if (!bases) { bases = new Map(); bySlot.set(slot, bases); }
+    bases.set(base, v);
+  }
+  const out = { students_updated: 0, keys_updated: 0, enrollments_reconciled: 0 };
+  if (bySlot.size === 0) return out;
+
+  const { rows: students } = await q<{ id: string; metadata: Record<string, unknown> | null }>(
+    `SELECT id, metadata FROM students WHERE school_id = $1 AND family_id = $2 AND status = 'active'`,
+    [schoolId, familyId],
+  );
+  for (const s of students) {
+    const md = s.metadata ?? {};
+    const slot = parseInt(String(md.ghl_slot ?? ''), 10);
+    if (!Number.isInteger(slot) || slot < 1 || slot > 4) continue;
+    const bases = bySlot.get(slot);
+    if (!bases) continue;
+
+    const ghlEnr = bases.get('enrollment_status');
+    if (ghlEnr) {
+      const mapped = mapEnrollmentStatus(ghlEnr);
+      if (mapped) {
+        const { rowCount } = await q(
+          `UPDATE enrollments e SET status = $2, updated_at = now()
+            WHERE e.student_id = $1
+              AND e.academic_year = (SELECT MAX(academic_year) FROM enrollments WHERE student_id = $1)
+              AND e.status <> $2`,
+          [s.id, mapped],
+        );
+        if (rowCount && rowCount > 0) out.enrollments_reconciled += rowCount;
+      }
+    }
+
+    const patch: Record<string, string> = {};
+    for (const [base, v] of bases) {
+      if (String(md[base] ?? '') !== v) patch[base] = v;
+    }
+    const n = Object.keys(patch).length;
+    if (n === 0) continue;
+    await q(
+      `UPDATE students SET metadata = COALESCE(metadata, '{}'::jsonb) || $2::jsonb, updated_at = now() WHERE id = $1`,
+      [s.id, JSON.stringify(patch)],
+    );
+    out.students_updated++;
+    out.keys_updated += n;
+  }
+  return out;
+}
+
 export interface MetadataRefreshResult {
   students_scanned: number;
   students_with_slot: number;

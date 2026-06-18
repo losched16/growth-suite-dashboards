@@ -27,6 +27,7 @@ import { query, withTransaction } from '@/lib/db';
 import { loadGhlClient } from '@/lib/ghl/client';
 import { getContact } from '@/lib/ghl/contacts';
 import { loadFieldKeyMap } from '@/lib/ghl/custom-fields-cache';
+import { propagateContactFieldsToFamilyMetadata } from '@/lib/sync/ghl-student-metadata';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -349,6 +350,22 @@ async function applyFullSync(
         [`${firstName} ${lastName}`, familyId, schoolId],
       );
       rowsAffected += fCount ?? 0;
+    }
+
+    // 5. Propagate this contact's per-student custom fields (program,
+    //    homeroom, schedule, lunch, enrollment status, …) into
+    //    students.metadata for this family in REAL TIME, so an edit on the
+    //    GHL contact shows on every metadata-backed dashboard column within
+    //    seconds. The 15-min cron (refreshStudentMetadataFromGhl) is the
+    //    backstop; this just removes the lag. Best-effort — names are
+    //    already synced above, so a failure here never fails the webhook.
+    try {
+      const meta = await propagateContactFieldsToFamilyMetadata(
+        q, schoolId, familyId, idByKey, cfById,
+      );
+      rowsAffected += meta.students_updated + meta.enrollments_reconciled;
+    } catch (e) {
+      console.error('[ghl-webhook] metadata propagation failed (cron will reconcile):', e);
     }
 
     return { rowsAffected, status: 'applied' };
