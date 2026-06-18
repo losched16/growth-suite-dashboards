@@ -475,7 +475,7 @@ async function loadFactsActuals(schoolId: string, year: string): Promise<FactsAc
     `WITH stu AS (
        SELECT l.student_id,
               SUM(l.charges_cents) ch, SUM(l.credits_cents) cr,
-              SUM(l.payments_cents) pay, SUM(l.ending_balance_cents) bal
+              SUM(l.payments_cents + l.credits_applied_cents) pay, SUM(l.ending_balance_cents) bal
          FROM facts_account_ledger l
         WHERE l.school_id = $1 AND l.academic_year = $2
         GROUP BY l.student_id)
@@ -507,7 +507,7 @@ async function loadFactsActuals(schoolId: string, year: string): Promise<FactsAc
   }>(
     `SELECT s.first_name, s.last_name, s.preferred_name, s.family_id,
             COALESCE(f.display_name,'') AS family,
-            SUM(l.charges_cents)::text AS ch, SUM(l.payments_cents)::text AS pay,
+            SUM(l.charges_cents)::text AS ch, SUM(l.payments_cents + l.credits_applied_cents)::text AS pay,
             SUM(l.ending_balance_cents)::text AS bal
        FROM facts_account_ledger l
        JOIN students s ON s.id = l.student_id
@@ -574,7 +574,7 @@ async function loadStudentProgress(
               WHERE e.student_id = s.id AND e.academic_year = $2) AS gs_first_due,
             COALESCE((SELECT SUM(l.charges_cents) FROM facts_account_ledger l WHERE l.student_id = s.id AND l.academic_year = $2),0)::text AS charged,
             COALESCE((SELECT SUM(l.credits_cents) FROM facts_account_ledger l WHERE l.student_id = s.id AND l.academic_year = $2),0)::text AS credits,
-            COALESCE((SELECT SUM(l.payments_cents) FROM facts_account_ledger l WHERE l.student_id = s.id AND l.academic_year = $2),0)::text AS paid,
+            COALESCE((SELECT SUM(l.payments_cents + l.credits_applied_cents) FROM facts_account_ledger l WHERE l.student_id = s.id AND l.academic_year = $2),0)::text AS paid,
             COALESCE((SELECT SUM(l.ending_balance_cents) FROM facts_account_ledger l WHERE l.student_id = s.id AND l.academic_year = $2),0)::text AS balance,
             COALESCE((SELECT COUNT(*) FROM invoices i WHERE i.student_id = s.id AND i.source = 'tuition_plan' AND i.voided_at IS NULL),0)::text AS gs_installments,
             COALESCE((SELECT SUM(li.amount_cents) FROM invoices i JOIN invoice_line_items li ON li.invoice_id = i.id
