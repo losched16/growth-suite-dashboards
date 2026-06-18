@@ -37,6 +37,14 @@ export interface FamilyHubConfig {
   show_stat_cards?: boolean;
   page_size?: number;        // default 50
   drilldown_dashboard_slug?: string;
+  // When true, the hub counts ONLY students whose current-year enrollment
+  // is 'enrolled' (and drops families with no enrolled student), so the
+  // Family Hub agrees with the Student Roster's enrolled_only scope.
+  // academic_year picks which year is "current" (falls back to the
+  // student's most-recent enrollment when blank). Default off = unchanged
+  // behavior (all active students) so other tenants aren't affected.
+  only_enrolled?: boolean;
+  academic_year?: string;
 }
 
 export const familyHubDefaults: FamilyHubConfig = {

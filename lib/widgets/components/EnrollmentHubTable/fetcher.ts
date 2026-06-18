@@ -190,6 +190,9 @@ export async function fetcher(
        ) e ON true
        LEFT JOIN classrooms c ON c.id = e.classroom_id
        WHERE s.school_id = $1 AND s.status = 'active'
+         -- Demo / test records (metadata.is_demo = true) are excluded on
+         -- every dashboard so the hubs agree (kept in the DB for testing).
+         AND (s.metadata->>'is_demo') IS DISTINCT FROM 'true'
          ${enrolledOnly ? "AND e.status = 'enrolled'" : ''}
          ${tagInclude}
          ${tagExclude}

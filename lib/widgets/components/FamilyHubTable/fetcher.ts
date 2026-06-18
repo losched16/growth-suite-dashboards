@@ -128,6 +128,20 @@ export async function fetcher(
   config: FamilyHubConfig,
   searchParams?: WidgetSearchParams,
 ): Promise<FamilyHubData> {
+  // Enrolled-only scope (opt-in). Makes the Family Hub count the same
+  // student population as the Student Roster's enrolled_only mode: only
+  // students whose current-year enrollment is 'enrolled'. Demo/test
+  // records (metadata.is_demo) are always excluded so every hub agrees.
+  const onlyEnrolled = !!config.only_enrolled;
+  const year = (config.academic_year ?? '').trim();
+  const params: unknown[] = [school.schoolId];
+  let yearIdx: number | null = null;
+  if (year) { params.push(year); yearIdx = params.length; } // → $2
+  const lateralYearPref = yearIdx !== null ? `(e2.academic_year = $${yearIdx}) DESC, ` : '';
+  const enrolledFilter = onlyEnrolled
+    ? `AND e.status = 'enrolled'${yearIdx !== null ? ` AND e.academic_year = $${yearIdx}` : ''}`
+    : '';
+
   // Big roll-up query — one row per family.
   const { rows } = await query<DbRow>(
     `WITH per_student AS (
@@ -185,7 +199,7 @@ export async function fetcher(
        LEFT JOIN LATERAL (
          SELECT * FROM enrollments e2
          WHERE e2.student_id = s.id
-         ORDER BY e2.created_at DESC LIMIT 1
+         ORDER BY ${lateralYearPref}e2.created_at DESC LIMIT 1
        ) e ON true
        LEFT JOIN classrooms c ON c.id = e.classroom_id
        LEFT JOIN student_health_profiles shp
@@ -198,6 +212,9 @@ export async function fetcher(
        ) fte ON true
        LEFT JOIN payment_plans pp ON pp.id = fte.payment_plan_id
        WHERE s.school_id = $1 AND s.status = 'active'
+         -- Demo / test records kept in the DB but excluded from every hub.
+         AND (s.metadata->>'is_demo') IS DISTINCT FROM 'true'
+         ${enrolledFilter}
      )
      SELECT
        f.id AS family_id,
@@ -289,7 +306,7 @@ export async function fetcher(
      FROM families f
      WHERE f.school_id = $1
      ORDER BY f.display_name`,
-    [school.schoolId],
+    params,
   );
 
   // Deterministic per-school embed token for the "View parent portal"
@@ -300,7 +317,11 @@ export async function fetcher(
   // whenever ENCRYPTION_KEY fell out of sync between the two projects).
   const embedToken = deriveEmbedToken(school.locationId);
 
-  const allFamilies: FamilyRow[] = rows.map((r) => {
+  const allFamilies: FamilyRow[] = rows
+    // In enrolled-only mode, drop families whose only children are
+    // pending/withdrawn/demo (no enrolled student → empty per_student set).
+    .filter((r) => !onlyEnrolled || Number(r.student_count) > 0)
+    .map((r) => {
     const enrStatuses = r.enrollment_status_array ?? [];
     // Real per-family student counts (every child counts), not 0/1 flags.
     const enrolled = Number(r.enrolled_count ?? 0);

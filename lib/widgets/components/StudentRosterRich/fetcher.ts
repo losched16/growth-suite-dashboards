@@ -339,6 +339,11 @@ export async function fetcher(
           AND active     = true
      ) pr ON true
      WHERE s.school_id = $1 AND s.status = 'active'
+       -- Demo / test records (metadata.is_demo = true) are KEPT in the DB
+       -- for the operator's own testing but never counted on any dashboard.
+       -- Every roster/hub fetcher applies this same exclusion so the
+       -- Student Roster, Family Hub, and Enrollment Hub agree.
+       AND (s.metadata->>'is_demo') IS DISTINCT FROM 'true'
        -- Optional: restrict to accepted/enrolled stages for schools whose
        -- roster is still an admissions pipeline ($4 NULL = show all).
        AND ($4::text[] IS NULL OR s.metadata->>'ghl_stage_name' = ANY($4))
