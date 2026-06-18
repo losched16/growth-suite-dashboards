@@ -120,6 +120,37 @@ export async function fetcher(
   // belt-and-suspenders — even if a future sync starts importing
   // inquiries, the hub stays scoped to actual students.
   const enrolledOnly = !!config.only_enrolled;
+  const enrolledTag = (config.enrolled_tag ?? '').trim().toLowerCase();
+  const excludedTag = (config.excluded_tag ?? '').trim().toLowerCase();
+
+  // Build the params + the optional tag-filter clauses. Params are
+  // positional ($1 = school, $2 = year if set, $3 = enrolled_tag if set,
+  // $4 = excluded_tag if set). We thread the indexes manually because
+  // year is optional.
+  const params: unknown[] = [school.schoolId];
+  let yearParamIdx: number | null = null;
+  let enrolledTagParamIdx: number | null = null;
+  let excludedTagParamIdx: number | null = null;
+  if (yearFilter) { params.push(yearFilter); yearParamIdx = params.length; }
+  if (enrolledTag) { params.push(enrolledTag); enrolledTagParamIdx = params.length; }
+  if (excludedTag) { params.push(excludedTag); excludedTagParamIdx = params.length; }
+
+  const tagInclude = enrolledTagParamIdx !== null
+    ? `AND EXISTS (
+         SELECT 1 FROM parents p
+           JOIN ghl_contact_tags t ON t.ghl_contact_id = p.ghl_contact_id AND t.school_id = s.school_id
+          WHERE p.family_id = f.id AND p.status = 'active'
+            AND lower(t.tag) = $${enrolledTagParamIdx}
+       )`
+    : '';
+  const tagExclude = excludedTagParamIdx !== null
+    ? `AND NOT EXISTS (
+         SELECT 1 FROM parents p
+           JOIN ghl_contact_tags t ON t.ghl_contact_id = p.ghl_contact_id AND t.school_id = s.school_id
+          WHERE p.family_id = f.id AND p.status = 'active'
+            AND lower(t.tag) = $${excludedTagParamIdx}
+       )`
+    : '';
 
   // Big roster query. Year filter applied at SQL level; everything else
   // we apply in TS over the result so the operator can see "X of Y" counts.
@@ -154,14 +185,16 @@ export async function fetcher(
        JOIN families f ON f.id = s.family_id
        LEFT JOIN LATERAL (
          SELECT * FROM enrollments e2
-         WHERE e2.student_id = s.id ${yearFilter ? 'AND e2.academic_year = $2' : ''}
+         WHERE e2.student_id = s.id ${yearParamIdx !== null ? `AND e2.academic_year = $${yearParamIdx}` : ''}
          ORDER BY e2.created_at DESC LIMIT 1
        ) e ON true
        LEFT JOIN classrooms c ON c.id = e.classroom_id
        WHERE s.school_id = $1 AND s.status = 'active'
          ${enrolledOnly ? "AND e.status = 'enrolled'" : ''}
+         ${tagInclude}
+         ${tagExclude}
        ORDER BY s.last_name, s.first_name`,
-      yearFilter ? [school.schoolId, yearFilter] : [school.schoolId],
+      params,
     )
   ).rows;
 

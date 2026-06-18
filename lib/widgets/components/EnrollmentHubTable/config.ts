@@ -56,6 +56,15 @@ export interface EnrollmentHubConfig {
   // students. Default off to match DGM's behavior (which renders the
   // full pipeline and lets stat cards break it down).
   only_enrolled?: boolean;
+  // Show only students whose family has at least one parent carrying
+  // this GHL tag. Mirrors PortalFormsTracker.enrolled_tag — the two
+  // widgets stay in sync on what "enrolled" means. Default empty =
+  // no tag filter (back-compat). Wooster sets this to
+  // "enrolled - 26/27" alongside only_enrolled.
+  enrolled_tag?: string;
+  // Hide students whose family has any parent carrying this tag — for
+  // withdrawn families. Empty = no exclusion.
+  excluded_tag?: string;
 }
 
 export const enrollmentHubDefaults: EnrollmentHubConfig = {
