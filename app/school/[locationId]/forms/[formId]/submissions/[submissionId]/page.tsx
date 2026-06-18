@@ -237,7 +237,9 @@ function ResponseValue({
   if (value == null || value === '') {
     return <span className="text-slate-400 italic">— not answered —</span>;
   }
-  // Drawn signature: data URL → real image
+  // Drawn signature: data URL → real image. If the parent used the
+  // "Type instead" fallback on a signature_drawn block, the value is
+  // plain text — fall through to the typed branch below.
   if (type === 'signature_drawn' && typeof value === 'string' && value.startsWith('data:image/')) {
     return (
       <div className="space-y-1">
@@ -253,15 +255,22 @@ function ResponseValue({
       </div>
     );
   }
-  // Typed signature: render in script font
-  if (type === 'signature_typed' && typeof value === 'string') {
+  // Typed signature: render in script font. Covers signature_typed
+  // blocks AND signature_drawn blocks where the parent chose to type
+  // their name instead of drawing.
+  if ((type === 'signature_typed' || type === 'signature_drawn') && typeof value === 'string' && value.trim()) {
     return (
-      <span
-        className="text-xl text-slate-900"
-        style={{ fontFamily: 'var(--font-signature), "Dancing Script", "Brush Script MT", cursive' }}
-      >
-        {value}
-      </span>
+      <div className="space-y-1">
+        <span
+          className="text-xl text-slate-900"
+          style={{ fontFamily: 'var(--font-signature), "Dancing Script", "Brush Script MT", cursive' }}
+        >
+          {value}
+        </span>
+        {type === 'signature_drawn' ? (
+          <div className="text-[10px] text-slate-500">Typed signature (fallback to drawing)</div>
+        ) : null}
+      </div>
     );
   }
   // Multi-checkbox: array of values → labels
