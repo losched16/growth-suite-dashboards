@@ -31,7 +31,7 @@ import { propagateContactFieldsToFamilyMetadata } from '@/lib/sync/ghl-student-m
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-export const maxDuration = 15;
+export const maxDuration = 25;
 
 // ─── Signature verification ──────────────────────────────────────────
 
@@ -196,6 +196,13 @@ async function applyFullSync(
     // null-out fields with bad data.
     const client = await loadGhlClient(schoolId).catch(() => null);
     if (!client) return { rowsAffected: 0, status: 'ignored' };
+    // Fail fast on a slow GHL API. The webhook must finish well inside its
+    // function budget — if a fetch can't complete in ~8s we'd rather drop
+    // to the payload-only apply below (which needs no GHL call) and let the
+    // 15-min cron reconcile, than hang and have GHL retry. getContact +
+    // loadFieldKeyMap both return empty on timeout, so this degrades
+    // cleanly rather than throwing.
+    client.axios.defaults.timeout = 8_000;
     const ghlContact = await getContact(client, contactId);
     if (!ghlContact) return { rowsAffected: 0, status: 'ignored' };
 

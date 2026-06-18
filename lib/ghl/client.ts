@@ -48,7 +48,11 @@ export function createGhlClient(school: SchoolRow): GhlClient {
       Accept: 'application/json',
       'Content-Type': 'application/json',
     },
-    timeout: 30_000,
+    // Default ceiling for batch sync calls (cron/manual sync run in a
+    // 300s function, so a slow page on a large account shouldn't fail at
+    // 30s). Latency-sensitive callers (the contact webhook) lower this
+    // per-client so they fail fast and fall back instead of hanging.
+    timeout: 60_000,
   });
   return { axios: instance, locationId: school.ghl_location_id, schoolId: school.id };
 }

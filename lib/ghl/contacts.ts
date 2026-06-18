@@ -47,16 +47,30 @@ export async function searchContacts({
   const all: GhlContact[] = [];
   let page = 1;
   while (page <= maxPages) {
-    const { data } = await client.axios.post<{ contacts?: GhlContact[] }>(
-      '/contacts/search',
-      {
-        locationId: client.locationId,
-        pageLimit,
-        page,
-        ...(filters ? { filters } : {}),
+    // Retry a single page once on timeout. Large accounts (DGM) sometimes
+    // see a transient slow page; without this, one slow request fails the
+    // whole sync run. Only timeouts are retried — real 4xx/5xx still throw.
+    let data: { contacts?: GhlContact[] } | undefined;
+    for (let attempt = 1; ; attempt++) {
+      try {
+        ({ data } = await client.axios.post<{ contacts?: GhlContact[] }>(
+          '/contacts/search',
+          {
+            locationId: client.locationId,
+            pageLimit,
+            page,
+            ...(filters ? { filters } : {}),
+          }
+        ));
+        break;
+      } catch (err) {
+        const e = err as { code?: string; message?: string };
+        const isTimeout = e?.code === 'ECONNABORTED' || /timeout/i.test(e?.message ?? '');
+        if (!isTimeout || attempt >= 2) throw err;
+        await new Promise((r) => setTimeout(r, 1500));
       }
-    );
-    const contacts = data.contacts ?? [];
+    }
+    const contacts = data?.contacts ?? [];
     all.push(...contacts);
     if (contacts.length < pageLimit) break;
     page++;
