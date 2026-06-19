@@ -199,6 +199,26 @@ function ViewToggle({ view, current }: { view: string; current: WidgetSearchPara
   );
 }
 
+// Enrolled / Withdrawn / All scope. Default 'enrolled' keeps the roster at
+// the aligned count; the other options surface students who withdrew.
+function StatusToggle({ value, current }: { value: 'enrolled' | 'withdrawn' | 'all'; current: WidgetSearchParams }) {
+  function urlFor(v: 'enrolled' | 'withdrawn' | 'all'): string {
+    const p = new URLSearchParams();
+    for (const [k, val] of Object.entries(current)) if (val && k !== 'roster_status') p.set(k, String(val));
+    if (v !== 'enrolled') p.set('roster_status', v);  // 'enrolled' is the default → omit
+    return `?${p.toString()}`;
+  }
+  const cls = (v: 'enrolled' | 'withdrawn' | 'all', border = false) =>
+    `px-2 py-1 ${border ? 'border-l border-gray-300 ' : ''}${value === v ? 'bg-gray-900 text-white' : 'hover:bg-gray-50'}`;
+  return (
+    <div className="inline-flex rounded-md border border-gray-300 bg-white text-xs">
+      <a href={urlFor('enrolled')} className={cls('enrolled')}>Enrolled</a>
+      <a href={urlFor('withdrawn')} className={cls('withdrawn', true)}>Withdrawn</a>
+      <a href={urlFor('all')} className={cls('all', true)}>All</a>
+    </div>
+  );
+}
+
 function StudentTable({
   rows, columns, drilldownDashboard, locationId,
 }: {
@@ -247,6 +267,11 @@ function renderCell(s: RosterStudent, col: ColumnKey, drilldownDashboard: string
         <span className="font-medium text-gray-900">
           {s.preferred_name ? `${s.preferred_name} (${s.first_name})` : s.first_name} {s.last_name}
           {s.has_allergy ? <AlertTriangle className="ml-1 inline h-3 w-3 text-rose-600" /> : null}
+          {s.status === 'withdrawn' ? (
+            <span className="ml-1.5 rounded-full bg-rose-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-rose-700 align-middle">
+              Withdrawn
+            </span>
+          ) : null}
         </span>
       );
     case 'gender_age': return <span className="text-gray-700">{(s.gender ?? '—')} · {ageFrom(s.date_of_birth)}</span>;
@@ -451,6 +476,7 @@ function Component({
         </div>
         <div className="flex items-center gap-2 print:hidden">
           <SyncGhlButton locationId={school.locationId} />
+          <StatusToggle value={data.roster_status} current={sp} />
           <ViewToggle view={view} current={sp} />
           <PrintButton
             label={view === 'allergies' ? 'Print allergies' : view === 'grid' ? 'Print grid' : 'Print roster'}

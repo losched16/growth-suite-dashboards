@@ -150,6 +150,8 @@ export interface DynamicFilterDef {
 
 export interface StudentRosterData {
   total_students: number;
+  // Active status scope: 'enrolled' (default), 'withdrawn', or 'all'.
+  roster_status: 'enrolled' | 'withdrawn' | 'all';
   filtered: RosterStudent[];
   page_rows: RosterStudent[];
   page: number;
@@ -246,6 +248,12 @@ export async function fetcher(
     ?? availableYears[0]
     ?? '').trim();
 
+  // Status scope. Default 'enrolled' = currently-enrolled only (the 256).
+  // 'withdrawn' = students who withdrew this year; 'all' = both. Withdrawn
+  // students are otherwise hidden because the base filter requires active.
+  const rosterStatusRaw = (((searchParams ?? {}).roster_status ?? '').trim());
+  const rosterStatus = (rosterStatusRaw === 'withdrawn' || rosterStatusRaw === 'all') ? rosterStatusRaw : 'enrolled';
+
   // Grade-cutoff reference dates, derived from the selected year:
   // "2026-27" → Aug 1 2026 and Jan 1 2027. Falls back to the calendar
   // year if the year string isn't in YYYY-YY form.
@@ -338,7 +346,7 @@ export async function fetcher(
           AND school_id  = s.school_id
           AND active     = true
      ) pr ON true
-     WHERE s.school_id = $1 AND s.status = 'active'
+     WHERE s.school_id = $1
        -- Demo / test records (metadata.is_demo = true) are KEPT in the DB
        -- for the operator's own testing but never counted on any dashboard.
        -- Every roster/hub fetcher applies this same exclusion so the
@@ -347,9 +355,17 @@ export async function fetcher(
        -- Optional: restrict to accepted/enrolled stages for schools whose
        -- roster is still an admissions pipeline ($4 NULL = show all).
        AND ($4::text[] IS NULL OR s.metadata->>'ghl_stage_name' = ANY($4))
-       -- Optional: only students whose current enrollment is 'enrolled'
-       -- ($5 = config.enrolled_only). NULL/none enrollment is excluded.
-       AND ($5::boolean IS NOT TRUE OR e.status = 'enrolled')
+       -- Status scope ($6). Default 'enrolled' = active students (optionally
+       -- gated to enrollment status 'enrolled' via $5). 'withdrawn' = only
+       -- students who withdrew. 'all' = both.
+       AND (
+         CASE $6::text
+           WHEN 'withdrawn' THEN (s.status = 'withdrawn' OR e.status = 'withdrawn')
+           WHEN 'all'       THEN ((s.status = 'active' AND ($5::boolean IS NOT TRUE OR e.status = 'enrolled'))
+                                  OR s.status = 'withdrawn' OR e.status = 'withdrawn')
+           ELSE                  (s.status = 'active' AND ($5::boolean IS NOT TRUE OR e.status = 'enrolled'))
+         END
+       )
      -- s.id tiebreaker keeps the order stable across renders (first_name
      -- isn't unique), so paginating can never repeat or drop a student.
      ORDER BY s.first_name, s.id`,
@@ -357,7 +373,8 @@ export async function fetcher(
     // this for another school, lift to widget config.
     [school.schoolId, 'America/Phoenix', fYear,
      (config.enrolled_stage_names && config.enrolled_stage_names.length > 0) ? config.enrolled_stage_names : null,
-     config.enrolled_only === true],
+     config.enrolled_only === true,
+     rosterStatus],
   );
 
   // ── Self-serve attributes (tags / GHL fields / opportunities) ──────
@@ -841,6 +858,7 @@ export async function fetcher(
 
   return {
     total_students: all.length,
+    roster_status: rosterStatus,
     filtered,
     page_rows: pageRows,
     page: safePage,

@@ -337,6 +337,11 @@ function renderCell(
         <span className="font-medium text-gray-900">
           {s.preferred_name ? `${s.preferred_name} (${s.first_name})` : s.first_name} {s.last_name}
           {s.has_allergy ? <AlertTriangle className="ml-1 inline h-3 w-3 text-rose-600" /> : null}
+          {s.status === 'withdrawn' ? (
+            <span className="ml-1.5 rounded-full bg-rose-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-rose-700 align-middle">
+              Withdrawn
+            </span>
+          ) : null}
         </span>
       );
     case 'last_name': return <span className="font-medium text-gray-900">{s.last_name}</span>;
