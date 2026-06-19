@@ -34,6 +34,13 @@ interface FormDefRow {
   confirmation_redirect_url: string | null;
   notify_emails: string[] | null;
   webhook_urls: string[] | null;
+  applies_to: {
+    program_match?: string[];
+    tuition_grid_match?: string[];
+    metadata_match?: Record<string, string[]>;
+    addon_keys?: string[];
+    student_ids?: string[];
+  } | null;
 }
 
 const PARENT_PORTAL_BASE = process.env.PARENT_PORTAL_BASE_URL
@@ -50,13 +57,26 @@ export default async function FormEditPage({
             is_active, allow_addendum, needs_review, resubmission_allowed,
             one_submission_per_year, field_schema,
             confirmation_message, confirmation_redirect_url, notify_emails,
-            webhook_urls
+            webhook_urls, applies_to
        FROM portal_form_definitions
       WHERE id = $1 AND school_id = $2`,
     [formId, schoolId],
   );
   if (rows.length === 0) notFound();
   const form = rows[0];
+
+  // Distinct program values on this school's roster → "Who sees this
+  // form" checklist. Demo/test students excluded.
+  const { rows: progRows } = await query<{ program: string }>(
+    `SELECT DISTINCT s.metadata->>'program' AS program
+       FROM students s
+      WHERE s.school_id = $1
+        AND btrim(coalesce(s.metadata->>'program','')) <> ''
+        AND (s.metadata->>'is_demo') IS DISTINCT FROM 'true'
+      ORDER BY 1`,
+    [schoolId],
+  );
+  const programOptions = progRows.map((r) => r.program);
 
   return (
     <main className="flex flex-1 flex-col items-center bg-zinc-50 p-6">
@@ -118,7 +138,9 @@ export default async function FormEditPage({
             confirmation_redirect_url: form.confirmation_redirect_url,
             notify_emails: form.notify_emails ?? [],
             webhook_urls: form.webhook_urls ?? [],
+            applies_to: form.applies_to,
           }}
+          programOptions={programOptions}
         />
       </div>
     </main>

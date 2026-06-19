@@ -62,6 +62,18 @@ interface FieldBlock {
   [k: string]: unknown;
 }
 
+// Per-student visibility rule. Mirrors lib/forms/applies-to.ts in the
+// parent portal (kept as a local copy — the two repos don't share code).
+// This editor only manages `program_match`; any other criteria a form
+// already carries are preserved untouched on save.
+interface FormAppliesTo {
+  program_match?: string[];
+  tuition_grid_match?: string[];
+  metadata_match?: Record<string, string[]>;
+  addon_keys?: string[];
+  student_ids?: string[];
+}
+
 interface InitialState {
   display_name: string;
   description: string | null;
@@ -79,6 +91,8 @@ interface InitialState {
   notify_emails?: string[];
   // Migration 042 — webhook fan-out
   webhook_urls?: string[];
+  // Per-student form visibility rule
+  applies_to?: FormAppliesTo | null;
 }
 
 const FIELD_TYPE_OPTIONS: Array<{ value: FieldType; label: string; group: string }> = [
@@ -105,12 +119,16 @@ const FIELD_TYPE_OPTIONS: Array<{ value: FieldType; label: string; group: string
 ];
 
 export function FormEditor({
-  schoolId, formId, slug, initial,
+  schoolId, formId, slug, initial, programOptions = [],
 }: {
   schoolId: string;
   formId: string;
   slug: string;
   initial: InitialState;
+  // Distinct program values found on this school's student records, used
+  // to populate the "Who sees this form" checklist. Empty → the school
+  // has no program data yet and program targeting is hidden.
+  programOptions?: string[];
 }) {
   const router = useRouter();
 
@@ -133,6 +151,39 @@ export function FormEditor({
   const [fields, setFields] = useState<FieldBlock[]>(
     (initial.field_schema as FieldBlock[]).map((b) => ({ ...b })),
   );
+
+  // ── Who sees this form (applies_to.program_match) ──────────────
+  // We only edit program_match here. Any OTHER criteria on the rule
+  // (a hand-picked student list, tuition-grid match, etc.) are stashed
+  // and merged back in untouched on save, so this UI can never clobber
+  // an advanced rule support set up out-of-band.
+  const otherCriteria = useMemo<Omit<FormAppliesTo, 'program_match'>>(() => {
+    const { program_match, ...rest } = initial.applies_to ?? {};
+    void program_match;
+    return rest;
+  }, [initial.applies_to]);
+  const hasOtherCriteria = Object.keys(otherCriteria).length > 0;
+  // Checklist = every program on the roster + any program the rule
+  // already names (so a renamed/removed program stays visible & removable).
+  const programChecklist = useMemo(() => {
+    const stored = initial.applies_to?.program_match ?? [];
+    return Array.from(new Set([...programOptions, ...stored]));
+  }, [programOptions, initial.applies_to]);
+  const [selectedPrograms, setSelectedPrograms] = useState<string[]>(
+    initial.applies_to?.program_match ?? [],
+  );
+  const [audienceMode, setAudienceMode] = useState<'all' | 'programs'>(
+    (initial.applies_to?.program_match?.length ?? 0) > 0 ? 'programs' : 'all',
+  );
+
+  // Build the applies_to value to persist. Empty → null ("all students").
+  function buildAppliesTo(): FormAppliesTo | null {
+    const base: FormAppliesTo = { ...otherCriteria };
+    if (audienceMode === 'programs' && selectedPrograms.length > 0) {
+      base.program_match = selectedPrograms;
+    }
+    return Object.keys(base).length ? base : null;
+  }
 
   const [openIdx, setOpenIdx] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
@@ -190,7 +241,12 @@ export function FormEditor({
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          meta: { ...metaForApi, notify_emails: notifyEmails, webhook_urls: webhookUrls },
+          meta: {
+            ...metaForApi,
+            notify_emails: notifyEmails,
+            webhook_urls: webhookUrls,
+            applies_to: buildAppliesTo(),
+          },
           field_schema: fields,
         }),
       });
@@ -264,6 +320,89 @@ export function FormEditor({
             onChange={(v) => patchMeta('needs_review', v)}
             hint="Surfaces this form in the admin review queue." />
         </div>
+      </section>
+
+      {/* ── Who sees this form (applies_to.program_match) ──────── */}
+      <section className="rounded-xl border border-black/10 bg-white p-5 space-y-3">
+        <div>
+          <h2 className="text-sm font-semibold text-zinc-900">Who sees this form</h2>
+          <p className="text-[11px] text-zinc-500 mt-0.5">
+            By default every child in a family sees this form. Restrict it to specific
+            programs and each family only sees it for the children enrolled in those
+            programs — so a family with a Primary child and a Lower&nbsp;El child sees a
+            Lower-El-only form just for the Lower&nbsp;El child. A child&rsquo;s program comes
+            straight from their contact record.
+          </p>
+        </div>
+
+        {!meta.per_student ? (
+          <p className="text-[11px] rounded-md bg-amber-50 border border-amber-200 px-2.5 py-2 text-amber-800">
+            This form isn&rsquo;t per-student, so program targeting doesn&rsquo;t apply — it shows
+            once per family. Turn on <strong>Per-student</strong> above to target it by program.
+          </p>
+        ) : programChecklist.length === 0 ? (
+          <p className="text-[11px] text-zinc-500">
+            No programs were found on your student records yet, so there&rsquo;s nothing to
+            target by — this form shows to everyone.
+          </p>
+        ) : (
+          <div className="space-y-2.5">
+            <label className="flex items-start gap-2 text-sm">
+              <input type="radio" name="audience" checked={audienceMode === 'all'}
+                onChange={() => setAudienceMode('all')} className="mt-0.5 h-4 w-4" />
+              <span>
+                <span className="text-zinc-800">All students</span>
+                <span className="block text-[10px] text-zinc-500">Every child in the family sees this form.</span>
+              </span>
+            </label>
+            <label className="flex items-start gap-2 text-sm">
+              <input type="radio" name="audience" checked={audienceMode === 'programs'}
+                onChange={() => setAudienceMode('programs')} className="mt-0.5 h-4 w-4" />
+              <span>
+                <span className="text-zinc-800">Only students in specific programs</span>
+                <span className="block text-[10px] text-zinc-500">Pick the programs below — the form hides for any child not in one of them.</span>
+              </span>
+            </label>
+
+            {audienceMode === 'programs' ? (
+              <div className="ml-6 rounded-md border border-zinc-200 bg-zinc-50/40 p-3 space-y-1.5">
+                {programChecklist.map((prog) => (
+                  <label key={prog} className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={selectedPrograms.includes(prog)}
+                      onChange={(e) => {
+                        setSelectedPrograms(
+                          e.target.checked
+                            ? [...selectedPrograms, prog]
+                            : selectedPrograms.filter((p) => p !== prog),
+                        );
+                      }}
+                      className="h-4 w-4 rounded border-zinc-300"
+                    />
+                    <span className="text-zinc-800">{prog}</span>
+                  </label>
+                ))}
+                {selectedPrograms.length === 0 ? (
+                  <p className="text-[11px] text-amber-700 pt-1">
+                    Select at least one program — otherwise this form shows to everyone.
+                  </p>
+                ) : (
+                  <p className="text-[11px] text-zinc-500 pt-1">
+                    Visible only to children in: {selectedPrograms.join(', ')}.
+                  </p>
+                )}
+              </div>
+            ) : null}
+
+            {hasOtherCriteria ? (
+              <p className="text-[11px] rounded-md bg-sky-50 border border-sky-200 px-2.5 py-2 text-sky-800">
+                This form also has an advanced visibility rule (a specific student list or
+                tuition-grid match) set up outside this screen. It&rsquo;s kept intact when you save.
+              </p>
+            ) : null}
+          </div>
+        )}
       </section>
 
       {/* ── After-submit behavior (migration 040) ─────────────── */}

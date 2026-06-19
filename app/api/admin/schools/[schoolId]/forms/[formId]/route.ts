@@ -55,8 +55,47 @@ interface Body {
     notifications_enabled?: unknown;
     // migration 042 — webhook fan-out (automation triggers)
     webhook_urls?: unknown;
+    // per-student form visibility rule (portal_form_definitions.applies_to).
+    // null / {} → form shows for every student (historical behavior).
+    applies_to?: unknown;
   };
   field_schema?: unknown;
+}
+
+// Normalize an inbound applies_to rule. Returns the cleaned object, or
+// null when the rule is absent/empty (meaning "show to every student").
+// We only keep the criteria the visibility engine understands and drop
+// anything blank, so a half-filled UI selection can't accidentally
+// hide a form. Mirrors lib/forms/applies-to.ts in the parent portal.
+function sanitizeAppliesTo(raw: unknown): { ok: true; value: Record<string, unknown> | null } | { ok: false; error: string } {
+  if (raw === null || raw === undefined) return { ok: true, value: null };
+  if (typeof raw !== 'object' || Array.isArray(raw)) {
+    return { ok: false, error: 'applies_to must be null or an object' };
+  }
+  const r = raw as Record<string, unknown>;
+  const out: Record<string, unknown> = {};
+  const strArray = (v: unknown): string[] =>
+    Array.isArray(v) ? v.map((x) => String(x ?? '').trim()).filter(Boolean) : [];
+
+  const pm = strArray(r.program_match);
+  if (pm.length) out.program_match = pm;
+  const tg = strArray(r.tuition_grid_match);
+  if (tg.length) out.tuition_grid_match = tg;
+  const ak = strArray(r.addon_keys);
+  if (ak.length) out.addon_keys = ak;
+  const si = strArray(r.student_ids);
+  if (si.length) out.student_ids = si;
+  if (r.metadata_match && typeof r.metadata_match === 'object' && !Array.isArray(r.metadata_match)) {
+    const mm: Record<string, string[]> = {};
+    for (const [k, v] of Object.entries(r.metadata_match as Record<string, unknown>)) {
+      const vals = strArray(v);
+      if (vals.length) mm[k] = vals;
+    }
+    if (Object.keys(mm).length) out.metadata_match = mm;
+  }
+
+  // No usable criteria → treat as "all students" (NULL).
+  return { ok: true, value: Object.keys(out).length ? out : null };
 }
 
 const ALLOWED_FIELD_TYPES = new Set([
@@ -197,6 +236,15 @@ export async function PATCH(request: NextRequest, { params }: { params: Params }
         .filter((v) => /^https:\/\/[^\s]+$/i.test(v));
       args.push(cleaned);
       sets.push(`webhook_urls = $${args.length}::text[]`);
+    }
+    if (body.meta.applies_to !== undefined) {
+      const res = sanitizeAppliesTo(body.meta.applies_to);
+      if (!res.ok) {
+        return NextResponse.json({ error: 'invalid_applies_to', detail: res.error }, { status: 400 });
+      }
+      // null → NULL::jsonb (show to everyone); object → stored rule.
+      args.push(res.value === null ? null : JSON.stringify(res.value));
+      sets.push(`applies_to = $${args.length}::jsonb`);
     }
   }
   if (body.field_schema !== undefined) {

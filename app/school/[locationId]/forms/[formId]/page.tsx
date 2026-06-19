@@ -40,6 +40,13 @@ interface FormDefRow {
   confirmation_redirect_url: string | null;
   notify_emails: string[] | null;
   webhook_urls: string[] | null;
+  applies_to: {
+    program_match?: string[];
+    tuition_grid_match?: string[];
+    metadata_match?: Record<string, string[]>;
+    addon_keys?: string[];
+    student_ids?: string[];
+  } | null;
 }
 
 export default async function FormEditPageScoped({
@@ -56,13 +63,27 @@ export default async function FormEditPageScoped({
             is_active, allow_addendum, needs_review, resubmission_allowed,
             one_submission_per_year, field_schema,
             confirmation_message, confirmation_redirect_url, notify_emails,
-            webhook_urls
+            webhook_urls, applies_to
        FROM portal_form_definitions
       WHERE id = $1 AND school_id = $2`,
     [formId, school.id],
   );
   if (rows.length === 0) notFound();
   const form = rows[0];
+
+  // Distinct program values on this school's roster — drives the
+  // "Who sees this form" checklist. Demo/test students excluded so the
+  // list reflects real programs only.
+  const { rows: progRows } = await query<{ program: string }>(
+    `SELECT DISTINCT s.metadata->>'program' AS program
+       FROM students s
+      WHERE s.school_id = $1
+        AND btrim(coalesce(s.metadata->>'program','')) <> ''
+        AND (s.metadata->>'is_demo') IS DISTINCT FROM 'true'
+      ORDER BY 1`,
+    [school.id],
+  );
+  const programOptions = progRows.map((r) => r.program);
 
   return (
     <main className="flex flex-1 flex-col items-center bg-slate-50 p-6 min-h-screen">
@@ -124,7 +145,9 @@ export default async function FormEditPageScoped({
             confirmation_redirect_url: form.confirmation_redirect_url,
             notify_emails: form.notify_emails ?? [],
             webhook_urls: form.webhook_urls ?? [],
+            applies_to: form.applies_to,
           }}
+          programOptions={programOptions}
         />
       </div>
     </main>
