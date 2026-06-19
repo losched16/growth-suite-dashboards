@@ -125,6 +125,9 @@ export interface FinanceData {
   q: string;
   acct: string;
   status: string;
+  // Audience filter: 'enrolled' (default, matches the roster's 256) or 'all'
+  // active. Demo/test students are always excluded regardless.
+  enr: 'enrolled' | 'all';
   // Per-tab payloads (only the active tab's is populated).
   students: StudentProgressRow[] | null;
   transactions: TransactionRow[] | null;
@@ -243,6 +246,11 @@ export async function fetcher(
   const q = (searchParams?.q ?? '').trim();
   const acct = (searchParams?.acct ?? '').trim();
   const status = (searchParams?.status ?? '').trim();
+  // Audience filter: 'enrolled' (default) restricts to students with an
+  // active academic enrollment for the year — the SAME signal the Student
+  // Roster uses, so the Finance hub matches it (256, not 287). 'all' shows
+  // every active student. Test/demo students are ALWAYS excluded.
+  const enrolledOnly = (searchParams?.enr ?? 'enrolled').trim() !== 'all';
 
   // Bridge JOIN: pull the active enrollment + grid program label so the
   // widget surfaces native-tuition data when student.metadata is empty.
@@ -265,8 +273,12 @@ export async function fetcher(
            AND fte.school_id = s.school_id
            AND fte.status = 'active'
      LEFT JOIN tuition_grids g ON g.id = fte.tuition_grid_id
-     WHERE s.school_id = $1 AND s.status = 'active'`,
-    [school.schoolId],
+     WHERE s.school_id = $1 AND s.status = 'active'
+       AND (s.metadata->>'is_demo') IS DISTINCT FROM 'true'
+       AND ($2::boolean IS NOT TRUE OR EXISTS (
+             SELECT 1 FROM enrollments e
+              WHERE e.student_id = s.id AND e.academic_year = $3 AND e.status = 'enrolled'))`,
+    [school.schoolId, enrolledOnly, FINANCE_YEAR],
   );
 
   let tuition = 0, extDay = 0, lunch = 0, admin = 0, enrollFee = 0;
@@ -407,12 +419,13 @@ export async function fetcher(
 
   // Per-tab payloads — only fetch the active tab's heavier data set.
   const students = fin_tab === 'students'
-    ? await loadStudentProgress(school.schoolId, FINANCE_YEAR, q, status) : null;
+    ? await loadStudentProgress(school.schoolId, FINANCE_YEAR, q, status, enrolledOnly) : null;
   const transactions = fin_tab === 'transactions'
     ? await loadTransactions(school.schoolId, FINANCE_YEAR, acct, q) : null;
 
   return {
     fin_tab, q, acct, status,
+    enr: enrolledOnly ? 'enrolled' : 'all',
     students, transactions,
     account_options: ACCOUNT_OPTIONS,
     facts,
@@ -554,7 +567,7 @@ async function loadFactsActuals(schoolId: string, year: string): Promise<FactsAc
 // remaining + their Growth Suite plan + go-forward schedule. Optional
 // name search (q) and balance filter (status).
 async function loadStudentProgress(
-  schoolId: string, year: string, q: string, status: string,
+  schoolId: string, year: string, q: string, status: string, enrolledOnly: boolean,
 ): Promise<StudentProgressRow[]> {
   const like = q ? `%${q}%` : null;
   const { rows } = await query<{
@@ -582,10 +595,14 @@ async function loadStudentProgress(
        FROM students s
        JOIN families f ON f.id = s.family_id
       WHERE s.school_id = $1 AND s.status = 'active'
+        AND (s.metadata->>'is_demo') IS DISTINCT FROM 'true'
+        AND ($4::boolean IS NOT TRUE OR EXISTS (
+              SELECT 1 FROM enrollments e
+               WHERE e.student_id = s.id AND e.academic_year = $2 AND e.status = 'enrolled'))
         AND ($3::text IS NULL OR s.first_name ILIKE $3 OR s.last_name ILIKE $3 OR f.display_name ILIKE $3)
       ORDER BY s.last_name, s.first_name
       LIMIT 1000`,
-    [schoolId, year, like],
+    [schoolId, year, like, enrolledOnly],
   );
   const c = (v: string) => Number(v ?? 0) / 100;
   let out: StudentProgressRow[] = rows.map((r) => {
@@ -726,8 +743,10 @@ async function loadLivePayments(schoolId: string): Promise<LivePayments | null> 
   }>(
     `SELECT COUNT(*)::text AS active_enrollments,
             COALESCE(SUM(total_annual_cents), 0)::text AS total_annual_contracted_cents
-       FROM family_tuition_enrollments
-      WHERE school_id = $1 AND status = 'active'`,
+       FROM family_tuition_enrollments fte
+      WHERE fte.school_id = $1 AND fte.status = 'active'
+        AND NOT EXISTS (SELECT 1 FROM students s
+                         WHERE s.id = fte.student_id AND (s.metadata->>'is_demo') = 'true')`,
     [schoolId],
   );
 

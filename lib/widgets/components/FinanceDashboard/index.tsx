@@ -132,8 +132,21 @@ function Component({
         <div>
           <h2 className="text-2xl font-bold text-emerald-800">Finance Hub — {school.schoolName}</h2>
           <p className="mt-1 text-sm text-gray-600">
-            2026–2027 school year · actual cash from FACTS + Growth Suite billing · {data.student_count} active students
+            2026–2027 school year · actual cash from FACTS + Growth Suite billing ·{' '}
+            <strong>{data.student_count}</strong> {data.enr === 'enrolled' ? 'enrolled' : 'active'} students
           </p>
+          {/* Audience toggle — Enrolled only (matches the Student Roster) vs all
+              active. Test/demo students are excluded either way. */}
+          <div className="mt-2 inline-flex items-center gap-0.5 rounded-md border border-gray-200 bg-gray-50 p-0.5 text-xs">
+            <a href={enrHref(current, 'enrolled')}
+              className={`rounded px-2 py-1 ${data.enr === 'enrolled' ? 'bg-emerald-600 text-white' : 'text-gray-600 hover:text-gray-900'}`}>
+              Enrolled only
+            </a>
+            <a href={enrHref(current, 'all')}
+              className={`rounded px-2 py-1 ${data.enr === 'all' ? 'bg-emerald-600 text-white' : 'text-gray-600 hover:text-gray-900'}`}>
+              All active
+            </a>
+          </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-[11px] font-medium text-gray-500">Download:</span>
@@ -452,6 +465,20 @@ function tabHref(current: WidgetSearchParams, tab: string): string {
   if (current.chrome) keep.chrome = current.chrome;
   if (current.embed_token) keep.embed_token = current.embed_token;
   keep.fintab = tab;
+  return `?${new URLSearchParams(keep).toString()}`;
+}
+
+// Link that flips the Enrolled-only / All-active filter while preserving
+// embed chrome + the current tab/search/account/status filters.
+function enrHref(current: WidgetSearchParams, enr: 'enrolled' | 'all'): string {
+  const keep: Record<string, string> = {};
+  if (current.chrome) keep.chrome = String(current.chrome);
+  if (current.embed_token) keep.embed_token = String(current.embed_token);
+  if (current.fintab) keep.fintab = String(current.fintab);
+  if (current.q) keep.q = String(current.q);
+  if (current.acct) keep.acct = String(current.acct);
+  if (current.status) keep.status = String(current.status);
+  keep.enr = enr;
   return `?${new URLSearchParams(keep).toString()}`;
 }
 
