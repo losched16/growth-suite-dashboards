@@ -32,6 +32,7 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { query, withTransaction } from '@/lib/db';
 import { sendInvoiceEmail } from '@/lib/billing/send-invoice-email';
+import { scheduleOneoffAutopay } from '@/lib/billing/oneoff-autopay';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -182,6 +183,13 @@ export async function POST(request: NextRequest, { params }: { params: Params })
   const issuedAt = sendNow ? new Date().toISOString() : null;
   const createdIds: string[] = [];
 
+  // One-off autopay window (school policy) — read once for the whole batch.
+  const { rows: oneoffCfg } = await query<{ days: number | null }>(
+    `SELECT autopay_oneoff_after_days AS days FROM school_payment_config WHERE school_id = $1`,
+    [schoolId],
+  );
+  const oneoffAfterDays = oneoffCfg[0]?.days ?? null;
+
   try {
     for (const target of targets) {
       // Per-invoice number (atomic bump, same scheme as single create).
@@ -216,6 +224,14 @@ export async function POST(request: NextRequest, { params }: { params: Params })
              VALUES ($1,$2,$3,$4,$5,$6,$7)`,
             [id, pos++, l.description, l.quantity, l.unit_amount_cents, l.amount_cents, l.category],
           );
+        }
+        // Auto-bill this family's one-off charge N days out (if a card is on
+        // file + the school enabled it). Cron does the charge once live.
+        if (sendNow) {
+          await scheduleOneoffAutopay(q, {
+            schoolId, familyId: target.family_id, invoiceId: id,
+            totalCents: subtotalCents, afterDays: oneoffAfterDays,
+          });
         }
         return id;
       });

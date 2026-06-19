@@ -19,6 +19,7 @@ import type { NextRequest } from 'next/server';
 import { query, withTransaction } from '@/lib/db';
 import { sendInvoiceEmail } from '@/lib/billing/send-invoice-email';
 import { evaluateDiscounts, recordDiscountApplications } from '@/lib/billing/discounts';
+import { scheduleOneoffAutopay } from '@/lib/billing/oneoff-autopay';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -267,6 +268,21 @@ export async function POST(request: NextRequest, { params }: { params: Params })
         await recordDiscountApplications(
           schoolId, familyId, invoiceId, discountResult.applications, q,
         );
+      }
+
+      // Auto-bill one-off invoices (school policy): when this charge was SENT
+      // to a family (open, positive total) and the school set a one-off
+      // autopay window, schedule it to auto-charge N days out if a card is on
+      // file. The daily autopay cron does the charge (billing_active gates it,
+      // so dry-run never charges).
+      if (sendNow) {
+        const { rows: cfgRows } = await q<{ days: number | null }>(
+          `SELECT autopay_oneoff_after_days AS days FROM school_payment_config WHERE school_id = $1`,
+          [schoolId],
+        );
+        await scheduleOneoffAutopay(q, {
+          schoolId, familyId, invoiceId, totalCents, afterDays: cfgRows[0]?.days ?? null,
+        });
       }
       return invoiceId;
     });
