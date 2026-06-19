@@ -3,10 +3,15 @@
 // Returns a 303 redirect to the parent portal logged in as the family's
 // primary parent. Used by admin "View as parent" chips on dashboards.
 //
-// Implementation: mints a single-use, 10-minute magic-link token in
-// parent_magic_link_tokens (the same table the parent's own login
-// uses) and redirects to /api/auth/verify on the parent portal. That
-// flow is battle-tested: Rachel's manual login used it earlier today.
+// Implementation: mints a REUSABLE (multi_use), 30-minute magic-link
+// token in parent_magic_link_tokens (the same table the parent's own
+// login uses) and redirects to /api/auth/verify on the parent portal.
+//
+// multi_use=true is deliberate: a single-use token gets burned by email
+// link-scanners, browser prefetch, or a simple repeat click, which then
+// dumps the operator on a login/password screen ("people need a login").
+// Reusable-within-TTL tokens bypass login on every click. No email is
+// ever sent by this route — it only mints a token and redirects.
 //
 // Why not the dedicated HMAC token? It required a shared
 // VIEW_AS_PARENT_SECRET / EMBED_TOKEN_SECRET across BOTH Vercel
@@ -39,7 +44,7 @@ interface ParentRow {
   is_primary: boolean;
 }
 
-const TOKEN_TTL_MS = 10 * 60 * 1000; // 10 min — operator clicks chip, click-through is immediate
+const TOKEN_TTL_MS = 30 * 60 * 1000; // 30 min — reusable within this window so repeat clicks don't hit a login
 
 async function parentPortalBaseFor(schoolId: string): Promise<string> {
   try {
@@ -95,15 +100,16 @@ export async function GET(request: NextRequest, { params }: { params: Params }) 
     return NextResponse.json({ error: 'cross_school_impersonation_blocked' }, { status: 403 });
   }
 
-  // Mint a magic-link token directly into the parent portal's table.
-  // Same shape parents use for their own login — the /api/auth/verify
-  // route consumes it idempotently (consumed_at + expires_at check).
+  // Mint a REUSABLE magic-link token directly into the parent portal's
+  // table. Same shape parents use for their own login, but multi_use=true
+  // so /api/auth/verify validates without consuming it — repeat clicks,
+  // prefetch, and link-scanners all bypass login instead of burning it.
   const token = crypto.randomBytes(24).toString('base64url');
   const expiresAt = new Date(Date.now() + TOKEN_TTL_MS).toISOString();
   await query(
     `INSERT INTO parent_magic_link_tokens
-       (token, email, school_id, parent_id, expires_at, request_ip, request_user_agent)
-     VALUES ($1, $2, $3, $4, $5, 'view-as-parent', 'admin-impersonation')`,
+       (token, email, school_id, parent_id, expires_at, request_ip, request_user_agent, multi_use)
+     VALUES ($1, $2, $3, $4, $5, 'view-as-parent', 'admin-impersonation', true)`,
     [token, parent.email!.toLowerCase(), parent.school_id, parent.id, expiresAt],
   );
 
