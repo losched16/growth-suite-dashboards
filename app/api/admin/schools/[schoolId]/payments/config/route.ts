@@ -77,13 +77,24 @@ export async function POST(request: NextRequest, { params }: { params: Params })
       ? String(currencyRaw).toLowerCase()
       : null;
 
+    // Auto-bill window for one-off invoices. Only the Settings form sends
+    // `autopay_oneoff_present=1`; other forms omit it and we keep the
+    // existing value (CASE below). When present: enabled → N days (default
+    // 5, capped), disabled → NULL (off).
+    const oneoffPresent = fd.get('autopay_oneoff_present') === '1';
+    let oneoffValue: number | null = null;
+    if (oneoffPresent && fd.get('autopay_oneoff_enabled') === '1') {
+      const n = parseInt(String(fd.get('autopay_oneoff_after_days') ?? ''), 10);
+      oneoffValue = Number.isFinite(n) && n >= 0 ? Math.min(n, 365) : 5;
+    }
+
     await query(
       `INSERT INTO school_payment_config
          (school_id, pass_card_fee, pass_ach_fee, processing_fee_label,
           autopay_days, late_fee_amount_cents, late_fee_grace_days,
           card_enabled, ach_enabled, invoice_number_prefix,
-          ghl_receipt_webhook_url, default_currency)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, COALESCE($12, 'usd'))
+          ghl_receipt_webhook_url, default_currency, autopay_oneoff_after_days)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, COALESCE($12, 'usd'), $14)
        ON CONFLICT (school_id) DO UPDATE SET
          pass_card_fee = EXCLUDED.pass_card_fee,
          pass_ach_fee = EXCLUDED.pass_ach_fee,
@@ -96,9 +107,12 @@ export async function POST(request: NextRequest, { params }: { params: Params })
          invoice_number_prefix = EXCLUDED.invoice_number_prefix,
          ghl_receipt_webhook_url = EXCLUDED.ghl_receipt_webhook_url,
          default_currency = COALESCE($12, school_payment_config.default_currency),
+         autopay_oneoff_after_days = CASE WHEN $13::boolean
+           THEN $14::int ELSE school_payment_config.autopay_oneoff_after_days END,
          updated_at = now()`,
       [schoolId, passCard, passAch, feeLabel, days, lateFeeCents, graceDays,
-       cardEnabled, achEnabled, invoicePrefix, ghlWebhookUrl, currency],
+       cardEnabled, achEnabled, invoicePrefix, ghlWebhookUrl, currency,
+       oneoffPresent, oneoffValue],
     );
 
     return back(request, schoolId, { msg: 'Billing config saved.' }, returnTo);

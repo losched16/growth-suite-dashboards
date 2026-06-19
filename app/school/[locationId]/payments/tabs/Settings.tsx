@@ -31,6 +31,8 @@ interface ConfigRow {
   autopay_days: number[];
   late_fee_amount_cents: number;
   late_fee_grace_days: number;
+  // One-off invoice auto-bill window (NULL = off).
+  autopay_oneoff_after_days: number | null;
 }
 
 export async function PaymentsHubSettings({
@@ -40,7 +42,8 @@ export async function PaymentsHubSettings({
     `SELECT pass_card_fee, pass_ach_fee, processing_fee_label,
             card_enabled, ach_enabled, invoice_number_prefix,
             ghl_receipt_webhook_url, default_currency,
-            autopay_days, late_fee_amount_cents, late_fee_grace_days
+            autopay_days, late_fee_amount_cents, late_fee_grace_days,
+            autopay_oneoff_after_days
        FROM school_payment_config WHERE school_id = $1`,
     [schoolId],
   );
@@ -52,6 +55,7 @@ export async function PaymentsHubSettings({
     ghl_receipt_webhook_url: null,
     default_currency: 'usd',
     autopay_days: [1, 15], late_fee_amount_cents: 0, late_fee_grace_days: 3,
+    autopay_oneoff_after_days: null,
   };
 
   const settingsReturnTo = `/school/${locationId}/payments?tab=settings`;
@@ -132,6 +136,31 @@ export async function PaymentsHubSettings({
                 <option value="cad">CAD — Canadian Dollar</option>
               </select>
             </Field>
+          </SettingsGroup>
+
+          <SettingsGroup
+            title="Auto-bill one-off invoices"
+            description="When on, a new one-off / incidental invoice automatically charges the family's saved card this many days after it's sent — but only if a card is on file (otherwise it stays manual-pay). Tuition installments follow their own schedule, and nothing charges until billing is live.">
+            <input type="hidden" name="autopay_oneoff_present" value="1" />
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+              <Toggle
+                name="autopay_oneoff_enabled"
+                defaultChecked={cfg.autopay_oneoff_after_days != null}
+                label="Auto-bill one-off invoices"
+              />
+              <label className="flex items-center gap-2 text-sm text-slate-700">
+                <span>after</span>
+                <input
+                  type="number"
+                  name="autopay_oneoff_after_days"
+                  min={0}
+                  max={365}
+                  defaultValue={cfg.autopay_oneoff_after_days ?? 5}
+                  className="w-16 rounded-md border border-slate-300 bg-white px-2 py-1 text-sm text-right tabular-nums focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-200"
+                />
+                <span>days</span>
+              </label>
+            </div>
           </SettingsGroup>
 
           <SettingsGroup
