@@ -201,18 +201,20 @@ function ViewToggle({ view, current }: { view: string; current: WidgetSearchPara
 
 // Enrolled / Withdrawn / All scope. Default 'enrolled' keeps the roster at
 // the aligned count; the other options surface students who withdrew.
-function StatusToggle({ value, current }: { value: 'enrolled' | 'withdrawn' | 'all'; current: WidgetSearchParams }) {
-  function urlFor(v: 'enrolled' | 'withdrawn' | 'all'): string {
+type RosterStatusScope = 'enrolled' | 'pending' | 'withdrawn' | 'all';
+function StatusToggle({ value, current }: { value: RosterStatusScope; current: WidgetSearchParams }) {
+  function urlFor(v: RosterStatusScope): string {
     const p = new URLSearchParams();
     for (const [k, val] of Object.entries(current)) if (val && k !== 'roster_status') p.set(k, String(val));
     if (v !== 'enrolled') p.set('roster_status', v);  // 'enrolled' is the default → omit
     return `?${p.toString()}`;
   }
-  const cls = (v: 'enrolled' | 'withdrawn' | 'all', border = false) =>
+  const cls = (v: RosterStatusScope, border = false) =>
     `px-2 py-1 ${border ? 'border-l border-gray-300 ' : ''}${value === v ? 'bg-gray-900 text-white' : 'hover:bg-gray-50'}`;
   return (
     <div className="inline-flex rounded-md border border-gray-300 bg-white text-xs">
       <a href={urlFor('enrolled')} className={cls('enrolled')}>Enrolled</a>
+      <a href={urlFor('pending')} className={cls('pending', true)}>Pending</a>
       <a href={urlFor('withdrawn')} className={cls('withdrawn', true)}>Withdrawn</a>
       <a href={urlFor('all')} className={cls('all', true)}>All</a>
     </div>
@@ -270,6 +272,10 @@ function renderCell(s: RosterStudent, col: ColumnKey, drilldownDashboard: string
           {s.status === 'withdrawn' ? (
             <span className="ml-1.5 rounded-full bg-rose-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-rose-700 align-middle">
               Withdrawn
+            </span>
+          ) : s.status === 'pending' ? (
+            <span className="ml-1.5 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700 align-middle">
+              Pending
             </span>
           ) : null}
         </span>

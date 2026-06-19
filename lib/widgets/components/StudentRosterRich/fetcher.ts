@@ -150,8 +150,8 @@ export interface DynamicFilterDef {
 
 export interface StudentRosterData {
   total_students: number;
-  // Active status scope: 'enrolled' (default), 'withdrawn', or 'all'.
-  roster_status: 'enrolled' | 'withdrawn' | 'all';
+  // Active status scope: 'enrolled' (default), 'pending', 'withdrawn', or 'all'.
+  roster_status: 'enrolled' | 'pending' | 'withdrawn' | 'all';
   filtered: RosterStudent[];
   page_rows: RosterStudent[];
   page: number;
@@ -252,7 +252,8 @@ export async function fetcher(
   // 'withdrawn' = students who withdrew this year; 'all' = both. Withdrawn
   // students are otherwise hidden because the base filter requires active.
   const rosterStatusRaw = (((searchParams ?? {}).roster_status ?? '').trim());
-  const rosterStatus = (rosterStatusRaw === 'withdrawn' || rosterStatusRaw === 'all') ? rosterStatusRaw : 'enrolled';
+  const rosterStatus = (rosterStatusRaw === 'withdrawn' || rosterStatusRaw === 'all' || rosterStatusRaw === 'pending')
+    ? rosterStatusRaw : 'enrolled';
 
   // Grade-cutoff reference dates, derived from the selected year:
   // "2026-27" → Aug 1 2026 and Jan 1 2027. Falls back to the calendar
@@ -360,8 +361,10 @@ export async function fetcher(
        -- students who withdrew. 'all' = both.
        AND (
          CASE $6::text
+           WHEN 'pending'   THEN (s.status = 'active' AND e.status = 'pending')
            WHEN 'withdrawn' THEN (s.status = 'withdrawn' OR e.status = 'withdrawn')
            WHEN 'all'       THEN ((s.status = 'active' AND ($5::boolean IS NOT TRUE OR e.status = 'enrolled'))
+                                  OR (s.status = 'active' AND e.status = 'pending')
                                   OR s.status = 'withdrawn' OR e.status = 'withdrawn')
            ELSE                  (s.status = 'active' AND ($5::boolean IS NOT TRUE OR e.status = 'enrolled'))
          END
