@@ -251,9 +251,11 @@ export async function fetcher(
   // Status scope. Default 'enrolled' = currently-enrolled only (the 256).
   // 'withdrawn' = students who withdrew this year; 'all' = both. Withdrawn
   // students are otherwise hidden because the base filter requires active.
+  // Default 'all' = everyone in the roster regardless of status. The
+  // status filter narrows to one of the three real statuses.
   const rosterStatusRaw = (((searchParams ?? {}).roster_status ?? '').trim());
-  const rosterStatus = (rosterStatusRaw === 'withdrawn' || rosterStatusRaw === 'all' || rosterStatusRaw === 'pending')
-    ? rosterStatusRaw : 'enrolled';
+  const rosterStatus = (rosterStatusRaw === 'enrolled' || rosterStatusRaw === 'pending' || rosterStatusRaw === 'withdrawn')
+    ? rosterStatusRaw : 'all';
 
   // Grade-cutoff reference dates, derived from the selected year:
   // "2026-27" → Aug 1 2026 and Jan 1 2027. Falls back to the calendar
@@ -361,12 +363,11 @@ export async function fetcher(
        -- students who withdrew. 'all' = both.
        AND (
          CASE $6::text
+           WHEN 'enrolled'  THEN (s.status = 'active' AND ($5::boolean IS NOT TRUE OR e.status = 'enrolled'))
            WHEN 'pending'   THEN (s.status = 'active' AND e.status = 'pending')
            WHEN 'withdrawn' THEN (s.status = 'withdrawn' OR e.status = 'withdrawn')
-           WHEN 'all'       THEN ((s.status = 'active' AND ($5::boolean IS NOT TRUE OR e.status = 'enrolled'))
-                                  OR (s.status = 'active' AND e.status = 'pending')
-                                  OR s.status = 'withdrawn' OR e.status = 'withdrawn')
-           ELSE                  (s.status = 'active' AND ($5::boolean IS NOT TRUE OR e.status = 'enrolled'))
+           -- 'all' (default): everyone in the roster, any status.
+           ELSE                  (s.status = 'active' OR s.status = 'withdrawn' OR e.status = 'withdrawn')
          END
        )
      -- s.id tiebreaker keeps the order stable across renders (first_name
