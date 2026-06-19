@@ -7,7 +7,7 @@
 
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ArrowLeft, ChevronDown, Mail, Phone, Inbox, Users, FlaskConical, Trash2 } from 'lucide-react';
+import { ArrowLeft, ChevronDown, Mail, Phone, Inbox, Users, FlaskConical, Trash2, Paperclip, Download, FileText } from 'lucide-react';
 import { query } from '@/lib/db';
 import { loadSchoolByLocationId } from '@/lib/dashboards/loader';
 import { HelpCallout } from '@/components/HelpCallout';
@@ -47,6 +47,17 @@ interface MissingRecipient {
   parent_email: string | null;
   parent_phone: string | null;
   student_id: string | null;
+  student_label: string | null;
+}
+
+interface FormUpload {
+  id: string;
+  display_name: string | null;
+  original_filename: string;
+  size_bytes: number;
+  uploaded_at: string;
+  acknowledged_at: string | null;
+  family_label: string;
   student_label: string | null;
 }
 
@@ -104,6 +115,25 @@ export default async function SubmissionsInboxScoped({
     [formId],
   );
   const testCount = testCountRows[0]?.n ?? 0;
+
+  // Files parents uploaded FOR this form (parent_uploads.form_id). Separate
+  // from the form answers above — staff see + download them right here.
+  const { rows: uploads } = await query<FormUpload>(
+    `SELECT u.id, u.display_name, u.original_filename, u.size_bytes,
+            to_char(u.uploaded_at, 'YYYY-MM-DD"T"HH24:MI:SSOF') AS uploaded_at,
+            to_char(u.acknowledged_at, 'YYYY-MM-DD"T"HH24:MI:SSOF') AS acknowledged_at,
+            COALESCE(NULLIF(f.display_name, ''), '(unnamed family)') AS family_label,
+            CASE WHEN u.student_id IS NOT NULL THEN
+              (SELECT COALESCE(NULLIF(st.preferred_name,''), st.first_name) || ' ' || st.last_name
+                 FROM students st WHERE st.id = u.student_id)
+              ELSE NULL END AS student_label
+       FROM parent_uploads u
+       LEFT JOIN families f ON f.id = u.family_id
+      WHERE u.school_id = $1 AND u.form_id = $2
+      ORDER BY u.uploaded_at DESC
+      LIMIT 500`,
+    [schoolId, formId],
+  );
 
   let missing: MissingRecipient[];
   if (def.per_student) {
@@ -290,6 +320,42 @@ export default async function SubmissionsInboxScoped({
             </ul>
           )}
         </section>
+
+        {/* Documents uploaded for this form */}
+        {uploads.length > 0 ? (
+          <section className="rounded-lg border border-slate-200 bg-white overflow-hidden">
+            <div className="border-b border-slate-100 px-4 py-2.5">
+              <h2 className="text-sm font-semibold text-slate-900 inline-flex items-center gap-2">
+                <Paperclip className="h-4 w-4 text-slate-500" />
+                Uploaded documents ({uploads.length})
+              </h2>
+            </div>
+            <ul className="divide-y divide-slate-100">
+              {uploads.map((u) => (
+                <li key={u.id} className="px-4 py-2.5 flex items-center justify-between gap-3 flex-wrap">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <FileText className="h-4 w-4 text-slate-400 shrink-0" />
+                      <span className="text-sm font-medium text-slate-900 truncate">{u.display_name || u.original_filename}</span>
+                      {u.acknowledged_at
+                        ? <span className="rounded-full bg-emerald-100 px-1.5 py-0 text-[10px] font-medium text-emerald-800">received</span>
+                        : <span className="rounded-full bg-amber-100 px-1.5 py-0 text-[10px] font-medium text-amber-800">new</span>}
+                    </div>
+                    <div className="mt-0.5 text-[11px] text-slate-500">
+                      {u.family_label}{u.student_label ? ` · ${u.student_label}` : ''} · uploaded {new Date(u.uploaded_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                    </div>
+                  </div>
+                  <a
+                    href={`/api/school/uploads/${u.id}/download`}
+                    className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                  >
+                    <Download className="h-3.5 w-3.5" /> Download
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
 
         {/* Missing */}
         {missing.length > 0 ? (
