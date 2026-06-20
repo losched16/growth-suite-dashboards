@@ -206,17 +206,17 @@ function StatusToggle({ value, current }: { value: RosterStatusScope; current: W
   function urlFor(v: RosterStatusScope): string {
     const p = new URLSearchParams();
     for (const [k, val] of Object.entries(current)) if (val && k !== 'roster_status') p.set(k, String(val));
-    if (v !== 'all') p.set('roster_status', v);  // 'all' is the default → omit
+    if (v !== 'enrolled') p.set('roster_status', v);  // 'enrolled' is the default → omit
     return `?${p.toString()}`;
   }
   const cls = (v: RosterStatusScope, border = false) =>
     `px-2 py-1 ${border ? 'border-l border-gray-300 ' : ''}${value === v ? 'bg-gray-900 text-white' : 'hover:bg-gray-50'}`;
   return (
     <div className="inline-flex rounded-md border border-gray-300 bg-white text-xs">
-      <a href={urlFor('all')} className={cls('all')}>All</a>
-      <a href={urlFor('enrolled')} className={cls('enrolled', true)}>Enrolled</a>
+      <a href={urlFor('enrolled')} className={cls('enrolled')}>Enrolled</a>
       <a href={urlFor('pending')} className={cls('pending', true)}>Pending</a>
       <a href={urlFor('withdrawn')} className={cls('withdrawn', true)}>Withdrawn</a>
+      <a href={urlFor('all')} className={cls('all', true)}>All</a>
     </div>
   );
 }

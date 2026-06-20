@@ -248,14 +248,15 @@ export async function fetcher(
     ?? availableYears[0]
     ?? '').trim();
 
-  // Status scope. Default 'enrolled' = currently-enrolled only (the 256).
-  // 'withdrawn' = students who withdrew this year; 'all' = both. Withdrawn
-  // students are otherwise hidden because the base filter requires active.
-  // Default 'all' = everyone in the roster regardless of status. The
-  // status filter narrows to one of the three real statuses.
+  // Status scope. Default 'enrolled' = currently-enrolled only. The toggle
+  // can widen to 'pending', 'withdrawn', or 'all' (everyone, any status).
+  // Withdrawn students are otherwise hidden because the base filter requires
+  // active. Pending/withdrawn families stay in GHL but drop off the default
+  // roster — "removed from the dashboard" without deleting anything, and the
+  // status still lives at the source (GHL contact field).
   const rosterStatusRaw = (((searchParams ?? {}).roster_status ?? '').trim());
-  const rosterStatus = (rosterStatusRaw === 'enrolled' || rosterStatusRaw === 'pending' || rosterStatusRaw === 'withdrawn')
-    ? rosterStatusRaw : 'all';
+  const rosterStatus = (rosterStatusRaw === 'pending' || rosterStatusRaw === 'withdrawn' || rosterStatusRaw === 'all')
+    ? rosterStatusRaw : 'enrolled';
 
   // Grade-cutoff reference dates, derived from the selected year:
   // "2026-27" → Aug 1 2026 and Jan 1 2027. Falls back to the calendar
@@ -358,15 +359,15 @@ export async function fetcher(
        -- Optional: restrict to accepted/enrolled stages for schools whose
        -- roster is still an admissions pipeline ($4 NULL = show all).
        AND ($4::text[] IS NULL OR s.metadata->>'ghl_stage_name' = ANY($4))
-       -- Status scope ($6). Default 'enrolled' = active students (optionally
-       -- gated to enrollment status 'enrolled' via $5). 'withdrawn' = only
-       -- students who withdrew. 'all' = both.
+       -- Status scope ($5). Default 'enrolled' = active students whose
+       -- current-year enrollment status is 'enrolled' (the true student
+       -- body). 'pending'/'withdrawn' = exactly those; 'all' = everyone.
        AND (
-         CASE $6::text
-           WHEN 'enrolled'  THEN (s.status = 'active' AND ($5::boolean IS NOT TRUE OR e.status = 'enrolled'))
+         CASE $5::text
+           WHEN 'enrolled'  THEN (s.status = 'active' AND e.status = 'enrolled')
            WHEN 'pending'   THEN (s.status = 'active' AND e.status = 'pending')
            WHEN 'withdrawn' THEN (s.status = 'withdrawn' OR e.status = 'withdrawn')
-           -- 'all' (default): everyone in the roster, any status.
+           -- 'all': everyone in the roster, any status.
            ELSE                  (s.status = 'active' OR s.status = 'withdrawn' OR e.status = 'withdrawn')
          END
        )
@@ -377,7 +378,6 @@ export async function fetcher(
     // this for another school, lift to widget config.
     [school.schoolId, 'America/Phoenix', fYear,
      (config.enrolled_stage_names && config.enrolled_stage_names.length > 0) ? config.enrolled_stage_names : null,
-     config.enrolled_only === true,
      rosterStatus],
   );
 
