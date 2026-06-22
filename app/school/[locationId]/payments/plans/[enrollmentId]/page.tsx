@@ -386,8 +386,9 @@ export default async function PlanDetailPage({
             <div>
               <h2 className="text-base font-semibold text-blue-900">Reschedule remaining balance</h2>
               <p className="text-xs text-blue-800 mt-0.5">
-                Voids all currently-open (unpaid) installments and replaces them with{' '}
-                <strong>N new monthly installments</strong> starting on the chosen date.
+                Voids all currently-open (unpaid) installments and replaces them with a new
+                schedule — either <strong>N installments</strong> on a fixed cadence, or a fully{' '}
+                <strong>custom</strong> set of dates &amp; amounts (including a single one-off).
                 Paid + partially-paid invoices are <strong>preserved as-is</strong>.
               </p>
               <p className="text-xs text-blue-700 mt-1">
@@ -411,9 +412,29 @@ export default async function PlanDetailPage({
                   <option value="monthly">Monthly (same day each month)</option>
                   <option value="biweekly">Every 2 weeks</option>
                   <option value="weekly">Weekly</option>
+                  <option value="custom">Custom — I&rsquo;ll enter each date &amp; amount below</option>
                 </select>
               </label>
             </div>
+
+            {/* Custom schedule — only read when Cadence = Custom. Full
+                flexibility, including a single one-off charge (one line). */}
+            <label className="block text-sm">
+              <span className="text-[11px] font-medium uppercase tracking-wide text-slate-700">
+                Custom schedule <span className="font-normal normal-case text-slate-500">(only used when Cadence = Custom)</span>
+              </span>
+              <textarea
+                name="custom_schedule"
+                rows={4}
+                placeholder={'One payment per line:  date, amount\n2026-09-01, 500\n2027-01-15, 250'}
+                className={`${inputCls} font-mono text-xs`}
+              />
+              <span className="mt-1 block text-[11px] text-blue-700">
+                One line per payment: <code>YYYY-MM-DD, amount</code>. The lines must total{' '}
+                <strong>${(balance / 100).toFixed(2)}</strong> (the outstanding balance) — you&rsquo;ll get an alert if they don&rsquo;t.
+                For a single one-off charge, enter just one line.
+              </span>
+            </label>
 
             <div className="flex gap-2 pt-2 border-t border-blue-200">
               <button type="submit" className="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">

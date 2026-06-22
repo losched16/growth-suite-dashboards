@@ -314,6 +314,14 @@ export async function POST(request: NextRequest, { params }: { params: Params })
           return back(request, fallback, returnTo, { err: 'Cannot split an invoice with payments. Void or refund first.' });
         }
 
+        // Mismatch guard: the two halves must equal the original total to the
+        // cent — catches a typo before it creates a balance discrepancy.
+        if (firstAmount + secondAmount !== inv.total_cents) {
+          return back(request, fallback, returnTo, {
+            err: `The two halves ($${(firstAmount / 100).toFixed(2)} + $${(secondAmount / 100).toFixed(2)} = $${((firstAmount + secondAmount) / 100).toFixed(2)}) must equal the original installment total of $${(inv.total_cents / 100).toFixed(2)}.`,
+          });
+        }
+
         await withTransaction(async (q) => {
           // Void the original.
           await q(
@@ -361,23 +369,18 @@ export async function POST(request: NextRequest, { params }: { params: Params })
       }
 
       // ── reschedule_remaining ─────────────────────────────────────────
+      // Two modes:
+      //   • even split  — spread the balance across N installments on a fixed
+      //                   monthly / biweekly / weekly cadence.
+      //   • custom      — operator supplies each installment's date + amount
+      //                   (cadence='custom', one "date, amount" per line). Full
+      //                   flexibility, including a single one-off charge.
+      // In BOTH modes the new installments must total the outstanding balance
+      // to the cent — a mismatch is rejected (the typo guard Kim asked for).
       case 'reschedule_remaining': {
-        const newCount = parseInt(String(fd.get('new_count') ?? '0'), 10);
-        const startDate = String(fd.get('start_date') ?? '').trim();
         const cadence = String(fd.get('cadence') ?? 'monthly').trim();
 
-        if (!Number.isFinite(newCount) || newCount < 1 || newCount > 60) {
-          return back(request, fallback, returnTo, { err: 'new_count must be between 1 and 60.' });
-        }
-        if (!startDate) {
-          return back(request, fallback, returnTo, { err: 'start_date required.' });
-        }
-        if (!['monthly', 'biweekly', 'weekly'].includes(cadence)) {
-          return back(request, fallback, returnTo, { err: 'cadence must be monthly | biweekly | weekly.' });
-        }
-
-        // Compute the unpaid balance from open + draft invoices. Don't
-        // touch partially_paid (preserve payment history).
+        // Unpaid balance = open + draft tuition invoices (paid ones preserved).
         const { rows: openRows } = await query<{ id: string; total_cents: number }>(
           `SELECT id, total_cents FROM invoices
             WHERE school_id = $1 AND source = 'tuition_plan'
@@ -390,8 +393,61 @@ export async function POST(request: NextRequest, { params }: { params: Params })
           return back(request, fallback, returnTo, { err: 'No open/draft installments to reschedule.' });
         }
 
+        // Build the target installments [{ due, cents }] for the chosen mode.
+        const plan: Array<{ due: string; cents: number }> = [];
+
+        if (cadence === 'custom') {
+          const raw = String(fd.get('custom_schedule') ?? '').trim();
+          if (!raw) {
+            return back(request, fallback, returnTo, { err: 'Custom schedule is empty — enter one "date, amount" per line (e.g. 2026-09-01, 500). One line = a single one-off charge.' });
+          }
+          const lines = raw.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+          for (let i = 0; i < lines.length; i++) {
+            const parts = lines[i].split(',').map((p) => p.trim());
+            const dateStr = parts[0] ?? '';
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+              return back(request, fallback, returnTo, { err: `Line ${i + 1} ("${lines[i]}"): the date must be YYYY-MM-DD.` });
+            }
+            const cents = dollarsToCents(parts[1] ?? '');
+            if (cents <= 0) {
+              return back(request, fallback, returnTo, { err: `Line ${i + 1} ("${lines[i]}"): the amount must be greater than $0.` });
+            }
+            plan.push({ due: dateStr, cents });
+          }
+          // Mismatch guard — the custom installments must total the balance.
+          const sum = plan.reduce((s, p) => s + p.cents, 0);
+          if (sum !== totalBalanceCents) {
+            return back(request, fallback, returnTo, {
+              err: `Your ${plan.length} custom installment(s) total $${(sum / 100).toFixed(2)}, but the outstanding balance is $${(totalBalanceCents / 100).toFixed(2)}. Adjust the amounts so they match exactly before applying.`,
+            });
+          }
+        } else {
+          const newCount = parseInt(String(fd.get('new_count') ?? '0'), 10);
+          const startDate = String(fd.get('start_date') ?? '').trim();
+          if (!Number.isFinite(newCount) || newCount < 1 || newCount > 60) {
+            return back(request, fallback, returnTo, { err: 'Number of installments must be between 1 and 60.' });
+          }
+          if (!startDate) {
+            return back(request, fallback, returnTo, { err: 'Start date required.' });
+          }
+          if (!['monthly', 'biweekly', 'weekly'].includes(cadence)) {
+            return back(request, fallback, returnTo, { err: 'Cadence must be monthly, biweekly, weekly, or custom.' });
+          }
+          // Even split; remainder lands on the last installment so the parent
+          // always pays the exact balance.
+          const base = Math.floor(totalBalanceCents / newCount);
+          const remainder = totalBalanceCents - base * newCount;
+          const start = new Date(startDate + 'T00:00:00.000Z');
+          for (let i = 0; i < newCount; i++) {
+            const d = new Date(start.getTime());
+            if (cadence === 'monthly') d.setUTCMonth(d.getUTCMonth() + i);
+            else if (cadence === 'biweekly') d.setUTCDate(d.getUTCDate() + i * 14);
+            else d.setUTCDate(d.getUTCDate() + i * 7);
+            plan.push({ due: d.toISOString().slice(0, 10), cents: i === newCount - 1 ? base + remainder : base });
+          }
+        }
+
         await withTransaction(async (q) => {
-          // Void existing open invoices.
           for (const r of openRows) {
             await q(
               `UPDATE invoices
@@ -401,33 +457,10 @@ export async function POST(request: NextRequest, { params }: { params: Params })
                 WHERE id = $1`, [r.id],
             );
           }
-
-          // Distribute totalBalanceCents across newCount installments.
-          // Remainder goes on the last one.
-          const base = Math.floor(totalBalanceCents / newCount);
-          const remainder = totalBalanceCents - base * newCount;
-
-          // Compute due dates per cadence.
-          const dueDates: Date[] = [];
-          const start = new Date(startDate + 'T00:00:00.000Z');
-          for (let i = 0; i < newCount; i++) {
-            const d = new Date(start.getTime());
-            if (cadence === 'monthly') {
-              d.setUTCMonth(d.getUTCMonth() + i);
-            } else if (cadence === 'biweekly') {
-              d.setUTCDate(d.getUTCDate() + i * 14);
-            } else {
-              d.setUTCDate(d.getUTCDate() + i * 7);
-            }
-            dueDates.push(d);
-          }
-
-          // Create new invoices.
-          for (let i = 0; i < newCount; i++) {
-            const amt = (i === newCount - 1) ? base + remainder : base;
-            const due = dueDates[i].toISOString().slice(0, 10);
+          for (let i = 0; i < plan.length; i++) {
+            const { due, cents } = plan[i];
             const invNum = await nextInvoiceNumber(schoolId, q);
-            const title = `Tuition (rescheduled) — installment ${i + 1}/${newCount}`;
+            const title = `Tuition (rescheduled) — installment ${i + 1}/${plan.length}`;
             const ins = await q<{ id: string }>(
               `INSERT INTO invoices
                  (school_id, family_id, student_id, invoice_number, title, description,
@@ -439,19 +472,13 @@ export async function POST(request: NextRequest, { params }: { params: Params })
                RETURNING id`,
               [
                 schoolId, enr.family_id, enr.student_id,
-                invNum, title, `Rescheduled balance · ${cadence} cadence`,
-                amt, due,
-                JSON.stringify({
-                  enrollment_id: enrollmentId,
-                  installment_number: i + 1,
-                  reschedule_source: 'remaining',
-                }),
+                invNum, title, `Rescheduled balance · ${cadence}`,
+                cents, due,
+                JSON.stringify({ enrollment_id: enrollmentId, installment_number: i + 1, reschedule_source: 'remaining' }),
               ],
             );
-            await rewriteSingleLine(ins.rows[0].id, title, amt, enr.student_id, q);
+            await rewriteSingleLine(ins.rows[0].id, title, cents, enr.student_id, q);
           }
-
-          // Update enrollment metadata so the headline counts match.
           await q(
             `UPDATE family_tuition_enrollments
                 SET installment_count = (
@@ -467,7 +494,7 @@ export async function POST(request: NextRequest, { params }: { params: Params })
         });
 
         return back(request, fallback, returnTo, {
-          msg: `Reschedule applied — $${(totalBalanceCents / 100).toFixed(2)} spread across ${newCount} new installments.`,
+          msg: `Reschedule applied — $${(totalBalanceCents / 100).toFixed(2)} across ${plan.length} new installment(s).`,
         });
       }
 
