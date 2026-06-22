@@ -24,7 +24,7 @@ export const dynamic = 'force-dynamic';
 export const maxDuration = 30;
 
 type Params = Promise<{ locationId: string }>;
-type SearchParams = Promise<{ msg?: string; err?: string }>;
+type SearchParams = Promise<{ msg?: string; err?: string; family?: string }>;
 
 const CURRENT_YEAR = '2026-27';
 
@@ -132,6 +132,7 @@ export default async function StartEnrollmentScoped({
           studentsByFamily={studentsByFamily}
           grids={grids}
           plans={plans}
+          defaultFamilyId={typeof sp.family === 'string' ? sp.family : undefined}
         />
       </div>
     </main>

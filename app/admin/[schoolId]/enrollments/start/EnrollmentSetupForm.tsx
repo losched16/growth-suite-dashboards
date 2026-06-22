@@ -38,7 +38,7 @@ function fmt(cents: number): string {
 
 export function EnrollmentSetupForm({
   schoolId, academicYear, returnTo, billingActive,
-  families, studentsByFamily, grids, plans,
+  families, studentsByFamily, grids, plans, defaultFamilyId,
 }: {
   schoolId: string;
   academicYear: string;
@@ -48,8 +48,11 @@ export function EnrollmentSetupForm({
   studentsByFamily: Record<string, StudentOpt[]>;
   grids: GridOpt[];
   plans: PlanOpt[];
+  // Preselect this family (e.g. arriving from the "Set up plan" button on
+  // the Tuition Plans tab's "awaiting plan setup" list).
+  defaultFamilyId?: string;
 }) {
-  const [familyId, setFamilyId] = useState('');
+  const [familyId, setFamilyId] = useState(defaultFamilyId ?? '');
   const [studentId, setStudentId] = useState('');
   const [gridId, setGridId] = useState('');
   const [planId, setPlanId] = useState(''); // '' = let the parent choose

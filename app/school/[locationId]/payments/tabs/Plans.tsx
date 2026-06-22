@@ -32,6 +32,10 @@ function viewAsParentHref(familyId: string, locationId: string): string {
   return `/api/school/family/${familyId}/view-as-parent?embed_token=${encodeURIComponent(token)}`;
 }
 
+// The current enrollment year. Matches the same constant on the
+// "Start an enrollment" screen so the two stay in lockstep.
+const CURRENT_YEAR = '2026-27';
+
 interface EnrollmentRow {
   id: string;
   family_id: string;
@@ -50,6 +54,19 @@ interface EnrollmentRow {
   invoices_open: number;
   invoices_paid: number;
   amount_paid_cents: number;
+}
+
+// A family that's on the roster for the current year but has NO tuition
+// plan yet — e.g. just auto-enrolled from GHL, hasn't completed the
+// enrollment agreement, and hasn't been set up manually. Surfaced so
+// staff can see (and act on) every enrolled family, not only those who
+// already have a plan.
+interface AwaitingPlanRow {
+  family_id: string;
+  family_label: string;
+  primary_parent_id: string | null;
+  student_names: string[];
+  programs: string[];
 }
 
 interface PlanTemplateRow {
@@ -82,7 +99,7 @@ export async function PaymentsHubPlans({
   const q = familySearch.trim();
   const qParam = q ? `%${q.toLowerCase()}%` : null;
 
-  const [{ rows: enrollments }, { rows: planTemplates }] = await Promise.all([
+  const [{ rows: enrollments }, { rows: planTemplates }, { rows: awaitingPlan }] = await Promise.all([
     query<EnrollmentRow>(
       `SELECT e.id,
               e.family_id,
@@ -151,6 +168,42 @@ export async function PaymentsHubPlans({
         WHERE pl.school_id = $1
         ORDER BY pl.is_active DESC, pl.position ASC, pl.created_at ASC`,
       [schoolId],
+    ),
+    // Enrolled families that have NO tuition plan for the current year yet.
+    // "No plan" = no family_tuition_enrollments row with a payment plan
+    // locked in (covers both "no row at all" — e.g. auto-enrolled from GHL —
+    // and "row exists but parent hasn't picked a frequency"). Filtered to the
+    // current roster (active students with a non-withdrawn current-year
+    // enrollment) and demo records are excluded.
+    query<AwaitingPlanRow>(
+      `SELECT f.id AS family_id,
+              COALESCE(NULLIF(f.display_name, ''),
+                       CONCAT_WS(' ', p.first_name, p.last_name),
+                       '(unnamed)') AS family_label,
+              p.id AS primary_parent_id,
+              array_agg(DISTINCT CONCAT_WS(' ',
+                COALESCE(NULLIF(s.preferred_name, ''), s.first_name), s.last_name)) AS student_names,
+              array_remove(array_agg(DISTINCT s.metadata->>'program_tuition'), NULL) AS programs
+         FROM families f
+         JOIN students s ON s.family_id = f.id AND s.status = 'active'
+              AND COALESCE(s.metadata->>'is_demo', '') <> 'true'
+         JOIN enrollments e ON e.student_id = s.id
+              AND e.academic_year = $2 AND e.status <> 'withdrawn'
+         LEFT JOIN LATERAL (
+           SELECT id, first_name, last_name FROM parents
+            WHERE family_id = f.id AND is_primary = true AND status = 'active' LIMIT 1
+         ) p ON true
+        WHERE f.school_id = $1
+          AND NOT EXISTS (
+            SELECT 1 FROM family_tuition_enrollments fte
+             WHERE fte.school_id = $1 AND fte.family_id = f.id
+               AND fte.academic_year = $2 AND fte.status <> 'cancelled'
+               AND fte.payment_plan_id IS NOT NULL
+          )
+        GROUP BY f.id, family_label, p.id
+        ORDER BY family_label
+        LIMIT 200`,
+      [schoolId, CURRENT_YEAR],
     ),
   ]);
 
@@ -264,6 +317,66 @@ export async function PaymentsHubPlans({
             </span>
           )}
         </div>
+
+        {/* Enrolled families that don't have a plan yet — surfaced so every
+            enrolled family is visible here, not only those already on a plan.
+            Auto-populated from the roster; no manual step needed. */}
+        {awaitingPlan.length > 0 ? (
+          <div className="mb-4 rounded-lg border border-amber-300 bg-amber-50/60 overflow-hidden">
+            <div className="px-4 py-2.5 border-b border-amber-200">
+              <h3 className="text-sm font-semibold text-amber-900">
+                Enrolled — awaiting plan setup ({awaitingPlan.length})
+              </h3>
+              <p className="text-[11px] text-amber-800 mt-0.5">
+                Enrolled for {CURRENT_YEAR} but no tuition plan yet. A plan is created automatically when the
+                parent completes their enrollment agreement (they pick the payment frequency) — or you can set
+                it up now.
+              </p>
+            </div>
+            <table className="w-full text-sm">
+              <thead className="bg-amber-100/50 text-left text-[10px] uppercase tracking-wide text-amber-800">
+                <tr>
+                  <th className="px-4 py-2 font-medium">Family</th>
+                  <th className="px-4 py-2 font-medium">Student(s)</th>
+                  <th className="px-4 py-2 font-medium">Program</th>
+                  <th className="px-4 py-2 font-medium text-right">Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-amber-100">
+                {awaitingPlan.map((a) => (
+                  <tr key={a.family_id} className="hover:bg-amber-50">
+                    <td className="px-4 py-2 align-top">
+                      <div className="text-slate-900">{a.family_label}</div>
+                      {a.primary_parent_id ? (
+                        <a href={viewAsParentHref(a.family_id, locationId)} target="_blank" rel="noopener noreferrer"
+                          className="mt-0.5 inline-flex items-center gap-1 text-[11px] text-blue-600 hover:text-blue-800 hover:underline"
+                          title="Open the parent portal signed in as this family — see what they see">
+                          👁 View parent portal
+                        </a>
+                      ) : null}
+                    </td>
+                    <td className="px-4 py-2 align-top text-xs text-slate-700">
+                      {a.student_names.length > 0 ? a.student_names.join(', ') : <span className="italic text-slate-400">—</span>}
+                    </td>
+                    <td className="px-4 py-2 align-top text-xs text-slate-600">
+                      {a.programs.length > 0
+                        ? a.programs.map((p) => p.replace(/^\d+:\s*/, '').trim()).join(', ')
+                        : <span className="italic text-slate-400">not set</span>}
+                    </td>
+                    <td className="px-4 py-2 align-top text-right">
+                      <Link
+                        href={`/school/${locationId}/enrollments/start?family=${a.family_id}`}
+                        className="inline-flex items-center gap-1 rounded-md bg-blue-600 px-3 py-1 text-xs font-semibold text-white hover:bg-blue-700"
+                      >
+                        <Plus className="h-3 w-3" /> Set up plan
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : null}
 
         {/* Family search — GET form scoped to the Plans tab so the URL
             keeps ?tab=plans and the search term as ?q=. Auto-submits on
