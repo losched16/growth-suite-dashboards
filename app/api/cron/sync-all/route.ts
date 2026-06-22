@@ -19,6 +19,7 @@ import type { NextRequest } from 'next/server';
 import { query } from '@/lib/db';
 import { runGhlSync, type SyncResult } from '@/lib/sync/run-ghl-sync';
 import { syncGhlAttributes } from '@/lib/sync/ghl-attributes';
+import { createMissingEnrolledFamilies } from '@/lib/sync/create-family-from-contact';
 
 // Vercel cron may take longer than the default Hobby 10s; bump.
 export const maxDuration = 300; // 5 min
@@ -105,10 +106,28 @@ async function runForAll(): Promise<NextResponse> {
         attrSummary = ` Attributes FAILED: ${attrErr instanceof Error ? attrErr.message : String(attrErr)}`;
       }
 
+      // Enrollment trigger — for live, import-managed (attributes_only)
+      // schools, create a loginable family for any contact whose opportunity
+      // reached an "Enrolled" stage but isn't in the family graph yet.
+      // Additive + idempotent; never touches existing families. Snapshot
+      // schools are excluded — they already create families on their full
+      // sync. Runs AFTER syncGhlAttributes so ghl_opportunities is fresh.
+      let enrollSummary = '';
+      if (s.sync_mode === 'attributes_only') {
+        try {
+          const enr = await createMissingEnrolledFamilies(s.id);
+          if (enr.ran && (enr.created > 0 || enr.errors > 0)) {
+            enrollSummary = ` Enroll-trigger: +${enr.created} portals, ${enr.skipped} skipped, ${enr.errors} errors.`;
+          }
+        } catch (enrErr) {
+          enrollSummary = ` Enroll-trigger FAILED: ${enrErr instanceof Error ? enrErr.message : String(enrErr)}`;
+        }
+      }
+
       const dur = Date.now() - t0;
       const summary = (result
         ? `Synced ${result.families_created} families, ${result.students_created} students, ${result.enrollments_created} enrollments, ${result.classrooms_created} classrooms.`
-        : `Family-graph sync skipped (sync_mode=${s.sync_mode}).`) + attrSummary;
+        : `Family-graph sync skipped (sync_mode=${s.sync_mode}).`) + attrSummary + enrollSummary;
       results.push({
         school_id: s.id,
         name: s.name,

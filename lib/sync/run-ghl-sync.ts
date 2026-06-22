@@ -12,7 +12,7 @@
 // Idempotent. Re-runnable. Single SQL transaction so partial failures
 // don't leave the school in a half-synced state.
 
-import { withTransaction } from '@/lib/db';
+import { withTransaction, query } from '@/lib/db';
 import { loadGhlClient, type GhlClient } from '@/lib/ghl/client';
 import { searchContacts, type GhlContact } from '@/lib/ghl/contacts';
 import {
@@ -37,9 +37,9 @@ interface GhlFieldDef {
   key?: string;
 }
 
-type FieldSchema = Map<string, string>; // normalized fieldKey → field id
+export type FieldSchema = Map<string, string>; // normalized fieldKey → field id
 
-async function fetchFieldSchema(client: GhlClient): Promise<FieldSchema> {
+export async function fetchFieldSchema(client: GhlClient): Promise<FieldSchema> {
   const { data } = await client.axios.get<{ customFields?: GhlFieldDef[] }>(
     `/locations/${client.locationId}/customFields`
   );
@@ -157,7 +157,7 @@ function pruneEmptyMetadata<T extends Record<string, unknown>>(md: T): T {
 // Unknown values fall back to 'enrolled' on the assumption that any
 // contact with student data + household_id is at minimum enrolled —
 // pre-enrollment families typically don't have student rows yet.
-function normalizeEnrollmentStatus(raw: string, warnings: string[]): string {
+export function normalizeEnrollmentStatus(raw: string, warnings: string[]): string {
   const v = raw.trim().toLowerCase();
   if (!v) return 'enrolled';
   // Direct match (already normalized)
@@ -196,12 +196,25 @@ function normalizeDate(raw: string): string | null {
 
 // ----- Mapper ---------------------------------------------------------------
 
-interface MappedFamily {
+export interface MappedFamily {
   display_name: string;
   notes: string | null;
   status: string;
   parents: MappedParent[];
   students: MappedStudent[];
+}
+
+// Options for mapContactToFamily. Defaults preserve the snapshot-sync
+// behavior; the enrollment trigger (createFamilyFromContact) overrides them.
+export interface MapContactOpts {
+  // Require a household_id custom field to treat the contact as a family.
+  // Default true (snapshot sync skips non-roster contacts). The enroll
+  // trigger sets false — a freshly-enrolled prospect may not have one yet.
+  requireHousehold?: boolean;
+  // Force every student's enrollment to 'enrolled' and allow a
+  // parent-only family (so the parent can log in immediately). Used by the
+  // enroll trigger.
+  forceEnrolled?: boolean;
 }
 
 interface MappedParent {
@@ -235,22 +248,26 @@ interface SchoolFormDef {
   per_student: boolean;
 }
 
-function mapContactToFamily(
+export function mapContactToFamily(
   contact: GhlContact,
   schema: FieldSchema,
   config: SchoolFieldSchema,
   forms: SchoolFormDef[] = [],
+  opts: MapContactOpts = {},
 ): MappedFamily | null {
   const FAMILY = config.family_fields;
   const PARENT2 = config.parent2_fields;
   const STUDENT = config.student_fields;
 
   // Skip contacts without the configured household-id field — they're not
-  // family-roster contacts. (Field key configurable per school.)
+  // family-roster contacts. (Field key configurable per school.) The enroll
+  // trigger passes requireHousehold:false so a just-enrolled contact that
+  // hasn't been assigned a household_id yet still becomes a family.
+  const requireHousehold = opts.requireHousehold !== false;
   const householdIdKey = FAMILY.householdId;
-  if (!householdIdKey) return null;
-  const householdId = getField(contact, householdIdKey, schema);
-  if (!householdId) return null;
+  if (requireHousehold && !householdIdKey) return null;
+  const householdId = householdIdKey ? getField(contact, householdIdKey, schema) : '';
+  if (requireHousehold && !householdId) return null;
 
   const parent1FirstName = (contact.firstName ?? '').trim();
   const parent1LastName = (contact.lastName ?? '').trim();
@@ -343,7 +360,7 @@ function mapContactToFamily(
       preferred_name: preferredName || null,
       date_of_birth: dob,
       gender: gender || null,
-      enrollment_status: enrollmentStatus || 'unknown',
+      enrollment_status: opts.forceEnrolled ? 'enrolled' : (enrollmentStatus || 'unknown'),
       classroom_name: classroomName,
       grade_level: gradeLevel || null,
       lead_teacher_name: leadTeacher || null,
@@ -378,7 +395,10 @@ function mapContactToFamily(
     // school_field_schemas row, and we keep the family as a
     // parent-and-household record. Dashboards will show 0 students until
     // the school backfills student data on the contact.
-    if (!config.allow_parent_only_families) return null;
+    // The enroll trigger (forceEnrolled) also allows parent-only so the
+    // parent can log in the moment they're enrolled — student rows backfill
+    // from GHL afterward.
+    if (!config.allow_parent_only_families && !opts.forceEnrolled) return null;
   }
 
   const displayName = (() => {
@@ -880,4 +900,87 @@ export async function runGhlSync(schoolId: string): Promise<SyncResult> {
     p2_contact_ids_carried_forward: result.p2ContactIdCarriedForward,
     warnings,
   };
+}
+
+// ----- Single-family insert (non-destructive) --------------------------------
+//
+// Inserts ONE mapped family + its parents + students + enrollments, reusing
+// an existing classroom (by name + academic year) rather than creating a
+// duplicate. Unlike runGhlSync's loop, this does NOT delete anything — it's
+// the additive path used by the enrollment trigger (createFamilyFromContact)
+// to add a single newly-enrolled family without touching the rest of the
+// import-managed roster. Caller is responsible for idempotency (don't call
+// it twice for a contact that already has a parent row) and for wrapping it
+// in a transaction.
+type QueryFn = typeof query;
+
+export async function insertOneFamily(
+  q: QueryFn,
+  schoolId: string,
+  fam: MappedFamily,
+): Promise<{ familyId: string; parentsCreated: number; studentsCreated: number; enrollmentsCreated: number }> {
+  const warnings: string[] = [];
+  const { rows: famRows } = await q<{ id: string }>(
+    `INSERT INTO families (school_id, display_name, notes, status)
+     VALUES ($1, $2, $3, $4) RETURNING id`,
+    [schoolId, fam.display_name, fam.notes, fam.status],
+  );
+  const familyId = famRows[0].id;
+  let parentsCreated = 0;
+  let studentsCreated = 0;
+  let enrollmentsCreated = 0;
+
+  for (const p of fam.parents) {
+    await q(
+      `INSERT INTO parents
+         (family_id, school_id, ghl_contact_id, first_name, last_name,
+          email, phone, role, is_primary, status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'active')`,
+      [familyId, schoolId, p.ghl_contact_id, p.first_name, p.last_name, p.email, p.phone, p.role, p.is_primary],
+    );
+    parentsCreated++;
+  }
+
+  for (const s of fam.students) {
+    const { rows: stuRows } = await q<{ id: string }>(
+      `INSERT INTO students
+         (family_id, school_id, first_name, last_name, preferred_name,
+          date_of_birth, gender, status, metadata)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, 'active', $8::jsonb)
+       RETURNING id`,
+      [familyId, schoolId, s.first_name, s.last_name, s.preferred_name, s.date_of_birth, s.gender, JSON.stringify(s.metadata)],
+    );
+    const studentId = stuRows[0].id;
+    studentsCreated++;
+
+    // Reuse an existing classroom (non-destructive) or create it.
+    let classroomId: string | null = null;
+    if (s.classroom_name) {
+      const { rows: ex } = await q<{ id: string }>(
+        `SELECT id FROM classrooms WHERE school_id = $1 AND name = $2 AND academic_year = $3 LIMIT 1`,
+        [schoolId, s.classroom_name, s.academic_year],
+      );
+      if (ex[0]) {
+        classroomId = ex[0].id;
+      } else {
+        const { rows: cRows } = await q<{ id: string }>(
+          `INSERT INTO classrooms (school_id, name, grade_level, academic_year, target_seats, lead_teacher_name)
+           VALUES ($1, $2, $3, $4, 0, $5) RETURNING id`,
+          [schoolId, s.classroom_name, s.grade_level, s.academic_year, s.lead_teacher_name],
+        );
+        classroomId = cRows[0].id;
+      }
+    }
+
+    const normalizedStatus = normalizeEnrollmentStatus(s.enrollment_status, warnings);
+    await q(
+      `INSERT INTO enrollments
+         (student_id, school_id, classroom_id, academic_year, status, enrolled_at, schedule)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      [studentId, schoolId, classroomId, s.academic_year, normalizedStatus, s.enrolled_at, s.schedule],
+    );
+    enrollmentsCreated++;
+  }
+
+  return { familyId, parentsCreated, studentsCreated, enrollmentsCreated };
 }
