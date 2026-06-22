@@ -7,7 +7,7 @@
 
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ArrowLeft, ChevronDown, Mail, Phone, Inbox, Users, FlaskConical, Trash2, Paperclip, Download, FileText } from 'lucide-react';
+import { ArrowLeft, ChevronDown, Mail, Phone, Inbox, Users, FlaskConical, Trash2, Paperclip, Download, FileText, PencilLine } from 'lucide-react';
 import { query } from '@/lib/db';
 import { loadSchoolByLocationId } from '@/lib/dashboards/loader';
 import { HelpCallout } from '@/components/HelpCallout';
@@ -39,6 +39,9 @@ interface Submission {
   parent_phone: string | null;
   student_label: string | null;
   is_test: boolean;
+  is_addendum: boolean;
+  parent_submission_id: string | null;
+  parent_submitted_at: string | null;
 }
 
 interface MissingRecipient {
@@ -88,6 +91,9 @@ export default async function SubmissionsInboxScoped({
   const { rows: subs } = await query<Submission>(
     `SELECT s.id, s.family_id, s.parent_id, s.student_id, s.status,
             s.submitted_at, s.responses, s.is_test,
+            COALESCE(s.is_addendum, false) AS is_addendum,
+            s.parent_submission_id,
+            ps.submitted_at AS parent_submitted_at,
             COALESCE(NULLIF(f.display_name, ''),
                      CONCAT_WS(' ', p.first_name, p.last_name),
                      CASE WHEN s.is_test THEN '(test submission)' ELSE '(unnamed family)' END) AS family_label,
@@ -100,6 +106,7 @@ export default async function SubmissionsInboxScoped({
        LEFT JOIN families f ON f.id = s.family_id
        LEFT JOIN parents p ON p.id = s.parent_id
        LEFT JOIN students st ON st.id = s.student_id
+       LEFT JOIN portal_form_submissions ps ON ps.id = s.parent_submission_id
       WHERE s.form_definition_id = $1
         AND s.status IN ('submitted', 'paid', 'pending_payment', 'legacy_imported')
         ${showTest ? '' : 'AND s.is_test = false'}
@@ -204,8 +211,11 @@ export default async function SubmissionsInboxScoped({
     missing = rows;
   }
 
-  // Completion math: test rows should never inflate the real %.
-  const realSubs = subs.filter((s) => !s.is_test);
+  // Completion math: test rows AND amendments should never inflate the real %.
+  // An amendment is a re-signed change to an existing submission (same family),
+  // not a brand-new submission — counting it would double-count the family.
+  const realSubs = subs.filter((s) => !s.is_test && !s.is_addendum);
+  const amendmentCount = subs.filter((s) => !s.is_test && s.is_addendum).length;
   const completionPct = realSubs.length + missing.length > 0
     ? Math.round((realSubs.length / (realSubs.length + missing.length)) * 100)
     : 0;
@@ -282,9 +292,9 @@ export default async function SubmissionsInboxScoped({
           <div className="flex items-center justify-between mb-2">
             <div className="text-sm font-semibold text-slate-900">Completion</div>
             <div className="text-sm tabular-nums">
-              <span className="font-semibold text-emerald-700">{subs.length}</span>
+              <span className="font-semibold text-emerald-700">{realSubs.length}</span>
               <span className="text-slate-400"> / </span>
-              <span className="text-slate-700">{subs.length + missing.length}</span>
+              <span className="text-slate-700">{realSubs.length + missing.length}</span>
               <span className="text-slate-500 ml-1">({completionPct}%)</span>
             </div>
           </div>
@@ -298,7 +308,12 @@ export default async function SubmissionsInboxScoped({
           <div className="border-b border-slate-100 px-4 py-2.5 flex items-center justify-between">
             <h2 className="text-sm font-semibold text-slate-900 inline-flex items-center gap-2">
               <Inbox className="h-4 w-4 text-emerald-600" />
-              Submitted ({subs.length})
+              Submitted ({realSubs.length})
+              {amendmentCount > 0 ? (
+                <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-blue-800">
+                  {amendmentCount} amended
+                </span>
+              ) : null}
             </h2>
           </div>
           {subs.length === 0 ? (
@@ -427,9 +442,21 @@ function SubmissionRow({
   for (const f of fieldSchema ?? []) {
     if (f.key && f.label) labelByKey[f.key] = f.label;
   }
-  const responseEntries = Object.entries(s.responses ?? {}).filter(([, v]) =>
+  // Hide internal `_`/`__` markers (amendment diff, review flags, signed-at
+  // timestamps) from the raw response list — they're rendered specially below.
+  const responseEntries = Object.entries(s.responses ?? {}).filter(([k, v]) =>
+    !k.startsWith('_') &&
     v !== null && v !== undefined && v !== '' && (!Array.isArray(v) || v.length > 0),
   );
+
+  // Amendment diff (Previous → New) stashed on the row by the submit route.
+  const amendmentDiff = (s.is_addendum
+    && s.responses
+    && typeof (s.responses as Record<string, unknown>)._amendment_diff === 'object'
+    && (s.responses as Record<string, unknown>)._amendment_diff)
+    ? ((s.responses as Record<string, unknown>)._amendment_diff as Record<string, { old: unknown; new: unknown }>)
+    : null;
+  const diffEntries = amendmentDiff ? Object.entries(amendmentDiff) : [];
 
   const submittedDate = new Date(s.submitted_at);
   return (
@@ -448,6 +475,12 @@ function SubmissionRow({
                 test
               </span>
             ) : null}
+            {s.is_addendum ? (
+              <span className="inline-flex items-center gap-0.5 rounded-full bg-blue-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-blue-800">
+                <PencilLine className="h-2.5 w-2.5" />
+                amendment{diffEntries.length > 0 ? ` · ${diffEntries.length} field${diffEntries.length === 1 ? '' : 's'}` : ''}
+              </span>
+            ) : null}
           </div>
           <div className="text-[11px] text-slate-500">
             {s.student_label ? `${s.student_label} · ` : ''}
@@ -463,7 +496,46 @@ function SubmissionRow({
         </div>
       </Link>
       {isOpen ? (
-        <div className="px-12 py-4 bg-slate-50 border-t border-slate-200">
+        <div className="px-12 py-4 bg-slate-50 border-t border-slate-200 space-y-4">
+          {/* Amendment banner: what the parent changed + re-signed, shown
+              before the full response dump so staff act on it first. */}
+          {s.is_addendum ? (
+            <div className="rounded-md border border-blue-200 bg-blue-50 p-3">
+              <div className="text-xs font-semibold text-blue-900 inline-flex items-center gap-1.5">
+                <PencilLine className="h-3.5 w-3.5" />
+                Parent amended {diffEntries.length > 0 ? `${diffEntries.length} field${diffEntries.length === 1 ? '' : 's'}` : 'this form'} and re-signed
+              </div>
+              <div className="mt-0.5 text-[11px] text-blue-700">
+                {s.parent_submitted_at
+                  ? `Amends the original submitted ${new Date(s.parent_submitted_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}. `
+                  : ''}
+                Re-signed {submittedDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}.
+              </div>
+              {diffEntries.length > 0 ? (
+                <table className="mt-2 w-full text-xs border-collapse">
+                  <thead>
+                    <tr className="text-left text-[10px] uppercase tracking-wide text-blue-800">
+                      <th className="py-1 pr-3 font-medium">Field</th>
+                      <th className="py-1 pr-3 font-medium">Previous</th>
+                      <th className="py-1 font-medium">New</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {diffEntries.map(([k, c]) => (
+                      <tr key={k} className="border-t border-blue-100 align-top">
+                        <td className="py-1 pr-3 font-medium text-slate-700">{labelByKey[k] ?? k}</td>
+                        <td className="py-1 pr-3 text-slate-500 line-through break-words">{renderResponseValue(c.old)}</td>
+                        <td className="py-1 text-emerald-700 font-medium break-words">{renderResponseValue(c.new)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
+                <div className="mt-1 text-[11px] text-blue-700 italic">Fields were re-affirmed (no value change detected).</div>
+              )}
+            </div>
+          ) : null}
+
           {responseEntries.length === 0 ? (
             <div className="text-xs italic text-slate-500">No response data on this submission.</div>
           ) : (
