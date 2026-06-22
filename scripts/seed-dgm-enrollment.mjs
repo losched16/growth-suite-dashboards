@@ -230,7 +230,9 @@ const FIELD_SCHEMA = [
     // Price is embedded in the paid labels, so don't also append it.
     show_price_in_label: false,
     options: [
-      { value: 'decline',                     label: 'I decline Organic Lunch',                              amount_cents: 0,      },
+      // Decline only for Elementary/MYHS (paid opt-in). Infant/Toddler/Primary
+      // get lunch free and MUST pick a diet, so decline is hidden for them.
+      { value: 'decline',                     label: 'I decline Organic Lunch',                              amount_cents: 0,      visible_when: { field: 'program_tuition', equals: ['lower_elem_school', 'upper_elem_school', 'middle_high_school'] } },
       // Infant / Toddler / Primary — included free; one row per diet.
       { value: 'included_nonvegetarian',      label: 'Included (Infant/Toddler/Primary) - Nonvegetarian',   amount_cents: 0,      visible_when: { field: 'program_tuition', equals: ['infant_school', 'tp_half', 'tp_school'] } },
       { value: 'included_vegan',              label: 'Included (Infant/Toddler/Primary) - Vegan',           amount_cents: 0,      visible_when: { field: 'program_tuition', equals: ['infant_school', 'tp_half', 'tp_school'] } },
