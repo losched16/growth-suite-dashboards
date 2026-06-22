@@ -307,7 +307,11 @@ function act90Form() {
 function dhsAgreementForm() {
   return {
     slug: 'mch-dhs-agreement',
-    display_name: 'DHS Agreement — Extended Care (School Year)',
+    // Named just "DHS Agreement" (not "...Extended Care Fee"): the form is
+    // the PA DHS regulatory care agreement required for ALL toddlers/Young
+    // Community students plus anyone in extended care — it's not an
+    // extended-care-fee doc for the toddler families. (School request.)
+    display_name: 'DHS Agreement',
     // Visible to: (a) Young Community / Toddler kids — they're enrolled
     // in DHS-licensed child care by default, and (b) anyone who selected
     // extended care (before-care, after-care, or both) on their
@@ -322,28 +326,30 @@ function dhsAgreementForm() {
     },
     description:
       'Pennsylvania DHS-required care agreement (55 PA Code Ch. 3270.123 & .181). ' +
-      'Sets the Extended Care fee, arrival / departure times, and authorized release ' +
-      'persons. Required at admission and at each periodic review.',
+      'Required for all toddler / Young Community children and anyone in extended care. ' +
+      'Shows your total tuition, per-payment amount, arrival / departure times, and ' +
+      'authorized release persons. Required at admission and at each periodic review.',
     category: 'enrollment',
     per_student: true,
     confirmation_message:
-      'Thanks! Your DHS Extended Care Agreement has been received and added to your child\'s file.',
+      'Thanks! Your DHS Agreement has been received and added to your child\'s file.',
     field_schema: [
-      blockHeader('DHS Agreement — Extended Care Fee'),
+      blockHeader('DHS Agreement'),
       blockParagraph('55 PA Code Ch. 3270.123 & .181(C); 3280.123 & .181(c); 3290.123 & .181(c).', 'note'),
 
-      blockSection('Care Fee',
+      blockSection('Fee',
         'Pre-filled from your enrollment paperwork. Contact the office if anything looks wrong.'),
       blockParagraph(
         'Services included: Childcare, after-school snack, developmentally appropriate activities, ' +
-        'and diapering for toddlers. Payment due on the 15th of each month, July through April.',
+        'and diapering for toddlers. Payments are due on the 15th of each scheduled month ' +
+        '(monthly plans run July through April).',
       ),
-      txt('fee_amount',  'Extended care fee — annual ($)',
-        { prefill: 'enrollment.extended_care_dollars', readOnly: true,
-          help: 'Your annual extended-care fee, from your enrollment record. Blank if you have no separate extended-care fee.' }),
+      txt('fee_amount',  'Fee amount ($)',
+        { required: true, prefill: 'enrollment.total_annual_dollars', readOnly: true,
+          help: 'Your total tuition for the 2026–2027 school year.' }),
       txt('per_payment', 'Per payment ($)',
-        { prefill: 'enrollment.extended_care_monthly_dollars', readOnly: true,
-          help: 'Annual extended-care fee ÷ 10 monthly payments (July–April).' }),
+        { required: true, prefill: 'enrollment.installment_dollars', readOnly: true,
+          help: 'Your total ÷ your number of scheduled payments.' }),
 
       blockSection('Days & Hours of Attendance',
         'Your child\'s scheduled days and arrival / departure times, from your enrollment paperwork.'),
