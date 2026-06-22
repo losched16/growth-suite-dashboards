@@ -85,6 +85,20 @@ export default async function FormEditPageScoped({
   );
   const programOptions = progRows.map((r) => r.program);
 
+  // Distinct grade levels on the roster — lets the school target a form by
+  // grade (e.g. Kindergarten) even when that grade lives inside a broader
+  // program. Backed by applies_to.metadata_match.grade_level.
+  const { rows: gradeRows } = await query<{ grade_level: string }>(
+    `SELECT DISTINCT s.metadata->>'grade_level' AS grade_level
+       FROM students s
+      WHERE s.school_id = $1
+        AND btrim(coalesce(s.metadata->>'grade_level','')) <> ''
+        AND (s.metadata->>'is_demo') IS DISTINCT FROM 'true'
+      ORDER BY 1`,
+    [school.id],
+  );
+  const gradeOptions = gradeRows.map((r) => r.grade_level);
+
   return (
     <main className="flex flex-1 flex-col items-center bg-slate-50 p-6 min-h-screen">
       <div className="w-full max-w-4xl space-y-4">
@@ -148,6 +162,7 @@ export default async function FormEditPageScoped({
             applies_to: form.applies_to,
           }}
           programOptions={programOptions}
+          gradeOptions={gradeOptions}
         />
       </div>
     </main>

@@ -78,6 +78,18 @@ export default async function FormEditPage({
   );
   const programOptions = progRows.map((r) => r.program);
 
+  // Distinct grade levels → "By grade" targeting (e.g. Kindergarten).
+  const { rows: gradeRows } = await query<{ grade_level: string }>(
+    `SELECT DISTINCT s.metadata->>'grade_level' AS grade_level
+       FROM students s
+      WHERE s.school_id = $1
+        AND btrim(coalesce(s.metadata->>'grade_level','')) <> ''
+        AND (s.metadata->>'is_demo') IS DISTINCT FROM 'true'
+      ORDER BY 1`,
+    [schoolId],
+  );
+  const gradeOptions = gradeRows.map((r) => r.grade_level);
+
   return (
     <main className="flex flex-1 flex-col items-center bg-zinc-50 p-6">
       <div className="w-full max-w-4xl space-y-4">
@@ -141,6 +153,7 @@ export default async function FormEditPage({
             applies_to: form.applies_to,
           }}
           programOptions={programOptions}
+          gradeOptions={gradeOptions}
         />
       </div>
     </main>

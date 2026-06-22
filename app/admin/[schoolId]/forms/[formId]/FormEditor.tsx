@@ -119,7 +119,7 @@ const FIELD_TYPE_OPTIONS: Array<{ value: FieldType; label: string; group: string
 ];
 
 export function FormEditor({
-  schoolId, formId, slug, initial, programOptions = [],
+  schoolId, formId, slug, initial, programOptions = [], gradeOptions = [],
 }: {
   schoolId: string;
   formId: string;
@@ -129,6 +129,12 @@ export function FormEditor({
   // to populate the "Who sees this form" checklist. Empty → the school
   // has no program data yet and program targeting is hidden.
   programOptions?: string[];
+  // Distinct grade_level values on the roster (e.g. "kindergarten").
+  // Lets the school target a form by grade even when that grade is folded
+  // into a broader program (e.g. MCH's kindergartners are stored under the
+  // Primary program with grade_level="kindergarten"). Backed by
+  // applies_to.metadata_match.grade_level — sync-safe (additive merge).
+  gradeOptions?: string[];
 }) {
   const router = useRouter();
 
@@ -152,15 +158,25 @@ export function FormEditor({
     (initial.field_schema as FieldBlock[]).map((b) => ({ ...b })),
   );
 
-  // ── Who sees this form (applies_to.program_match) ──────────────
-  // We only edit program_match here. Any OTHER criteria on the rule
-  // (a hand-picked student list, tuition-grid match, etc.) are stashed
-  // and merged back in untouched on save, so this UI can never clobber
-  // an advanced rule support set up out-of-band.
+  // ── Who sees this form ─────────────────────────────────────────
+  // This UI manages two dimensions: program_match (by program) and
+  // metadata_match.grade_level (by grade). ANY other criteria on the
+  // rule (a hand-picked student list, tuition-grid match, other
+  // metadata_match keys like aftercare) are stashed and merged back in
+  // untouched on save, so this screen can never clobber an advanced rule
+  // set up out-of-band.
   const otherCriteria = useMemo<Omit<FormAppliesTo, 'program_match'>>(() => {
-    const { program_match, ...rest } = initial.applies_to ?? {};
+    const { program_match, metadata_match, ...rest } = initial.applies_to ?? {};
     void program_match;
-    return rest;
+    // Preserve every metadata_match key EXCEPT grade_level, which this
+    // screen owns. Keeps e.g. the DHS form's `aftercare` rule intact.
+    const out: Omit<FormAppliesTo, 'program_match'> = { ...rest };
+    if (metadata_match) {
+      const { grade_level, ...mmRest } = metadata_match;
+      void grade_level;
+      if (Object.keys(mmRest).length) out.metadata_match = mmRest;
+    }
+    return out;
   }, [initial.applies_to]);
   const hasOtherCriteria = Object.keys(otherCriteria).length > 0;
   // Checklist = every program on the roster + any program the rule
@@ -169,18 +185,34 @@ export function FormEditor({
     const stored = initial.applies_to?.program_match ?? [];
     return Array.from(new Set([...programOptions, ...stored]));
   }, [programOptions, initial.applies_to]);
+  // Same for grades: roster grade_level values + any the rule already names.
+  const gradeChecklist = useMemo(() => {
+    const stored = initial.applies_to?.metadata_match?.grade_level ?? [];
+    return Array.from(new Set([...gradeOptions, ...stored]));
+  }, [gradeOptions, initial.applies_to]);
   const [selectedPrograms, setSelectedPrograms] = useState<string[]>(
     initial.applies_to?.program_match ?? [],
   );
-  const [audienceMode, setAudienceMode] = useState<'all' | 'programs'>(
-    (initial.applies_to?.program_match?.length ?? 0) > 0 ? 'programs' : 'all',
+  const [selectedGrades, setSelectedGrades] = useState<string[]>(
+    initial.applies_to?.metadata_match?.grade_level ?? [],
+  );
+  const restrictedInitially =
+    (initial.applies_to?.program_match?.length ?? 0) > 0 ||
+    (initial.applies_to?.metadata_match?.grade_level?.length ?? 0) > 0;
+  const [audienceMode, setAudienceMode] = useState<'all' | 'restricted'>(
+    restrictedInitially ? 'restricted' : 'all',
   );
 
   // Build the applies_to value to persist. Empty → null ("all students").
+  // program_match and grade_level are OR'd by the matcher: a student sees
+  // the form if they're in a selected program OR a selected grade.
   function buildAppliesTo(): FormAppliesTo | null {
     const base: FormAppliesTo = { ...otherCriteria };
-    if (audienceMode === 'programs' && selectedPrograms.length > 0) {
-      base.program_match = selectedPrograms;
+    if (audienceMode === 'restricted') {
+      if (selectedPrograms.length > 0) base.program_match = selectedPrograms;
+      if (selectedGrades.length > 0) {
+        base.metadata_match = { ...(base.metadata_match ?? {}), grade_level: selectedGrades };
+      }
     }
     return Object.keys(base).length ? base : null;
   }
@@ -340,10 +372,10 @@ export function FormEditor({
             This form isn&rsquo;t per-student, so program targeting doesn&rsquo;t apply — it shows
             once per family. Turn on <strong>Per-student</strong> above to target it by program.
           </p>
-        ) : programChecklist.length === 0 ? (
+        ) : (programChecklist.length === 0 && gradeChecklist.length === 0) ? (
           <p className="text-[11px] text-zinc-500">
-            No programs were found on your student records yet, so there&rsquo;s nothing to
-            target by — this form shows to everyone.
+            No programs or grades were found on your student records yet, so there&rsquo;s
+            nothing to target by — this form shows to everyone.
           </p>
         ) : (
           <div className="space-y-2.5">
@@ -356,40 +388,69 @@ export function FormEditor({
               </span>
             </label>
             <label className="flex items-start gap-2 text-sm">
-              <input type="radio" name="audience" checked={audienceMode === 'programs'}
-                onChange={() => setAudienceMode('programs')} className="mt-0.5 h-4 w-4" />
+              <input type="radio" name="audience" checked={audienceMode === 'restricted'}
+                onChange={() => setAudienceMode('restricted')} className="mt-0.5 h-4 w-4" />
               <span>
-                <span className="text-zinc-800">Only students in specific programs</span>
-                <span className="block text-[10px] text-zinc-500">Pick the programs below — the form hides for any child not in one of them.</span>
+                <span className="text-zinc-800">Only students in specific programs or grades</span>
+                <span className="block text-[10px] text-zinc-500">Pick below — the form hides for any child not in one of them.</span>
               </span>
             </label>
 
-            {audienceMode === 'programs' ? (
-              <div className="ml-6 rounded-md border border-zinc-200 bg-zinc-50/40 p-3 space-y-1.5">
-                {programChecklist.map((prog) => (
-                  <label key={prog} className="flex items-center gap-2 text-sm">
-                    <input
-                      type="checkbox"
-                      checked={selectedPrograms.includes(prog)}
-                      onChange={(e) => {
-                        setSelectedPrograms(
-                          e.target.checked
-                            ? [...selectedPrograms, prog]
-                            : selectedPrograms.filter((p) => p !== prog),
-                        );
-                      }}
-                      className="h-4 w-4 rounded border-zinc-300"
-                    />
-                    <span className="text-zinc-800">{prog}</span>
-                  </label>
-                ))}
-                {selectedPrograms.length === 0 ? (
-                  <p className="text-[11px] text-amber-700 pt-1">
-                    Select at least one program — otherwise this form shows to everyone.
+            {audienceMode === 'restricted' ? (
+              <div className="ml-6 space-y-3">
+                {programChecklist.length > 0 ? (
+                  <div className="rounded-md border border-zinc-200 bg-zinc-50/40 p-3 space-y-1.5">
+                    <div className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">By program</div>
+                    {programChecklist.map((prog) => (
+                      <label key={prog} className="flex items-center gap-2 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={selectedPrograms.includes(prog)}
+                          onChange={(e) => {
+                            setSelectedPrograms(
+                              e.target.checked
+                                ? [...selectedPrograms, prog]
+                                : selectedPrograms.filter((p) => p !== prog),
+                            );
+                          }}
+                          className="h-4 w-4 rounded border-zinc-300"
+                        />
+                        <span className="text-zinc-800">{prog}</span>
+                      </label>
+                    ))}
+                  </div>
+                ) : null}
+
+                {gradeChecklist.length > 0 ? (
+                  <div className="rounded-md border border-zinc-200 bg-zinc-50/40 p-3 space-y-1.5">
+                    <div className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">By grade</div>
+                    {gradeChecklist.map((g) => (
+                      <label key={g} className="flex items-center gap-2 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={selectedGrades.includes(g)}
+                          onChange={(e) => {
+                            setSelectedGrades(
+                              e.target.checked
+                                ? [...selectedGrades, g]
+                                : selectedGrades.filter((x) => x !== g),
+                            );
+                          }}
+                          className="h-4 w-4 rounded border-zinc-300"
+                        />
+                        <span className="text-zinc-800 capitalize">{g}</span>
+                      </label>
+                    ))}
+                  </div>
+                ) : null}
+
+                {selectedPrograms.length === 0 && selectedGrades.length === 0 ? (
+                  <p className="text-[11px] text-amber-700">
+                    Select at least one program or grade — otherwise this form shows to everyone.
                   </p>
                 ) : (
-                  <p className="text-[11px] text-zinc-500 pt-1">
-                    Visible only to children in: {selectedPrograms.join(', ')}.
+                  <p className="text-[11px] text-zinc-500">
+                    Visible only to: {[...selectedPrograms, ...selectedGrades].join(', ')}.
                   </p>
                 )}
               </div>
