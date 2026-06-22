@@ -53,7 +53,13 @@ export function StudentsTable({ rows, locationId }: { rows: StudentProgressRow[]
                   </td>
                   <td className="px-3 py-2 font-medium text-gray-900">
                     {r.student_name}
-                    {r.program ? <div className="text-[11px] text-gray-500">{r.program}</div> : null}
+                    {(r.unique_id || r.program) ? (
+                      <div className="text-[11px] text-gray-500">
+                        {r.unique_id ? <span className="tabular-nums">ID {r.unique_id}</span> : null}
+                        {r.unique_id && r.program ? ' · ' : ''}
+                        {r.program || ''}
+                      </div>
+                    ) : null}
                   </td>
                   <td className="px-3 py-2 text-gray-700">{r.family}</td>
                   <td className="px-3 py-2 text-xs text-gray-600">
@@ -113,7 +119,7 @@ function StudentDetail({ row, locationId }: { row: StudentProgressRow; locationI
           <table className="w-full text-xs">
             <thead className="text-left text-[10px] uppercase tracking-wide text-gray-400">
               <tr>
-                <th className="px-3 py-1.5 font-medium">Account</th>
+                <th className="px-3 py-1.5 font-medium">FACTS account</th>
                 <th className="px-3 py-1.5 font-medium text-right">Charged</th>
                 <th className="px-3 py-1.5 font-medium text-right">Credit</th>
                 <th className="px-3 py-1.5 font-medium text-right">Paid</th>

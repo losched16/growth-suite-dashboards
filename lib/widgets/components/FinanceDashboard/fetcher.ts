@@ -87,6 +87,10 @@ export interface FactsActuals {
 // progress per family in one place.
 export interface StudentProgressRow {
   student_id: string;
+  // Canonical GHL contact Student ID (metadata.unique_id) — the SAME id the
+  // student roster shows, so the two hubs reconcile. The FACTS account number
+  // (in accounts[]) is a separate legacy reference kept for FACTS matching.
+  unique_id: string | null;
   student_name: string;
   family: string;
   family_id: string | null;
@@ -572,11 +576,13 @@ async function loadStudentProgress(
   const like = q ? `%${q}%` : null;
   const { rows } = await query<{
     id: string; first_name: string; last_name: string; preferred_name: string | null;
+    unique_id: string | null;
     family_id: string | null; family: string; program: string; plan: string;
     gs_first_due: string | null; charged: string; credits: string; paid: string;
     balance: string; gs_installments: string; gs_scheduled: string;
   }>(
     `SELECT s.id, s.first_name, s.last_name, s.preferred_name, s.family_id,
+            s.metadata->>'unique_id' AS unique_id,
             COALESCE(f.display_name,'') AS family,
             COALESCE(s.metadata->>'program_name','') AS program,
             COALESCE((SELECT pp.display_name FROM family_tuition_enrollments e
@@ -611,6 +617,7 @@ async function loadStudentProgress(
     const pct = net > 0 ? Math.min(100, Math.round((paid / net) * 100)) : (paid > 0 ? 100 : 0);
     return {
       student_id: r.id,
+      unique_id: r.unique_id,
       student_name: `${(r.preferred_name && r.preferred_name.trim()) || r.first_name} ${r.last_name}`.trim(),
       family: r.family, family_id: r.family_id, program: r.program, plan: r.plan,
       charged, credits, paid, balance, pct_paid: pct,
