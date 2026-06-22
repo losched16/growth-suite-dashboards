@@ -15,7 +15,7 @@
 
 import type { NextRequest } from 'next/server';
 import {
-  authorizeExport,
+  authorizeExportPublic,
   unauthorizedCsvResponse,
   csvResponse,
   toCsv,
@@ -40,7 +40,12 @@ function meta(s: StudentRecord | null, key: string): string {
 
 export async function GET(request: NextRequest, { params }: { params: Params }) {
   const { locationId } = await params;
-  const school = await authorizeExport(request, locationId);
+  // Public posture (resolve by location id) — same as the roster / contacts
+  // / FACTS exports. The strict cookie/embed_token check used to 401 when
+  // the Download link navigated the top frame out of the embedded iframe
+  // (the partitioned session cookie isn't sent on that navigation), so the
+  // download failed. The CSV is no more sensitive than the on-screen table.
+  const school = await authorizeExportPublic(request, locationId);
   if (!school) return unauthorizedCsvResponse();
 
   const sp: WidgetSearchParams = {};
