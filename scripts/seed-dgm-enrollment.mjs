@@ -214,6 +214,10 @@ const FIELD_SCHEMA = [
     label: 'Extended Day',
     required: true,
     show_price_in_label: true,
+    // Extended Day isn't offered for the half-day program — hide the whole
+    // field when Toddler/Primary Half Day is selected. Shows for every
+    // full-day program.
+    visible_when: { field: 'program_tuition', equals: ['infant_school', 'tp_school', 'lower_elem_school', 'upper_elem_school', 'middle_high_school'] },
     options: [
       { value: 'enroll',  label: 'Enroll in Extended Day (until 6:00 p.m.)', amount_cents: 495000 },
       { value: 'decline', label: 'Decline Extended Day',                     amount_cents: 0      },
