@@ -16,6 +16,31 @@ import { useRouter } from 'next/navigation';
 import { AlertCircle, Loader2 } from 'lucide-react';
 
 type Block = Record<string, unknown>;
+type VisibleWhen = { field?: string; equals?: string[] } | null | undefined;
+
+// Mirror of the parent-portal's conditional-visibility semantics
+// (lib/forms/prefill.ts). Kept in sync so the staff Test-mode preview
+// hides/shows exactly what a real parent sees on the live form.
+//
+// Field-level: a block with no `visible_when` is always shown; otherwise
+// it shows only when the referenced field's CURRENT value is one of
+// `equals` — an empty/unselected reference field means HIDDEN.
+function isBlockVisible(vw: VisibleWhen, values: Record<string, string>): boolean {
+  if (!vw || !vw.field) return true;
+  const cur = values[vw.field];
+  const curStr = cur == null ? '' : String(cur);
+  return (vw.equals ?? []).map(String).includes(curStr);
+}
+
+// Option-level: like the above, EXCEPT an empty/unselected reference field
+// means SHOW the option (we don't filter until the parent has picked the
+// thing the option depends on). Matches FormRenderer's PricingSelect filter.
+function isOptionVisible(vw: VisibleWhen, values: Record<string, string>): boolean {
+  if (!vw || !vw.field) return true;
+  const v = values[vw.field];
+  if (v == null || v === '') return true;
+  return (vw.equals ?? []).map(String).includes(String(v));
+}
 
 export function TestSubmitForm({
   schoolId,
@@ -36,6 +61,18 @@ export function TestSubmitForm({
   const blocks = Array.isArray(schema) ? (schema as Block[]) : [];
   const [submitting, setSubmitting] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  // Reactive snapshot of current field values, recomputed from the form's
+  // own FormData on every change. Drives conditional visibility so the
+  // preview behaves like the live parent form (hides extended day for
+  // half-day, drops the paid-lunch option for toddler/primary, etc.).
+  const [responses, setResponses] = useState<Record<string, string>>({});
+
+  function refreshResponses(form: HTMLFormElement) {
+    const fd = new FormData(form);
+    const next: Record<string, string> = {};
+    for (const [k, v] of fd.entries()) next[k] = typeof v === 'string' ? v : '';
+    setResponses(next);
+  }
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -73,11 +110,19 @@ export function TestSubmitForm({
   }
 
   return (
-    <form onSubmit={onSubmit} className="space-y-5">
+    <form
+      onSubmit={onSubmit}
+      onChange={(e) => refreshResponses(e.currentTarget)}
+      className="space-y-5"
+    >
       {perStudent ? (
         <input type="hidden" name="student_id" value="__test__" />
       ) : null}
-      {blocks.map((block, i) => <Block key={i} block={block} />)}
+      {blocks.map((block, i) =>
+        isBlockVisible(block.visible_when as VisibleWhen, responses) ? (
+          <Block key={i} block={block} responses={responses} />
+        ) : null,
+      )}
 
       {err ? (
         <div className="rounded-md border border-rose-300 bg-rose-50 p-3 text-sm text-rose-800 flex items-start gap-2">
@@ -107,7 +152,7 @@ export function TestSubmitForm({
 
 // ─── Field renderers ───────────────────────────────────────────────
 
-function Block({ block }: { block: Block }) {
+function Block({ block, responses }: { block: Block; responses: Record<string, string> }) {
   const type = String(block.type ?? '');
   const key = String(block.key ?? '');
 
@@ -247,7 +292,11 @@ function Block({ block }: { block: Block }) {
     case 'multi_pricing':
     case 'quantity_pricing':
     case 'tuition_calculator': {
-      const options = Array.isArray(block.options) ? (block.options as Array<{ label: string; amount_cents: number; value?: string }>) : [];
+      const options = (
+        Array.isArray(block.options)
+          ? (block.options as Array<{ label: string; amount_cents: number; value?: string; visible_when?: VisibleWhen }>)
+          : []
+      ).filter((o) => isOptionVisible(o.visible_when, responses));
       return (
         <Shell block={block}>
           <div className="mt-1 rounded-md border border-emerald-200 bg-emerald-50/40 px-3 py-2 text-sm">
