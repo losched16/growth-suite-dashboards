@@ -98,9 +98,11 @@ function lunchIcon(v: string | null) {
   if (!v) return <MinusCircle className="h-4 w-4 text-slate-300" />;
   const lower = v.toLowerCase();
   if (lower.includes('decline')) return <MinusCircle className="h-4 w-4 text-slate-400" />;
+  // Check nonveg FIRST — "nonvegetarian" contains the substring "vegetarian",
+  // so it would otherwise match the vegetarian branch by accident.
+  if (lower.includes('nonveg'))  return <Drumstick className="h-4 w-4 text-amber-700" />;
   if (lower.includes('vegan'))   return <Leaf className="h-4 w-4 text-emerald-600" />;
   if (lower.includes('vegetarian')) return <Salad className="h-4 w-4 text-emerald-600" />;
-  if (lower.includes('nonveg'))  return <Drumstick className="h-4 w-4 text-amber-700" />;
   return <Soup className="h-4 w-4 text-orange-600" />;
 }
 

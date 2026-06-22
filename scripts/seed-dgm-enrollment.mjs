@@ -227,11 +227,18 @@ const FIELD_SCHEMA = [
     key: 'organic_lunch',
     label: 'Organic Lunch',
     required: true,
-    show_price_in_label: true,
+    // Price is embedded in the paid labels, so don't also append it.
+    show_price_in_label: false,
     options: [
-      { value: 'enroll_elem',  label: 'Enroll in Organic Lunch (Elementary / MYHS — $2,100/year)', amount_cents: 210000 },
-      { value: 'included',     label: 'Included with my tuition (Infant / Toddler / Primary)',     amount_cents: 0      },
-      { value: 'decline',      label: 'Decline Organic Lunch',                                      amount_cents: 0      },
+      { value: 'decline',                     label: 'I decline Organic Lunch',                              amount_cents: 0,      },
+      // Infant / Toddler / Primary — included free; one row per diet.
+      { value: 'included_nonvegetarian',      label: 'Included (Infant/Toddler/Primary) - Nonvegetarian',   amount_cents: 0,      visible_when: { field: 'program_tuition', equals: ['infant_school', 'tp_half', 'tp_school'] } },
+      { value: 'included_vegan',              label: 'Included (Infant/Toddler/Primary) - Vegan',           amount_cents: 0,      visible_when: { field: 'program_tuition', equals: ['infant_school', 'tp_half', 'tp_school'] } },
+      { value: 'included_vegetarian',         label: 'Included (Infant/Toddler/Primary) - Vegetarian',      amount_cents: 0,      visible_when: { field: 'program_tuition', equals: ['infant_school', 'tp_half', 'tp_school'] } },
+      // Elementary / MYHS — $2,100/year; one row per diet.
+      { value: 'organic_2100_nonvegetarian',  label: 'Organic Lunch $2,100 - Nonvegetarian',                amount_cents: 210000, visible_when: { field: 'program_tuition', equals: ['lower_elem_school', 'upper_elem_school', 'middle_high_school'] } },
+      { value: 'organic_2100_vegan',          label: 'Organic Lunch $2,100 - Vegan',                        amount_cents: 210000, visible_when: { field: 'program_tuition', equals: ['lower_elem_school', 'upper_elem_school', 'middle_high_school'] } },
+      { value: 'organic_2100_vegetarian',     label: 'Organic Lunch $2,100 - Vegetarian',                   amount_cents: 210000, visible_when: { field: 'program_tuition', equals: ['lower_elem_school', 'upper_elem_school', 'middle_high_school'] } },
     ],
   },
 
