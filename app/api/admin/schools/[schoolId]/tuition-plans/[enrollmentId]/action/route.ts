@@ -294,9 +294,11 @@ export async function POST(request: NextRequest, { params }: { params: Params })
         const { rows: iRows } = await query<{
           id: string; status: string; amount_paid_cents: number;
           total_cents: number; installment_number: number | null;
+          autopay_enabled: boolean; autopay_payment_method_id: string | null;
         }>(
           `SELECT i.id, i.status, i.amount_paid_cents, i.total_cents,
-                  (i.source_ref->>'installment_number')::int AS installment_number
+                  (i.source_ref->>'installment_number')::int AS installment_number,
+                  i.autopay_enabled, i.autopay_payment_method_id
              FROM invoices i
             WHERE i.id = $1 AND i.school_id = $2
               AND i.source = 'tuition_plan'
@@ -345,9 +347,11 @@ export async function POST(request: NextRequest, { params }: { params: Params })
                  (school_id, family_id, student_id, invoice_number, title, description,
                   status, subtotal_cents, platform_fee_cents, discount_total_cents,
                   total_cents, due_at, issued_at, source, source_ref,
-                  includes_platform_setup_fee, created_by_email)
+                  includes_platform_setup_fee, created_by_email,
+                  autopay_enabled, autopay_payment_method_id)
                VALUES ($1, $2, $3, $4, $5, $6, 'open', $7, 0, 0, $7, $8::date, now(),
-                       'tuition_plan', $9::jsonb, false, 'operator@growthsuite.local')
+                       'tuition_plan', $9::jsonb, false, 'operator@growthsuite.local',
+                       $10, $11)
                RETURNING id`,
               [
                 schoolId, enr.family_id, enr.student_id,
@@ -359,6 +363,7 @@ export async function POST(request: NextRequest, { params }: { params: Params })
                   split_part: idx,
                   split_from_invoice_id: invoiceId,
                 }),
+                inv.autopay_enabled, inv.autopay_payment_method_id,
               ],
             );
             await rewriteSingleLine(ins.rows[0].id, title, amt, enr.student_id, q);
@@ -381,8 +386,8 @@ export async function POST(request: NextRequest, { params }: { params: Params })
         const cadence = String(fd.get('cadence') ?? 'monthly').trim();
 
         // Unpaid balance = open + draft tuition invoices (paid ones preserved).
-        const { rows: openRows } = await query<{ id: string; total_cents: number }>(
-          `SELECT id, total_cents FROM invoices
+        const { rows: openRows } = await query<{ id: string; total_cents: number; autopay_enabled: boolean; autopay_payment_method_id: string | null }>(
+          `SELECT id, total_cents, autopay_enabled, autopay_payment_method_id FROM invoices
             WHERE school_id = $1 AND source = 'tuition_plan'
               AND source_ref->>'enrollment_id' = $2
               AND status IN ('open', 'draft')`,
@@ -392,6 +397,11 @@ export async function POST(request: NextRequest, { params }: { params: Params })
         if (totalBalanceCents <= 0) {
           return back(request, fallback, returnTo, { err: 'No open/draft installments to reschedule.' });
         }
+        // Carry the family's autopay setup forward to the new installments, so a
+        // reschedule keeps auto-billing on the new (incl. custom) due dates
+        // instead of silently dropping the saved card.
+        const inheritAutopay = openRows.some((r) => r.autopay_enabled);
+        const inheritMethodId = openRows.map((r) => r.autopay_payment_method_id).find(Boolean) ?? null;
 
         // Build the target installments [{ due, cents }] for the chosen mode.
         const plan: Array<{ due: string; cents: number }> = [];
@@ -466,15 +476,18 @@ export async function POST(request: NextRequest, { params }: { params: Params })
                  (school_id, family_id, student_id, invoice_number, title, description,
                   status, subtotal_cents, platform_fee_cents, discount_total_cents,
                   total_cents, due_at, issued_at, source, source_ref,
-                  includes_platform_setup_fee, created_by_email)
+                  includes_platform_setup_fee, created_by_email,
+                  autopay_enabled, autopay_payment_method_id)
                VALUES ($1, $2, $3, $4, $5, $6, 'open', $7, 0, 0, $7, $8::date, now(),
-                       'tuition_plan', $9::jsonb, false, 'operator@growthsuite.local')
+                       'tuition_plan', $9::jsonb, false, 'operator@growthsuite.local',
+                       $10, $11)
                RETURNING id`,
               [
                 schoolId, enr.family_id, enr.student_id,
                 invNum, title, `Rescheduled balance · ${cadence}`,
                 cents, due,
                 JSON.stringify({ enrollment_id: enrollmentId, installment_number: i + 1, reschedule_source: 'remaining' }),
+                inheritAutopay, inheritMethodId,
               ],
             );
             await rewriteSingleLine(ins.rows[0].id, title, cents, enr.student_id, q);
