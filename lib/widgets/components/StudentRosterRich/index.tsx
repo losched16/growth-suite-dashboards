@@ -283,6 +283,7 @@ function renderCell(s: RosterStudent, col: ColumnKey, drilldownDashboard: string
     case 'gender_age': return <span className="text-gray-700">{(s.gender ?? '—')} · {ageFrom(s.date_of_birth)}</span>;
     case 'age_aug1': return <span className="text-gray-700 tabular-nums">{s.age_as_of_aug1 || '—'}</span>;
     case 'age_jan1': return <span className="text-gray-700 tabular-nums">{s.age_as_of_jan1 || '—'}</span>;
+    case 'age_today': return <span className="text-gray-700 tabular-nums">{s.age_as_of_today || '—'}</span>;
     case 'program': return <span className="text-gray-700">{s.program ?? s.classroom_name ?? '—'}</span>;
     case 'homeroom': return <span className="text-gray-700">{s.homeroom ?? s.classroom_name ?? '—'}</span>;
     case 'lead_teacher': return <span className="text-gray-700">{s.lead_teacher_name ?? '—'}</span>;

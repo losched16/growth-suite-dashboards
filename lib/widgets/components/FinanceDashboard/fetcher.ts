@@ -106,7 +106,7 @@ export interface StudentProgressRow {
   gs_first_due: string | null;
   // Drill-down detail (rendered in the inline accordion).
   accounts: Array<{ account: string; charged: number; credit: number; paid: number; balance: number }>;
-  schedule: Array<{ label: string; due: string | null; amount: number; status: string; paid: number }>;
+  schedule: Array<{ label: string; due: string | null; amount: number; status: string; paid: number; kind?: 'tuition' | 'fee' }>;
 }
 
 // One FACTS ledger line for the "Transactions" tab — every debit/credit/
@@ -651,15 +651,18 @@ async function loadStudentProgress(
         paid: c(r.payments_cents), balance: c(r.ending_balance_cents),
       });
     }
+    // Consolidated schedule: tuition installments AND incidental one-off fees
+    // (enrollment fee, late fees, etc.) on one timeline, each with its due
+    // date — so the office sees every upcoming draw in one place.
     const { rows: invRows } = await query<{
-      student_id: string; invoice_number: string; due_at: Date | null;
+      student_id: string; invoice_number: string; title: string | null; source: string | null; due_at: Date | null;
       total_cents: string; amount_paid_cents: string; status: string;
     }>(
-      `SELECT student_id, invoice_number, due_at, total_cents::text, amount_paid_cents::text, status
+      `SELECT student_id, invoice_number, title, source, due_at, total_cents::text, amount_paid_cents::text, status
          FROM invoices
-        WHERE school_id = $1 AND source = 'tuition_plan' AND voided_at IS NULL
+        WHERE school_id = $1 AND voided_at IS NULL
           AND student_id = ANY($2::uuid[])
-        ORDER BY due_at`,
+        ORDER BY due_at NULLS LAST, invoice_number`,
       [schoolId, ids],
     );
     for (const r of invRows) {
@@ -668,10 +671,12 @@ async function loadStudentProgress(
         : paid > 0 ? 'Partial'
         : r.status === 'draft' ? 'Scheduled (draft)'
         : 'Scheduled';
+      const isTuition = r.source === 'tuition_plan';
       byId.get(r.student_id)?.schedule.push({
-        label: r.invoice_number,
+        label: isTuition ? r.invoice_number : (r.title || r.invoice_number),
         due: r.due_at ? r.due_at.toISOString().slice(0, 10) : null,
         amount: total, status: st, paid,
+        kind: isTuition ? 'tuition' : 'fee',
       });
     }
   }

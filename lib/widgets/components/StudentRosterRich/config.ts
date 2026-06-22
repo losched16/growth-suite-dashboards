@@ -33,6 +33,7 @@ export const AVAILABLE_COLUMNS = [
   { key: 'gender_age',           label: 'Gender / Age' },
   { key: 'age_aug1',             label: 'Age @ Aug 1' },
   { key: 'age_jan1',             label: 'Age @ Jan 1' },
+  { key: 'age_today',            label: 'Age @ Today' },
   { key: 'program',              label: 'Program' },
   { key: 'homeroom',             label: 'Homeroom' },
   { key: 'lead_teacher',         label: 'Lead teacher' },

@@ -164,7 +164,10 @@ function StudentDetail({ row, locationId }: { row: StudentProgressRow; locationI
                 <tr><td colSpan={4} className="px-3 py-3 text-center text-gray-400">No schedule yet</td></tr>
               ) : row.schedule.map((s, i) => (
                 <tr key={i}>
-                  <td className="px-3 py-1.5 text-gray-600">{s.label}</td>
+                  <td className="px-3 py-1.5 text-gray-600">
+                    {s.label}
+                    {s.kind === 'fee' ? <span className="ml-1.5 rounded bg-indigo-100 px-1 py-0.5 text-[9px] font-semibold tracking-wide text-indigo-700">FEE</span> : null}
+                  </td>
                   <td className="px-3 py-1.5 text-gray-600">{s.due ?? '—'}</td>
                   <td className="px-3 py-1.5 text-right tabular-nums text-gray-700">{fmt(s.amount)}</td>
                   <td className="px-3 py-1.5">

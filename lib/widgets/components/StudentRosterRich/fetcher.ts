@@ -86,9 +86,11 @@ export interface RosterStudent {
   lead_teacher_name: string | null;
   schedule: string | null;
   academic_year: string | null;
-  // Age at the selected year's grade-cutoff dates (Aug 1 / Jan 1).
+  // Age at the selected year's grade-cutoff dates (Aug 1 / Jan 1) plus the
+  // current age (today) — the three age formulas DGM tracks for placement.
   age_as_of_aug1: string;
   age_as_of_jan1: string;
+  age_as_of_today: string;
   program: string | null;
   homeroom: string | null;
   tuition: string | null;
@@ -664,6 +666,7 @@ export async function fetcher(
       academic_year: r.academic_year,
       age_as_of_aug1: ageAtDate(r.date_of_birth, augRef),
       age_as_of_jan1: ageAtDate(r.date_of_birth, janRef),
+      age_as_of_today: ageAtDate(r.date_of_birth, new Date()),
       program,
       homeroom,
       tuition,
