@@ -120,11 +120,16 @@ async function main(){
     // sibling discount (no compounding): each comes off its own basis.
     const promptPay = (e.installment_count===1 && !isScholar) ? Math.round(base*0.03) : 0;
     if(promptPay>0) addons.push({key:'prompt_pay_discount',label:'Paid-in-full discount (3%)',amount_cents:-promptPay});
+    // Semi-annual (2-installment, July & January) plans earn a 2% discount
+    // off base tuition. School-confirmed. Mutually exclusive with the 3%
+    // pay-in-full discount above; both come off base, independent of sibling.
+    const semiAnnual = (e.installment_count===2 && !isScholar) ? Math.round(base*0.02) : 0;
+    if(semiAnnual>0) addons.push({key:'semi_annual_discount',label:'Semi-annual discount (2%)',amount_cents:-semiAnnual});
     const subtotal = base - deposit + ext;
     let sibAmt=0;
     if(isSibling){ sibAmt = subtotal - Math.round(subtotal*0.9); addons.push({key:'sibling_discount',label:'Sibling discount (10%)',amount_cents:-sibAmt}); }
     addons.push({key:'development_fee',label:`Development fee`,amount_cents:devFee});
-    let total = subtotal - sibAmt - promptPay + devFee;
+    let total = subtotal - sibAmt - promptPay - semiAnnual + devFee;
     if(isScholar){ addons.push({key:'scholarship',label:'Full scholarship',amount_cents:-total}); }
     const owed = isScholar ? 0 : total;
 
