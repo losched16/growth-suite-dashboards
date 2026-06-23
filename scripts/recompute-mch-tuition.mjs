@@ -49,6 +49,16 @@ const EXT_OVERRIDE = new Map([
   ['siena quintans', 172500],
 ]);
 
+// Students on a genuine 4-DAY schedule. Historically 4 days rounded UP to
+// the 5-day grid (for both base tuition AND extended care), overcharging
+// them. School-confirmed these attend 4 days: base = the $11,500 4-day grid
+// and extended care = the 4-day column of the rate matrix. Listed here so
+// the 4→5 rounding is skipped only for them (others unaffected).
+const FOUR_DAY = new Set([
+  'vivienne tryens', 'tessa tryens', 'cameron sutter', 'harrison cucura',
+  'ruby park', 'kiera dagostino', 'luca giannascoli',
+]);
+
 const EXT = { '1':{2:97500,3:136500,4:172000,5:202500}, '2':{2:172500,3:230000,4:286500,5:330000}, '3':{2:230000,3:313000,4:357000,5:400000}, '4':{2:285000,3:357000,4:404000,5:467500} };
 function extTier(raw){ const s=String(raw??'').toLowerCase(); if(!s||s==='0'||s==='none')return null; if(s.includes('1 hour or less'))return '1'; if(s.includes('1 hours, up to 2')||(s.includes('1 hour')&&s.includes('2 hours')))return '2'; if(s.includes('2 hours')&&s.includes('3 hours'))return '3'; if(s.includes('more than 3'))return '4'; return null; }
 function parseDays(raw, times){ let s=String(raw??'').toUpperCase(); let hf=s.includes('FULL')?'full':(s.includes('HAL')?'half':null);
@@ -59,7 +69,7 @@ function parseDays(raw, times){ let s=String(raw??'').toUpperCase(); let hf=s.in
   if(!hf){const t=String(times??'').toLowerCase(); hf=(t.includes('11:30')||t.includes('11:45'))?'half':'full';}
   return {count:n,hf};
 }
-function gridName(program, days, hf){ const eff=days===4?5:days; if(program==='Kindergarten')return 'Kindergarten — 5 Full Days (8:30am–3:15pm)';
+function gridName(program, days, hf){ const eff=days; if(program==='Kindergarten')return 'Kindergarten — 5 Full Days (8:30am–3:15pm)';
   const dl=`${eff} Days`, hl=hf==='half'?'Half Day':'Full Day';
   if(program==='Young Community'){ if(eff===2&&hf==='half')return 'YC — 2 Days, Half Day (9am–11:30am)'; if(eff===2)return 'YC — 2 Days, Full Day (9am–2:45pm)'; return `YC — ${dl}, ${hl}`; }
   if(eff===3&&hf==='half')return 'Primary — 3 Days, Half Day (8:45am–11:45am)'; if(eff===3)return 'Primary — 3 Days, Full Day (8:45am–2:45pm)'; return `Primary — ${dl}, ${hl}`;
@@ -97,11 +107,13 @@ async function main(){
     const isK=K_LIST.has(norm(`${first} ${last}`));
     const program = isK ? 'Kindergarten' : (r.yc ? 'Young Community' : 'Primary');
     const {count,hf}=parseDays(r.days, r.times);
-    const gname=gridName(program,count,hf);
+    // 4-day students keep 4; everyone else rounds a stray 4 up to 5 (legacy).
+    const effDays = FOUR_DAY.has(key) ? count : (count===4?5:count);
+    const gname=gridName(program,effDays,hf);
     const { rows: gr } = await pool.query(`SELECT id, annual_tuition_cents FROM tuition_grids WHERE school_id=$1 AND display_name=$2 AND is_active=true`,[SCHOOL,gname]);
     if(!gr.length){ preview.push(`  ?? ${r.name} — grid not found: ${gname}`); continue; }
     const base=gr[0].annual_tuition_cents, gridId=gr[0].id;
-    const tier=extTier(r.extcare); const eff=count===4?5:count;
+    const tier=extTier(r.extcare); const eff=effDays;
     const ext = EXT_OVERRIDE.has(key) ? EXT_OVERRIDE.get(key) : (tier ? (EXT[tier]?.[eff]??0) : 0);
     const extLabel = EXT_OVERRIDE.has(key) ? 'Extended care (2 days/week)' : `Extended care (${r.extcare})`;
     const isScholar=SCHOLARSHIP.has(key);
