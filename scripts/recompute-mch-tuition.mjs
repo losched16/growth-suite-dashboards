@@ -68,6 +68,12 @@ const SIBLING_OVERRIDE = new Set([
   'daphne lewis',
 ]);
 
+// Students who did NOT pay the $400 enrollment fee/deposit — so they get no
+// deposit credit and owe the full amount. School-confirmed: Zara Alizai.
+const NO_DEPOSIT = new Set([
+  'zara alizai',
+]);
+
 const EXT = { '1':{2:97500,3:136500,4:172000,5:202500}, '2':{2:172500,3:230000,4:286500,5:330000}, '3':{2:230000,3:313000,4:357000,5:400000}, '4':{2:285000,3:357000,4:404000,5:467500} };
 function extTier(raw){ const s=String(raw??'').toLowerCase(); if(!s||s==='0'||s==='none')return null; if(s.includes('1 hour or less'))return '1'; if(s.includes('1 hours, up to 2')||(s.includes('1 hour')&&s.includes('2 hours')))return '2'; if(s.includes('2 hours')&&s.includes('3 hours'))return '3'; if(s.includes('more than 3'))return '4'; return null; }
 function parseDays(raw, times){ let s=String(raw??'').toUpperCase(); let hf=s.includes('FULL')?'full':(s.includes('HAL')?'half':null);
@@ -130,7 +136,7 @@ async function main(){
     // Flat deposit rule (school-confirmed): every student gets a $400
     // deposit credit, siblings $200 — regardless of whether the sheet
     // cell is filled. Scholarship (Violet) has no deposit.
-    const deposit = isScholar ? 0 : (isSibling ? 20000 : 40000);
+    const deposit = (isScholar || NO_DEPOSIT.has(key)) ? 0 : (isSibling ? 20000 : 40000);
     const devFee = isK ? 25000 : (money(r.devfee)||20000);
 
     // Build the breakdown.
