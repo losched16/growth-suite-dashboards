@@ -2,10 +2,12 @@
 // and rewrite the installment invoices. Fixes the June-15 date-regen
 // that flattened totals down to base grid tuition.
 //
-// Formula (school-confirmed, NO plan/prompt-pay discount):
-//   subtotal = base grid tuition − deposit + extended care
-//   if sibling: subtotal × 0.90        (10% sibling discount)
-//   total    = subtotal + development fee
+// Formula (school-confirmed):
+//   discountable = base grid tuition + extended care
+//   discounts (each on `discountable`, non-compounding):
+//     3% paid-in-full (1-installment) | 2% semi-annual (2-installment)
+//     10% sibling (multi-child)
+//   total = base + extended care − deposit − discounts + development fee
 //   Kindergarten: base = $13,500 grid, development fee = $250
 //   Violet Sekel: show K $13,500 + $250 dev, then scholarship → $0 owed
 //
@@ -114,22 +116,24 @@ async function main(){
     const addons=[];
     if(ext>0) addons.push({key:'extended_care',label:extLabel,amount_cents:ext});
     if(deposit>0) addons.push({key:'deposit',label:'Deposit (paid)',amount_cents:-deposit});
-    // Paid-in-full discount: 3% off BASE TUITION, annual (1-installment)
-    // plans only. School-confirmed; applies to base tuition only — not
-    // extended care, deposit, or dev fee. Computed independently of the
-    // sibling discount (no compounding): each comes off its own basis.
-    const promptPay = (e.installment_count===1 && !isScholar) ? Math.round(base*0.03) : 0;
+    // ALL percentage discounts come off TUITION + EXTENDED CARE (school-
+    // confirmed). They do NOT compound — each is computed on the same gross
+    // (base + ext) basis, independent of one another and of the deposit
+    // (a paid-deposit credit, not part of the discountable amount) and the
+    // development fee (never discounted).
+    const discBase = base + ext;
+    // Paid-in-full: 3% (annual / 1-installment plans). Mutually exclusive
+    // with the 2% semi-annual below.
+    const promptPay = (e.installment_count===1 && !isScholar) ? Math.round(discBase*0.03) : 0;
     if(promptPay>0) addons.push({key:'prompt_pay_discount',label:'Paid-in-full discount (3%)',amount_cents:-promptPay});
-    // Semi-annual (2-installment, July & January) plans earn a 2% discount
-    // off base tuition. School-confirmed. Mutually exclusive with the 3%
-    // pay-in-full discount above; both come off base, independent of sibling.
-    const semiAnnual = (e.installment_count===2 && !isScholar) ? Math.round(base*0.02) : 0;
+    // Semi-annual: 2% (2-installment, July & January plans).
+    const semiAnnual = (e.installment_count===2 && !isScholar) ? Math.round(discBase*0.02) : 0;
     if(semiAnnual>0) addons.push({key:'semi_annual_discount',label:'Semi-annual discount (2%)',amount_cents:-semiAnnual});
-    const subtotal = base - deposit + ext;
+    // Sibling: 10% (multi-child families).
     let sibAmt=0;
-    if(isSibling){ sibAmt = subtotal - Math.round(subtotal*0.9); addons.push({key:'sibling_discount',label:'Sibling discount (10%)',amount_cents:-sibAmt}); }
+    if(isSibling){ sibAmt = Math.round(discBase*0.10); addons.push({key:'sibling_discount',label:'Sibling discount (10%)',amount_cents:-sibAmt}); }
     addons.push({key:'development_fee',label:`Development fee`,amount_cents:devFee});
-    let total = subtotal - sibAmt - promptPay - semiAnnual + devFee;
+    let total = base + ext - deposit - sibAmt - promptPay - semiAnnual + devFee;
     if(isScholar){ addons.push({key:'scholarship',label:'Full scholarship',amount_cents:-total}); }
     const owed = isScholar ? 0 : total;
 
