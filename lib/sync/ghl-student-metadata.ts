@@ -27,10 +27,44 @@
 
 import { query } from '@/lib/db';
 import { parseStudentSlotKey } from './slot-keys';
+import { loadSchoolFieldSchema } from './schema-loader';
+import { STUDENT_FIELDS as CANONICAL_STUDENT } from './desert-garden-config';
 
 const SKIP_BASES = new Set([
   'first_name', 'last_name', 'preferred_name', 'birth_date', 'gender', 'id',
 ]);
+
+// Build a map of this school's GHL base key → canonical role key (the key
+// the school-agnostic widgets read, e.g. annual_tuition → tuition_fee).
+// Empty for schools already on canonical keys. Lets the real-time webhook
+// and attribute-cron paths write the same canonical metadata keys the full
+// snapshot sync (run-ghl-sync) writes, so an edit shows on the Finance Hub
+// etc. without waiting for the next snapshot rebuild.
+async function loadBaseToCanonical(schoolId: string): Promise<Map<string, string>> {
+  const m = new Map<string, string>();
+  try {
+    const schema = await loadSchoolFieldSchema(schoolId);
+    for (const [role, base] of Object.entries(schema.student_fields)) {
+      if (!base) continue;
+      const canonical = CANONICAL_STUDENT[role as keyof typeof CANONICAL_STUDENT];
+      if (canonical && canonical !== base) m.set(base, canonical);
+    }
+  } catch { /* fall back to no aliasing */ }
+  return m;
+}
+
+// Add canonical-key aliases to a metadata patch: for any base whose value
+// changed, also stage the canonical key when it differs from what's stored.
+function addCanonicalAliases(
+  patch: Record<string, string>,
+  baseToCanonical: Map<string, string>,
+  md: Record<string, unknown>,
+): void {
+  for (const [base, v] of Object.entries(patch)) {
+    const canonical = baseToCanonical.get(base);
+    if (canonical && String(md[canonical] ?? '') !== v) patch[canonical] = v;
+  }
+}
 
 // Map the GHL contact's free-text "Student Enrollment Status" to our
 // enrollments.status enum, so the Family Hub / roster / enrollment
@@ -84,6 +118,8 @@ export async function propagateContactFieldsToFamilyMetadata(
   const out = { students_updated: 0, keys_updated: 0, enrollments_reconciled: 0 };
   if (bySlot.size === 0) return out;
 
+  const baseToCanonical = await loadBaseToCanonical(schoolId);
+
   const { rows: students } = await q<{ id: string; metadata: Record<string, unknown> | null }>(
     `SELECT id, metadata FROM students WHERE school_id = $1 AND family_id = $2 AND status = 'active'`,
     [schoolId, familyId],
@@ -114,6 +150,7 @@ export async function propagateContactFieldsToFamilyMetadata(
     for (const [base, v] of bases) {
       if (String(md[base] ?? '') !== v) patch[base] = v;
     }
+    addCanonicalAliases(patch, baseToCanonical, md);
     const n = Object.keys(patch).length;
     if (n === 0) continue;
     await q(
@@ -136,6 +173,7 @@ export interface MetadataRefreshResult {
 }
 
 export async function refreshStudentMetadataFromGhl(schoolId: string): Promise<MetadataRefreshResult> {
+  const baseToCanonical = await loadBaseToCanonical(schoolId);
   const { rows: parents } = await query<{ family_id: string; ghl_contact_id: string }>(
     `SELECT family_id, ghl_contact_id
        FROM parents
@@ -258,6 +296,7 @@ export async function refreshStudentMetadataFromGhl(schoolId: string): Promise<M
       const existing = md[base];
       if (String(existing ?? '') !== v) patch[base] = v;
     }
+    addCanonicalAliases(patch, baseToCanonical, md);
     const n = Object.keys(patch).length;
     if (n === 0) continue;
 
