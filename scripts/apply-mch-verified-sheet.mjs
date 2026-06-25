@@ -4,10 +4,11 @@
 //
 // Per the school's column order:
 //   Total Due = base tuition + extra care − sibling − pay-early − deposit + dev fee   (+ ACH fee, see below)
-// We store that "clean" tuition total on the enrollment (tuition shown on its
-// own). The ACH convenience fee ($5/payment) is NOT baked into tuition — it's
-// added as a separate line item on each installment invoice for ACH-paying
-// families only. pass_ach_fee is turned OFF so checkout doesn't double-charge.
+// We store that "clean" tuition total on the enrollment + invoices. Payment
+// fees are NOT pre-printed — they're applied automatically AT CHECKOUT based
+// on the method the parent actually uses (fee-math.ts): card = 2.9% + $0.30,
+// ACH = 0.8% capped at $5 (= $5/payment for tuition). pass_ach_fee +
+// pass_card_fee stay ON so both fees show on the pay screen.
 //
 // Usage:
 //   node scripts/apply-mch-verified-sheet.mjs          # PREVIEW (cross-checks every row vs the sheet)
@@ -52,7 +53,9 @@ function dueDates(tpl, monthDay, ay, count){
 }
 
 async function main(){
-  if(APPLY){ await pool.query("UPDATE school_payment_config SET pass_ach_fee=false, updated_at=now() WHERE school_id=$1",[SCHOOL]); }
+  // Fees apply at checkout based on actual method — turn the automatic ACH
+  // fee back ON (card fee is already on). No pre-printed fee lines.
+  if(APPLY){ await pool.query("UPDATE school_payment_config SET pass_ach_fee=true, pass_card_fee=true, updated_at=now() WHERE school_id=$1",[SCHOOL]); }
 
   // plans by installment count
   const { rows: plans } = await pool.query("SELECT id,installment_count,schedule_template,first_due_month_day FROM payment_plans WHERE school_id=$1",[SCHOOL]);
@@ -118,7 +121,7 @@ async function main(){
     if(dev>0) addons.push({key:'development_fee',label:'Development fee',amount_cents:dev});
 
     const plan = planByCount.get(num);
-    const achTag = isACH ? ` +ACH $${(ACH_FEE_CENTS*num/100).toFixed(0)}` : '';
+    const achTag = isACH ? '  (ACH — fee at checkout)' : '';
     const gridTag = gridId ? '' : '  ⚠ NO GRID';
     out.push(`  ${(first+' '+last).padEnd(22)} ${program.padEnd(7)} /${String(num).padEnd(2)} base $${(base/100).toString().padStart(6)} ext $${(extra/100)} = clean $${(cleanTotal/100).toFixed(2).padStart(10)}${achTag}${gridTag}`);
 
@@ -130,18 +133,12 @@ async function main(){
         const dates=dueDates(plan.schedule_template, plan.first_due_month_day, st.academic_year, num);
         const per=Math.floor(cleanTotal/num), rem=cleanTotal-per*num;
         for(let i=0;i<num;i++){
-          const tuition = i===num-1 ? per+rem : per;
-          const invTotal = tuition + (isACH?ACH_FEE_CENTS:0);
+          const tuition = i===num-1 ? per+rem : per; // CLEAN tuition; fees applied at checkout
           const due = (dates[i]||dates[dates.length-1]).toISOString().slice(0,10);
           const cfg=await pool.query("INSERT INTO school_payment_config (school_id) VALUES ($1) ON CONFLICT (school_id) DO UPDATE SET next_invoice_number=school_payment_config.next_invoice_number+1 RETURNING invoice_number_prefix prefix, next_invoice_number next",[SCHOOL]);
           const seq=cfg.rows[0].next>1?cfg.rows[0].next-1:1; const invno=`${cfg.rows[0].prefix}-${String(seq).padStart(6,'0')}`;
-          const ins=await pool.query("INSERT INTO invoices (school_id,family_id,student_id,invoice_number,title,description,status,subtotal_cents,platform_fee_cents,discount_total_cents,total_cents,due_at,issued_at,source,source_ref,includes_platform_setup_fee,created_by_email) VALUES ($1,$2,$3,$4,$5,$6,'draft',$7,0,0,$8,$9::date,null,'tuition_plan',$10::jsonb,false,'verified-sheet@growthsuite.local') RETURNING id",
-            [SCHOOL,st.family_id,st.id,invno,`Tuition — installment ${i+1}/${num}`,`Annual ${st.academic_year}`,invTotal,invTotal,due,JSON.stringify({enrollment_id:st.eid,installment_number:i+1})]);
-          if(isACH){
-            const invId=ins.rows[0].id;
-            await pool.query("INSERT INTO invoice_line_items (invoice_id,position,description,quantity,unit_amount_cents,amount_cents,category) VALUES ($1,1,$2,1,$3,$3,'tuition'),($1,2,'ACH convenience fee',1,$4,$4,'fee')",
-              [invId,`Tuition — installment ${i+1}/${num}`,tuition,ACH_FEE_CENTS]);
-          }
+          await pool.query("INSERT INTO invoices (school_id,family_id,student_id,invoice_number,title,description,status,subtotal_cents,platform_fee_cents,discount_total_cents,total_cents,due_at,issued_at,source,source_ref,includes_platform_setup_fee,created_by_email) VALUES ($1,$2,$3,$4,$5,$6,'draft',$7,0,0,$7,$8::date,null,'tuition_plan',$9::jsonb,false,'verified-sheet@growthsuite.local')",
+            [SCHOOL,st.family_id,st.id,invno,`Tuition — installment ${i+1}/${num}`,`Annual ${st.academic_year}`,tuition,due,JSON.stringify({enrollment_id:st.eid,installment_number:i+1})]);
         }
       }
       await pool.query("UPDATE family_tuition_enrollments SET installments_generated_at=now() WHERE id=$1",[st.eid]);
@@ -152,7 +149,7 @@ async function main(){
   if(unmatched.length){ console.log('\n⚠ UNMATCHED students (not found in DB):\n  '+unmatched.join('\n  ')); }
   if(mismatches.length){ console.log('\n⚠ TOTAL MISMATCHES (computed vs sheet):\n  '+mismatches.join('\n  ')); }
   else console.log('\n✓ Every matched student\'s computed clean total equals the sheet (Total Due − ACH).');
-  console.log(`\n${APPLY?'APPLIED':'PREVIEW'}. ${APPLY?'pass_ach_fee turned OFF.':'Re-run with --apply to write.'}`);
+  console.log(`\n${APPLY?'APPLIED':'PREVIEW'}. ${APPLY?'Invoices are clean tuition; card/ACH fees apply at checkout.':'Re-run with --apply to write.'}`);
   await pool.end();
 }
 main().catch(e=>{console.error(e);process.exit(1);});
