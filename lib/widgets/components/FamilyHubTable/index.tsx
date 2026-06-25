@@ -34,10 +34,15 @@ function FilterRow({
   filterKeys,
   options,
   current,
+  defaultEnrollmentStatus,
 }: {
   filterKeys: FilterKey[];
   options: FamilyHubData['options'];
   current: WidgetSearchParams;
+  // When set (e.g. 'enrolled'), the Enrollment filter pre-selects this on
+  // first load and its "all" option submits the sentinel 'all' so the choice
+  // survives navigation. See fetcher's default handling.
+  defaultEnrollmentStatus?: string;
 }) {
   const optionsByKey: Record<FilterKey, string[]> = {
     family_status: options.family_statuses,
@@ -63,15 +68,22 @@ function FilterRow({
         const meta = AVAILABLE_FILTERS.find((f) => f.key === k);
         if (!meta) return null;
         const opts = optionsByKey[k];
+        // The Enrollment filter can carry a configured default. When it does,
+        // its "all" option uses the sentinel value 'all' (non-empty so it
+        // survives nav links), and the select pre-selects the default on first
+        // load. Every other filter keeps the plain empty="all" behavior.
+        const hasDefault = k === 'enrollment_status' && !!defaultEnrollmentStatus;
+        const allValue = hasDefault ? 'all' : '';
+        const selected = current[k] ?? (hasDefault ? defaultEnrollmentStatus : '');
         return (
           <label key={k} className="text-xs text-gray-600">
             {meta.label}:{' '}
             <select
               name={k}
-              defaultValue={current[k] ?? ''}
+              defaultValue={selected}
               className="rounded-md border border-gray-300 bg-white px-2 py-1 text-sm focus:border-emerald-600 focus:outline-none"
             >
-              <option value="">all</option>
+              <option value={allValue}>all</option>
               {opts.map((o) => (
                 <option key={o} value={o}>{o}</option>
               ))}
@@ -205,7 +217,12 @@ function Component({
         </div>
       ) : null}
 
-      <FilterRow filterKeys={filters} options={data.options} current={sp} />
+      <FilterRow
+        filterKeys={filters}
+        options={data.options}
+        current={sp}
+        defaultEnrollmentStatus={config.default_enrollment_status}
+      />
       <AccordionTable
         rows={data.page_rows}
         columns={columns}

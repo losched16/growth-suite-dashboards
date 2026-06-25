@@ -45,6 +45,13 @@ export interface FamilyHubConfig {
   // behavior (all active students) so other tenants aren't affected.
   only_enrolled?: boolean;
   academic_year?: string;
+  // Default value for the Enrollment filter on first load (URL param absent),
+  // e.g. 'enrolled' so the hub opens showing enrolled families. Still fully
+  // switchable — the user can pick withdrawn/pending or "all". Empty/unset =
+  // no default (shows all), so other tenants are unaffected. The filter's
+  // "all" option submits the sentinel value `all` (not empty) so the choice
+  // survives pagination/sort links.
+  default_enrollment_status?: string;
 }
 
 export const familyHubDefaults: FamilyHubConfig = {

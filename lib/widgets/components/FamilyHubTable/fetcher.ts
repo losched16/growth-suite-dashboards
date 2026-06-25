@@ -391,7 +391,12 @@ export async function fetcher(
   const sp = searchParams ?? {};
   const search = (sp.q ?? '').trim().toLowerCase();
   const fStatus = (sp.family_status ?? '').trim();
-  const fEnr = (sp.enrollment_status ?? '').trim();
+  // Enrollment filter. When the URL param is ABSENT (first load), fall back to
+  // the configured default (e.g. 'enrolled'). The "all" option submits the
+  // sentinel 'all' (treated as no filter below) — a non-empty value so it
+  // survives pagination/sort/export links that drop empty params.
+  const defEnr = (config.default_enrollment_status ?? '').trim();
+  const fEnr = sp.enrollment_status === undefined ? defEnr : (sp.enrollment_status ?? '').trim();
   const fProg = (sp.program ?? '').trim();
   const fPlan = (sp.payment_plan ?? '').trim();
   const fHome = (sp.homeroom ?? '').trim();
@@ -399,7 +404,7 @@ export async function fetcher(
 
   let filtered = allFamilies.filter((f) => {
     if (fStatus && f.family_status !== fStatus) return false;
-    if (fEnr && !f.enrollment_statuses.includes(fEnr)) return false;
+    if (fEnr && fEnr !== 'all' && !f.enrollment_statuses.includes(fEnr)) return false;
     if (fProg && !f.programs.split(', ').includes(fProg)) return false;
     if (fPlan && f.payment_plan !== fPlan) return false;
     if (fHome) {
