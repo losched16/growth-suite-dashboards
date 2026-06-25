@@ -65,6 +65,7 @@ export interface FamilyRow {
   enrolled_count: number;
   pending_count: number;
   accepted_count: number;
+  withdrawn_count: number;
   programs: string;                  // comma-joined unique
   payment_plan: string;              // first non-empty across students
   total_tuition: number;
@@ -115,6 +116,7 @@ interface DbRow {
   enrolled_count: string | null;
   accepted_count: string | null;
   pending_count: string | null;
+  withdrawn_count: string | null;
   programs_array: string[] | null;
   homerooms_array: string[] | null;
   payment_plans_array: string[] | null;
@@ -239,6 +241,7 @@ export async function fetcher(
        (SELECT count(*) FROM per_student ps WHERE ps.family_id = f.id AND ps.enrollment_status = 'accepted') AS accepted_count,
        (SELECT count(*) FROM per_student ps WHERE ps.family_id = f.id
           AND ps.enrollment_status IN ('pending','application_submitted','tour_scheduled','inquiry','waitlisted')) AS pending_count,
+       (SELECT count(*) FROM per_student ps WHERE ps.family_id = f.id AND ps.enrollment_status = 'withdrawn') AS withdrawn_count,
        (SELECT array_agg(DISTINCT ps.metadata->>'program') FILTER (WHERE ps.metadata->>'program' IS NOT NULL AND length(ps.metadata->>'program') > 0)
           FROM per_student ps WHERE ps.family_id = f.id) AS programs_array,
        (SELECT array_agg(DISTINCT ps.classroom_name) FILTER (WHERE ps.classroom_name IS NOT NULL)
@@ -328,6 +331,7 @@ export async function fetcher(
     const enrolled = Number(r.enrolled_count ?? 0);
     const accepted = Number(r.accepted_count ?? 0);
     const pending = Number(r.pending_count ?? 0);
+    const withdrawn = Number(r.withdrawn_count ?? 0);
     // Worst-case roll-up label
     const summary = pickWorstStatus(enrStatuses);
 
@@ -359,6 +363,7 @@ export async function fetcher(
       enrolled_count: enrolled,
       pending_count: pending,
       accepted_count: accepted,
+      withdrawn_count: withdrawn,
       programs,
       payment_plan: paymentPlan,
       total_tuition: Number(r.total_tuition ?? 0),
@@ -424,10 +429,24 @@ export async function fetcher(
   const sortDir = sp.dir === 'desc' ? 'desc' : 'asc';
   filtered = sortRows(filtered, sortKey, sortDir);
 
-  // Stats roll-up across filtered
+  // Stats roll-up across filtered. When an enrollment-status filter is active,
+  // the "Students" headline counts only the students WITH that status — not
+  // every child in the matched families. Otherwise a family that appears
+  // because one child is enrolled would also count a withdrawn sibling, so
+  // "enrolled" could read 251 when there are only 250 enrolled students.
+  const statusStudentCount = (f: FamilyRow): number => {
+    switch (fEnr) {
+      case 'enrolled': return f.enrolled_count;
+      case 'accepted': return f.accepted_count;
+      case 'pending': return f.pending_count;
+      case 'withdrawn': return f.withdrawn_count;
+      default: return f.student_count;
+    }
+  };
+  const statusFilterActive = !!fEnr && fEnr !== 'all';
   const stats = {
     families: filtered.length,
-    students: filtered.reduce((s, f) => s + f.student_count, 0),
+    students: filtered.reduce((s, f) => s + (statusFilterActive ? statusStudentCount(f) : f.student_count), 0),
     enrolled: filtered.reduce((s, f) => s + f.enrolled_count, 0),
     pending: filtered.reduce((s, f) => s + f.pending_count, 0),
     accepted: filtered.reduce((s, f) => s + f.accepted_count, 0),
