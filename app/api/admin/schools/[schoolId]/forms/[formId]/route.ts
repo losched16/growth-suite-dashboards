@@ -103,7 +103,7 @@ const ALLOWED_FIELD_TYPES = new Set([
   'text', 'email', 'tel', 'url', 'textarea', 'number', 'date',
   'select', 'radio', 'checkbox', 'multi_checkbox',
   'file_upload',
-  'signature_drawn', 'signature_typed',
+  'signature_drawn', 'signature_typed', 'signature_stamp',
   'pricing_select', 'multi_pricing', 'quantity_pricing', 'tuition_calculator',
 ]);
 
@@ -129,7 +129,9 @@ function validateFieldSchema(raw: unknown): { ok: true; schema: unknown[] } | { 
     if (typeof type !== 'string' || !ALLOWED_FIELD_TYPES.has(type)) {
       return { ok: false, error: `Block #${i + 1} has invalid type: ${String(type)}` };
     }
-    const isDisplayOnly = type === 'header' || type === 'paragraph' || type === 'section';
+    // signature_stamp is a pre-signed Head-of-School stamp — display-only,
+    // no key/label/input (same as header/paragraph/section).
+    const isDisplayOnly = type === 'header' || type === 'paragraph' || type === 'section' || type === 'signature_stamp';
     if (!isDisplayOnly) {
       const key = block.key;
       if (typeof key !== 'string' || !/^[a-z_][a-z0-9_]*$/i.test(key)) {
