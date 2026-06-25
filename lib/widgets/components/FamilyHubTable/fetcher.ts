@@ -61,6 +61,7 @@ export interface FamilyRow {
   student_count: number;
   student_names: string;
   enrollment_summary: string;       // worst-case status across students
+  enrollment_statuses: string[];    // EVERY distinct student status — the filter matches on this (a family with any withdrawn student shows under "withdrawn")
   enrolled_count: number;
   pending_count: number;
   accepted_count: number;
@@ -354,6 +355,7 @@ export async function fetcher(
       student_count: Number(r.student_count),
       student_names: studentNames,
       enrollment_summary: summary,
+      enrollment_statuses: enrStatuses,
       enrolled_count: enrolled,
       pending_count: pending,
       accepted_count: accepted,
@@ -379,7 +381,7 @@ export async function fetcher(
 
   const options = {
     family_statuses: uniq(allFamilies.map((f) => f.family_status)),
-    enrollment_statuses: uniq(allFamilies.flatMap((f) => f.enrollment_summary ? [f.enrollment_summary] : [])),
+    enrollment_statuses: uniq(allFamilies.flatMap((f) => f.enrollment_statuses)),
     programs: uniq(allFamilies.flatMap((f) => f.programs.split(', ').filter(Boolean))),
     payment_plans: uniq(allFamilies.map((f) => f.payment_plan)),
     homerooms: uniq(rows.flatMap((r) => r.homerooms_array ?? [])),
@@ -397,7 +399,7 @@ export async function fetcher(
 
   let filtered = allFamilies.filter((f) => {
     if (fStatus && f.family_status !== fStatus) return false;
-    if (fEnr && f.enrollment_summary !== fEnr) return false;
+    if (fEnr && !f.enrollment_statuses.includes(fEnr)) return false;
     if (fProg && !f.programs.split(', ').includes(fProg)) return false;
     if (fPlan && f.payment_plan !== fPlan) return false;
     if (fHome) {

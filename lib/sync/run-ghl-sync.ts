@@ -26,7 +26,7 @@ import {
 } from '@/lib/ghl/pipelines';
 import { pipelineStageToFunnelStatus } from './pipeline-stage-map';
 import { loadSchoolFieldSchema, type SchoolFieldSchema } from './schema-loader';
-import { studentFieldKey } from './desert-garden-config';
+import { studentFieldKey, STUDENT_FIELDS as CANONICAL_STUDENT } from './desert-garden-config';
 import { parseStudentSlotKey, studentSlotKeyCandidates } from './slot-keys';
 
 // ----- GHL field-schema helpers ---------------------------------------------
@@ -343,9 +343,16 @@ export function mapContactToFamily(
     // (FinanceDashboard, RostersHub) read from here without needing to
     // know which fields exist per school.
     const rawStudentFields: Record<string, string> = {};
-    for (const baseKey of Object.values(STUDENT)) {
+    for (const [role, baseKey] of Object.entries(STUDENT)) {
       if (!baseKey) continue;
-      rawStudentFields[baseKey] = getStudentField(contact, schema, slot, baseKey);
+      const v = getStudentField(contact, schema, slot, baseKey);
+      rawStudentFields[baseKey] = v;
+      // Also write under the canonical role key so school-agnostic widgets
+      // (FinanceDashboard etc.) find the value regardless of what this
+      // location named the field — e.g. a school that calls tuition
+      // `annual_tuition` still populates metadata.tuition_fee.
+      const canonical = CANONICAL_STUDENT[role as keyof typeof CANONICAL_STUDENT];
+      if (canonical && canonical !== baseKey) rawStudentFields[canonical] = v;
     }
     // Plus EVERY non-empty custom field on the contact that belongs to
     // this slot — picks up school-specific fields not in our DG template.
@@ -576,9 +583,16 @@ function buildProspectiveStudents(args: {
     // Pull every student field configured for this school into metadata,
     // same as Phase 1 — downstream widgets read by snake_case key.
     const rawStudentFields: Record<string, string> = {};
-    for (const baseKey of Object.values(STUDENT)) {
+    for (const [role, baseKey] of Object.entries(STUDENT)) {
       if (!baseKey) continue;
-      rawStudentFields[baseKey] = getStudentField(contact, schema, slot, baseKey);
+      const v = getStudentField(contact, schema, slot, baseKey);
+      rawStudentFields[baseKey] = v;
+      // Also write under the canonical role key so school-agnostic widgets
+      // (FinanceDashboard etc.) find the value regardless of what this
+      // location named the field — e.g. a school that calls tuition
+      // `annual_tuition` still populates metadata.tuition_fee.
+      const canonical = CANONICAL_STUDENT[role as keyof typeof CANONICAL_STUDENT];
+      if (canonical && canonical !== baseKey) rawStudentFields[canonical] = v;
     }
 
     const program = STUDENT.program ? getStudentField(contact, schema, slot, STUDENT.program) : '';

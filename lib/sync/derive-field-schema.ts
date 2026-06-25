@@ -30,6 +30,22 @@ const STUDENT_ROLE_VARIANTS: Record<string, string[]> = {
   dailySchedule: ['daily_schedule', 'schedule'],
   leadTeacher: ['lead_teacher', 'teacher'],
   allergy: ['allergy', 'allergies'],
+  // Financial roles — these drive the Finance Hub. Canonical key first,
+  // then known per-school variants. Only numeric (MONETORY) fields belong
+  // here; dropdown "*_choice" fields are NOT financial amounts.
+  tuitionFee: ['tuition_fee', 'annual_tuition'],
+  totalTuitionCost: ['total_tuition_cost'],
+  programTuition: ['program_tuition'],
+  extendedDayFee: ['extended_day_fee', 'extended_day'],
+  lunchFee: ['lunch_fee', 'organic_lunch'],
+  adminFee: ['admin_fee', 'administrative_fee'],
+  enrollmentFee: ['enrollment_fee'],
+  totalAmount: ['total_amount', 'total_charges', 'net_charges'],
+  paymentPlan: ['payment_plan'],
+  annualDiscount: ['annual_discount'],
+  employeeDiscount: ['employee_discount'],
+  siblingDiscount: ['sibling_discount'],
+  financialAid: ['financial_aid'],
 };
 
 // Parent-2 roles → candidate FULL keys (parent-2 fields aren't slot-scoped).
