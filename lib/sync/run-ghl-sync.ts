@@ -673,8 +673,14 @@ export async function runGhlSync(schoolId: string): Promise<SyncResult> {
   const mapped: MappedFamily[] = [];
   let withHouseholdId = 0;
   const enrolledContactIds = new Set<string>();
+  // Only GATE on household_id for schools that actually use it to mark which
+  // contacts are roster families. Schools with no household field model one
+  // contact = one family (e.g. a fresh per-family import), so every contact
+  // that carries student data becomes a family — driven purely by what the
+  // location holds, nothing school-specific.
+  const requireHousehold = !!config.family_fields?.householdId;
   for (const c of allContacts) {
-    const family = mapContactToFamily(c, schema, config, formDefs);
+    const family = mapContactToFamily(c, schema, config, formDefs, { requireHousehold });
     if (family) {
       withHouseholdId++;
       enrolledContactIds.add(c.id);
