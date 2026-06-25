@@ -27,6 +27,7 @@ import {
 import { pipelineStageToFunnelStatus } from './pipeline-stage-map';
 import { loadSchoolFieldSchema, type SchoolFieldSchema } from './schema-loader';
 import { studentFieldKey } from './desert-garden-config';
+import { parseStudentSlotKey, studentSlotKeyCandidates } from './slot-keys';
 
 // ----- GHL field-schema helpers ---------------------------------------------
 
@@ -68,7 +69,14 @@ function getStudentField(
   slot: number,
   base: string,
 ): string {
-  return getField(contact, studentFieldKey(slot, base), schema);
+  // Try every key form this slot could use (slot 1 may be `student_<base>`
+  // OR `student_1_<base>` depending on the school) — a location only uses
+  // one, so this stays school-agnostic.
+  for (const key of studentSlotKeyCandidates(slot, base)) {
+    const v = getField(contact, key, schema);
+    if (v) return v;
+  }
+  return '';
 }
 
 // Capture every non-empty custom field on the contact that's scoped to a
@@ -115,21 +123,12 @@ function captureAllContactFieldsForSlot(
     if (key.startsWith('parent_') || key.startsWith('parent2_')) continue;
     if (key === 'household_id' || key === 'household_phone' || key === 'parents_combined') continue;
 
-    // Determine which slot this field belongs to (and what its bare name is)
-    let belongsToSlot: number;
-    let display: string;
-    const m = key.match(/^student_(\d+)_(.+)$/);
-    if (m) {
-      belongsToSlot = parseInt(m[1], 10);
-      display = m[2];
-    } else if (key.startsWith('student_')) {
-      belongsToSlot = 1; // DG-style unnumbered = slot 1
-      display = key.slice('student_'.length);
-    } else {
-      // Unprefixed contact-level fields are slot-1 by convention
-      belongsToSlot = 1;
-      display = key;
-    }
+    // Determine which slot this field belongs to (and what its bare name
+    // is) via the shared school-agnostic parser. Unprefixed contact-level
+    // fields are slot-1 by convention.
+    const parsed = parseStudentSlotKey(key);
+    const belongsToSlot = parsed ? parsed.slot : 1;
+    const display = parsed ? parsed.base : key;
     if (belongsToSlot !== slot) continue;
     if (!display || display in out) continue;
     out[display] = value;

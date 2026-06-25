@@ -26,8 +26,7 @@
 //     dashboard data.
 
 import { query } from '@/lib/db';
-
-const SLOT_KEY_RE = /^student_(?:([2-4])_)?(.+)$/;
+import { parseStudentSlotKey } from './slot-keys';
 
 const SKIP_BASES = new Set([
   'first_name', 'last_name', 'preferred_name', 'birth_date', 'gender', 'id',
@@ -71,11 +70,10 @@ export async function propagateContactFieldsToFamilyMetadata(
   // Build slot → base → value from the live contact's fields.
   const bySlot = new Map<number, Map<string, string>>();
   for (const [key, id] of idByKey) {
-    const m = SLOT_KEY_RE.exec(key);
-    if (!m) continue;
-    const slot = m[1] ? parseInt(m[1], 10) : 1;
-    const base = m[2];
-    if (!base || SKIP_BASES.has(base)) continue;
+    const parsed = parseStudentSlotKey(key);
+    if (!parsed) continue;
+    const { slot, base } = parsed;
+    if (SKIP_BASES.has(base)) continue;
     const raw = cfById.get(id);
     const v = raw == null ? '' : String(raw).trim();
     if (!v) continue;
@@ -161,11 +159,10 @@ export async function refreshStudentMetadataFromGhl(schoolId: string): Promise<M
   // contact → slot → base → value
   const bySlot = new Map<string, Map<number, Map<string, string>>>();
   for (const r of cfv) {
-    const m = SLOT_KEY_RE.exec(r.field_key);
-    if (!m) continue;
-    const slot = m[1] ? parseInt(m[1], 10) : 1;
-    const base = m[2];
-    if (!base || SKIP_BASES.has(base)) continue;
+    const parsed = parseStudentSlotKey(r.field_key);
+    if (!parsed) continue;
+    const { slot, base } = parsed;
+    if (SKIP_BASES.has(base)) continue;
     const v = (r.value ?? '').trim();
     if (!v) continue;
     let slots = bySlot.get(r.ghl_contact_id);
