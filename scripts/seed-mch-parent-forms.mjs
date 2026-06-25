@@ -337,6 +337,19 @@ function dhsAgreementForm() {
       blockHeader('DHS Agreement'),
       blockParagraph('55 PA Code Ch. 3270.123 & .181(C); 3280.123 & .181(c); 3290.123 & .181(c).', 'note'),
 
+      blockSection('Child & Parent / Guardian Information',
+        'Pre-filled from your contact record on file. Please review and correct anything that is out of date.'),
+      txt('child_name', 'Child\'s full name',
+        { required: true, prefill: 'student.full_name', readOnly: true }),
+      dateF('child_dob', 'Child\'s date of birth',
+        { prefill: 'student.date_of_birth', readOnly: true }),
+      txt('guardian_name', 'Parent / Guardian name',
+        { required: true, prefill: 'parent.full_name' }),
+      txt('home_address', 'Home address',
+        { prefill: 'meta:family_address' }),
+      tel('guardian_phone', 'Phone', { required: true, prefill: 'parent.phone' }),
+      txt('guardian_email', 'Email', { prefill: 'parent.email' }),
+
       blockSection('Fee',
         'Pre-filled from your enrollment paperwork. Contact the office if anything looks wrong.'),
       blockParagraph(
