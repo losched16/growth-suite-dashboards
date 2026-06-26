@@ -105,6 +105,7 @@ const ALLOWED_FIELD_TYPES = new Set([
   'file_upload',
   'signature_drawn', 'signature_typed', 'signature_stamp',
   'pricing_select', 'multi_pricing', 'quantity_pricing', 'tuition_calculator',
+  'student_picker',
 ]);
 
 function asBool(v: unknown, fallback: boolean): boolean {
