@@ -319,7 +319,13 @@ function dhsAgreementForm() {
     // even for older Primary / Kindergarten students. Plain half-day
     // Primary kids without extended care skip it.
     applies_to: {
+      // ALL toddlers / Young Community kids, PLUS any Primary or
+      // Kindergarten student in extended care. Extended care is recorded
+      // as the `extended_care` add-on on the enrollment, so match on that
+      // (the aftercare metadata tag is sparse — many paying families have
+      // the add-on but no tag, and were missing the form without this).
       program_match: ['young community'],
+      addon_keys: ['extended_care'],
       metadata_match: {
         aftercare: ['before', 'after', 'both', 'full'],
       },
