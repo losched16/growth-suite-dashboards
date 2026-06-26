@@ -784,6 +784,39 @@ export async function runGhlSync(schoolId: string): Promise<SyncResult> {
       );
     }
 
+    // Preserve row ids across the snapshot rebuild. The parent portal holds
+    // references to these ids — the login session's family_id, a form's
+    // submitted student_id, a submission's parent_id — so a plain
+    // delete+reinsert (new ids every 15-min sync) breaks portal actions
+    // ("student not in family", FK violations on submit). Capture the current
+    // id for each STABLE identity now (family = primary parent's GHL contact;
+    // parent = contact / family+email; student = contact+slot) and reuse it on
+    // reinsert below, so the same contact keeps the same id sync to sync.
+    const parentKey = (isPrimary: boolean, gc: string | null, p1gc: string | null, email: string | null): string | null => {
+      if (isPrimary && gc) return `p:${gc}`;
+      if (!isPrimary && p1gc && email) return `s:${p1gc}|${email.toLowerCase()}`;
+      return null;
+    };
+    const reuseFamilyId = new Map<string, string>();
+    const reuseParentId = new Map<string, string>();
+    const reuseStudentId = new Map<string, string>();
+    {
+      const { rows: ef } = await q<{ family_id: string; gc: string | null }>(
+        `SELECT family_id, ghl_contact_id AS gc FROM parents
+          WHERE school_id = $1 AND is_primary = true AND ghl_contact_id IS NOT NULL`, [schoolId]);
+      for (const r of ef) if (r.gc) reuseFamilyId.set(r.gc, r.family_id);
+      const { rows: ep } = await q<{ id: string; gc: string | null; email: string | null; is_primary: boolean; p1gc: string | null }>(
+        `SELECT pa.id, pa.ghl_contact_id AS gc, pa.email, pa.is_primary,
+                (SELECT pp.ghl_contact_id FROM parents pp
+                  WHERE pp.family_id = pa.family_id AND pp.is_primary = true LIMIT 1) AS p1gc
+           FROM parents pa WHERE pa.school_id = $1`, [schoolId]);
+      for (const r of ep) { const k = parentKey(r.is_primary, r.gc, r.p1gc, r.email); if (k) reuseParentId.set(k, r.id); }
+      const { rows: es } = await q<{ id: string; gc: string | null; slot: string | null }>(
+        `SELECT id, metadata->>'ghl_contact_id' AS gc, metadata->>'ghl_slot' AS slot
+           FROM students WHERE school_id = $1`, [schoolId]);
+      for (const r of es) if (r.gc && r.slot) reuseStudentId.set(`${r.gc}|${r.slot}`, r.id);
+    }
+
     // Snapshot semantics: blow away existing rows for this school.
     // Cascade order matters; do it explicitly even though FKs would handle it.
     await q('DELETE FROM enrollments WHERE school_id = $1', [schoolId]);
@@ -805,18 +838,23 @@ export async function runGhlSync(schoolId: string): Promise<SyncResult> {
     let classroomsCreated = 0;
 
     for (const fam of mapped) {
-      const { rows: famRows } = await q<{ id: string }>(
-        `INSERT INTO families (school_id, display_name, notes, status)
-         VALUES ($1, $2, $3, $4) RETURNING id`,
-        [schoolId, fam.display_name, fam.notes, fam.status],
-      );
+      // P1 contact id from this family (used to look up carryover for the
+      // family's P2, and to preserve ids across the rebuild). Phase-1 /
+      // Phase-2 both put P1 first and only one P1 per family, so this is
+      // well-defined.
+      const p1ContactId = fam.parents.find((p) => p.is_primary)?.ghl_contact_id ?? null;
+      const keepFamilyId = p1ContactId ? reuseFamilyId.get(p1ContactId) : undefined;
+      const { rows: famRows } = keepFamilyId
+        ? await q<{ id: string }>(
+            `INSERT INTO families (id, school_id, display_name, notes, status)
+             VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+            [keepFamilyId, schoolId, fam.display_name, fam.notes, fam.status])
+        : await q<{ id: string }>(
+            `INSERT INTO families (school_id, display_name, notes, status)
+             VALUES ($1, $2, $3, $4) RETURNING id`,
+            [schoolId, fam.display_name, fam.notes, fam.status]);
       const familyId = famRows[0].id;
       familiesCreated++;
-
-      // P1 contact id from this family (used to look up carryover for the
-      // family's P2). Phase-1 / Phase-2 both put P1 first and only one P1
-      // per family, so this is well-defined.
-      const p1ContactId = fam.parents.find((p) => p.is_primary)?.ghl_contact_id ?? null;
 
       for (const p of fam.parents) {
         let effectiveContactId = p.ghl_contact_id;
@@ -829,33 +867,53 @@ export async function runGhlSync(schoolId: string): Promise<SyncResult> {
             p2ContactIdCarriedForward++;
           }
         }
-        await q(
-          `INSERT INTO parents
-             (family_id, school_id, ghl_contact_id, first_name, last_name,
-              email, phone, role, is_primary, status)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'active')`,
-          [
-            familyId, schoolId, effectiveContactId,
-            p.first_name, p.last_name, p.email, p.phone,
-            p.role, p.is_primary,
-          ],
-        );
+        const pk = parentKey(p.is_primary, p.ghl_contact_id, p1ContactId, p.email);
+        const keepParentId = pk ? reuseParentId.get(pk) : undefined;
+        if (keepParentId) {
+          await q(
+            `INSERT INTO parents
+               (id, family_id, school_id, ghl_contact_id, first_name, last_name,
+                email, phone, role, is_primary, status)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'active')`,
+            [keepParentId, familyId, schoolId, effectiveContactId,
+             p.first_name, p.last_name, p.email, p.phone, p.role, p.is_primary],
+          );
+        } else {
+          await q(
+            `INSERT INTO parents
+               (family_id, school_id, ghl_contact_id, first_name, last_name,
+                email, phone, role, is_primary, status)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'active')`,
+            [familyId, schoolId, effectiveContactId,
+             p.first_name, p.last_name, p.email, p.phone, p.role, p.is_primary],
+          );
+        }
         parentsCreated++;
       }
 
       for (const s of fam.students) {
-        const { rows: stuRows } = await q<{ id: string }>(
-          `INSERT INTO students
-             (family_id, school_id, first_name, last_name, preferred_name,
-              date_of_birth, gender, status, metadata)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, 'active', $8::jsonb)
-           RETURNING id`,
-          [
-            familyId, schoolId,
-            s.first_name, s.last_name, s.preferred_name,
-            s.date_of_birth, s.gender, JSON.stringify(s.metadata),
-          ],
-        );
+        const sContact = String((s.metadata as Record<string, unknown>)?.ghl_contact_id ?? '') || p1ContactId || '';
+        const sSlot = String((s.metadata as Record<string, unknown>)?.ghl_slot ?? '');
+        const keepStudentId = (sContact && sSlot) ? reuseStudentId.get(`${sContact}|${sSlot}`) : undefined;
+        const { rows: stuRows } = keepStudentId
+          ? await q<{ id: string }>(
+              `INSERT INTO students
+                 (id, family_id, school_id, first_name, last_name, preferred_name,
+                  date_of_birth, gender, status, metadata)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'active', $9::jsonb)
+               RETURNING id`,
+              [keepStudentId, familyId, schoolId,
+               s.first_name, s.last_name, s.preferred_name,
+               s.date_of_birth, s.gender, JSON.stringify(s.metadata)])
+          : await q<{ id: string }>(
+              `INSERT INTO students
+                 (family_id, school_id, first_name, last_name, preferred_name,
+                  date_of_birth, gender, status, metadata)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, 'active', $8::jsonb)
+               RETURNING id`,
+              [familyId, schoolId,
+               s.first_name, s.last_name, s.preferred_name,
+               s.date_of_birth, s.gender, JSON.stringify(s.metadata)]);
         const studentId = stuRows[0].id;
         studentsCreated++;
 
