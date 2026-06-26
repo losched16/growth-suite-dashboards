@@ -126,13 +126,21 @@ function Component({
 
   const exportBase = `/api/export/finance/${school.locationId}`;
 
+  // Describe where the numbers come from. Schools that bill through Growth
+  // Suite / imported a FACTS ledger show actual cash; payment-free schools
+  // (figures entered on the contact record) show contracted tuition & fees.
+  const hasCashData = !!data.facts || !!data.live_payments;
+  const sourceLabel = hasCashData
+    ? 'actual cash from FACTS + Growth Suite billing'
+    : 'contracted tuition & fees from the contact record';
+
   return (
     <div className="space-y-5">
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
           <h2 className="text-2xl font-bold text-emerald-800">Finance Hub — {school.schoolName}</h2>
           <p className="mt-1 text-sm text-gray-600">
-            2026–2027 school year · actual cash from FACTS + Growth Suite billing ·{' '}
+            2026–2027 school year · {sourceLabel} ·{' '}
             <strong>{data.student_count}</strong> {data.enr === 'enrolled' ? 'enrolled' : 'active'} students
           </p>
           {/* Audience toggle — Enrolled only (matches the Student Roster) vs all
