@@ -580,6 +580,8 @@ async function loadStudentProgress(
     family_id: string | null; family: string; program: string; plan: string;
     gs_first_due: string | null; charged: string; credits: string; paid: string;
     balance: string; gs_installments: string; gs_scheduled: string;
+    md_charged: string | null; md_credits: string | null; md_paid: string | null;
+    md_balance: string | null;
   }>(
     `SELECT s.id, s.first_name, s.last_name, s.preferred_name, s.family_id,
             s.metadata->>'unique_id' AS unique_id,
@@ -595,6 +597,13 @@ async function loadStudentProgress(
             COALESCE((SELECT SUM(l.credits_cents) FROM facts_account_ledger l WHERE l.student_id = s.id AND l.academic_year = $2),0)::text AS credits,
             COALESCE((SELECT SUM(l.payments_cents + l.credits_applied_cents) FROM facts_account_ledger l WHERE l.student_id = s.id AND l.academic_year = $2),0)::text AS paid,
             COALESCE((SELECT SUM(l.ending_balance_cents) FROM facts_account_ledger l WHERE l.student_id = s.id AND l.academic_year = $2),0)::text AS balance,
+            -- Contact-record figures (the school's sheet → GHL custom fields,
+            -- mirrored into metadata). These WIN when present; FACTS above is
+            -- only a fallback for legacy tenants that imported a FACTS ledger.
+            s.metadata->>'total_charges'     AS md_charged,
+            s.metadata->>'total_credits'     AS md_credits,
+            s.metadata->>'payments'          AS md_paid,
+            s.metadata->>'remaining_balance' AS md_balance,
             COALESCE((SELECT COUNT(*) FROM invoices i WHERE i.student_id = s.id AND i.source = 'tuition_plan' AND i.voided_at IS NULL),0)::text AS gs_installments,
             COALESCE((SELECT SUM(li.amount_cents) FROM invoices i JOIN invoice_line_items li ON li.invoice_id = i.id
                        WHERE i.student_id = s.id AND i.source = 'tuition_plan' AND i.voided_at IS NULL),0)::text AS gs_scheduled
@@ -610,9 +619,23 @@ async function loadStudentProgress(
       LIMIT 1000`,
     [schoolId, year, like, enrolledOnly],
   );
-  const c = (v: string) => Number(v ?? 0) / 100;
+  const c = (v: string) => Number(v ?? 0) / 100;          // FACTS cents → dollars
+  const md = (v: string | null) => (v == null || v === '' ? null : Number(v)); // contact-record dollars
   let out: StudentProgressRow[] = rows.map((r) => {
-    const charged = c(r.charged), credits = c(r.credits), paid = c(r.paid), balance = c(r.balance);
+    // Contact-record numbers (Total Charges / Total Credits / Payments /
+    // Remaining Balance from the GHL contact) take precedence. FACTS is only
+    // a fallback for legacy tenants that imported a ledger — DGM 2.0 has none.
+    const mdCharged = md(r.md_charged);
+    let charged: number, credits: number, paid: number, balance: number;
+    if (mdCharged != null) {
+      charged = mdCharged;
+      credits = md(r.md_credits) ?? 0;
+      paid = md(r.md_paid) ?? 0;
+      const mdBal = md(r.md_balance);
+      balance = mdBal != null ? mdBal : Math.max(0, charged - credits - paid);
+    } else {
+      charged = c(r.charged); credits = c(r.credits); paid = c(r.paid); balance = c(r.balance);
+    }
     const net = Math.max(0, charged - credits);
     const pct = net > 0 ? Math.min(100, Math.round((paid / net) * 100)) : (paid > 0 ? 100 : 0);
     return {
