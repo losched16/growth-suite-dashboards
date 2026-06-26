@@ -134,6 +134,32 @@ function Component({
     ? 'actual cash from FACTS + Growth Suite billing'
     : 'contracted tuition & fees from the contact record';
 
+  // Only surface revenue/aid lines that actually have a value, so the
+  // dashboard shows just this school's data — no empty leftover rows.
+  const otherLines = [
+    { label: 'Enrollment Fee Revenue', value: data.enrollment_fee },
+    { label: 'Admin Fee Revenue', value: data.admin_fee },
+    { label: 'Extended Day Revenue', value: data.extended_day },
+    { label: 'Paid Organic Lunch Revenue', value: data.lunch },
+    { label: 'SST Revenue', value: data.sst },
+    { label: 'Enrichments Revenue (all classes)', value: data.enrichments_total },
+    { label: 'Sports Revenue (all sports)', value: data.sports_total },
+    { label: 'Late Fee Revenue', value: data.late_fees },
+  ].filter((l) => l.value > 0);
+  const aidLines = [
+    { label: 'Financial Aid Awards', value: data.financial_aid },
+    { label: 'Referral Credits', value: data.referral_credit },
+    { label: 'ESA Payments', value: data.esa },
+    { label: 'STO Payments — Original', value: data.sto_orig },
+    { label: 'STO Payments — Switcher', value: data.sto_switcher },
+    { label: 'STO Payments — Corporate', value: data.sto_corp },
+    { label: 'STO Payments — Other / unspecified', value: data.sto_other },
+  ].filter((l) => l.value > 0);
+  const hasEnrichSports = data.by_enrichment.length > 0 || data.by_sport.length > 0;
+  const hasRecipients = data.fin_aid_recipients.length > 0
+    || data.esa_recipients.length > 0 || data.sto_recipients.length > 0;
+  const tabs = hasCashData ? FIN_TABS : FIN_TABS.filter((t) => t.key !== 'transactions');
+
   return (
     <div className="space-y-5">
       <div className="flex items-start justify-between gap-3 flex-wrap">
@@ -158,32 +184,40 @@ function Component({
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-[11px] font-medium text-gray-500">Download:</span>
-          <DownloadCsvButton href={`/api/export/facts-ledger/${school.locationId}`} label="Transactions (by account)" size="xs" />
-          <DownloadCsvButton href={`/api/export/facts/${school.locationId}`} label="Per-student rollup" size="xs" />
+          {hasCashData ? (
+            <>
+              <DownloadCsvButton href={`/api/export/facts-ledger/${school.locationId}`} label="Transactions (by account)" size="xs" />
+              <DownloadCsvButton href={`/api/export/facts/${school.locationId}`} label="Per-student rollup" size="xs" />
+            </>
+          ) : null}
           <DownloadCsvButton href={exportBase} label="Contracted revenue" size="xs" />
         </div>
       </div>
 
-      <TabNav active={data.fin_tab} current={current} />
+      <TabNav active={data.fin_tab} current={current} tabs={tabs} />
 
       {data.fin_tab === 'students' ? <StudentsTab data={data} school={school} current={current} /> : null}
-      {data.fin_tab === 'transactions' ? <TransactionsTab data={data} school={school} current={current} /> : null}
+      {data.fin_tab === 'transactions' && hasCashData ? <TransactionsTab data={data} school={school} current={current} /> : null}
 
       {data.fin_tab === 'overview' ? (
       <div className="space-y-5">
         {data.facts ? <FactsActualsSection facts={data.facts} school={school} /> : null}
         {data.live_payments ? <LivePaymentsSection live={data.live_payments} /> : null}
-        <BillingActions school={school} />
+        {hasCashData ? <BillingActions school={school} /> : null}
         <div className="rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-[11px] text-gray-600">
-          The tables below are <em>contracted / projected</em> revenue from enrollment records (full-year totals).
-          Actual cash charged and collected to date is in the cards above.
+          {hasCashData ? (
+            <>The tables below are <em>contracted / projected</em> revenue from enrollment records (full-year totals).
+              Actual cash charged and collected to date is in the cards above.</>
+          ) : (
+            <>These figures are <em>contracted</em> tuition &amp; fees for the year, taken directly from each student&rsquo;s contact record.</>
+          )}
         </div>
 
       {/* Top-line */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <BigCard label="Gross revenue (contracted)" value={fmt(data.total_revenue)} accent="emerald" sub={`across ${data.student_count} students`} />
         <BigCard label="Total discounts" value={fmt(data.total_discounts)} accent="rose" sub="emp + annual + sibling" />
-        <BigCard label="Total aid + credits" value={fmt(data.total_aid_credits)} accent="amber" sub="fin aid + ESA + STO + referral" />
+        <BigCard label="Total aid + credits" value={fmt(data.total_aid_credits)} accent="amber" sub="financial aid + credits" />
         <BigCard label="Net revenue" value={fmt(data.net_revenue)} accent="emerald" sub="gross − discounts − aid" />
       </div>
 
@@ -206,29 +240,24 @@ function Component({
         </tbody>
       </Section>
 
-      {/* Other revenue lines */}
-      <Section title="Other revenue lines">
-        <TableHead cols={['Line item', 'Total']} rightCols={[1]} />
-        <tbody className="divide-y divide-gray-100">
-          <LineRow label="Enrollment Fee Revenue" value={data.enrollment_fee} />
-          <LineRow label="Admin Fee Revenue" value={data.admin_fee} />
-          <LineRow label="Extended Day Revenue" value={data.extended_day} />
-          <LineRow label="Paid Organic Lunch Revenue" value={data.lunch} />
-          <LineRow label="SST Revenue" value={data.sst} />
-          <LineRow label="Enrichments Revenue (all classes)" value={data.enrichments_total} />
-          <LineRow label="Sports Revenue (all sports)" value={data.sports_total} />
-          <LineRow label="Late Fee Revenue" value={data.late_fees} />
-        </tbody>
-      </Section>
+      {/* Other revenue lines — only those with a value */}
+      {otherLines.length > 0 ? (
+        <Section title="Other revenue lines">
+          <TableHead cols={['Line item', 'Total']} rightCols={[1]} />
+          <tbody className="divide-y divide-gray-100">
+            {otherLines.map((l) => <LineRow key={l.label} label={l.label} value={l.value} />)}
+          </tbody>
+        </Section>
+      ) : null}
 
-      {/* Enrichments + Sports breakdowns */}
+      {/* Enrichments + Sports breakdowns — only when there's data */}
+      {hasEnrichSports ? (
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {data.by_enrichment.length > 0 ? (
         <Section title="Enrichments Revenue — by class">
           <TableHead cols={['Class', 'Students', 'Revenue']} rightCols={[1, 2]} />
           <tbody className="divide-y divide-gray-100">
-            {data.by_enrichment.length === 0 ? (
-              <tr><td colSpan={3} className="px-3 py-4 text-center text-sm text-gray-500">No enrichment data yet</td></tr>
-            ) : data.by_enrichment.map((e) => (
+            {data.by_enrichment.map((e) => (
               <tr key={e.label} className="text-sm">
                 <td className="px-3 py-2 text-gray-900">{e.label}</td>
                 <td className="px-3 py-2 text-right tabular-nums text-gray-700">{e.count}</td>
@@ -237,12 +266,12 @@ function Component({
             ))}
           </tbody>
         </Section>
+        ) : null}
+        {data.by_sport.length > 0 ? (
         <Section title="Sports Revenue — by sport">
           <TableHead cols={['Sport', 'Students', 'Revenue']} rightCols={[1, 2]} />
           <tbody className="divide-y divide-gray-100">
-            {data.by_sport.length === 0 ? (
-              <tr><td colSpan={3} className="px-3 py-4 text-center text-sm text-gray-500">No sports data yet</td></tr>
-            ) : data.by_sport.map((s) => (
+            {data.by_sport.map((s) => (
               <tr key={s.label} className="text-sm">
                 <td className="px-3 py-2 text-gray-900">{s.label}</td>
                 <td className="px-3 py-2 text-right tabular-nums text-gray-700">{s.count}</td>
@@ -251,46 +280,48 @@ function Component({
             ))}
           </tbody>
         </Section>
+        ) : null}
       </div>
+      ) : null}
 
-      {/* Discounts + Aid */}
+      {/* Discounts + Aid — each shown only when it has a value */}
+      {(data.total_discounts > 0 || aidLines.length > 0) ? (
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {data.total_discounts > 0 ? (
         <Section title="Discounts">
           <TableHead cols={['Discount type', 'Total']} rightCols={[1]} />
           <tbody className="divide-y divide-gray-100">
-            <LineRow label="Employee Discounts" value={data.employee_discount} />
-            <LineRow label="Annual Discounts" value={data.annual_discount} />
-            <LineRow label="Sibling Discounts" value={data.sibling_discount} />
+            {data.employee_discount > 0 ? <LineRow label="Employee Discounts" value={data.employee_discount} /> : null}
+            {data.annual_discount > 0 ? <LineRow label="Annual Discounts" value={data.annual_discount} /> : null}
+            {data.sibling_discount > 0 ? <LineRow label="Sibling Discounts" value={data.sibling_discount} /> : null}
             <tr className="bg-rose-50 text-sm font-semibold">
               <td className="px-3 py-2">Total Discounts</td>
               <td className="px-3 py-2 text-right tabular-nums text-rose-800">{fmt(data.total_discounts)}</td>
             </tr>
           </tbody>
         </Section>
+        ) : null}
+        {aidLines.length > 0 ? (
         <Section title="Aid & credits">
           <TableHead cols={['Type', 'Total']} rightCols={[1]} />
           <tbody className="divide-y divide-gray-100">
-            <LineRow label="Financial Aid Awards" value={data.financial_aid} />
-            <LineRow label="Referral Credits" value={data.referral_credit} />
-            <LineRow label="ESA Payments" value={data.esa} />
-            <LineRow label="STO Payments — Original" value={data.sto_orig} />
-            <LineRow label="STO Payments — Switcher" value={data.sto_switcher} />
-            <LineRow label="STO Payments — Corporate" value={data.sto_corp} />
-            {data.sto_other > 0 ? <LineRow label="STO Payments — Other / unspecified" value={data.sto_other} /> : null}
+            {aidLines.map((l) => <LineRow key={l.label} label={l.label} value={l.value} />)}
             <tr className="bg-amber-50 text-sm font-semibold">
               <td className="px-3 py-2">Total Aid + Credits</td>
               <td className="px-3 py-2 text-right tabular-nums text-amber-900">{fmt(data.total_aid_credits)}</td>
             </tr>
           </tbody>
         </Section>
+        ) : null}
       </div>
+      ) : null}
 
-      {/* Recipient lists */}
-      {showRecipients ? (
+      {/* Recipient lists — only those with recipients */}
+      {showRecipients && hasRecipients ? (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          <RecipientList title="Financial Aid Recipients" count={data.fin_aid_recipients.length} total={data.financial_aid} items={data.fin_aid_recipients} />
-          <RecipientList title="ESA Recipients" count={data.esa_recipients.length} total={data.esa} items={data.esa_recipients} emptyHint="Add esa_recipient / esa_amount fields on the contact record" />
-          <RecipientList title="STO Recipients" count={data.sto_recipients.length} total={data.sto_orig + data.sto_switcher + data.sto_corp + data.sto_other} items={data.sto_recipients} emptyHint="Add sto_recipient / sto_type / sto_amount fields on the contact record" />
+          {data.fin_aid_recipients.length > 0 ? <RecipientList title="Financial Aid Recipients" count={data.fin_aid_recipients.length} total={data.financial_aid} items={data.fin_aid_recipients} /> : null}
+          {data.esa_recipients.length > 0 ? <RecipientList title="ESA Recipients" count={data.esa_recipients.length} total={data.esa} items={data.esa_recipients} /> : null}
+          {data.sto_recipients.length > 0 ? <RecipientList title="STO Recipients" count={data.sto_recipients.length} total={data.sto_orig + data.sto_switcher + data.sto_corp + data.sto_other} items={data.sto_recipients} /> : null}
         </div>
       ) : null}
 
@@ -490,10 +521,10 @@ function enrHref(current: WidgetSearchParams, enr: 'enrolled' | 'all'): string {
   return `?${new URLSearchParams(keep).toString()}`;
 }
 
-function TabNav({ active, current }: { active: FinanceData['fin_tab']; current: WidgetSearchParams }) {
+function TabNav({ active, current, tabs }: { active: FinanceData['fin_tab']; current: WidgetSearchParams; tabs: typeof FIN_TABS }) {
   return (
     <div className="flex items-center gap-1 border-b border-gray-200">
-      {FIN_TABS.map((t) => (
+      {tabs.map((t) => (
         <a
           key={t.key}
           href={tabHref(current, t.key)}
@@ -543,7 +574,7 @@ function StudentsTab({ data, school, current }: { data: FinanceData; school: Sch
             <option value="">All students</option>
             <option value="balance">Has a balance</option>
             <option value="paid">Paid in full</option>
-            <option value="no_facts">No FACTS history</option>
+            <option value="no_facts">No charges</option>
           </select>
         </label>
         <noscript><button type="submit" className="rounded bg-emerald-600 px-3 py-1.5 text-sm text-white">Apply</button></noscript>
@@ -551,7 +582,7 @@ function StudentsTab({ data, school, current }: { data: FinanceData; school: Sch
       </AutoSubmitForm>
 
       <StudentsTable rows={rows} locationId={school.locationId} />
-      <p className="text-[11px] text-gray-500">Charged / Paid / Balance are actuals from FACTS. <strong>Click a student</strong> to expand their full account history + payment schedule. “Paid” updates from Growth Suite autopay once you go live. Showing up to 1,000 students.</p>
+      <p className="text-[11px] text-gray-500">Charged / Paid / Balance come from each student&rsquo;s contact record (Total Charges, Payments, Remaining Balance). <strong>Click a student</strong> to expand the detail. Showing up to 1,000 students.</p>
     </div>
   );
 }
