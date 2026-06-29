@@ -41,10 +41,45 @@ export const AVAILABLE_COLUMNS = [
 
 export type ColumnKey = typeof AVAILABLE_COLUMNS[number]['key'];
 
+// An arbitrary GHL custom field surfaced as an extra table column. `key` is
+// the raw key as it appears in students.metadata (e.g. "tuition_fee",
+// "t_shirt_size"); `label` is the human heading shown to staff. This is what
+// makes the hub "columns on ANY data" — schools add whatever GHL field they
+// track without us shipping code per field.
+export interface ExtraColumn {
+  key: string;
+  label: string;
+}
+
+// Internal plumbing keys that live in students.metadata but should never be
+// offered as a selectable column. Everything else a school puts in GHL is
+// fair game.
+export const RESERVED_METADATA_KEYS: ReadonlySet<string> = new Set([
+  'ghl_contact_id',
+  'ghl_slot',
+  'is_demo',
+  're_enrolled',
+  'student_id',
+  'family_id',
+]);
+
+// Turn a raw GHL field key into a readable column heading:
+//   "t_shirt_size" -> "T Shirt Size", "tuition_fee" -> "Tuition Fee".
+export function humanizeFieldKey(key: string): string {
+  return key
+    .replace(/^contact\./, '')
+    .replace(/[_-]+/g, ' ')
+    .trim()
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 export interface EnrollmentHubConfig {
   academic_year?: string;          // null = "any"
   shown_filters: FilterKey[];
   shown_columns: ColumnKey[];
+  // Extra columns sourced from arbitrary GHL fields (students.metadata).
+  // Rendered after the built-in columns. Empty/undefined = none (back-compat).
+  extra_columns?: ExtraColumn[];
   show_stat_cards?: boolean;       // default true
   show_breakdowns?: boolean;       // default true
   drilldown_dashboard_slug?: string; // default 'family-hub'

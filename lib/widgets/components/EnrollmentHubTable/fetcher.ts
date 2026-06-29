@@ -43,6 +43,9 @@ export interface StudentRow {
   // contact record constantly; without this they have to manually search
   // each time.
   primary_parent_ghl_contact_id: string | null;
+  // Stringified values for any operator-configured extra GHL columns,
+  // keyed by the raw metadata key. Only the configured keys are projected.
+  extra: Record<string, string>;
 }
 
 export interface EnrollmentHubData {
@@ -201,8 +204,18 @@ export async function fetcher(
     )
   ).rows;
 
+  // Keys the operator asked to surface as extra columns. Projected from
+  // metadata per-row below (stringified, empty-string when absent/blank).
+  const extraKeys = (config.extra_columns ?? [])
+    .map((c) => c.key)
+    .filter((k): k is string => typeof k === 'string' && k.length > 0);
+
   const allStudents: StudentRow[] = rows.map((r) => {
     const md = r.metadata ?? {};
+    const extra: Record<string, string> = {};
+    for (const k of extraKeys) {
+      extra[k] = stringifyMeta(md[k]);
+    }
     return {
       student_id: r.student_id,
       family_id: r.family_id,
@@ -233,6 +246,7 @@ export async function fetcher(
       re_enrolled: md.re_enrolled === true,
       parent_names: r.parent_names ?? '',
       primary_parent_ghl_contact_id: r.primary_parent_ghl_contact_id ?? null,
+      extra,
     };
   });
 
@@ -328,6 +342,17 @@ export async function fetcher(
     by_program: buildBreakdown((s) => s.program ?? s.classroom_name),
     by_homeroom: buildBreakdown((s) => s.homeroom ?? s.classroom_name),
   };
+}
+
+// Render an arbitrary metadata value as a display string. Scalars pass
+// through; arrays join with ", "; objects JSON-stringify; null/undefined
+// become "". Keeps extra columns robust to whatever GHL field type backs them.
+function stringifyMeta(v: unknown): string {
+  if (v === null || v === undefined) return '';
+  if (typeof v === 'string') return v;
+  if (typeof v === 'number' || typeof v === 'boolean') return String(v);
+  if (Array.isArray(v)) return v.map((x) => stringifyMeta(x)).filter(Boolean).join(', ');
+  try { return JSON.stringify(v); } catch { return String(v); }
 }
 
 function yesNo(raw: string | null | undefined): string {

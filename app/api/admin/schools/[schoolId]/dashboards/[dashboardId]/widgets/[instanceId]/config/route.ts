@@ -10,8 +10,11 @@ import type { WidgetInstance } from '@/lib/widgets/types';
 import {
   AVAILABLE_FILTERS,
   AVAILABLE_COLUMNS,
+  RESERVED_METADATA_KEYS,
+  humanizeFieldKey,
   type FilterKey,
   type ColumnKey,
+  type ExtraColumn,
 } from '@/lib/widgets/components/EnrollmentHubTable/config';
 import {
   AVAILABLE_TABS as RH_TABS,
@@ -63,12 +66,25 @@ function parseConfigFromForm(widgetId: string, form: FormData): unknown {
     const shown_columns = form.getAll('shown_columns')
       .map(String)
       .filter((v): v is ColumnKey => validColumnKeys.has(v as ColumnKey));
+    // Extra columns: arbitrary GHL field keys the operator checked. We label
+    // them by humanizing the key (a custom label per field is a later add).
+    // Dedup, drop reserved/internal keys, and ignore any that collide with a
+    // built-in column key so we never render the same data twice.
+    const builtinKeys = new Set<string>(AVAILABLE_COLUMNS.map((c) => c.key));
+    const seen = new Set<string>();
+    const extra_columns: ExtraColumn[] = form.getAll('extra_columns')
+      .map(String)
+      .map((k) => k.trim())
+      .filter((k) => k.length > 0 && !RESERVED_METADATA_KEYS.has(k) && !builtinKeys.has(k))
+      .filter((k) => (seen.has(k) ? false : (seen.add(k), true)))
+      .map((k) => ({ key: k, label: humanizeFieldKey(k) }));
     const academic_year = String(form.get('academic_year') ?? '').trim();
     const drilldown = String(form.get('drilldown_dashboard_slug') ?? '').trim() || 'family-hub';
     return {
       academic_year: academic_year || undefined,
       shown_filters,
       shown_columns,
+      extra_columns,
       show_stat_cards: form.get('show_stat_cards') !== null,
       show_breakdowns: form.get('show_breakdowns') !== null,
       drilldown_dashboard_slug: drilldown,

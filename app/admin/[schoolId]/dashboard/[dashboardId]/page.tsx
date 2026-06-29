@@ -13,7 +13,10 @@ import { listWidgets } from '@/lib/widgets/registry';
 import {
   AVAILABLE_FILTERS as EH_FILTERS,
   AVAILABLE_COLUMNS as EH_COLUMNS,
+  RESERVED_METADATA_KEYS,
+  humanizeFieldKey,
   type EnrollmentHubConfig,
+  type ExtraColumn,
   type FilterKey as EHFilterKey,
   type ColumnKey as EHColumnKey,
 } from '@/lib/widgets/components/EnrollmentHubTable/config';
@@ -109,6 +112,15 @@ export async function DashboardConfigEditor({
   );
   const school = schoolRows[0];
 
+  // The Enrollment Hub widget lets staff add ANY GHL field as a column. Pull
+  // the distinct field keys actually present in this school's student
+  // records (GHL = source of truth) so the picker only ever offers real
+  // data. Skipped entirely unless the layout has such a widget.
+  const hasEnrollmentHub = d.layout.some((w) => w.widget_id === 'enrollment_hub_table');
+  const availableFields: ExtraColumn[] = hasEnrollmentHub
+    ? await loadAvailableFields(schoolId)
+    : [];
+
   const allWidgets = listWidgets();
 
   return (
@@ -156,6 +168,7 @@ export async function DashboardConfigEditor({
             schoolId={schoolId}
             dashboardId={dashboardId}
             returnTo={returnTo}
+            availableFields={availableFields}
           />
         ))}
 
@@ -228,18 +241,43 @@ export async function DashboardConfigEditor({
   );
 }
 
+// Distinct GHL field keys present in this school's student metadata, minus
+// internal plumbing and anything already covered by a built-in column —
+// these are what staff can add as extra columns.
+async function loadAvailableFields(schoolId: string): Promise<ExtraColumn[]> {
+  const { rows } = await query<{ k: string }>(
+    `SELECT DISTINCT k FROM (
+       SELECT jsonb_object_keys(metadata) AS k
+       FROM students
+       WHERE school_id = $1
+         AND metadata IS NOT NULL
+         AND jsonb_typeof(metadata) = 'object'
+         AND (metadata->>'is_demo') IS DISTINCT FROM 'true'
+     ) sub
+     ORDER BY k`,
+    [schoolId],
+  );
+  const builtin = new Set<string>(EH_COLUMNS.map((c) => c.key));
+  return rows
+    .map((r) => r.k)
+    .filter((k) => !!k && !RESERVED_METADATA_KEYS.has(k) && !builtin.has(k))
+    .map((k) => ({ key: k, label: humanizeFieldKey(k) }));
+}
+
 function WidgetEditor({
   instance,
   index,
   schoolId,
   dashboardId,
   returnTo,
+  availableFields,
 }: {
   instance: WidgetInstance;
   index: number;
   schoolId: string;
   dashboardId: string;
   returnTo: string;
+  availableFields: ExtraColumn[];
 }) {
   const configAction = `/api/admin/schools/${schoolId}/dashboards/${dashboardId}/widgets/${instance.instance_id}/config`;
   const removeAction = `/api/admin/schools/${schoolId}/dashboards/${dashboardId}/widgets/${instance.instance_id}/remove`;
@@ -263,7 +301,7 @@ function WidgetEditor({
           </form>
         </div>
       </div>
-      <ConfigForm instance={instance} formAction={configAction} />
+      <ConfigForm instance={instance} formAction={configAction} availableFields={availableFields} />
     </section>
   );
 }
@@ -294,10 +332,10 @@ const WIDGET_TITLES: Record<string, string> = {
   hello_world: 'Hello World',
 };
 
-function ConfigForm({ instance, formAction }: { instance: WidgetInstance; formAction: string }) {
+function ConfigForm({ instance, formAction, availableFields }: { instance: WidgetInstance; formAction: string; availableFields: ExtraColumn[] }) {
   switch (instance.widget_id) {
     case 'enrollment_hub_table':
-      return <EnrollmentHubForm config={instance.config as EnrollmentHubConfig} formAction={formAction} />;
+      return <EnrollmentHubForm config={instance.config as EnrollmentHubConfig} formAction={formAction} availableFields={availableFields} />;
     case 'rosters_hub':
       return <RostersHubForm config={instance.config as RostersHubConfig} formAction={formAction} />;
     case 'document_tracker':
@@ -329,9 +367,16 @@ function JsonForm({ instance, formAction }: { instance: WidgetInstance; formActi
   );
 }
 
-function EnrollmentHubForm({ config, formAction }: { config: EnrollmentHubConfig; formAction: string }) {
+function EnrollmentHubForm({ config, formAction, availableFields }: { config: EnrollmentHubConfig; formAction: string; availableFields: ExtraColumn[] }) {
   const shownFilters = new Set<EHFilterKey>(config.shown_filters ?? []);
   const shownColumns = new Set<EHColumnKey>(config.shown_columns ?? []);
+  const selectedExtra = new Set<string>((config.extra_columns ?? []).map((c) => c.key));
+  // Always offer any field the school already chose, even if it has since
+  // disappeared from the live data (so unchecking it stays possible).
+  const extraOptions: ExtraColumn[] = [
+    ...availableFields,
+    ...(config.extra_columns ?? []).filter((c) => !availableFields.some((a) => a.key === c.key)),
+  ].sort((a, b) => a.label.localeCompare(b.label));
   return (
     <form action={formAction} method="POST" className="space-y-4 text-sm">
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
@@ -377,6 +422,30 @@ function EnrollmentHubForm({ config, formAction }: { config: EnrollmentHubConfig
           </div>
         </div>
       </div>
+
+      {/* Any-GHL-field columns. Sourced live from this school's student
+          records, so the menu always reflects what's actually in GHL. */}
+      <div>
+        <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-zinc-700">
+          Additional GHL fields as columns
+        </h3>
+        <p className="mb-2 text-[11px] text-zinc-500">
+          Add any field from your contact records as an extra column (shown after the columns above).
+        </p>
+        {extraOptions.length === 0 ? (
+          <p className="text-[11px] text-zinc-400">No additional fields found in this school&apos;s student records yet.</p>
+        ) : (
+          <div className="grid grid-cols-2 gap-x-4 gap-y-1 md:grid-cols-3">
+            {extraOptions.map((c) => (
+              <label key={c.key} className="flex items-center gap-1.5">
+                <input type="checkbox" name="extra_columns" value={c.key} defaultChecked={selectedExtra.has(c.key)} />
+                <span className="truncate" title={c.key}>{c.label}</span>
+              </label>
+            ))}
+          </div>
+        )}
+      </div>
+
       <SaveButton />
     </form>
   );

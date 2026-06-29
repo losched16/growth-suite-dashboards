@@ -16,6 +16,7 @@ import {
   type EnrollmentHubConfig,
   type FilterKey,
   type ColumnKey,
+  type ExtraColumn,
 } from './config';
 import { fetcher, type EnrollmentHubData, type StudentRow } from './fetcher';
 import { PreserveEmbedParams, clearHref } from '@/lib/widgets/components/_shared/PreserveEmbedParams';
@@ -190,11 +191,13 @@ function FilterRow({
 function StudentTable({
   rows,
   columns,
+  extraColumns,
   drilldownDashboard,
   locationId,
 }: {
   rows: StudentRow[];
   columns: ColumnKey[];
+  extraColumns: ExtraColumn[];
   drilldownDashboard: string;
   locationId: string;
 }) {
@@ -215,6 +218,9 @@ function StudentTable({
               const meta = AVAILABLE_COLUMNS.find((c) => c.key === col);
               return <th key={col} className="px-3 py-2 font-medium">{meta?.label ?? col}</th>;
             })}
+            {extraColumns.map((col) => (
+              <th key={`x:${col.key}`} className="px-3 py-2 font-medium">{col.label}</th>
+            ))}
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-100">
@@ -225,6 +231,14 @@ function StudentTable({
                   {renderCell(s, col, drilldownDashboard, locationId)}
                 </td>
               ))}
+              {extraColumns.map((col) => {
+                const v = s.extra[col.key] ?? '';
+                return (
+                  <td key={`x:${col.key}`} className="px-3 py-2 align-top text-gray-700">
+                    {v.trim() ? v : <span className="text-gray-400">—</span>}
+                  </td>
+                );
+              })}
             </tr>
           ))}
         </tbody>
@@ -308,6 +322,7 @@ function Component({
   const showBreakdowns = config.show_breakdowns !== false;
   const filters = config.shown_filters ?? enrollmentHubDefaults.shown_filters;
   const columns = config.shown_columns ?? enrollmentHubDefaults.shown_columns;
+  const extraColumns = config.extra_columns ?? [];
   const drilldown = config.drilldown_dashboard_slug ?? 'family-hub';
   const sp = searchParams ?? {};
   const isFiltered = Object.values(sp).some((v) => v && v.length > 0);
@@ -354,7 +369,7 @@ function Component({
 
       {/* Filters + table */}
       <FilterRow filterKeys={filters} options={data.options} current={sp} />
-      <StudentTable rows={data.filtered} columns={columns} drilldownDashboard={drilldown} locationId={school.locationId} />
+      <StudentTable rows={data.filtered} columns={columns} extraColumns={extraColumns} drilldownDashboard={drilldown} locationId={school.locationId} />
     </div>
   );
 }
