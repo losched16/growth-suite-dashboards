@@ -162,12 +162,14 @@ export function normalizeEnrollmentStatus(raw: string, warnings: string[]): stri
   // Direct match (already normalized)
   const allowed = new Set([
     'inquiry', 'tour_scheduled', 'application_submitted',
-    'accepted', 'enrolled', 'waitlisted', 'withdrawn', 'declined',
+    'accepted', 'pending', 'enrolled', 'waitlisted', 'withdrawn', 'declined',
   ]);
   if (allowed.has(v)) return v;
   // GHL freetext variants
   const collapsed = v.replace(/[\s_-]+/g, ' ');
   if (collapsed === 'enrolled' || collapsed === 'enrolled not started' || collapsed === 'currently enrolled') return 'enrolled';
+  // "Pending" — sent the enrollment agreement, awaiting completion/signature.
+  if (collapsed === 'pending' || collapsed === 'pending enrollment' || collapsed === 'enrollment pending' || collapsed === 'pending opportunities') return 'pending';
   if (collapsed === 'accepted' || collapsed === 'admitted') return 'accepted';
   if (collapsed === 'waitlist' || collapsed === 'waitlisted') return 'waitlisted';
   if (collapsed === 'withdrawn' || collapsed === 'withdrew' || collapsed === 'graduated') return 'withdrawn';

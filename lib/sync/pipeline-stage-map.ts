@@ -12,6 +12,7 @@ const FUNNEL_STAGES = [
   'tour_scheduled',
   'application_submitted',
   'accepted',
+  'pending',
   'enrolled',
   'waitlisted',
   'withdrawn',
@@ -33,6 +34,9 @@ export function pipelineStageToFunnelStatus(stageName: string): FunnelStatus | n
   // Synonyms — prefer most-progressed match if a stage name implies multiple
   // (e.g., "Accepted - Awaiting Deposit" → 'accepted')
   if (/\benrolled\b|\bactive\b|\bcurrent\b|\bregistered\b/.test(v)) return 'enrolled';
+  // "Pending", "Pending Opportunities", "Enrollment Pending" — a parent who
+  // has been sent the enrollment agreement and is awaiting completion.
+  if (/\bpending\b/.test(v)) return 'pending';
   if (/\baccept|\badmit|\boffer/.test(v)) return 'accepted';
   if (/\bapplic|\bapplied/.test(v)) return 'application_submitted';
   if (/\btour|\bvisit|\bopen house\b|\bshadow/.test(v)) return 'tour_scheduled';

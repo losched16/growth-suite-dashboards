@@ -305,7 +305,7 @@ export async function fetcher(
     const st = s.status ?? '';
     if (st === 'enrolled') enrolled++;
     else if (st === 'accepted') accepted++;
-    else if (st === 'application_submitted' || st === 'tour_scheduled') pending++;
+    else if (st === 'pending' || st === 'application_submitted' || st === 'tour_scheduled') pending++;
     else other++;
   }
 
@@ -323,7 +323,7 @@ export async function fetcher(
       const st = s.status ?? '';
       if (st === 'enrolled') row.enrolled++;
       else if (st === 'accepted') row.accepted++;
-      else if (st === 'application_submitted' || st === 'tour_scheduled') row.pending++;
+      else if (st === 'pending' || st === 'application_submitted' || st === 'tour_scheduled') row.pending++;
     }
     return [...map.values()].sort((a, b) => a.label.localeCompare(b.label));
   };
