@@ -116,13 +116,31 @@ export default async function SchoolAdmin({
     support_email: string | null;
     support_phone: string | null;
     footer_html: string | null;
+    portal_hidden_nav: string[] | null;
   }>(
     `SELECT display_name, logo_url, primary_color, primary_color_soft, primary_color_fg,
-            support_email, support_phone, footer_html
+            support_email, support_phone, footer_html, portal_hidden_nav
      FROM school_branding WHERE school_id = $1`,
     [schoolId],
   );
   const branding = brandingRows[0] ?? null;
+  // Canonical parent-portal nav items (kept in sync with the portal's
+  // app/(portal)/layout.tsx NAV_ITEMS — the two repos don't share code).
+  const PORTAL_NAV = [
+    { href: '/home', label: 'Home' },
+    { href: '/notifications', label: 'Notifications' },
+    { href: '/attendance', label: 'Attendance' },
+    { href: '/family', label: 'Family' },
+    { href: '/forms-v2', label: 'Forms' },
+    { href: '/resources', label: 'Important Documents' },
+    { href: '/forms', label: 'Documents' },
+    { href: '/tuition', label: 'Tuition' },
+    { href: '/billing', label: 'Invoices' },
+    { href: '/financial-aid', label: 'Financial Aid' },
+    { href: '/products', label: 'School Store' },
+    { href: '/help', label: 'Help' },
+  ];
+  const hiddenNav = new Set(branding?.portal_hidden_nav ?? []);
 
   const { rows: portalForms } = await query<{
     id: string; display_name: string; description: string | null;
@@ -657,6 +675,41 @@ export default async function SchoolAdmin({
               </div>
               <button type="submit" className="rounded-md bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-zinc-800">
                 Save branding
+              </button>
+            </form>
+          </div>
+
+          {/* Portal menus on/off */}
+          <div id="portal-menus" className="rounded-xl border border-black/10 bg-white p-4">
+            <h3 className="mb-1 text-sm font-semibold text-zinc-900">Portal menus</h3>
+            <p className="mb-3 text-[11px] text-zinc-500">
+              Turn parent-portal menu items on or off. Items turned off disappear from the
+              parent&rsquo;s navigation. Home is always shown.
+            </p>
+            <form action={`/api/admin/schools/${schoolId}/portal-menus`} method="POST" className="space-y-2.5 text-sm">
+              <input type="hidden" name="all_nav" value={PORTAL_NAV.map((n) => n.href).join(',')} />
+              {/* Home is always visible — submit it regardless of the (disabled) box. */}
+              <input type="hidden" name="visible" value="/home" />
+              <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 sm:grid-cols-3">
+                {PORTAL_NAV.map((n) => {
+                  const pinned = n.href === '/home';
+                  return (
+                    <label key={n.href} className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        name={pinned ? undefined : 'visible'}
+                        value={n.href}
+                        defaultChecked={pinned || !hiddenNav.has(n.href)}
+                        disabled={pinned}
+                        className="h-4 w-4 rounded border-zinc-300"
+                      />
+                      <span className={pinned ? 'text-zinc-400' : 'text-zinc-800'}>{n.label}</span>
+                    </label>
+                  );
+                })}
+              </div>
+              <button type="submit" className="rounded-md bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-zinc-800">
+                Save portal menus
               </button>
             </form>
           </div>
