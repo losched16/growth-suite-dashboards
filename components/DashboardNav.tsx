@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import {
-  FileText, Users, GraduationCap, TrendingUp, Megaphone, CreditCard, BarChart3, Upload,
+  FileText, Users, GraduationCap, TrendingUp, Megaphone, CreditCard, BarChart3, Upload, Settings,
   type LucideIcon,
 } from 'lucide-react';
 import type { SchoolDashboardRow } from '@/lib/dashboards/types';
@@ -53,6 +53,13 @@ export function DashboardNav({ schoolName, locationId, dashboards, activeSlug, i
         >
           <Upload className="h-4 w-4 shrink-0" />
           <span className="truncate">Import roster (CSV)</span>
+        </Link>
+        <Link
+          href={`/school/${locationId}/settings`}
+          className="flex items-center gap-2 rounded px-2 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
+        >
+          <Settings className="h-4 w-4 shrink-0" />
+          <span className="truncate">Portal settings</span>
         </Link>
       </div>
     </aside>

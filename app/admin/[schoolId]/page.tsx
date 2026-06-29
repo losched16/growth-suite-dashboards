@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { query } from '@/lib/db';
+import { PORTAL_NAV } from '@/lib/portal-nav';
 import { listSchoolDashboards } from '@/lib/dashboards/loader';
 import { dashboardRegistry } from '@/lib/dashboards/registry';
 import { deriveEmbedToken } from '@/lib/auth/embed';
@@ -124,22 +125,6 @@ export default async function SchoolAdmin({
     [schoolId],
   );
   const branding = brandingRows[0] ?? null;
-  // Canonical parent-portal nav items (kept in sync with the portal's
-  // app/(portal)/layout.tsx NAV_ITEMS — the two repos don't share code).
-  const PORTAL_NAV = [
-    { href: '/home', label: 'Home' },
-    { href: '/notifications', label: 'Notifications' },
-    { href: '/attendance', label: 'Attendance' },
-    { href: '/family', label: 'Family' },
-    { href: '/forms-v2', label: 'Forms' },
-    { href: '/resources', label: 'Important Documents' },
-    { href: '/forms', label: 'Documents' },
-    { href: '/tuition', label: 'Tuition' },
-    { href: '/billing', label: 'Invoices' },
-    { href: '/financial-aid', label: 'Financial Aid' },
-    { href: '/products', label: 'School Store' },
-    { href: '/help', label: 'Help' },
-  ];
   const hiddenNav = new Set(branding?.portal_hidden_nav ?? []);
 
   const { rows: portalForms } = await query<{
