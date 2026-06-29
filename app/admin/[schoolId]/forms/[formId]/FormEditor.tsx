@@ -37,6 +37,10 @@ interface FieldBlock {
   text?: string;
   help?: string;
   required?: boolean;
+  // Lock a (usually prefilled) field so parents see the value but can't
+  // edit it. Honored by the portal renderer, which locks `readOnly: true`
+  // blocks (the value still submits).
+  readOnly?: boolean;
   options?: Option[];
   emphasis?: 'normal' | 'note' | 'warning';
   description?: string;
@@ -68,6 +72,7 @@ interface FieldBlock {
 // already carries are preserved untouched on save.
 interface FormAppliesTo {
   program_match?: string[];
+  tag_match?: string[];
   tuition_grid_match?: string[];
   metadata_match?: Record<string, string[]>;
   addon_keys?: string[];
@@ -119,12 +124,15 @@ const FIELD_TYPE_OPTIONS: Array<{ value: FieldType; label: string; group: string
 ];
 
 export function FormEditor({
-  schoolId, formId, slug, initial, programOptions = [], gradeOptions = [],
+  schoolId, formId, slug, initial, programOptions = [], gradeOptions = [], tagOptions = [],
 }: {
   schoolId: string;
   formId: string;
   slug: string;
   initial: InitialState;
+  // Distinct GHL contact tags synced for this school, for the
+  // "who sees this form" tag checklist. Backed by applies_to.tag_match.
+  tagOptions?: string[];
   // Distinct program values found on this school's student records, used
   // to populate the "Who sees this form" checklist. Empty → the school
   // has no program data yet and program targeting is hidden.
@@ -165,12 +173,12 @@ export function FormEditor({
   // metadata_match keys like aftercare) are stashed and merged back in
   // untouched on save, so this screen can never clobber an advanced rule
   // set up out-of-band.
-  const otherCriteria = useMemo<Omit<FormAppliesTo, 'program_match'>>(() => {
-    const { program_match, metadata_match, ...rest } = initial.applies_to ?? {};
-    void program_match;
+  const otherCriteria = useMemo<Omit<FormAppliesTo, 'program_match' | 'tag_match'>>(() => {
+    const { program_match, tag_match, metadata_match, ...rest } = initial.applies_to ?? {};
+    void program_match; void tag_match;
     // Preserve every metadata_match key EXCEPT grade_level, which this
     // screen owns. Keeps e.g. the DHS form's `aftercare` rule intact.
-    const out: Omit<FormAppliesTo, 'program_match'> = { ...rest };
+    const out: Omit<FormAppliesTo, 'program_match' | 'tag_match'> = { ...rest };
     if (metadata_match) {
       const { grade_level, ...mmRest } = metadata_match;
       void grade_level;
@@ -190,15 +198,24 @@ export function FormEditor({
     const stored = initial.applies_to?.metadata_match?.grade_level ?? [];
     return Array.from(new Set([...gradeOptions, ...stored]));
   }, [gradeOptions, initial.applies_to]);
+  // Tags: every synced GHL tag + any the rule already names.
+  const tagChecklist = useMemo(() => {
+    const stored = initial.applies_to?.tag_match ?? [];
+    return Array.from(new Set([...tagOptions, ...stored]));
+  }, [tagOptions, initial.applies_to]);
   const [selectedPrograms, setSelectedPrograms] = useState<string[]>(
     initial.applies_to?.program_match ?? [],
   );
   const [selectedGrades, setSelectedGrades] = useState<string[]>(
     initial.applies_to?.metadata_match?.grade_level ?? [],
   );
+  const [selectedTags, setSelectedTags] = useState<string[]>(
+    initial.applies_to?.tag_match ?? [],
+  );
   const restrictedInitially =
     (initial.applies_to?.program_match?.length ?? 0) > 0 ||
-    (initial.applies_to?.metadata_match?.grade_level?.length ?? 0) > 0;
+    (initial.applies_to?.metadata_match?.grade_level?.length ?? 0) > 0 ||
+    (initial.applies_to?.tag_match?.length ?? 0) > 0;
   const [audienceMode, setAudienceMode] = useState<'all' | 'restricted'>(
     restrictedInitially ? 'restricted' : 'all',
   );
@@ -210,6 +227,7 @@ export function FormEditor({
     const base: FormAppliesTo = { ...otherCriteria };
     if (audienceMode === 'restricted') {
       if (selectedPrograms.length > 0) base.program_match = selectedPrograms;
+      if (selectedTags.length > 0) base.tag_match = selectedTags;
       if (selectedGrades.length > 0) {
         base.metadata_match = { ...(base.metadata_match ?? {}), grade_level: selectedGrades };
       }
@@ -367,14 +385,9 @@ export function FormEditor({
           </p>
         </div>
 
-        {!meta.per_student ? (
-          <p className="text-[11px] rounded-md bg-amber-50 border border-amber-200 px-2.5 py-2 text-amber-800">
-            This form isn&rsquo;t per-student, so program targeting doesn&rsquo;t apply — it shows
-            once per family. Turn on <strong>Per-student</strong> above to target it by program.
-          </p>
-        ) : (programChecklist.length === 0 && gradeChecklist.length === 0) ? (
+        {(programChecklist.length === 0 && gradeChecklist.length === 0 && tagChecklist.length === 0) ? (
           <p className="text-[11px] text-zinc-500">
-            No programs or grades were found on your student records yet, so there&rsquo;s
+            No programs, grades, or tags were found on your records yet, so there&rsquo;s
             nothing to target by — this form shows to everyone.
           </p>
         ) : (
@@ -383,22 +396,22 @@ export function FormEditor({
               <input type="radio" name="audience" checked={audienceMode === 'all'}
                 onChange={() => setAudienceMode('all')} className="mt-0.5 h-4 w-4" />
               <span>
-                <span className="text-zinc-800">All students</span>
-                <span className="block text-[10px] text-zinc-500">Every child in the family sees this form.</span>
+                <span className="text-zinc-800">Everyone</span>
+                <span className="block text-[10px] text-zinc-500">Every family (and every child) sees this form.</span>
               </span>
             </label>
             <label className="flex items-start gap-2 text-sm">
               <input type="radio" name="audience" checked={audienceMode === 'restricted'}
                 onChange={() => setAudienceMode('restricted')} className="mt-0.5 h-4 w-4" />
               <span>
-                <span className="text-zinc-800">Only students in specific programs or grades</span>
-                <span className="block text-[10px] text-zinc-500">Pick below — the form hides for any child not in one of them.</span>
+                <span className="text-zinc-800">Only specific programs, grades, or tags</span>
+                <span className="block text-[10px] text-zinc-500">Pick below — the form hides for anyone not matching.</span>
               </span>
             </label>
 
             {audienceMode === 'restricted' ? (
               <div className="ml-6 space-y-3">
-                {programChecklist.length > 0 ? (
+                {meta.per_student && programChecklist.length > 0 ? (
                   <div className="rounded-md border border-zinc-200 bg-zinc-50/40 p-3 space-y-1.5">
                     <div className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">By program</div>
                     {programChecklist.map((prog) => (
@@ -421,7 +434,7 @@ export function FormEditor({
                   </div>
                 ) : null}
 
-                {gradeChecklist.length > 0 ? (
+                {meta.per_student && gradeChecklist.length > 0 ? (
                   <div className="rounded-md border border-zinc-200 bg-zinc-50/40 p-3 space-y-1.5">
                     <div className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">By grade</div>
                     {gradeChecklist.map((g) => (
@@ -444,13 +457,46 @@ export function FormEditor({
                   </div>
                 ) : null}
 
-                {selectedPrograms.length === 0 && selectedGrades.length === 0 ? (
+                {tagChecklist.length > 0 ? (
+                  <div className="rounded-md border border-zinc-200 bg-zinc-50/40 p-3 space-y-1.5">
+                    <div className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">By GHL tag</div>
+                    <p className="text-[10px] text-zinc-500 -mt-1">
+                      Tag the parent&rsquo;s contact in GHL; this form then shows only to families carrying a selected tag.
+                      Works for family-level forms too.
+                    </p>
+                    {tagChecklist.map((tag) => (
+                      <label key={tag} className="flex items-center gap-2 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={selectedTags.includes(tag)}
+                          onChange={(e) => {
+                            setSelectedTags(
+                              e.target.checked
+                                ? [...selectedTags, tag]
+                                : selectedTags.filter((x) => x !== tag),
+                            );
+                          }}
+                          className="h-4 w-4 rounded border-zinc-300"
+                        />
+                        <span className="text-zinc-800">{tag}</span>
+                      </label>
+                    ))}
+                  </div>
+                ) : null}
+
+                {!meta.per_student ? (
+                  <p className="text-[10px] text-zinc-500 italic">
+                    Program and grade targeting need a per-student form; tag targeting works here either way.
+                  </p>
+                ) : null}
+
+                {selectedPrograms.length === 0 && selectedGrades.length === 0 && selectedTags.length === 0 ? (
                   <p className="text-[11px] text-amber-700">
-                    Select at least one program or grade — otherwise this form shows to everyone.
+                    Select at least one program, grade, or tag — otherwise this form shows to everyone.
                   </p>
                 ) : (
                   <p className="text-[11px] text-zinc-500">
-                    Visible only to: {[...selectedPrograms, ...selectedGrades].join(', ')}.
+                    Visible only to: {[...selectedPrograms, ...selectedGrades, ...selectedTags].join(', ')}.
                   </p>
                 )}
               </div>
@@ -695,7 +741,11 @@ function FieldBody({
           <input type="text" value={field.help ?? ''} onChange={(e) => onPatch({ help: e.target.value })} className={inputCls} />
         </Field>
       </div>
-      <ToggleField label="Required" checked={!!field.required} onChange={(v) => onPatch({ required: v })} />
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2">
+        <ToggleField label="Required" checked={!!field.required} onChange={(v) => onPatch({ required: v })} />
+        <ToggleField label="Locked (read-only)" checked={!!field.readOnly} onChange={(v) => onPatch({ readOnly: v })}
+          hint="Parents see the value but can't change it — use it for info prefilled from the contact record (name, address, program)." />
+      </div>
 
       {/* Choice fields */}
       {(t === 'select' || t === 'radio' || t === 'multi_checkbox') ? (
