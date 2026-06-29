@@ -111,10 +111,11 @@ export default async function FormEditPageScoped({
   return (
     <main className="flex flex-1 flex-col items-center bg-slate-50 p-6 min-h-screen">
       <div className="w-full max-w-4xl space-y-4">
-        {/* Back link stays INSIDE the school iframe — go back to the Forms
-            tab in the Payments hub. No escape to /admin. */}
+        {/* Back link stays INSIDE the school iframe — go back to the
+            standalone Parent Portal → Forms page. (Forms used to live as a
+            tab in the Payments hub; that tab was removed.) */}
         <Link
-          href={`/school/${locationId}/payments?tab=forms`}
+          href={`/school/${locationId}/forms`}
           className="inline-flex items-center gap-1 text-xs text-slate-500 hover:text-slate-700"
         >
           <ArrowLeft className="h-3 w-3" /> Back to Forms

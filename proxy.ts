@@ -332,6 +332,9 @@ function extractLocationId(request: NextRequest): string | null {
 // the Growth Suite sidebar visible inside their GHL embeds.
 const FORCE_NO_CHROME_LOCATIONS = new Set<string>([
   '61ZKzUGlRhlujvo9vljO', // Shrewsbury Montessori
+  '1JOwnyxFSKEwJNgmq84I', // Desert Garden Montessori (2.0) — every /school
+                          // surface is embedded as a GHL Custom Menu Link, so
+                          // internal links must never unwrap to the full shell.
 ]);
 
 function passThroughWithChrome(request: NextRequest): NextResponse {

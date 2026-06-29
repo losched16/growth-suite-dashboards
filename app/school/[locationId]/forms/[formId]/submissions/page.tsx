@@ -229,7 +229,7 @@ export default async function SubmissionsInboxScoped({
         <div className="flex items-baseline justify-between gap-3 flex-wrap">
           <div>
             <Link
-              href={`/school/${locationId}/payments?tab=forms`}
+              href={`/school/${locationId}/forms`}
               className="text-xs text-slate-500 hover:text-slate-700 inline-flex items-center gap-1"
             >
               <ArrowLeft className="h-3 w-3" /> Back to Forms

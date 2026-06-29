@@ -129,7 +129,7 @@ export default async function SchoolFormPreviewPage({
               <Edit3 className="h-3 w-3" /> Back to editor
             </Link>
             <Link
-              href={`/school/${locationId}/payments?tab=forms`}
+              href={`/school/${locationId}/forms`}
               className={testMode ? 'inline-flex items-center gap-1 text-emerald-800 hover:underline' : 'inline-flex items-center gap-1 text-amber-800 hover:underline'}
             >
               <ArrowLeft className="h-3 w-3" /> All forms

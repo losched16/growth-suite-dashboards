@@ -35,10 +35,10 @@ export default async function NewSchoolFormPage({
     <main className="flex flex-1 flex-col items-center bg-zinc-50 p-6">
       <div className="w-full max-w-2xl space-y-4">
         <Link
-          href={`/school/${locationId}/payments?chrome=none#forms`}
+          href={`/school/${locationId}/forms`}
           className="inline-flex items-center gap-1 text-xs text-zinc-500 hover:text-zinc-700"
         >
-          <ArrowLeft className="h-3 w-3" /> Back to Payments → Forms
+          <ArrowLeft className="h-3 w-3" /> Back to Forms
         </Link>
         <header>
           <h1 className="text-2xl font-semibold text-zinc-900">Create a new form</h1>
