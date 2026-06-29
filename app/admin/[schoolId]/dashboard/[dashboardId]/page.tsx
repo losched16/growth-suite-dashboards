@@ -58,7 +58,43 @@ export default async function DashboardConfigPage({
 }) {
   const { schoolId, dashboardId } = await params;
   const { msg, err } = await searchParams;
+  return (
+    <DashboardConfigEditor
+      schoolId={schoolId}
+      dashboardId={dashboardId}
+      returnTo={`/admin/${schoolId}/dashboard/${dashboardId}`}
+      backHref={`/admin/${schoolId}`}
+      backLabel="Back to school"
+      allowDelete
+      msg={msg}
+      err={err}
+    />
+  );
+}
 
+// Reusable editor body — rendered by BOTH the operator page above and the
+// school-facing /school/[locationId]/dashboard/[dashboardId] page. `returnTo`
+// is threaded into every form so the school-scoped endpoints redirect back to
+// the right place; `allowDelete` hides the danger zone for schools.
+export async function DashboardConfigEditor({
+  schoolId,
+  dashboardId,
+  returnTo,
+  backHref,
+  backLabel,
+  allowDelete = false,
+  msg,
+  err,
+}: {
+  schoolId: string;
+  dashboardId: string;
+  returnTo: string;
+  backHref: string;
+  backLabel: string;
+  allowDelete?: boolean;
+  msg?: string;
+  err?: string;
+}) {
   const { rows } = await query<DashboardRow>(
     `SELECT id, school_id, dashboard_slug, display_name, layout
      FROM school_dashboards WHERE id = $1 AND school_id = $2`,
@@ -80,8 +116,8 @@ export default async function DashboardConfigPage({
       <div className="w-full max-w-4xl space-y-5">
         <div className="flex items-baseline justify-between">
           <div>
-            <Link href={`/admin/${schoolId}`} className="text-xs text-zinc-500 hover:text-zinc-700">
-              ← Back to school
+            <Link href={backHref} className="text-xs text-zinc-500 hover:text-zinc-700">
+              ← {backLabel}
             </Link>
             <h1 className="mt-2 text-2xl font-semibold text-zinc-900">{d.display_name}</h1>
             <p className="mt-1 font-mono text-xs text-zinc-500">
@@ -119,6 +155,7 @@ export default async function DashboardConfigPage({
             index={idx}
             schoolId={schoolId}
             dashboardId={dashboardId}
+            returnTo={returnTo}
           />
         ))}
 
@@ -130,6 +167,7 @@ export default async function DashboardConfigPage({
             method="POST"
             className="flex flex-wrap items-center gap-2 text-sm"
           >
+            <input type="hidden" name="return_to" value={returnTo} />
             <select
               name="widget_id"
               required
@@ -158,7 +196,8 @@ export default async function DashboardConfigPage({
           </form>
         </section>
 
-        {/* Delete dashboard */}
+        {/* Delete dashboard — operators only */}
+        {allowDelete ? (
         <section className="rounded-xl border border-red-200 bg-red-50/50 p-4">
           <h2 className="mb-2 text-sm font-semibold text-red-900">Danger zone</h2>
           <form
@@ -183,6 +222,7 @@ export default async function DashboardConfigPage({
             </button>
           </form>
         </section>
+        ) : null}
       </div>
     </main>
   );
@@ -193,11 +233,13 @@ function WidgetEditor({
   index,
   schoolId,
   dashboardId,
+  returnTo,
 }: {
   instance: WidgetInstance;
   index: number;
   schoolId: string;
   dashboardId: string;
+  returnTo: string;
 }) {
   const configAction = `/api/admin/schools/${schoolId}/dashboards/${dashboardId}/widgets/${instance.instance_id}/config`;
   const removeAction = `/api/admin/schools/${schoolId}/dashboards/${dashboardId}/widgets/${instance.instance_id}/remove`;
@@ -211,6 +253,7 @@ function WidgetEditor({
         <div className="flex items-center gap-2">
           <span className="font-mono text-[11px] text-zinc-500">{instance.instance_id.slice(0, 8)}</span>
           <form action={removeAction} method="POST">
+            <input type="hidden" name="return_to" value={returnTo} />
             <button
               type="submit"
               className="rounded border border-red-200 bg-white px-2 py-0.5 text-[11px] text-red-700 hover:bg-red-50"

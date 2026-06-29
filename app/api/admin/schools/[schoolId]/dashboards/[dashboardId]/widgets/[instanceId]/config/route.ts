@@ -3,9 +3,9 @@
 // EnrollmentHubTable form fields specifically; for any other widget, accepts
 // a config_json textarea.
 
-import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { query } from '@/lib/db';
+import { editorRedirect } from '@/lib/dashboards/editor-redirect';
 import type { WidgetInstance } from '@/lib/widgets/types';
 import {
   AVAILABLE_FILTERS,
@@ -131,10 +131,5 @@ function back(
   dashboardId: string,
   q: { msg?: string; err?: string },
 ) {
-  const url = request.nextUrl.clone();
-  url.pathname = `/admin/${schoolId}/dashboard/${dashboardId}`;
-  url.search = '';
-  if (q.msg) url.searchParams.set('msg', q.msg);
-  if (q.err) url.searchParams.set('err', q.err);
-  return NextResponse.redirect(url, 303);
+  return editorRedirect(request, schoolId, dashboardId, q);
 }

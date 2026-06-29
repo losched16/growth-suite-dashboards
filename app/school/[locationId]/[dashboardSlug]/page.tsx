@@ -1,4 +1,5 @@
 import { notFound } from 'next/navigation';
+import { headers } from 'next/headers';
 import {
   loadSchoolByLocationId,
   getSchoolDashboard,
@@ -42,6 +43,11 @@ export default async function DashboardPage({
   const dashboard = await getSchoolDashboard(school.id, dashboardSlug);
   if (!dashboard || !dashboard.is_enabled) notFound();
 
+  // Show the "Edit layout" affordance only in the full-shell staff view —
+  // not in bare GHL embeds (chrome=none), where the viewer may be a parent.
+  const reqHeaders = await headers();
+  const embedded = reqHeaders.get('x-chrome') === 'none';
+
   const ctx: SchoolContext = {
     schoolId: school.id,
     schoolName: school.name,
@@ -82,10 +88,20 @@ export default async function DashboardPage({
         />
       ) : null}
 
-      <header>
-        <h1 className="text-xl font-semibold text-gray-900">{dashboard.display_name}</h1>
-        {dashboard.description ? (
-          <p className="text-sm text-gray-500 mt-0.5">{dashboard.description}</p>
+      <header className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-xl font-semibold text-gray-900">{dashboard.display_name}</h1>
+          {dashboard.description ? (
+            <p className="text-sm text-gray-500 mt-0.5">{dashboard.description}</p>
+          ) : null}
+        </div>
+        {!embedded ? (
+          <a
+            href={`/school/${locationId}/dashboard/${dashboard.id}`}
+            className="shrink-0 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+          >
+            Edit layout
+          </a>
         ) : null}
       </header>
 
