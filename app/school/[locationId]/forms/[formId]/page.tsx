@@ -99,6 +99,15 @@ export default async function FormEditPageScoped({
   );
   const gradeOptions = gradeRows.map((r) => r.grade_level);
 
+  // Distinct GHL contact tags synced for this school → "By tag" targeting.
+  const { rows: tagRows } = await query<{ tag: string }>(
+    `SELECT DISTINCT tag FROM ghl_contact_tags
+      WHERE school_id = $1 AND btrim(coalesce(tag,'')) <> ''
+      ORDER BY 1`,
+    [school.id],
+  );
+  const tagOptions = tagRows.map((r) => r.tag);
+
   return (
     <main className="flex flex-1 flex-col items-center bg-slate-50 p-6 min-h-screen">
       <div className="w-full max-w-4xl space-y-4">
@@ -163,6 +172,7 @@ export default async function FormEditPageScoped({
           }}
           programOptions={programOptions}
           gradeOptions={gradeOptions}
+          tagOptions={tagOptions}
         />
       </div>
     </main>
