@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import {
   FileText, Users, GraduationCap, TrendingUp, Megaphone, CreditCard, BarChart3, Upload, Settings,
+  FilePen, Bell, BookOpen,
   type LucideIcon,
 } from 'lucide-react';
 import type { SchoolDashboardRow } from '@/lib/dashboards/types';
@@ -45,7 +46,28 @@ export function DashboardNav({ schoolName, locationId, dashboards, activeSlug, i
           );
         })}
       </nav>
+      {/* Parent Portal — everything that manages what parents see/do. */}
       <div className="px-2 mt-4 pt-3 border-t border-gray-100">
+        <div className="px-2 pb-1 text-[10px] font-semibold uppercase tracking-wide text-gray-400">Parent Portal</div>
+        {([
+          { href: `/school/${locationId}/forms`, label: 'Forms', Icon: FilePen },
+          { href: `/school/${locationId}/notifications`, label: 'Notifications', Icon: Bell },
+          { href: `/school/${locationId}/resources`, label: 'Important Documents', Icon: BookOpen },
+          { href: `/school/${locationId}/settings`, label: 'Portal settings', Icon: Settings },
+        ] as const).map(({ href, label, Icon }) => (
+          <Link
+            key={href}
+            href={href}
+            className="flex items-center gap-2 rounded px-2 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
+          >
+            <Icon className="h-4 w-4 shrink-0" />
+            <span className="truncate">{label}</span>
+          </Link>
+        ))}
+      </div>
+
+      {/* Tools — data/admin utilities. */}
+      <div className="px-2 mt-3 pt-3 border-t border-gray-100">
         <div className="px-2 pb-1 text-[10px] font-semibold uppercase tracking-wide text-gray-400">Tools</div>
         <Link
           href={`/school/${locationId}/roster-import`}
@@ -53,13 +75,6 @@ export function DashboardNav({ schoolName, locationId, dashboards, activeSlug, i
         >
           <Upload className="h-4 w-4 shrink-0" />
           <span className="truncate">Import roster (CSV)</span>
-        </Link>
-        <Link
-          href={`/school/${locationId}/settings`}
-          className="flex items-center gap-2 rounded px-2 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
-        >
-          <Settings className="h-4 w-4 shrink-0" />
-          <span className="truncate">Portal settings</span>
         </Link>
       </div>
     </aside>
