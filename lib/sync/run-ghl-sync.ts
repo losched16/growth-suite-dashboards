@@ -819,6 +819,19 @@ export async function runGhlSync(schoolId: string): Promise<SyncResult> {
       for (const r of es) if (r.gc && r.slot) reuseStudentId.set(`${r.gc}|${r.slot}`, r.id);
     }
 
+    // Preserve parent portal credentials across the DELETE+INSERT rebuild.
+    // The re-insert below only carries synced (GHL) fields, so without this a
+    // parent who created a portal password would lose it on every sync. IDs
+    // are preserved (reuse maps above), so we stash by id now and restore
+    // after the rebuild. ON COMMIT DROP keeps it scoped to this transaction.
+    await q(
+      `CREATE TEMP TABLE _pw_preserve ON COMMIT DROP AS
+         SELECT id, password_hash, password_set_at
+           FROM parents
+          WHERE school_id = $1 AND password_hash IS NOT NULL`,
+      [schoolId],
+    );
+
     // Snapshot semantics: blow away existing rows for this school.
     // Cascade order matters; do it explicitly even though FKs would handle it.
     await q('DELETE FROM enrollments WHERE school_id = $1', [schoolId]);
@@ -957,6 +970,16 @@ export async function runGhlSync(schoolId: string): Promise<SyncResult> {
         enrollmentsCreated++;
       }
     }
+
+    // Restore preserved portal credentials onto the rebuilt parent rows,
+    // matched by their preserved id. No-op when no parent had a password.
+    await q(
+      `UPDATE parents p
+          SET password_hash = t.password_hash,
+              password_set_at = t.password_set_at
+         FROM _pw_preserve t
+        WHERE p.id = t.id`,
+    );
 
     return {
       familiesCreated, parentsCreated, studentsCreated,
