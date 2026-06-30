@@ -18,6 +18,7 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { query } from '@/lib/db';
 import { runGhlSync, type SyncResult } from '@/lib/sync/run-ghl-sync';
+import { backfillStudentIds } from '@/lib/sync/student-id-backfill';
 import { syncGhlAttributes } from '@/lib/sync/ghl-attributes';
 import { createMissingEnrolledFamilies } from '@/lib/sync/create-family-from-contact';
 
@@ -124,10 +125,23 @@ async function runForAll(): Promise<NextResponse> {
         }
       }
 
+      // Auto-assign Student IDs to any new students missing one (opted-in
+      // schools only). Generates a unique random 8-digit id, writes it to GHL
+      // (source of truth) + mirrors to metadata. Best-effort.
+      let sidSummary = '';
+      try {
+        const sid = await backfillStudentIds(s.id);
+        if (sid.ran && (sid.assigned > 0 || sid.errors.length > 0)) {
+          sidSummary = ` Student-IDs: +${sid.assigned} assigned (${sid.ghl_written} to GHL)${sid.errors.length ? `, ${sid.errors.length} errors` : ''}.`;
+        }
+      } catch (sidErr) {
+        sidSummary = ` Student-IDs FAILED: ${sidErr instanceof Error ? sidErr.message : String(sidErr)}`;
+      }
+
       const dur = Date.now() - t0;
       const summary = (result
         ? `Synced ${result.families_created} families, ${result.students_created} students, ${result.enrollments_created} enrollments, ${result.classrooms_created} classrooms.`
-        : `Family-graph sync skipped (sync_mode=${s.sync_mode}).`) + attrSummary + enrollSummary;
+        : `Family-graph sync skipped (sync_mode=${s.sync_mode}).`) + attrSummary + enrollSummary + sidSummary;
       results.push({
         school_id: s.id,
         name: s.name,
