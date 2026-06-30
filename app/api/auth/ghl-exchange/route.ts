@@ -50,9 +50,16 @@ async function exchange(request: NextRequest) {
     via: 'ghl',
   });
 
+  // Optional deep-link target so a SINGLE dynamic menu link can land on a
+  // specific dashboard page for whatever sub-account opened it — e.g.
+  // ?next=forms → the Parent Portal → Forms page. Restricted to one safe
+  // path segment (always nested under /school/{id}/), so it can never be an
+  // open redirect. No `next` → dashboard home, same as before.
+  const nextRaw = request.nextUrl.searchParams.get('next') ?? '';
+  const next = /^[a-z][a-z0-9-]*$/.test(nextRaw) ? nextRaw : '';
   const url = request.nextUrl.clone();
-  url.pathname = `/school/${school.ghl_location_id}`;
-  url.search = '';
+  url.pathname = `/school/${school.ghl_location_id}${next ? `/${next}` : ''}`;
+  url.search = next ? 'chrome=none' : '';
   const response = NextResponse.redirect(url, 303);
   response.cookies.set({
     name: SCHOOL_SESSION_COOKIE,
