@@ -26,6 +26,7 @@ import type { NextRequest } from 'next/server';
 import { query, withTransaction } from '@/lib/db';
 import { authorizeOperatorOrSchool } from '@/lib/auth/dual';
 import { generateTuitionEnrollment } from '@/lib/billing/tuition-plan-generator';
+import { recomputePlanBreakdown, type DiscountRules, type AddonSnap } from '@/lib/billing/recompute-plan';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -150,6 +151,83 @@ export async function POST(request: NextRequest, { params }: { params: Params })
             WHERE id = $1`, [enrollmentId],
         );
         return back(request, fallback, returnTo, { msg: 'Plan resumed.' });
+      }
+
+      // ── change_plan ──────────────────────────────────────────────────
+      // Swap the family's tuition grid (e.g. 5-day → 4-day) and/or payment
+      // plan. Percentage discounts auto-recompute against the new base via
+      // the school's discount_rules; fixed addons (extended care, deposit,
+      // dev fee) carry forward. Unpaid invoices regenerate at the new total;
+      // paid / partially-paid invoices are preserved.
+      case 'change_plan': {
+        const newGridId = String(fd.get('new_grid_id') ?? '').trim();
+        const newPlanId = String(fd.get('new_plan_id') ?? '').trim();
+        if (!newGridId) return back(request, fallback, returnTo, { err: 'Pick a program / tuition first.' });
+        if (!newPlanId) return back(request, fallback, returnTo, { err: 'Pick a payment plan first.' });
+
+        // Current breakdown (to carry addons + detect sibling) + first due date.
+        const { rows: curRows } = await query<{ addons: AddonSnap[] | null; first_due_date: string | null }>(
+          `SELECT addons, first_due_date FROM family_tuition_enrollments WHERE id = $1`,
+          [enrollmentId],
+        );
+        const currentAddons = Array.isArray(curRows[0]?.addons) ? curRows[0]!.addons! : [];
+        const firstDue = curRows[0]?.first_due_date
+          ? new Date(curRows[0].first_due_date).toISOString().slice(0, 10)
+          : null;
+
+        // New grid + plan + this school's discount rules.
+        const { rows: gRows } = await query<{ display_name: string; annual_tuition_cents: number }>(
+          `SELECT display_name, annual_tuition_cents FROM tuition_grids
+            WHERE id = $1 AND school_id = $2 AND is_active = true`,
+          [newGridId, schoolId],
+        );
+        if (gRows.length === 0) return back(request, fallback, returnTo, { err: 'That tuition option was not found.' });
+        const { rows: pRows } = await query<{ slug: string }>(
+          `SELECT slug FROM payment_plans WHERE id = $1 AND school_id = $2 AND is_active = true`,
+          [newPlanId, schoolId],
+        );
+        if (pRows.length === 0) return back(request, fallback, returnTo, { err: 'That payment plan was not found.' });
+        const { rows: cfgRows } = await query<{ discount_rules: DiscountRules | null }>(
+          `SELECT discount_rules FROM school_payment_config WHERE school_id = $1`,
+          [schoolId],
+        );
+
+        const recomputed = recomputePlanBreakdown({
+          currentAddons,
+          newBaseCents: gRows[0].annual_tuition_cents,
+          newGridLabel: gRows[0].display_name,
+          newPlanSlug: pRows[0].slug,
+          rules: cfgRows[0]?.discount_rules ?? null,
+        });
+
+        // Regenerate via the override path (deletes unpaid, preserves paid).
+        const result = await generateTuitionEnrollment({
+          schoolId,
+          familyId: enr.family_id,
+          studentId: enr.student_id,
+          academicYear: enr.academic_year,
+          tuitionGridId: newGridId,
+          paymentPlanId: newPlanId,
+          addonKeys: [],
+          overrideLines: recomputed.overrideLines,
+          tuitionOverrideCents: recomputed.totalAnnualCents,
+          firstDueDate: firstDue,
+          createdByEmail: auth.via === 'school' ? 'school@growthsuite.local' : 'operator@growthsuite.local',
+          initialStatus: 'open',
+        });
+
+        // The generator snapshots addons from the grid's catalog (empty for
+        // override-priced schools), so persist OUR recomputed breakdown back
+        // onto the enrollment — the contract / DHS forms render from it.
+        await query(
+          `UPDATE family_tuition_enrollments SET addons = $2::jsonb, updated_at = now() WHERE id = $1`,
+          [result.enrollment_id, JSON.stringify(recomputed.addons)],
+        );
+
+        const flag = recomputed.notes.length ? ` Note: ${recomputed.notes.join(' ')}` : '';
+        return back(request, fallback, returnTo, {
+          msg: `Plan changed to ${gRows[0].display_name} — ${result.invoice_ids.length} installment${result.invoice_ids.length === 1 ? '' : 's'} totaling $${(recomputed.totalAnnualCents / 100).toLocaleString()}. Paid invoices preserved.${flag}`,
+        });
       }
 
       // ── edit_installment ─────────────────────────────────────────────
