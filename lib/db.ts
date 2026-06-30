@@ -29,15 +29,58 @@ export function getPool(): Pool {
       idleTimeoutMillis: 10_000,
       connectionTimeoutMillis: 5_000,
     });
+    // The Supabase transaction-mode pooler will occasionally terminate an
+    // IDLE pooled connection (pgbouncer recycle, brief network blip,
+    // maintenance). node-postgres surfaces that as an 'error' event on the
+    // pool object; with NO listener, Node escalates it to an unhandled
+    // 'error' that can crash the process. Swallow it — the broken client is
+    // already evicted from the pool, and the next query() acquires a fresh
+    // one. Without this, a transient drop took down more than the one query.
+    _pool.on('error', (err) => {
+      // eslint-disable-next-line no-console
+      console.error('[db] idle pooled client error (evicted, non-fatal):', err.message);
+    });
   }
   return _pool;
 }
 
-export function query<T extends QueryResultRow = QueryResultRow>(
+// Connection-level failures that mean the statement almost certainly never
+// reached Postgres (the pooler handed back a dead connection, or dropped it
+// during the handshake). Safe to retry for READ queries — see query().
+function isTransientConnError(e: unknown): boolean {
+  const err = e as { message?: string; code?: string } | null;
+  if (!err) return false;
+  // SQLSTATE class 08 = connection exception; 57P0x = admin/server shutdown.
+  if (err.code && /^(08|57P0)/.test(err.code)) return true;
+  return !!err.message && /connection terminated|econnreset|epipe|connection closed|server closed the connection|timeout exceeded|terminating connection/i.test(err.message);
+}
+
+// Retry transient connection drops, but ONLY for read-only (SELECT)
+// statements — so a write can never be double-applied. The Supabase pooler
+// dropping a connection used to surface as a hard 500 (e.g. the iframe
+// auto-auth "Auto-auth failed: Connection terminated unexpectedly"); a short
+// retry turns that blip into a transparent re-attempt. Writes and
+// transactions (withTransaction, below) are untouched.
+export async function query<T extends QueryResultRow = QueryResultRow>(
   text: string,
   params?: unknown[]
 ): Promise<QueryResult<T>> {
-  return getPool().query<T>(text, params as never);
+  const isRead = /^\s*select\b/i.test(text);
+  const maxAttempts = isRead ? 3 : 1;
+  let lastErr: unknown;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      return await getPool().query<T>(text, params as never);
+    } catch (e) {
+      lastErr = e;
+      if (attempt < maxAttempts && isTransientConnError(e)) {
+        await new Promise((r) => setTimeout(r, attempt * 150));
+        continue;
+      }
+      throw e;
+    }
+  }
+  throw lastErr;
 }
 
 export async function withTransaction<T>(
