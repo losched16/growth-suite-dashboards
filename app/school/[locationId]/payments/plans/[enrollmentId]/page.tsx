@@ -16,7 +16,7 @@
 
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ArrowLeft, Pause, Play, Edit3, Scissors, Calendar, Plus, RotateCw } from 'lucide-react';
+import { ArrowLeft, Pause, Play, Edit3, Scissors, Calendar, Plus, RotateCw, SlidersHorizontal } from 'lucide-react';
 import { query } from '@/lib/db';
 import { loadSchoolByLocationId } from '@/lib/dashboards/loader';
 import { HelpCallout } from '@/components/HelpCallout';
@@ -28,7 +28,7 @@ export const maxDuration = 30;
 type Params = Promise<{ locationId: string; enrollmentId: string }>;
 type SearchParams = Promise<{
   msg?: string; err?: string;
-  edit?: string; split?: string; reschedule?: string;
+  edit?: string; split?: string; reschedule?: string; changeplan?: string;
 }>;
 
 interface EnrollmentRow {
@@ -38,6 +38,8 @@ interface EnrollmentRow {
   student_id: string | null;
   academic_year: string;
   status: 'active' | 'paused' | 'completed' | 'cancelled';
+  tuition_grid_id: string;
+  payment_plan_id: string;
   total_annual_cents: number;
   installment_count: number;
   internal_note: string | null;
@@ -98,6 +100,7 @@ export default async function PlanDetailPage({
 
   const { rows: eRows } = await query<EnrollmentRow>(
     `SELECT e.id, e.school_id, e.family_id, e.student_id, e.academic_year, e.status,
+            e.tuition_grid_id, e.payment_plan_id,
             e.total_annual_cents, e.installment_count, e.internal_note,
             e.tuition_override_cents, e.tuition_override_reason,
             e.tuition_override_set_by_email, e.tuition_override_set_at,
@@ -123,6 +126,26 @@ export default async function PlanDetailPage({
   );
   const enr = eRows[0];
   if (!enr) notFound();
+
+  // Active tuition grids + payment plans for the "Change plan" editor.
+  const { rows: gridOpts } = await query<{ id: string; display_name: string; annual_tuition_cents: number; grade_level: string }>(
+    `SELECT id, display_name, annual_tuition_cents, grade_level
+       FROM tuition_grids
+      WHERE school_id = $1 AND is_active = true
+      ORDER BY grade_level, annual_tuition_cents`,
+    [schoolId],
+  );
+  const { rows: planOpts } = await query<{ id: string; display_name: string }>(
+    `SELECT id, display_name FROM payment_plans
+      WHERE school_id = $1 AND is_active = true
+      ORDER BY installment_count`,
+    [schoolId],
+  );
+  // Group grids by grade for an <optgroup>-friendly select.
+  const gridsByGrade = gridOpts.reduce<Record<string, typeof gridOpts>>((acc, g) => {
+    (acc[g.grade_level] ??= []).push(g);
+    return acc;
+  }, {});
 
   // Pull all invoices for this enrollment, paid + open + voided. Sort by
   // due_at so the timeline reads top-down. installment_number is in the
@@ -371,7 +394,82 @@ export default async function PlanDetailPage({
               <RotateCw className="h-3.5 w-3.5" /> Reschedule remaining balance
             </Link>
           ) : null}
+
+          {!sp.changeplan ? (
+            <Link
+              href={`${selfHref}?changeplan=1`}
+              className="inline-flex items-center gap-1.5 rounded-md border border-violet-300 bg-violet-50 px-3 py-1.5 text-sm font-medium text-violet-800 hover:bg-violet-100"
+            >
+              <SlidersHorizontal className="h-3.5 w-3.5" /> Change plan
+            </Link>
+          ) : null}
         </div>
+
+        {/* CHANGE PLAN — swap grid (day-count) and/or payment plan. Discounts
+            auto-recompute against the new base; unpaid invoices regenerate. */}
+        {sp.changeplan ? (
+          <form
+            action={`/api/admin/schools/${schoolId}/tuition-plans/${enrollmentId}/action`}
+            method="POST"
+            className="rounded-xl border-2 border-violet-300 bg-violet-50/30 p-5 space-y-4"
+          >
+            <input type="hidden" name="action" value="change_plan" />
+            <input type="hidden" name="return_to" value={returnTo} />
+            <div>
+              <h2 className="text-base font-semibold text-violet-900">Change plan</h2>
+              <p className="text-xs text-violet-800 mt-0.5">
+                Swap this family&rsquo;s program / day-count or payment plan. Percentage discounts
+                auto-recompute against the new tuition; add-ons (extended care, deposit, fees)
+                carry over. Unpaid installments regenerate at the new total —{' '}
+                <strong>paid installments are preserved</strong>.
+              </p>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="block text-sm">
+                <span className="font-medium text-slate-700">Program / tuition</span>
+                <select
+                  name="new_grid_id"
+                  defaultValue={enr.tuition_grid_id}
+                  className="mt-1 w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm"
+                >
+                  {Object.entries(gridsByGrade).map(([grade, gs]) => (
+                    <optgroup key={grade} label={grade}>
+                      {gs.map((g) => (
+                        <option key={g.id} value={g.id}>
+                          {g.display_name} — ${(g.annual_tuition_cents / 100).toLocaleString()}
+                        </option>
+                      ))}
+                    </optgroup>
+                  ))}
+                </select>
+              </label>
+              <label className="block text-sm">
+                <span className="font-medium text-slate-700">Payment plan</span>
+                <select
+                  name="new_plan_id"
+                  defaultValue={enr.payment_plan_id}
+                  className="mt-1 w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm"
+                >
+                  {planOpts.map((p) => (
+                    <option key={p.id} value={p.id}>{p.display_name}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <p className="text-[11px] text-violet-700">
+              Currently: <strong>{enr.grid_label}</strong> · {enr.plan_label} · ${(enr.total_annual_cents / 100).toLocaleString()}/yr.
+              The recomputed breakdown appears above as soon as you apply.
+            </p>
+            <div className="flex items-center gap-2">
+              <button type="submit" className="inline-flex items-center gap-1.5 rounded-md bg-violet-600 px-3.5 py-1.5 text-sm font-semibold text-white hover:bg-violet-700">
+                Apply change
+              </button>
+              <Link href={selfHref} className="inline-flex items-center rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50">
+                Cancel
+              </Link>
+            </div>
+          </form>
+        ) : null}
 
         {/* RESCHEDULE REMAINING BALANCE — collapsible */}
         {sp.reschedule ? (
