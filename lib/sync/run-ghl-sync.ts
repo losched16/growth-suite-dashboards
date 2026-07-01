@@ -695,9 +695,22 @@ export async function runGhlSync(schoolId: string): Promise<SyncResult> {
   // that carries student data becomes a family — driven purely by what the
   // location holds, nothing school-specific.
   const requireHousehold = !!config.family_fields?.householdId;
+  // Per-school ROSTER TAG FILTER: for schools listed here, ONLY contacts carrying
+  // one of these tags become roster families (Spruce Tree = the "2026-27 stms"
+  // enrolling class + withdrawn). Contacts tagged "withdrawn" are kept but marked
+  // withdrawn. Schools not listed are unaffected (data-driven as before).
+  const ROSTER_TAG_FILTER: Record<string, string[]> = {
+    '4aba0898-ec93-42ed-8e87-5374ca211738': ['2026-27 stms', 'withdrawn'], // Spruce Tree Montessori
+  };
+  const rosterTags = (ROSTER_TAG_FILTER[schoolId] ?? []).map((t) => t.toLowerCase());
+  const tagsLower = (c: GhlContact) => (c.tags ?? []).map((t) => String(t).trim().toLowerCase());
+  const passesRosterFilter = (c: GhlContact) => rosterTags.length === 0 || rosterTags.some((rt) => tagsLower(c).includes(rt));
+  const isWithdrawn = (c: GhlContact) => tagsLower(c).includes('withdrawn');
   for (const c of allContacts) {
+    if (!passesRosterFilter(c)) continue;
     const family = mapContactToFamily(c, schema, config, formDefs, { requireHousehold });
     if (family) {
+      if (isWithdrawn(c)) for (const s of family.students) s.enrollment_status = 'withdrawn';
       withHouseholdId++;
       enrolledContactIds.add(c.id);
       mapped.push(family);
@@ -730,6 +743,7 @@ export async function runGhlSync(schoolId: string): Promise<SyncResult> {
     if (enrolledContactIds.has(contactId)) continue; // Phase 1 already covered them
     const contact = contactsById.get(contactId);
     if (!contact) continue;
+    if (!passesRosterFilter(contact)) continue; // roster tag gate applies to prospects too
     const primary = pickPrimaryOpportunity(contactOpps);
     if (!primary) continue;
     if (primary.status !== 'open') continue; // skip lost/won/abandoned for the funnel
