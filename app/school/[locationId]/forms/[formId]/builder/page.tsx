@@ -47,8 +47,13 @@ export default async function FormBuilderPage({ params }: { params: Params }) {
 
   const { rows } = await query<{
     id: string; slug: string; display_name: string; field_schema: unknown[];
+    description: string | null; confirmation_message: string | null;
+    notify_emails: string[] | null; per_student: boolean;
+    resubmission_allowed: boolean; is_active: boolean;
   }>(
-    `SELECT id, slug, display_name, field_schema
+    `SELECT id, slug, display_name, field_schema,
+            description, confirmation_message, notify_emails,
+            per_student, resubmission_allowed, is_active
        FROM portal_form_definitions
       WHERE id = $1 AND school_id = $2`,
     [formId, school.id],
@@ -64,6 +69,15 @@ export default async function FormBuilderPage({ params }: { params: Params }) {
       slug={form.slug}
       displayName={form.display_name}
       initialSchema={(form.field_schema ?? []) as FieldBlock[]}
+      initialSettings={{
+        display_name: form.display_name,
+        description: form.description,
+        confirmation_message: form.confirmation_message,
+        notify_emails: form.notify_emails ?? [],
+        per_student: form.per_student,
+        resubmission_allowed: form.resubmission_allowed,
+        is_active: form.is_active,
+      }}
       ghlFields={ghlFields}
       previewHref={`/school/${locationId}/forms/${formId}/preview?chrome=none`}
       backHref={`/school/${locationId}/forms`}

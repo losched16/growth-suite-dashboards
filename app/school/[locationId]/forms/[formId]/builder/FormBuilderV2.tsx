@@ -12,7 +12,7 @@ import { useState } from 'react';
 import {
   GripVertical, Plus, Trash2, Eye, ArrowLeft, Check, Loader2,
   Type, AlignLeft, Mail, Phone, Hash, Calendar, ChevronDown, CircleDot,
-  CheckSquare, PenLine, Heading, Text as TextIcon, X, Search, Plug,
+  CheckSquare, PenLine, Heading, Text as TextIcon, X, Search, Plug, Settings as SettingsIcon,
 } from 'lucide-react';
 
 interface Option { value: string; label: string; amount_cents?: number }
@@ -33,6 +33,16 @@ export interface FieldBlock {
 }
 
 export interface GhlField { key: string; name: string; dataType: string; options: string[] }
+
+export interface FormSettings {
+  display_name: string;
+  description: string | null;
+  confirmation_message: string | null;
+  notify_emails: string[];
+  per_student: boolean;
+  resubmission_allowed: boolean;
+  is_active: boolean;
+}
 
 type PaletteType =
   | 'section' | 'paragraph'
@@ -102,18 +112,20 @@ function connectFieldTo(f: FieldBlock, gf: GhlField): FieldBlock {
 }
 
 export function FormBuilderV2({
-  schoolId, formId, slug, displayName, initialSchema, ghlFields, previewHref, backHref,
+  schoolId, formId, slug, initialSchema, initialSettings, ghlFields, previewHref, backHref,
 }: {
   schoolId: string;
   formId: string;
   slug: string;
   displayName: string;
   initialSchema: FieldBlock[];
+  initialSettings: FormSettings;
   ghlFields: GhlField[];
   previewHref: string;
   backHref: string;
 }) {
   const [ghlSearch, setGhlSearch] = useState('');
+  const [settings, setSettings] = useState<FormSettings>(initialSettings);
   const [fields, setFields] = useState<FieldBlock[]>(initialSchema);
   const [sel, setSel] = useState<number | null>(null);
   const [dragIdx, setDragIdx] = useState<number | null>(null);
@@ -126,6 +138,7 @@ export function FormBuilderV2({
   const keys = new Set(fields.map((f) => f.key).filter(Boolean) as string[]);
 
   function mutate(next: FieldBlock[]) { setFields(next); setDirty(true); setSavedAt(null); }
+  function patchSettings(patch: Partial<FormSettings>) { setSettings((s) => ({ ...s, ...patch })); setDirty(true); setSavedAt(null); }
   function addField(type: PaletteType) {
     const f = makeField(type, keys);
     mutate([...fields, f]);
@@ -169,7 +182,18 @@ export function FormBuilderV2({
       const r = await fetch(`/api/admin/schools/${schoolId}/forms/${formId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ field_schema: fields }),
+        body: JSON.stringify({
+          field_schema: fields,
+          meta: {
+            display_name: settings.display_name,
+            description: settings.description,
+            confirmation_message: settings.confirmation_message,
+            notify_emails: settings.notify_emails,
+            per_student: settings.per_student,
+            resubmission_allowed: settings.resubmission_allowed,
+            is_active: settings.is_active,
+          },
+        }),
       });
       if (!r.ok) {
         let msg = 'Could not save';
@@ -192,10 +216,14 @@ export function FormBuilderV2({
       <div className="flex items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-2.5">
         <div className="flex items-center gap-2 min-w-0">
           <a href={backHref} className="text-slate-400 hover:text-slate-700" title="Back to forms"><ArrowLeft className="h-4 w-4" /></a>
-          <span className="text-sm font-semibold text-slate-900 truncate">{displayName}</span>
+          <span className="text-sm font-semibold text-slate-900 truncate">{settings.display_name}</span>
           <span className="font-mono text-[11px] text-slate-400 truncate">{slug}</span>
         </div>
         <div className="flex items-center gap-2 shrink-0">
+          <button onClick={() => setSel(null)}
+            className={['inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium', sel === null ? 'border-emerald-400 bg-emerald-50 text-emerald-800' : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'].join(' ')}>
+            <SettingsIcon className="h-3.5 w-3.5" /> Settings
+          </button>
           {err ? <span className="text-xs text-red-600">{err}</span>
             : savedAt ? <span className="inline-flex items-center gap-1 text-xs text-emerald-700"><Check className="h-3.5 w-3.5" /> Saved</span>
             : dirty ? <span className="text-xs text-amber-600">Unsaved changes</span> : null}
@@ -307,9 +335,7 @@ export function FormBuilderV2({
               onConnect={connectSelected}
             />
           ) : (
-            <div className="pt-8 text-center text-xs text-slate-400">
-              Select a field to edit its settings.
-            </div>
+            <FormSettingsPanel settings={settings} onPatch={patchSettings} />
           )}
         </aside>
       </div>
@@ -467,6 +493,39 @@ function ConditionEditor({ field, allFields, onPatch, input }: {
         className="inline-flex items-center gap-1 text-[11px] text-slate-400 hover:text-rose-500">
         <X className="h-3 w-3" /> Remove rule
       </button>
+    </div>
+  );
+}
+
+function FormSettingsPanel({ settings, onPatch }: { settings: FormSettings; onPatch: (patch: Partial<FormSettings>) => void }) {
+  const input = 'w-full rounded-md border border-slate-300 px-2.5 py-1.5 text-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500';
+  const lbl = 'mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-400';
+  const toggle = 'flex items-center justify-between text-sm text-slate-700';
+  const cb = 'h-4 w-4 rounded border-slate-300 text-emerald-600';
+  return (
+    <div className="space-y-4">
+      <div className="text-xs font-semibold text-slate-800">Form settings</div>
+      <div>
+        <label className={lbl}>Form name</label>
+        <input className={input} value={settings.display_name} onChange={(e) => onPatch({ display_name: e.target.value })} />
+      </div>
+      <div>
+        <label className={lbl}>Description</label>
+        <input className={input} value={settings.description ?? ''} onChange={(e) => onPatch({ description: e.target.value || null })} />
+      </div>
+      <div>
+        <label className={lbl}>Confirmation message</label>
+        <textarea rows={4} className={input} value={settings.confirmation_message ?? ''} placeholder="Shown to the parent after they submit" onChange={(e) => onPatch({ confirmation_message: e.target.value || null })} />
+      </div>
+      <div>
+        <label className={lbl}>Notify on submit</label>
+        <input className={input} value={settings.notify_emails.join(', ')} placeholder="office@school.org, admissions@school.org"
+          onChange={(e) => onPatch({ notify_emails: e.target.value.split(',').map((s) => s.trim()).filter(Boolean) })} />
+        <p className="mt-1 text-[11px] text-slate-400">Comma-separated. Blank = no notification.</p>
+      </div>
+      <label className={toggle}>One form per student<input type="checkbox" checked={settings.per_student} onChange={(e) => onPatch({ per_student: e.target.checked })} className={cb} /></label>
+      <label className={toggle}>Allow re-submission<input type="checkbox" checked={settings.resubmission_allowed} onChange={(e) => onPatch({ resubmission_allowed: e.target.checked })} className={cb} /></label>
+      <label className={toggle}>Form is live<input type="checkbox" checked={settings.is_active} onChange={(e) => onPatch({ is_active: e.target.checked })} className={cb} /></label>
     </div>
   );
 }
