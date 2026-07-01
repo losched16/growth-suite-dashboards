@@ -65,7 +65,7 @@ export default async function FormBuilderPage({ params }: { params: Params }) {
   // "Who sees this form" checklists — distinct program / grade / tag values on
   // this school's roster (demo students excluded). Same source the classic
   // editor uses, so both editors offer identical targeting choices.
-  const [progRows, gradeRows, tagRows, ghlFields] = await Promise.all([
+  const [progRows, gradeRows, tagRows, metaKeyRows, ghlFields] = await Promise.all([
     query<{ v: string }>(
       `SELECT DISTINCT s.metadata->>'program' AS v FROM students s
         WHERE s.school_id = $1 AND btrim(coalesce(s.metadata->>'program','')) <> ''
@@ -81,6 +81,16 @@ export default async function FormBuilderPage({ params }: { params: Params }) {
     query<{ v: string }>(
       `SELECT DISTINCT tag AS v FROM ghl_contact_tags
         WHERE school_id = $1 AND btrim(coalesce(tag,'')) <> '' ORDER BY 1`,
+      [school.id],
+    ),
+    // Distinct students.metadata keys — the ground truth of what a form field
+    // can prefill (the sync mirrors each contact field's value under these
+    // keys). The builder alias-matches a connected GHL field to one of these so
+    // its prefill key is always one that actually resolves.
+    query<{ v: string }>(
+      `SELECT DISTINCT k AS v FROM students s, jsonb_object_keys(s.metadata) AS k
+        WHERE s.school_id = $1 AND s.metadata IS NOT NULL
+          AND (s.metadata->>'is_demo') IS DISTINCT FROM 'true' ORDER BY 1`,
       [school.id],
     ),
     loadGhlFields(school.id),
@@ -104,6 +114,7 @@ export default async function FormBuilderPage({ params }: { params: Params }) {
         applies_to: (form.applies_to ?? null) as FormAppliesTo | null,
       }}
       ghlFields={ghlFields}
+      metadataKeys={metaKeyRows.rows.map((r) => r.v)}
       programOptions={progRows.rows.map((r) => r.v)}
       gradeOptions={gradeRows.rows.map((r) => r.v)}
       tagOptions={tagRows.rows.map((r) => r.v)}

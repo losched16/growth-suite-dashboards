@@ -128,11 +128,44 @@ function inferType(dt: string): PaletteType {
   }
 }
 
+// The equivalent key forms the sync may store a per-student contact field
+// under. GHL keys come bare (`street`), slot-1-bare (`student_street`), or
+// numbered (`student_2_grade_level`); the sync mirrors the value under one of
+// these. We try the siblings so the prefill key we stamp is one that resolves.
+function metaKeyCandidates(key: string): string[] {
+  const out = [key];
+  const m = /^student_(\d+)_(.+)$/.exec(key);
+  if (m) {
+    out.push(m[2]);                              // student_2_grade_level → grade_level
+    if (m[1] === '1') out.push(`student_${m[2]}`);
+  } else if (key.startsWith('student_')) {
+    const b = key.slice('student_'.length);
+    out.push(b, `student_1_${b}`);               // student_street → street / student_1_street
+  } else {
+    out.push(`student_${key}`, `student_1_${key}`); // street → student_street / student_1_street
+  }
+  return out;
+}
+
+// Pick the prefill key that actually exists in the roster's metadata, so a
+// connected field reliably pre-fills from the contact record regardless of the
+// school's field-naming convention. Falls back to the raw key when we have no
+// roster keys to match against (e.g. a brand-new school with no data yet).
+function resolvePrefillKey(rawKey: string, metadataKeys: string[]): string {
+  if (metadataKeys.length === 0) return rawKey;
+  const have = new Set(metadataKeys);
+  for (const c of metaKeyCandidates(rawKey)) if (have.has(c)) return c;
+  return rawKey;
+}
+
 // Connect a field to a Growth Suite (GHL) contact field: it prefills from the
-// contact record (meta:<key>) and inherits the field's type + choices.
-function connectFieldTo(f: FieldBlock, gf: GhlField): FieldBlock {
+// contact record (meta:<key>) and inherits the field's type + choices. The
+// prefill key is alias-matched to a real roster metadata key; writeback always
+// targets the raw GHL field key (they can legitimately differ).
+function connectFieldTo(f: FieldBlock, gf: GhlField, metadataKeys: string[]): FieldBlock {
   const type = inferType(gf.dataType);
-  const next: FieldBlock = { ...f, type, prefill: `meta:${gf.key}`, ghl_field_key: gf.key };
+  const prefillKey = resolvePrefillKey(gf.key, metadataKeys);
+  const next: FieldBlock = { ...f, type, prefill: `meta:${prefillKey}`, ghl_field_key: gf.key };
   if (!next.label || next.label === TYPE_LABEL[f.type]) next.label = gf.name;
   if (type === 'select' && gf.options.length) {
     next.options = gf.options.map((o) => ({ value: slugify(o) || o, label: o }));
@@ -141,7 +174,7 @@ function connectFieldTo(f: FieldBlock, gf: GhlField): FieldBlock {
 }
 
 export function FormBuilderV2({
-  schoolId, formId, slug, initialSchema, initialSettings, ghlFields,
+  schoolId, formId, slug, initialSchema, initialSettings, ghlFields, metadataKeys = [],
   programOptions = [], gradeOptions = [], tagOptions = [], previewHref, backHref,
 }: {
   schoolId: string;
@@ -151,6 +184,7 @@ export function FormBuilderV2({
   initialSchema: FieldBlock[];
   initialSettings: FormSettings;
   ghlFields: GhlField[];
+  metadataKeys?: string[];
   programOptions?: string[];
   gradeOptions?: string[];
   tagOptions?: string[];
@@ -184,7 +218,7 @@ export function FormBuilderV2({
     setSel(fields.length);
   }
   function addGhlField(gf: GhlField) {
-    const f = { ...connectFieldTo(makeField(inferType(gf.dataType), keys), gf), _uid: nextUid() };
+    const f = { ...connectFieldTo(makeField(inferType(gf.dataType), keys), gf, metadataKeys), _uid: nextUid() };
     mutate([...fields, f]);
     setSel(fields.length);
   }
@@ -192,7 +226,7 @@ export function FormBuilderV2({
     if (sel == null) return;
     mutate(fields.map((f, j) => {
       if (j !== sel) return f;
-      if (gf) return connectFieldTo(f, gf);
+      if (gf) return connectFieldTo(f, gf, metadataKeys);
       const next = { ...f };
       delete next.prefill;
       delete next.ghl_field_key;
@@ -494,7 +528,11 @@ function Inspector({ field, allFields, ghlFields, onPatch, onConnect }: { field:
           ) : (
             <p className="text-[11px] text-slate-400">No Growth Suite fields available.</p>
           )}
-          <p className="mt-1 text-[11px] text-slate-400">Connected fields pre-fill from the contact record and save the answer back to it.</p>
+          {field.ghl_field_key && typeof field.prefill === 'string' && field.prefill.startsWith('meta:') ? (
+            <p className="mt-1 text-[11px] text-emerald-700">Pre-fills from <span className="font-mono">{field.prefill.slice('meta:'.length)}</span> and saves back to the contact.</p>
+          ) : (
+            <p className="mt-1 text-[11px] text-slate-400">Connected fields pre-fill from the contact record and save the answer back to it.</p>
+          )}
         </div>
       ) : null}
 
