@@ -54,6 +54,11 @@ interface Submission {
   student_first: string | null;
   student_last: string | null;
   student_preferred: string | null;
+  cosign_status: string | null;
+  cosign_name: string | null;
+  cosign_email: string | null;
+  cosign_signature: string | null;
+  cosign_signed_at: string | null;
 }
 
 function fmtDateTime(iso: string): string {
@@ -94,7 +99,9 @@ export default async function SubmissionDetail({
             p.first_name AS parent_first, p.last_name AS parent_last,
             p.email AS parent_email, p.phone AS parent_phone,
             st.first_name AS student_first, st.last_name AS student_last,
-            st.preferred_name AS student_preferred
+            st.preferred_name AS student_preferred,
+            s.cosign_status, s.cosign_name, s.cosign_email, s.cosign_signature,
+            to_char(s.cosign_signed_at, 'YYYY-MM-DD"T"HH24:MI:SSOF') AS cosign_signed_at
        FROM portal_form_submissions s
        LEFT JOIN families f ON f.id = s.family_id
        LEFT JOIN parents p ON p.id = s.parent_id
@@ -159,6 +166,36 @@ export default async function SubmissionDetail({
             <Field label="Status" value={sub.status.replace(/_/g, ' ')} />
           </dl>
         </header>
+
+        {/* Second-guardian (co-sign) status + signature */}
+        {sub.cosign_status ? (
+          <section className={`rounded-lg border p-4 mb-4 ${sub.cosign_status === 'signed' ? 'border-emerald-300 bg-emerald-50' : 'border-amber-300 bg-amber-50'}`}>
+            <h2 className={`text-sm font-semibold uppercase tracking-wide mb-2 ${sub.cosign_status === 'signed' ? 'text-emerald-800' : 'text-amber-800'}`}>
+              Second guardian signature
+            </h2>
+            {sub.cosign_status === 'signed' ? (
+              <>
+                <p className="text-sm text-emerald-900">✓ Signed by both guardians — fully executed.</p>
+                <dl className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1.5 text-sm">
+                  <Field label="Second guardian" value={sub.cosign_name || sub.cosign_email || '—'} />
+                  {sub.cosign_signed_at ? <Field label="Signed" value={fmtDateTime(sub.cosign_signed_at)} /> : null}
+                </dl>
+                {sub.cosign_signature ? (
+                  <div className="mt-3">
+                    <div className="text-[10px] uppercase tracking-wide text-slate-500 font-semibold">2nd signature</div>
+                    <div className="text-2xl text-slate-900" style={{ fontFamily: 'var(--font-signature), "Dancing Script", "Brush Script MT", cursive' }}>
+                      {sub.cosign_signature}
+                    </div>
+                  </div>
+                ) : null}
+              </>
+            ) : (
+              <p className="text-sm text-amber-900">
+                ⏳ Awaiting the second guardian&rsquo;s signature{sub.cosign_name ? ` from ${sub.cosign_name}` : ''}{sub.cosign_email ? ` (${sub.cosign_email})` : ''}.
+              </p>
+            )}
+          </section>
+        ) : null}
 
         {/* Responses */}
         <section className="rounded-lg border border-slate-200 bg-white p-5 print:border-0 print:p-0 print:rounded-none">

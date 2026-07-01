@@ -42,6 +42,7 @@ interface Submission {
   is_addendum: boolean;
   parent_submission_id: string | null;
   parent_submitted_at: string | null;
+  cosign_status: string | null;
 }
 
 interface MissingRecipient {
@@ -90,7 +91,7 @@ export default async function SubmissionsInboxScoped({
   // is_test filter is appended conditionally.
   const { rows: subs } = await query<Submission>(
     `SELECT s.id, s.family_id, s.parent_id, s.student_id, s.status,
-            s.submitted_at, s.responses, s.is_test,
+            s.submitted_at, s.responses, s.is_test, s.cosign_status,
             COALESCE(s.is_addendum, false) AS is_addendum,
             s.parent_submission_id,
             ps.submitted_at AS parent_submitted_at,
@@ -487,7 +488,14 @@ function SubmissionRow({
             {s.is_test ? '(staff preview test — no real parent)' : (s.parent_email ?? '(no email)')}
           </div>
         </div>
-        <StatusPill status={s.status} />
+        <div className="flex flex-col items-start gap-1">
+          <StatusPill status={s.status} />
+          {s.cosign_status === 'awaiting' ? (
+            <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-800" title="Waiting on the second guardian's signature">⏳ Awaiting 2nd signature</span>
+          ) : s.cosign_status === 'signed' ? (
+            <span className="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-800" title="Both guardians have signed">✓ Both signed</span>
+          ) : null}
+        </div>
         <div className="text-[11px] text-slate-500 tabular-nums whitespace-nowrap min-w-[100px] text-right">
           {submittedDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
           <div className="text-[10px] text-slate-400">
