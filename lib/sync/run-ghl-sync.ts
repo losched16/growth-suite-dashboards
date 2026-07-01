@@ -846,6 +846,21 @@ export async function runGhlSync(schoolId: string): Promise<SyncResult> {
       [schoolId],
     );
 
+    // Before the rebuild, stamp submitter_email onto any submission missing it,
+    // from its current parent. If that parent (or the whole family) is later
+    // removed from GHL, we null the dangling parent_id/family_id below — and the
+    // `real_has_family_parent` check constraint requires a real submission keep
+    // EITHER a family+parent OR a submitter_email. Backfilling the email now
+    // preserves "who submitted" and lets the orphan cleanup satisfy the check.
+    await q(
+      `UPDATE portal_form_submissions sub
+          SET submitter_email = p.email
+         FROM parents p
+        WHERE sub.parent_id = p.id AND sub.school_id = $1
+          AND sub.submitter_email IS NULL AND p.email IS NOT NULL`,
+      [schoolId],
+    );
+
     // Snapshot semantics: blow away existing rows for this school.
     // Cascade order matters; do it explicitly even though FKs would handle it.
     await q('DELETE FROM enrollments WHERE school_id = $1', [schoolId]);
@@ -994,6 +1009,31 @@ export async function runGhlSync(schoolId: string): Promise<SyncResult> {
          FROM _pw_preserve t
         WHERE p.id = t.id`,
     );
+
+    // Robustness guard: a portal submission points at student / parent / family
+    // rows by id. When one of those is removed from GHL (contact deleted, or a
+    // slot's name fields cleared) the rebuild won't recreate that id — and the
+    // DEFERRABLE-INITIALLY-DEFERRED FKs on portal_form_submissions would abort
+    // the ENTIRE school's sync at COMMIT. Null the now-dangling links so a
+    // single removed contact can't stall the whole sync. All three columns are
+    // nullable; the submission's answers + signature stay intact, only the
+    // pointer to the vanished row is cleared (correct — it no longer exists).
+    // parent_uploads carries the same student FK, so guard it too.
+    const nullOrphans = async (table: string, col: string, refTable: string) => {
+      const res = await q(
+        `UPDATE ${table} SET ${col} = NULL
+          WHERE school_id = $1 AND ${col} IS NOT NULL
+            AND NOT EXISTS (SELECT 1 FROM ${refTable} r WHERE r.id = ${table}.${col})`,
+        [schoolId],
+      );
+      return res.rowCount ?? 0;
+    };
+    const cleared =
+      (await nullOrphans('portal_form_submissions', 'student_id', 'students')) +
+      (await nullOrphans('portal_form_submissions', 'parent_id', 'parents')) +
+      (await nullOrphans('portal_form_submissions', 'family_id', 'families')) +
+      (await nullOrphans('parent_uploads', 'student_id', 'students'));
+    if (cleared > 0) warnings.push(`Cleared ${cleared} dangling portal link(s) whose contact left GHL.`);
 
     return {
       familiesCreated, parentsCreated, studentsCreated,
