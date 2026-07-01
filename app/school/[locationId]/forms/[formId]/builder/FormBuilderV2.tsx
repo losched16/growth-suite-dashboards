@@ -301,6 +301,7 @@ export function FormBuilderV2({
             <Inspector
               key={sel}
               field={selField}
+              allFields={fields}
               ghlFields={ghlFields}
               onPatch={(patch) => sel != null && patchField(sel, patch)}
               onConnect={connectSelected}
@@ -316,7 +317,7 @@ export function FormBuilderV2({
   );
 }
 
-function Inspector({ field, ghlFields, onPatch, onConnect }: { field: FieldBlock; ghlFields: GhlField[]; onPatch: (patch: Partial<FieldBlock>) => void; onConnect: (gf: GhlField | null) => void }) {
+function Inspector({ field, allFields, ghlFields, onPatch, onConnect }: { field: FieldBlock; allFields: FieldBlock[]; ghlFields: GhlField[]; onPatch: (patch: Partial<FieldBlock>) => void; onConnect: (gf: GhlField | null) => void }) {
   const isLayout = field.type === 'section' || field.type === 'paragraph';
   const hasOptions = HAS_OPTIONS.has(field.type);
   const input = 'w-full rounded-md border border-slate-300 px-2.5 py-1.5 text-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500';
@@ -401,14 +402,71 @@ function Inspector({ field, ghlFields, onPatch, onConnect }: { field: FieldBlock
           ) : (
             <p className="text-[11px] text-slate-400">No Growth Suite fields available.</p>
           )}
-          <p className="mt-1 text-[11px] text-slate-400">Connected fields pre-fill from the contact record.</p>
+          <p className="mt-1 text-[11px] text-slate-400">Connected fields pre-fill from the contact record and save the answer back to it.</p>
         </div>
       ) : null}
-      {field.visible_when ? (
-        <div className="rounded-md border border-amber-200 bg-amber-50 px-2.5 py-2 text-[11px] text-amber-800">
-          Has a show/hide rule. (Visual rule editor comes in the next update.)
+
+      <div className="border-t border-slate-100 pt-3">
+        <label className={lbl}>Show this field when</label>
+        <ConditionEditor field={field} allFields={allFields} onPatch={onPatch} input={input} />
+      </div>
+    </div>
+  );
+}
+
+function ConditionEditor({ field, allFields, onPatch, input }: {
+  field: FieldBlock; allFields: FieldBlock[];
+  onPatch: (patch: Partial<FieldBlock>) => void; input: string;
+}) {
+  const vw = field.visible_when;
+  const candidates = allFields.filter((f) => f.key && f.key !== field.key && f.type !== 'section' && f.type !== 'paragraph');
+
+  if (!vw) {
+    if (candidates.length === 0) {
+      return <p className="text-[11px] text-slate-400">Always shown — add another field first to build a rule.</p>;
+    }
+    return (
+      <div>
+        <p className="mb-2 text-[11px] text-slate-500">Always shown.</p>
+        <button onClick={() => onPatch({ visible_when: { field: candidates[0].key as string, equals: [] } })}
+          className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700 hover:underline">
+          <Plus className="h-3.5 w-3.5" /> Add a rule
+        </button>
+      </div>
+    );
+  }
+
+  const ref = allFields.find((f) => f.key === vw.field);
+  const refOptions: Option[] = ref?.options ?? (ref?.type === 'checkbox' ? [{ value: '1', label: 'Checked' }] : []);
+  const toggle = (v: string) => {
+    const set = new Set(vw.equals);
+    if (set.has(v)) set.delete(v); else set.add(v);
+    onPatch({ visible_when: { field: vw.field, equals: [...set] } });
+  };
+
+  return (
+    <div className="space-y-2 rounded-md border border-slate-200 bg-slate-50 p-2.5">
+      <select className={input} value={vw.field} onChange={(e) => onPatch({ visible_when: { field: e.target.value, equals: [] } })}>
+        {candidates.map((f) => <option key={f.key} value={f.key as string}>{f.label || f.key}</option>)}
+      </select>
+      <p className="text-[11px] text-slate-500">is any of</p>
+      {refOptions.length > 0 ? (
+        <div className="space-y-1">
+          {refOptions.map((o) => (
+            <label key={o.value} className="flex items-center gap-2 text-xs text-slate-700">
+              <input type="checkbox" checked={vw.equals.includes(o.value)} onChange={() => toggle(o.value)} className="h-3.5 w-3.5 rounded border-slate-300 text-emerald-600" />
+              {o.label || o.value}
+            </label>
+          ))}
         </div>
-      ) : null}
+      ) : (
+        <input className={input} value={vw.equals.join(', ')} placeholder="Comma-separated values"
+          onChange={(e) => onPatch({ visible_when: { field: vw.field, equals: e.target.value.split(',').map((s) => s.trim()).filter(Boolean) } })} />
+      )}
+      <button onClick={() => onPatch({ visible_when: undefined })}
+        className="inline-flex items-center gap-1 text-[11px] text-slate-400 hover:text-rose-500">
+        <X className="h-3 w-3" /> Remove rule
+      </button>
     </div>
   );
 }
