@@ -12,7 +12,7 @@
 
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ArrowLeft, Eye } from 'lucide-react';
+import { ArrowLeft, Eye, Wand2 } from 'lucide-react';
 import { query } from '@/lib/db';
 import { loadSchoolByLocationId } from '@/lib/dashboards/loader';
 import { FormEditor } from '@/app/admin/[schoolId]/forms/[formId]/FormEditor';
@@ -127,6 +127,12 @@ export default async function FormEditPageScoped({
             <div className="text-xs text-slate-500 font-mono">{form.slug}</div>
           </div>
           <div className="flex items-center gap-2">
+            <Link
+              href={`/school/${locationId}/forms/${formId}/builder`}
+              className="inline-flex items-center gap-1.5 rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700"
+            >
+              <Wand2 className="h-3.5 w-3.5" /> New builder
+            </Link>
             <Link
               href={`/school/${locationId}/forms/${formId}/submissions`}
               className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
