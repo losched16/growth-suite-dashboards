@@ -14,6 +14,14 @@ import {
   Type, AlignLeft, Mail, Phone, Hash, Calendar, ChevronDown, CircleDot,
   CheckSquare, PenLine, Heading, Text as TextIcon, X, Search, Plug, Settings as SettingsIcon,
 } from 'lucide-react';
+import {
+  DndContext, closestCenter, PointerSensor, KeyboardSensor, useSensor, useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  SortableContext, verticalListSortingStrategy, arrayMove, useSortable, sortableKeyboardCoordinates,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 interface Option { value: string; label: string; amount_cents?: number }
 export interface FieldBlock {
@@ -29,6 +37,7 @@ export interface FieldBlock {
   visible_when?: { field: string; equals: string[] };
   prefill?: string;
   ghl_field_key?: string;
+  _uid?: string;
   [k: string]: unknown;
 }
 
@@ -66,6 +75,11 @@ const PALETTE: Array<{ group: string; type: PaletteType; label: string; icon: Re
 
 const TYPE_LABEL: Record<string, string> = Object.fromEntries(PALETTE.map((p) => [p.type, p.label]));
 const HAS_OPTIONS = new Set(['select', 'radio']);
+
+// Stable client-only id per field so dnd-kit can track it across reorders.
+// Stripped from the payload on save (never persisted).
+let _uidSeq = 0;
+const nextUid = () => `u${++_uidSeq}`;
 
 function slugify(s: string): string {
   return s.toLowerCase().trim().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 40);
@@ -126,10 +140,12 @@ export function FormBuilderV2({
 }) {
   const [ghlSearch, setGhlSearch] = useState('');
   const [settings, setSettings] = useState<FormSettings>(initialSettings);
-  const [fields, setFields] = useState<FieldBlock[]>(initialSchema);
+  const [fields, setFields] = useState<FieldBlock[]>(() => initialSchema.map((f) => ({ ...f, _uid: nextUid() })));
   const [sel, setSel] = useState<number | null>(null);
-  const [dragIdx, setDragIdx] = useState<number | null>(null);
-  const [overIdx, setOverIdx] = useState<number | null>(null);
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
   const [busy, setBusy] = useState(false);
   const [savedAt, setSavedAt] = useState<Date | null>(null);
   const [dirty, setDirty] = useState(false);
@@ -140,12 +156,12 @@ export function FormBuilderV2({
   function mutate(next: FieldBlock[]) { setFields(next); setDirty(true); setSavedAt(null); }
   function patchSettings(patch: Partial<FormSettings>) { setSettings((s) => ({ ...s, ...patch })); setDirty(true); setSavedAt(null); }
   function addField(type: PaletteType) {
-    const f = makeField(type, keys);
+    const f = { ...makeField(type, keys), _uid: nextUid() };
     mutate([...fields, f]);
     setSel(fields.length);
   }
   function addGhlField(gf: GhlField) {
-    const f = connectFieldTo(makeField(inferType(gf.dataType), keys), gf);
+    const f = { ...connectFieldTo(makeField(inferType(gf.dataType), keys), gf), _uid: nextUid() };
     mutate([...fields, f]);
     setSel(fields.length);
   }
@@ -167,12 +183,13 @@ export function FormBuilderV2({
     mutate(fields.filter((_, j) => j !== i));
     setSel(null);
   }
-  function moveField(from: number, to: number) {
-    if (from === to) return;
-    const a = [...fields];
-    const [x] = a.splice(from, 1);
-    a.splice(to, 0, x);
-    mutate(a);
+  function onDragEnd(e: DragEndEvent) {
+    const { active, over } = e;
+    if (!over || active.id === over.id) return;
+    const from = fields.findIndex((f) => f._uid === active.id);
+    const to = fields.findIndex((f) => f._uid === over.id);
+    if (from < 0 || to < 0) return;
+    mutate(arrayMove(fields, from, to));
     setSel(to);
   }
 
@@ -183,7 +200,7 @@ export function FormBuilderV2({
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          field_schema: fields,
+          field_schema: fields.map((f) => { const { _uid: _u, ...rest } = f; void _u; return rest; }),
           meta: {
             display_name: settings.display_name,
             description: settings.description,
@@ -274,52 +291,22 @@ export function FormBuilderV2({
 
         {/* Canvas */}
         <main className="overflow-y-auto bg-slate-100 p-6">
-          <div className="mx-auto max-w-2xl space-y-2">
+          <div className="mx-auto max-w-2xl">
             {fields.length === 0 ? (
               <div className="rounded-lg border-2 border-dashed border-slate-300 py-16 text-center text-sm text-slate-400">
                 Add a field from the left to get started.
               </div>
-            ) : null}
-            {fields.map((f, i) => {
-              const isSel = sel === i;
-              const isLayout = f.type === 'section' || f.type === 'paragraph';
-              return (
-                <div
-                  key={('key' in f && f.key) ? String(f.key) : `pos-${i}`}
-                  draggable
-                  onDragStart={() => setDragIdx(i)}
-                  onDragEnd={() => { setDragIdx(null); setOverIdx(null); }}
-                  onDragOver={(e) => { e.preventDefault(); if (overIdx !== i) setOverIdx(i); }}
-                  onDrop={(e) => { e.preventDefault(); if (dragIdx != null) moveField(dragIdx, i); setDragIdx(null); setOverIdx(null); }}
-                  onClick={() => setSel(i)}
-                  className={[
-                    'group flex items-center gap-2 rounded-lg border bg-white px-3 py-2.5 cursor-pointer',
-                    isSel ? 'border-emerald-500 ring-1 ring-emerald-500' : 'border-slate-200 hover:border-slate-300',
-                    overIdx === i && dragIdx !== i ? 'border-t-2 border-t-emerald-500' : '',
-                  ].join(' ')}
-                >
-                  <GripVertical className="h-4 w-4 shrink-0 cursor-grab text-slate-300 group-hover:text-slate-400" />
-                  <div className="min-w-0 flex-1">
-                    <p className={isLayout ? 'text-sm font-semibold text-slate-800' : 'text-sm font-medium text-slate-900 truncate'}>
-                      {f.type === 'paragraph' ? (f.text || 'Text block') : (f.label || '(untitled)')}
-                      {f.required ? <span className="ml-1 text-rose-500">*</span> : null}
-                    </p>
-                    {!isLayout ? (
-                      <p className="mt-0.5 text-[11px] text-slate-500">
-                        {TYPE_LABEL[f.type] ?? f.type}
-                        {f.prefill ? ' · linked to GHL' : ''}
-                        {f.visible_when ? ' · conditional' : ''}
-                        {f.readOnly ? ' · locked' : ''}
-                      </p>
-                    ) : null}
+            ) : (
+              <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+                <SortableContext items={fields.map((f) => f._uid as string)} strategy={verticalListSortingStrategy}>
+                  <div className="space-y-2">
+                    {fields.map((f, i) => (
+                      <SortableFieldCard key={f._uid} field={f} selected={sel === i} onSelect={() => setSel(i)} onDelete={() => deleteField(i)} />
+                    ))}
                   </div>
-                  <button onClick={(e) => { e.stopPropagation(); deleteField(i); }}
-                    className="shrink-0 text-slate-300 opacity-0 hover:text-rose-500 group-hover:opacity-100" title="Delete field">
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                </div>
-              );
-            })}
+                </SortableContext>
+              </DndContext>
+            )}
           </div>
         </main>
 
@@ -339,6 +326,46 @@ export function FormBuilderV2({
           )}
         </aside>
       </div>
+    </div>
+  );
+}
+
+function SortableFieldCard({ field, selected, onSelect, onDelete }: {
+  field: FieldBlock; selected: boolean; onSelect: () => void; onDelete: () => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: field._uid as string });
+  const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1 };
+  const isLayout = field.type === 'section' || field.type === 'paragraph';
+  return (
+    <div ref={setNodeRef} style={style} onClick={onSelect}
+      className={[
+        'group flex items-center gap-2 rounded-lg border bg-white px-3 py-2.5 cursor-pointer',
+        selected ? 'border-emerald-500 ring-1 ring-emerald-500' : 'border-slate-200 hover:border-slate-300',
+        isDragging ? 'shadow-lg' : '',
+      ].join(' ')}
+    >
+      <button {...attributes} {...listeners} onClick={(e) => e.stopPropagation()}
+        className="shrink-0 cursor-grab text-slate-300 hover:text-slate-500 active:cursor-grabbing" aria-label="Drag to reorder">
+        <GripVertical className="h-4 w-4" />
+      </button>
+      <div className="min-w-0 flex-1">
+        <p className={isLayout ? 'text-sm font-semibold text-slate-800' : 'text-sm font-medium text-slate-900 truncate'}>
+          {field.type === 'paragraph' ? (field.text || 'Text block') : (field.label || '(untitled)')}
+          {field.required ? <span className="ml-1 text-rose-500">*</span> : null}
+        </p>
+        {!isLayout ? (
+          <p className="mt-0.5 text-[11px] text-slate-500">
+            {TYPE_LABEL[field.type] ?? field.type}
+            {field.prefill ? ' · linked to GHL' : ''}
+            {field.visible_when ? ' · conditional' : ''}
+            {field.readOnly ? ' · locked' : ''}
+          </p>
+        ) : null}
+      </div>
+      <button onClick={(e) => { e.stopPropagation(); onDelete(); }}
+        className="shrink-0 text-slate-300 opacity-0 hover:text-rose-500 group-hover:opacity-100" title="Delete field">
+        <Trash2 className="h-4 w-4" />
+      </button>
     </div>
   );
 }
