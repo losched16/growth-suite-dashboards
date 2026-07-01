@@ -256,6 +256,16 @@ export function mapContactToFamily(
   forms: SchoolFormDef[] = [],
   opts: MapContactOpts = {},
 ): MappedFamily | null {
+  // A promoted Parent-2 contact (tagged "Parent 2") exists only for email
+  // marketing — we gave it the family's student names for context, but it must
+  // NOT spawn its own family/student rows or the roster double-counts every
+  // enrolled child. The second guardian is already modeled as the secondary
+  // parent on the primary's contact (parent_2_* fields), so skipping this
+  // contact keeps the dashboard clean without losing anyone.
+  if (contact.tags?.some((t) => typeof t === 'string' && t.trim().toLowerCase() === 'parent 2')) {
+    return null;
+  }
+
   const FAMILY = config.family_fields;
   const PARENT2 = config.parent2_fields;
   const STUDENT = config.student_fields;
