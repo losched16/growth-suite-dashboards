@@ -91,6 +91,27 @@ const PALETTE: Array<{ group: string; type: PaletteType; label: string; icon: Re
 const TYPE_LABEL: Record<string, string> = Object.fromEntries(PALETTE.map((p) => [p.type, p.label]));
 const HAS_OPTIONS = new Set(['select', 'radio']);
 
+// Canonical Growth Suite prefill sources — read straight from the student /
+// parent record (not a GHL custom field), so they always resolve with no
+// key-matching. Read-only by default (they show what's on file); the operator
+// can unlock a field if they want parents to be able to edit it. These are
+// display/prefill only — no writeback (you can't save a composed full name
+// back to a single field).
+const BUILTIN_SOURCES: Array<{ source: string; label: string; type: PaletteType }> = [
+  { source: 'student.full_name', label: 'Student full name', type: 'text' },
+  { source: 'student.first_name', label: 'Student first name', type: 'text' },
+  { source: 'student.last_name', label: 'Student last name', type: 'text' },
+  { source: 'student.date_of_birth', label: 'Student date of birth', type: 'date' },
+  { source: 'student.age', label: 'Student age', type: 'number' },
+  { source: 'parent.full_name', label: 'Parent/Guardian full name', type: 'text' },
+  { source: 'parent.first_name', label: 'Parent first name', type: 'text' },
+  { source: 'parent.last_name', label: 'Parent last name', type: 'text' },
+  { source: 'parent.email', label: 'Parent email', type: 'email' },
+  { source: 'parent.phone', label: 'Parent phone', type: 'tel' },
+  { source: 'today', label: "Today's date", type: 'date' },
+];
+const BUILTIN_LABEL: Record<string, string> = Object.fromEntries(BUILTIN_SOURCES.map((s) => [s.source, s.label]));
+
 // Stable client-only id per field so dnd-kit can track it across reorders.
 // Stripped from the payload on save (never persisted).
 let _uidSeq = 0;
@@ -222,6 +243,14 @@ export function FormBuilderV2({
     mutate([...fields, f]);
     setSel(fields.length);
   }
+  function addBuiltinSource(src: { source: string; label: string; type: PaletteType }) {
+    let key = slugify(src.label) || 'field';
+    let n = 1;
+    while (keys.has(key)) key = `${slugify(src.label)}_${++n}`;
+    const f: FieldBlock = { type: src.type, key, label: src.label, prefill: src.source, readOnly: true, _uid: nextUid() };
+    mutate([...fields, f]);
+    setSel(fields.length);
+  }
   function connectSelected(gf: GhlField | null) {
     if (sel == null) return;
     mutate(fields.map((f, j) => {
@@ -338,6 +367,15 @@ export function FormBuilderV2({
               ))}
             </div>
           ))}
+          <div className="mb-4">
+            <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-slate-400">Prefill from record</p>
+            {BUILTIN_SOURCES.map((s) => (
+              <button key={s.source} onClick={() => addBuiltinSource(s)} title={`Pre-fills from ${s.source}`}
+                className="mb-1 flex w-full items-center gap-2 rounded-md border border-emerald-200 bg-emerald-50/60 px-2.5 py-1.5 text-left text-xs font-medium text-emerald-800 hover:bg-emerald-50">
+                <Plug className="h-3.5 w-3.5 shrink-0" /><span className="truncate">{s.label}</span>
+              </button>
+            ))}
+          </div>
           {ghlFields.length > 0 ? (
             <div>
               <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-slate-400">Your Growth Suite fields</p>
@@ -446,6 +484,11 @@ function SortableFieldCard({ field, selected, onSelect, onDelete }: {
 function Inspector({ field, allFields, ghlFields, onPatch, onConnect }: { field: FieldBlock; allFields: FieldBlock[]; ghlFields: GhlField[]; onPatch: (patch: Partial<FieldBlock>) => void; onConnect: (gf: GhlField | null) => void }) {
   const isLayout = field.type === 'section' || field.type === 'paragraph';
   const hasOptions = HAS_OPTIONS.has(field.type);
+  // A canonical record source (student.*, parent.*, today) — set as prefill
+  // with no ghl_field_key (read-only, no writeback), distinct from a meta:<key>
+  // GHL-custom-field connection.
+  const builtinSource = !field.ghl_field_key && typeof field.prefill === 'string' && !field.prefill.startsWith('meta:')
+    ? field.prefill : null;
   const input = 'w-full rounded-md border border-slate-300 px-2.5 py-1.5 text-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500';
   const lbl = 'mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-400';
 
@@ -520,6 +563,11 @@ function Inspector({ field, allFields, ghlFields, onPatch, onConnect }: { field:
               <span className="inline-flex items-center gap-1.5 truncate"><Plug className="h-3.5 w-3.5 shrink-0" />{String(field.ghl_field_key)}</span>
               <button onClick={() => onConnect(null)} className="shrink-0 text-blue-500 hover:text-blue-700" title="Disconnect"><X className="h-3.5 w-3.5" /></button>
             </div>
+          ) : builtinSource ? (
+            <div className="flex items-center justify-between gap-2 rounded-md border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-xs text-emerald-800">
+              <span className="inline-flex items-center gap-1.5 truncate"><Plug className="h-3.5 w-3.5 shrink-0" />{BUILTIN_LABEL[builtinSource] ?? builtinSource}</span>
+              <button onClick={() => onPatch({ prefill: undefined })} className="shrink-0 text-emerald-600 hover:text-emerald-800" title="Disconnect"><X className="h-3.5 w-3.5" /></button>
+            </div>
           ) : ghlFields.length > 0 ? (
             <select className={input} value="" onChange={(e) => { const g = ghlFields.find((x) => x.key === e.target.value); if (g) onConnect(g); }}>
               <option value="">Not connected — pick a field…</option>
@@ -528,7 +576,9 @@ function Inspector({ field, allFields, ghlFields, onPatch, onConnect }: { field:
           ) : (
             <p className="text-[11px] text-slate-400">No Growth Suite fields available.</p>
           )}
-          {field.ghl_field_key && typeof field.prefill === 'string' && field.prefill.startsWith('meta:') ? (
+          {builtinSource ? (
+            <p className="mt-1 text-[11px] text-emerald-700">Pre-fills from the record (read-only). Uncheck “Locked” above to let parents edit it.</p>
+          ) : field.ghl_field_key && typeof field.prefill === 'string' && field.prefill.startsWith('meta:') ? (
             <p className="mt-1 text-[11px] text-emerald-700">Pre-fills from <span className="font-mono">{field.prefill.slice('meta:'.length)}</span> and saves back to the contact.</p>
           ) : (
             <p className="mt-1 text-[11px] text-slate-400">Connected fields pre-fill from the contact record and save the answer back to it.</p>
@@ -636,6 +686,11 @@ function FormPreview({ fields, settings, answers, setAnswers }: {
           const strVal = typeof val === 'string' ? val : '';
           const arrVal = Array.isArray(val) ? val : [];
           const help = f.help ? <p className="mt-1 text-xs text-slate-400">{String(f.help)}</p> : null;
+          // In the sandbox there's no real record data, so hint what a prefilled
+          // read-only field will show live (e.g. the student's name).
+          const ph = f.readOnly && f.prefill
+            ? `— pre-filled: ${(typeof f.prefill === 'string' && (BUILTIN_LABEL[f.prefill] || (f.prefill.startsWith('meta:') ? f.prefill.slice(5) : f.prefill))) || 'from record'} —`
+            : String(f.placeholder ?? '');
           const label = (
             <label className="mb-1 block text-sm font-medium text-slate-800">
               {f.label}{f.required ? <span className="ml-0.5 text-rose-500">*</span> : null}
@@ -659,7 +714,7 @@ function FormPreview({ fields, settings, answers, setAnswers }: {
           let control: React.ReactNode;
           switch (f.type) {
             case 'textarea':
-              control = <textarea rows={3} disabled={dis} className={input} placeholder={String(f.placeholder ?? '')} value={strVal} onChange={(e) => set(key, e.target.value)} />;
+              control = <textarea rows={3} disabled={dis} className={input} placeholder={ph} value={strVal} onChange={(e) => set(key, e.target.value)} />;
               break;
             case 'select':
               control = (
@@ -699,16 +754,16 @@ function FormPreview({ fields, settings, answers, setAnswers }: {
               control = <input type="date" disabled={dis} className={input} value={strVal} onChange={(e) => set(key, e.target.value)} />;
               break;
             case 'number':
-              control = <input type="number" disabled={dis} className={input} placeholder={String(f.placeholder ?? '')} value={strVal} onChange={(e) => set(key, e.target.value)} />;
+              control = <input type="number" disabled={dis} className={input} placeholder={ph} value={strVal} onChange={(e) => set(key, e.target.value)} />;
               break;
             case 'email':
-              control = <input type="email" disabled={dis} className={input} placeholder={String(f.placeholder ?? '')} value={strVal} onChange={(e) => set(key, e.target.value)} />;
+              control = <input type="email" disabled={dis} className={input} placeholder={ph} value={strVal} onChange={(e) => set(key, e.target.value)} />;
               break;
             case 'tel':
-              control = <input type="tel" disabled={dis} className={input} placeholder={String(f.placeholder ?? '')} value={strVal} onChange={(e) => set(key, e.target.value)} />;
+              control = <input type="tel" disabled={dis} className={input} placeholder={ph} value={strVal} onChange={(e) => set(key, e.target.value)} />;
               break;
             case 'url':
-              control = <input type="url" disabled={dis} className={input} placeholder={String(f.placeholder ?? '')} value={strVal} onChange={(e) => set(key, e.target.value)} />;
+              control = <input type="url" disabled={dis} className={input} placeholder={ph} value={strVal} onChange={(e) => set(key, e.target.value)} />;
               break;
             case 'signature_typed':
               control = (
@@ -728,7 +783,7 @@ function FormPreview({ fields, settings, answers, setAnswers }: {
               control = <div className={muted}>{TYPE_LABEL[f.type] ?? 'Interactive'} options appear here in the live form.</div>;
               break;
             default:
-              control = <input type="text" disabled={dis} className={input} placeholder={String(f.placeholder ?? '')} value={strVal} onChange={(e) => set(key, e.target.value)} />;
+              control = <input type="text" disabled={dis} className={input} placeholder={ph} value={strVal} onChange={(e) => set(key, e.target.value)} />;
           }
           return <div key={i}>{label}{control}{help}</div>;
         })}
