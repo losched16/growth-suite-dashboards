@@ -15,9 +15,24 @@
 // Returns a result summary per family for the operator UI.
 
 import { query } from '@/lib/db';
-import { loadGhlClient } from '@/lib/ghl/client';
+import { loadGhlClient, type GhlClient } from '@/lib/ghl/client';
 import { upsertContactByEmail } from '@/lib/ghl/contacts';
 import { linkContacts } from '@/lib/ghl/associations';
+
+// Schools where the promote-parent2 pass runs automatically (on the sync cron).
+// Other schools can still trigger it on demand from the admin UI.
+export const PROMOTE_PARENT2_SCHOOLS = new Set<string>([
+  '005c2872-dd27-4c43-9b3c-5fd353b8db44', // Desert Garden Montessori 2.0
+]);
+
+// Email-marketing tags applied to each parent contact during promotion.
+const P1_TAGS = ['Parent 1', 'Parent'];
+const P2_TAGS = ['Parent 2', 'Parent'];
+
+// Append tags to a GHL contact (does NOT clobber existing tags).
+async function addContactTags(client: GhlClient, contactId: string, tags: string[]): Promise<void> {
+  await client.axios.post(`/contacts/${contactId}/tags`, { tags });
+}
 
 export interface PromoteResult {
   total_families: number;
@@ -47,12 +62,14 @@ interface FamilyParents {
   p1_first_name: string | null;
   p1_last_name: string | null;
   p1_email: string | null;
+  p1_phone: string | null;
   p2_parent_id: string | null;
   p2_ghl_contact_id: string | null;
   p2_first_name: string | null;
   p2_last_name: string | null;
   p2_email: string | null;
   p2_phone: string | null;
+  students: Array<{ slot: number; first: string | null; last: string | null }>;
 }
 
 export async function promoteParent2sForSchool(
@@ -74,15 +91,23 @@ export async function promoteParent2sForSchool(
        p1.first_name AS p1_first_name,
        p1.last_name AS p1_last_name,
        p1.email AS p1_email,
+       p1.phone AS p1_phone,
        p2.id AS p2_parent_id,
        p2.ghl_contact_id AS p2_ghl_contact_id,
        p2.first_name AS p2_first_name,
        p2.last_name AS p2_last_name,
        p2.email AS p2_email,
-       p2.phone AS p2_phone
+       p2.phone AS p2_phone,
+       COALESCE((
+         SELECT json_agg(json_build_object(
+                  'slot', COALESCE((s.metadata->>'ghl_slot')::int, 1),
+                  'first', s.first_name, 'last', s.last_name)
+                ORDER BY COALESCE((s.metadata->>'ghl_slot')::int, 1))
+           FROM students s WHERE s.family_id = f.id AND s.status = 'active'
+       ), '[]'::json) AS students
      FROM families f
      LEFT JOIN LATERAL (
-       SELECT id, ghl_contact_id, first_name, last_name, email FROM parents
+       SELECT id, ghl_contact_id, first_name, last_name, email, phone FROM parents
        WHERE family_id = f.id AND is_primary = true AND status = 'active'
        ORDER BY created_at LIMIT 1
      ) p1 ON true
@@ -109,6 +134,15 @@ export async function promoteParent2sForSchool(
 
   // Only need one GHL client per school
   const client = await loadGhlClient(schoolId);
+
+  // Custom-field key → id map, so we can write family data (student names +
+  // Parent 1 info) onto each promoted Parent 2 contact.
+  const fieldMap = new Map<string, string>();
+  try {
+    const cfData = (await client.axios.get<{ customFields?: Array<{ id: string; fieldKey?: string }> }>(
+      `/locations/${client.locationId}/customFields`)).data?.customFields ?? [];
+    for (const f of cfData) if (f.fieldKey) fieldMap.set(f.fieldKey.replace(/^contact\./, ''), f.id);
+  } catch { /* carry-over is skipped if we can't resolve field ids */ }
 
   for (const fam of families) {
     const famName = fam.family_display_name ?? `${fam.p1_last_name ?? '(unnamed)'} Family`;
@@ -218,6 +252,32 @@ export async function promoteParent2sForSchool(
          ON CONFLICT DO NOTHING`,
         [fam.family_id, schoolId, fam.p1_parent_id, fam.p2_parent_id, link.relationId],
       ).catch(() => undefined);
+
+      // #2 Tags (email-marketing segmentation) + #4 carry-over (mirror the
+      // family onto P2's contact so it stands alone: student name(s) + Parent 1
+      // in the co-parent parent_2_* slots). Best-effort — the promotion above
+      // already succeeded, so don't fail it on a tag/field error. P2's contact
+      // gets NO household_id, so the sync never treats it as a duplicate family.
+      try {
+        await addContactTags(client, fam.p1_ghl_contact_id, P1_TAGS);
+        await addContactTags(client, p2.id, P2_TAGS);
+        const cf: Array<{ id: string; field_value: string }> = [];
+        const setField = (key: string, val: string | null | undefined) => {
+          const id = fieldMap.get(key);
+          if (id && val != null && String(val).trim() !== '') cf.push({ id, field_value: String(val) });
+        };
+        setField('parent_2_first_name', fam.p1_first_name);
+        setField('parent_2_last_name', fam.p1_last_name);
+        setField('parent_2_email', fam.p1_email);
+        setField('parent_2_phone', fam.p1_phone);
+        for (const s of fam.students ?? []) {
+          setField(`student_${s.slot}_first_name`, s.first);
+          setField(`student_${s.slot}_last_name`, s.last);
+        }
+        if (cf.length > 0) await client.axios.put(`/contacts/${p2.id}`, { customFields: cf });
+      } catch (coErr) {
+        console.warn(`[promote-p2] ${famName} tags/carry-over failed:`, coErr instanceof Error ? coErr.message : String(coErr));
+      }
 
       result.promoted_now++;
       const noteParts: string[] = [];
