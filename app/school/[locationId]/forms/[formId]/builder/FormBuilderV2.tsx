@@ -13,6 +13,7 @@ import {
   GripVertical, Plus, Trash2, Eye, ArrowLeft, Check, Loader2,
   Type, AlignLeft, Mail, Phone, Hash, Calendar, ChevronDown, CircleDot,
   CheckSquare, PenLine, Heading, Text as TextIcon, X, Search, Plug, Settings as SettingsIcon,
+  Pencil, Users,
 } from 'lucide-react';
 import {
   DndContext, closestCenter, PointerSensor, KeyboardSensor, useSensor, useSensors,
@@ -43,6 +44,19 @@ export interface FieldBlock {
 
 export interface GhlField { key: string; name: string; dataType: string; options: string[] }
 
+// Per-student visibility rule (portal_form_definitions.applies_to). null / {}
+// → the form shows for every student. We only surface program / grade / tag
+// targeting in the UI; any other criteria already on the rule pass through
+// untouched so advanced targeting set elsewhere is never clobbered.
+export interface FormAppliesTo {
+  program_match?: string[];
+  tag_match?: string[];
+  tuition_grid_match?: string[];
+  addon_keys?: string[];
+  student_ids?: string[];
+  metadata_match?: Record<string, string[]>;
+}
+
 export interface FormSettings {
   display_name: string;
   description: string | null;
@@ -51,6 +65,7 @@ export interface FormSettings {
   per_student: boolean;
   resubmission_allowed: boolean;
   is_active: boolean;
+  applies_to: FormAppliesTo | null;
 }
 
 type PaletteType =
@@ -126,7 +141,8 @@ function connectFieldTo(f: FieldBlock, gf: GhlField): FieldBlock {
 }
 
 export function FormBuilderV2({
-  schoolId, formId, slug, initialSchema, initialSettings, ghlFields, previewHref, backHref,
+  schoolId, formId, slug, initialSchema, initialSettings, ghlFields,
+  programOptions = [], gradeOptions = [], tagOptions = [], previewHref, backHref,
 }: {
   schoolId: string;
   formId: string;
@@ -135,6 +151,9 @@ export function FormBuilderV2({
   initialSchema: FieldBlock[];
   initialSettings: FormSettings;
   ghlFields: GhlField[];
+  programOptions?: string[];
+  gradeOptions?: string[];
+  tagOptions?: string[];
   previewHref: string;
   backHref: string;
 }) {
@@ -142,6 +161,10 @@ export function FormBuilderV2({
   const [settings, setSettings] = useState<FormSettings>(initialSettings);
   const [fields, setFields] = useState<FieldBlock[]>(() => initialSchema.map((f) => ({ ...f, _uid: nextUid() })));
   const [sel, setSel] = useState<number | null>(null);
+  // Inline live preview — renders the form as a parent sees it, with the
+  // conditional-logic rules actually working so operators can test them.
+  const [preview, setPreview] = useState(false);
+  const [pans, setPans] = useState<Record<string, string | string[]>>({});
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
@@ -209,6 +232,7 @@ export function FormBuilderV2({
             per_student: settings.per_student,
             resubmission_allowed: settings.resubmission_allowed,
             is_active: settings.is_active,
+            applies_to: settings.applies_to,
           },
         }),
       });
@@ -237,6 +261,18 @@ export function FormBuilderV2({
           <span className="font-mono text-[11px] text-slate-400 truncate">{slug}</span>
         </div>
         <div className="flex items-center gap-2 shrink-0">
+          {/* Build / Preview toggle — swaps the canvas between the editor and a
+              live rendering of the form (conditional logic runs for real). */}
+          <div className="inline-flex overflow-hidden rounded-md border border-slate-300">
+            <button onClick={() => setPreview(false)}
+              className={['inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium', !preview ? 'bg-slate-800 text-white' : 'bg-white text-slate-700 hover:bg-slate-50'].join(' ')}>
+              <Pencil className="h-3.5 w-3.5" /> Build
+            </button>
+            <button onClick={() => setPreview(true)}
+              className={['inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium', preview ? 'bg-slate-800 text-white' : 'bg-white text-slate-700 hover:bg-slate-50'].join(' ')}>
+              <Eye className="h-3.5 w-3.5" /> Preview
+            </button>
+          </div>
           <button onClick={() => setSel(null)}
             className={['inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium', sel === null ? 'border-emerald-400 bg-emerald-50 text-emerald-800' : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'].join(' ')}>
             <SettingsIcon className="h-3.5 w-3.5" /> Settings
@@ -244,8 +280,8 @@ export function FormBuilderV2({
           {err ? <span className="text-xs text-red-600">{err}</span>
             : savedAt ? <span className="inline-flex items-center gap-1 text-xs text-emerald-700"><Check className="h-3.5 w-3.5" /> Saved</span>
             : dirty ? <span className="text-xs text-amber-600">Unsaved changes</span> : null}
-          <a href={previewHref} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50">
-            <Eye className="h-3.5 w-3.5" /> Preview
+          <a href={previewHref} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50" title="Open the full portal preview in a new tab">
+            <Eye className="h-3.5 w-3.5" /> Full preview
           </a>
           <button onClick={save} disabled={busy || !dirty}
             className="inline-flex items-center gap-1.5 rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-50">
@@ -292,7 +328,9 @@ export function FormBuilderV2({
         {/* Canvas */}
         <main className="overflow-y-auto bg-slate-100 p-6">
           <div className="mx-auto max-w-2xl">
-            {fields.length === 0 ? (
+            {preview ? (
+              <FormPreview fields={fields} settings={settings} answers={pans} setAnswers={setPans} />
+            ) : fields.length === 0 ? (
               <div className="rounded-lg border-2 border-dashed border-slate-300 py-16 text-center text-sm text-slate-400">
                 Add a field from the left to get started.
               </div>
@@ -322,7 +360,8 @@ export function FormBuilderV2({
               onConnect={connectSelected}
             />
           ) : (
-            <FormSettingsPanel settings={settings} onPatch={patchSettings} />
+            <FormSettingsPanel settings={settings} onPatch={patchSettings}
+              programOptions={programOptions} gradeOptions={gradeOptions} tagOptions={tagOptions} />
           )}
         </aside>
       </div>
@@ -524,7 +563,250 @@ function ConditionEditor({ field, allFields, onPatch, input }: {
   );
 }
 
-function FormSettingsPanel({ settings, onPatch }: { settings: FormSettings; onPatch: (patch: Partial<FormSettings>) => void }) {
+// Live, in-canvas rendering of the form as a parent sees it. Choice inputs are
+// interactive so the conditional-logic rules run for real — an operator can pick
+// an option and watch dependent fields appear/disappear. Nothing is submitted.
+type PreviewAnswers = Record<string, string | string[]>;
+function FormPreview({ fields, settings, answers, setAnswers }: {
+  fields: FieldBlock[]; settings: FormSettings;
+  answers: PreviewAnswers; setAnswers: (u: (a: PreviewAnswers) => PreviewAnswers) => void;
+}) {
+  const set = (key: string, value: string | string[]) => setAnswers((a) => ({ ...a, [key]: value }));
+  const visible = (f: FieldBlock): boolean => {
+    const vw = f.visible_when;
+    if (!vw) return true;
+    const cur = answers[vw.field];
+    const vals = Array.isArray(cur) ? cur : cur == null || cur === '' ? [] : [cur];
+    return vw.equals.some((e) => vals.includes(e));
+  };
+  const input = 'w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 disabled:bg-slate-50 disabled:text-slate-500';
+  const muted = 'rounded-lg border border-dashed border-slate-300 bg-slate-50 px-3 py-2.5 text-xs text-slate-500';
+
+  const shown = fields.filter(visible);
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+      <h2 className="text-lg font-semibold text-slate-900">{settings.display_name}</h2>
+      {settings.description ? <p className="mt-1 text-sm text-slate-500">{settings.description}</p> : null}
+      <div className="mt-5 space-y-5">
+        {shown.length === 0 ? <p className="text-sm text-slate-400">Nothing to show yet.</p> : null}
+        {shown.map((f, i) => {
+          if (f.type === 'header') return <h2 key={i} className="text-base font-bold text-slate-900">{f.label}</h2>;
+          if (f.type === 'section') return <h3 key={i} className="border-b border-slate-100 pb-1 text-sm font-semibold uppercase tracking-wide text-slate-700">{f.label}</h3>;
+          if (f.type === 'paragraph') return <p key={i} className="whitespace-pre-wrap text-sm text-slate-600">{f.text}</p>;
+          const key = f.key ?? `f${i}`;
+          const val = answers[key];
+          const strVal = typeof val === 'string' ? val : '';
+          const arrVal = Array.isArray(val) ? val : [];
+          const help = f.help ? <p className="mt-1 text-xs text-slate-400">{String(f.help)}</p> : null;
+          const label = (
+            <label className="mb-1 block text-sm font-medium text-slate-800">
+              {f.label}{f.required ? <span className="ml-0.5 text-rose-500">*</span> : null}
+              {f.readOnly ? <span className="ml-1.5 align-middle text-slate-400" title="Read-only">🔒</span> : null}
+            </label>
+          );
+          const dis = !!f.readOnly;
+
+          if (f.type === 'checkbox') {
+            return (
+              <div key={i}>
+                <label className="flex items-start gap-2 text-sm text-slate-700">
+                  <input type="checkbox" disabled={dis} checked={strVal === '1'} onChange={(e) => set(key, e.target.checked ? '1' : '')} className="mt-0.5 h-4 w-4 rounded text-emerald-600" />
+                  <span>{f.label}{f.required ? <span className="ml-0.5 text-rose-500">*</span> : null}</span>
+                </label>
+                {help}
+              </div>
+            );
+          }
+
+          let control: React.ReactNode;
+          switch (f.type) {
+            case 'textarea':
+              control = <textarea rows={3} disabled={dis} className={input} placeholder={String(f.placeholder ?? '')} value={strVal} onChange={(e) => set(key, e.target.value)} />;
+              break;
+            case 'select':
+              control = (
+                <select disabled={dis} className={input} value={strVal} onChange={(e) => set(key, e.target.value)}>
+                  <option value="">Select…</option>
+                  {(f.options ?? []).map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </select>
+              );
+              break;
+            case 'radio':
+              control = (
+                <div className="space-y-1.5">
+                  {(f.options ?? []).map((o) => (
+                    <label key={o.value} className="flex items-center gap-2 text-sm text-slate-700">
+                      <input type="radio" name={key} disabled={dis} checked={strVal === o.value} onChange={() => set(key, o.value)} className="h-4 w-4 text-emerald-600" />
+                      {o.label}
+                    </label>
+                  ))}
+                </div>
+              );
+              break;
+            case 'multi_checkbox':
+              control = (
+                <div className="space-y-1.5">
+                  {(f.options ?? []).map((o) => (
+                    <label key={o.value} className="flex items-center gap-2 text-sm text-slate-700">
+                      <input type="checkbox" disabled={dis} checked={arrVal.includes(o.value)}
+                        onChange={() => set(key, arrVal.includes(o.value) ? arrVal.filter((x) => x !== o.value) : [...arrVal, o.value])}
+                        className="h-4 w-4 rounded text-emerald-600" />
+                      {o.label}
+                    </label>
+                  ))}
+                </div>
+              );
+              break;
+            case 'date':
+              control = <input type="date" disabled={dis} className={input} value={strVal} onChange={(e) => set(key, e.target.value)} />;
+              break;
+            case 'number':
+              control = <input type="number" disabled={dis} className={input} placeholder={String(f.placeholder ?? '')} value={strVal} onChange={(e) => set(key, e.target.value)} />;
+              break;
+            case 'email':
+              control = <input type="email" disabled={dis} className={input} placeholder={String(f.placeholder ?? '')} value={strVal} onChange={(e) => set(key, e.target.value)} />;
+              break;
+            case 'tel':
+              control = <input type="tel" disabled={dis} className={input} placeholder={String(f.placeholder ?? '')} value={strVal} onChange={(e) => set(key, e.target.value)} />;
+              break;
+            case 'url':
+              control = <input type="url" disabled={dis} className={input} placeholder={String(f.placeholder ?? '')} value={strVal} onChange={(e) => set(key, e.target.value)} />;
+              break;
+            case 'signature_typed':
+              control = (
+                <div className="flex items-center gap-2">
+                  <input disabled={dis} className={input} placeholder="Type your full name" value={strVal} onChange={(e) => set(key, e.target.value)} />
+                  <span className="shrink-0 text-xs text-slate-400">Date auto-stamped</span>
+                </div>
+              );
+              break;
+            case 'signature_drawn': case 'signature_stamp':
+              control = <div className={muted}>Signature captured here in the live form.</div>;
+              break;
+            case 'file_upload':
+              control = <input type="file" disabled className="block w-full text-xs text-slate-500 file:mr-2 file:rounded file:border-0 file:bg-slate-100 file:px-2 file:py-1 file:text-xs" />;
+              break;
+            case 'pricing_select': case 'multi_pricing': case 'quantity_pricing': case 'tuition_calculator': case 'student_picker':
+              control = <div className={muted}>{TYPE_LABEL[f.type] ?? 'Interactive'} options appear here in the live form.</div>;
+              break;
+            default:
+              control = <input type="text" disabled={dis} className={input} placeholder={String(f.placeholder ?? '')} value={strVal} onChange={(e) => set(key, e.target.value)} />;
+          }
+          return <div key={i}>{label}{control}{help}</div>;
+        })}
+      </div>
+      <div className="mt-6 border-t border-slate-100 pt-4">
+        <button disabled className="cursor-default rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white opacity-90">Submit</button>
+        <p className="mt-2 text-[11px] text-slate-400">Preview only — nothing is submitted. Pick options to watch your conditional rules run.</p>
+      </div>
+    </div>
+  );
+}
+
+function WhoSeesEditor({ settings, onPatch, programOptions, gradeOptions, tagOptions }: {
+  settings: FormSettings; onPatch: (patch: Partial<FormSettings>) => void;
+  programOptions: string[]; gradeOptions: string[]; tagOptions: string[];
+}) {
+  const at = settings.applies_to ?? {};
+  const programs = at.program_match ?? [];
+  const grades = at.metadata_match?.grade_level ?? [];
+  const tags = at.tag_match ?? [];
+  const hasRule = programs.length > 0 || grades.length > 0 || tags.length > 0;
+
+  // Checklists = roster values + any value the rule already names (so a
+  // renamed/removed program stays visible and removable).
+  const progList = Array.from(new Set([...programOptions, ...programs]));
+  const gradeList = Array.from(new Set([...gradeOptions, ...grades]));
+  const tagList = Array.from(new Set([...tagOptions, ...tags]));
+  // Program/grade are per-student attributes; tags are family-level.
+  const showProgram = (settings.per_student && programOptions.length > 0) || programs.length > 0;
+  const showGrade = (settings.per_student && gradeOptions.length > 0) || grades.length > 0;
+  const showTag = tagList.length > 0;
+
+  function apply(next: { programs?: string[]; grades?: string[]; tags?: string[] }) {
+    const p = next.programs ?? programs;
+    const g = next.grades ?? grades;
+    const t = next.tags ?? tags;
+    const base: FormAppliesTo = { ...(settings.applies_to ?? {}) };
+    delete base.program_match; delete base.tag_match;
+    const mm: Record<string, string[]> = { ...(base.metadata_match ?? {}) };
+    delete mm.grade_level;
+    if (p.length) base.program_match = p;
+    if (t.length) base.tag_match = t;
+    if (g.length) mm.grade_level = g;
+    if (Object.keys(mm).length) base.metadata_match = mm; else delete base.metadata_match;
+    onPatch({ applies_to: Object.keys(base).length === 0 ? null : base });
+  }
+  const toggleIn = (arr: string[], v: string) => (arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v]);
+  const cb = 'h-3.5 w-3.5 rounded border-slate-300 text-emerald-600';
+
+  const nothingToTarget = progList.length === 0 && gradeList.length === 0 && tagList.length === 0;
+
+  return (
+    <div className="border-t border-slate-100 pt-4">
+      <div className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-slate-800"><Users className="h-3.5 w-3.5" /> Who sees this form</div>
+      {nothingToTarget ? (
+        <p className="text-[11px] text-slate-400">No programs, grades, or tags found on your records yet — this form shows to everyone.</p>
+      ) : (
+        <>
+          <label className="mb-1.5 flex items-center gap-2 text-sm text-slate-700">
+            <input type="radio" checked={!hasRule} onChange={() => onPatch({ applies_to: null })} className="h-4 w-4 text-emerald-600" />
+            Everyone
+          </label>
+          <label className="mb-2 flex items-center gap-2 text-sm text-slate-700">
+            <input type="radio" checked={hasRule}
+              onChange={() => { if (!hasRule) { const first = showProgram && progList.length ? [progList[0]] : []; const t = !first.length && tagList.length ? [tagList[0]] : []; apply({ programs: first, grades: [], tags: t }); } }}
+              className="h-4 w-4 text-emerald-600" />
+            Only specific programs, grades, or tags
+          </label>
+          {hasRule ? (
+            <div className="space-y-3 rounded-md border border-slate-200 bg-slate-50 p-2.5">
+              {showProgram ? (
+                <div>
+                  <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-500">By program</div>
+                  {progList.map((p) => (
+                    <label key={p} className="flex items-center gap-2 text-xs text-slate-700">
+                      <input type="checkbox" checked={programs.includes(p)} onChange={() => apply({ programs: toggleIn(programs, p) })} className={cb} />{p}
+                    </label>
+                  ))}
+                </div>
+              ) : null}
+              {showGrade ? (
+                <div>
+                  <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-500">By grade</div>
+                  {gradeList.map((g) => (
+                    <label key={g} className="flex items-center gap-2 text-xs text-slate-700">
+                      <input type="checkbox" checked={grades.includes(g)} onChange={() => apply({ grades: toggleIn(grades, g) })} className={cb} />{g}
+                    </label>
+                  ))}
+                </div>
+              ) : null}
+              {showTag ? (
+                <div>
+                  <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-500">By tag</div>
+                  {tagList.map((t) => (
+                    <label key={t} className="flex items-center gap-2 text-xs text-slate-700">
+                      <input type="checkbox" checked={tags.includes(t)} onChange={() => apply({ tags: toggleIn(tags, t) })} className={cb} />{t}
+                    </label>
+                  ))}
+                </div>
+              ) : null}
+              {!settings.per_student && (programOptions.length > 0 || gradeOptions.length > 0) ? (
+                <p className="text-[11px] text-amber-600">Turn on “One form per student” above to target by program or grade.</p>
+              ) : null}
+              <p className="text-[11px] text-slate-400">A family only sees the form for the children who match. Pick at least one — otherwise it shows to everyone.</p>
+            </div>
+          ) : null}
+        </>
+      )}
+    </div>
+  );
+}
+
+function FormSettingsPanel({ settings, onPatch, programOptions, gradeOptions, tagOptions }: {
+  settings: FormSettings; onPatch: (patch: Partial<FormSettings>) => void;
+  programOptions: string[]; gradeOptions: string[]; tagOptions: string[];
+}) {
   const input = 'w-full rounded-md border border-slate-300 px-2.5 py-1.5 text-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500';
   const lbl = 'mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-400';
   const toggle = 'flex items-center justify-between text-sm text-slate-700';
@@ -553,6 +835,7 @@ function FormSettingsPanel({ settings, onPatch }: { settings: FormSettings; onPa
       <label className={toggle}>One form per student<input type="checkbox" checked={settings.per_student} onChange={(e) => onPatch({ per_student: e.target.checked })} className={cb} /></label>
       <label className={toggle}>Allow re-submission<input type="checkbox" checked={settings.resubmission_allowed} onChange={(e) => onPatch({ resubmission_allowed: e.target.checked })} className={cb} /></label>
       <label className={toggle}>Form is live<input type="checkbox" checked={settings.is_active} onChange={(e) => onPatch({ is_active: e.target.checked })} className={cb} /></label>
+      <WhoSeesEditor settings={settings} onPatch={onPatch} programOptions={programOptions} gradeOptions={gradeOptions} tagOptions={tagOptions} />
     </div>
   );
 }

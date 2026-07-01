@@ -79,6 +79,8 @@ function sanitizeAppliesTo(raw: unknown): { ok: true; value: Record<string, unkn
 
   const pm = strArray(r.program_match);
   if (pm.length) out.program_match = pm;
+  const tm = strArray(r.tag_match);
+  if (tm.length) out.tag_match = tm;
   const tg = strArray(r.tuition_grid_match);
   if (tg.length) out.tuition_grid_match = tg;
   const ak = strArray(r.addon_keys);
