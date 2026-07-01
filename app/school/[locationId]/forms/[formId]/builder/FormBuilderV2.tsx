@@ -12,7 +12,7 @@ import { useState } from 'react';
 import {
   GripVertical, Plus, Trash2, Eye, ArrowLeft, Check, Loader2,
   Type, AlignLeft, Mail, Phone, Hash, Calendar, ChevronDown, CircleDot,
-  CheckSquare, PenLine, Heading, Text as TextIcon, X,
+  CheckSquare, PenLine, Heading, Text as TextIcon, X, Search, Plug,
 } from 'lucide-react';
 
 interface Option { value: string; label: string; amount_cents?: number }
@@ -28,8 +28,11 @@ export interface FieldBlock {
   options?: Option[];
   visible_when?: { field: string; equals: string[] };
   prefill?: string;
+  ghl_field_key?: string;
   [k: string]: unknown;
 }
+
+export interface GhlField { key: string; name: string; dataType: string; options: string[] }
 
 type PaletteType =
   | 'section' | 'paragraph'
@@ -73,17 +76,44 @@ function makeField(type: PaletteType, existingKeys: Set<string>): FieldBlock {
   return base;
 }
 
+// GHL custom-field dataType → the closest builder field type.
+function inferType(dt: string): PaletteType {
+  switch ((dt || '').toUpperCase()) {
+    case 'LARGE_TEXT': case 'TEXTBOX_LIST': return 'textarea';
+    case 'SINGLE_OPTIONS': case 'RADIO': case 'MULTIPLE_OPTIONS': case 'CHECKBOX': return 'select';
+    case 'DATE': return 'date';
+    case 'NUMERICAL': case 'MONETORY': return 'number';
+    case 'PHONE': return 'tel';
+    case 'EMAIL': return 'email';
+    default: return 'text';
+  }
+}
+
+// Connect a field to a Growth Suite (GHL) contact field: it prefills from the
+// contact record (meta:<key>) and inherits the field's type + choices.
+function connectFieldTo(f: FieldBlock, gf: GhlField): FieldBlock {
+  const type = inferType(gf.dataType);
+  const next: FieldBlock = { ...f, type, prefill: `meta:${gf.key}`, ghl_field_key: gf.key };
+  if (!next.label || next.label === TYPE_LABEL[f.type]) next.label = gf.name;
+  if (type === 'select' && gf.options.length) {
+    next.options = gf.options.map((o) => ({ value: slugify(o) || o, label: o }));
+  }
+  return next;
+}
+
 export function FormBuilderV2({
-  schoolId, formId, slug, displayName, initialSchema, previewHref, backHref,
+  schoolId, formId, slug, displayName, initialSchema, ghlFields, previewHref, backHref,
 }: {
   schoolId: string;
   formId: string;
   slug: string;
   displayName: string;
   initialSchema: FieldBlock[];
+  ghlFields: GhlField[];
   previewHref: string;
   backHref: string;
 }) {
+  const [ghlSearch, setGhlSearch] = useState('');
   const [fields, setFields] = useState<FieldBlock[]>(initialSchema);
   const [sel, setSel] = useState<number | null>(null);
   const [dragIdx, setDragIdx] = useState<number | null>(null);
@@ -100,6 +130,22 @@ export function FormBuilderV2({
     const f = makeField(type, keys);
     mutate([...fields, f]);
     setSel(fields.length);
+  }
+  function addGhlField(gf: GhlField) {
+    const f = connectFieldTo(makeField(inferType(gf.dataType), keys), gf);
+    mutate([...fields, f]);
+    setSel(fields.length);
+  }
+  function connectSelected(gf: GhlField | null) {
+    if (sel == null) return;
+    mutate(fields.map((f, j) => {
+      if (j !== sel) return f;
+      if (gf) return connectFieldTo(f, gf);
+      const next = { ...f };
+      delete next.prefill;
+      delete next.ghl_field_key;
+      return next;
+    }));
   }
   function patchField(i: number, patch: Partial<FieldBlock>) {
     mutate(fields.map((f, j) => (j === i ? { ...f, ...patch } : f)));
@@ -177,6 +223,25 @@ export function FormBuilderV2({
               ))}
             </div>
           ))}
+          {ghlFields.length > 0 ? (
+            <div>
+              <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-slate-400">Your Growth Suite fields</p>
+              <div className="mb-1.5 flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2 py-1.5">
+                <Search className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                <input value={ghlSearch} onChange={(e) => setGhlSearch(e.target.value)} placeholder={`Search ${ghlFields.length} fields`}
+                  className="w-full bg-transparent text-xs text-slate-700 placeholder:text-slate-400 focus:outline-none" />
+              </div>
+              {ghlFields
+                .filter((g) => !ghlSearch || g.name.toLowerCase().includes(ghlSearch.toLowerCase()) || g.key.includes(ghlSearch.toLowerCase()))
+                .slice(0, 40)
+                .map((g) => (
+                  <button key={g.key} onClick={() => addGhlField(g)} title={g.key}
+                    className="mb-1 flex w-full items-center gap-2 rounded-md border border-blue-200 bg-blue-50/60 px-2.5 py-1.5 text-left text-xs font-medium text-blue-800 hover:bg-blue-50">
+                    <Plug className="h-3.5 w-3.5 shrink-0" /><span className="truncate">{g.name}</span>
+                  </button>
+                ))}
+            </div>
+          ) : null}
         </aside>
 
         {/* Canvas */}
@@ -236,7 +301,9 @@ export function FormBuilderV2({
             <Inspector
               key={sel}
               field={selField}
+              ghlFields={ghlFields}
               onPatch={(patch) => sel != null && patchField(sel, patch)}
+              onConnect={connectSelected}
             />
           ) : (
             <div className="pt-8 text-center text-xs text-slate-400">
@@ -249,7 +316,7 @@ export function FormBuilderV2({
   );
 }
 
-function Inspector({ field, onPatch }: { field: FieldBlock; onPatch: (patch: Partial<FieldBlock>) => void }) {
+function Inspector({ field, ghlFields, onPatch, onConnect }: { field: FieldBlock; ghlFields: GhlField[]; onPatch: (patch: Partial<FieldBlock>) => void; onConnect: (gf: GhlField | null) => void }) {
   const isLayout = field.type === 'section' || field.type === 'paragraph';
   const hasOptions = HAS_OPTIONS.has(field.type);
   const input = 'w-full rounded-md border border-slate-300 px-2.5 py-1.5 text-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500';
@@ -318,9 +385,23 @@ function Inspector({ field, onPatch }: { field: FieldBlock; onPatch: (patch: Par
         </div>
       ) : null}
 
-      {field.prefill ? (
-        <div className="rounded-md border border-blue-200 bg-blue-50 px-2.5 py-2 text-[11px] text-blue-800">
-          Linked to a Growth Suite field — prefill/write-back is managed. (Editing GHL mapping comes in the next update.)
+      {!isLayout ? (
+        <div>
+          <label className={lbl}>Growth Suite field</label>
+          {field.ghl_field_key ? (
+            <div className="flex items-center justify-between gap-2 rounded-md border border-blue-200 bg-blue-50 px-2.5 py-1.5 text-xs text-blue-800">
+              <span className="inline-flex items-center gap-1.5 truncate"><Plug className="h-3.5 w-3.5 shrink-0" />{String(field.ghl_field_key)}</span>
+              <button onClick={() => onConnect(null)} className="shrink-0 text-blue-500 hover:text-blue-700" title="Disconnect"><X className="h-3.5 w-3.5" /></button>
+            </div>
+          ) : ghlFields.length > 0 ? (
+            <select className={input} value="" onChange={(e) => { const g = ghlFields.find((x) => x.key === e.target.value); if (g) onConnect(g); }}>
+              <option value="">Not connected — pick a field…</option>
+              {ghlFields.map((g) => <option key={g.key} value={g.key}>{g.name}</option>)}
+            </select>
+          ) : (
+            <p className="text-[11px] text-slate-400">No Growth Suite fields available.</p>
+          )}
+          <p className="mt-1 text-[11px] text-slate-400">Connected fields pre-fill from the contact record.</p>
         </div>
       ) : null}
       {field.visible_when ? (
