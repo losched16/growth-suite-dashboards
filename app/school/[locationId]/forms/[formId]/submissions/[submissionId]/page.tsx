@@ -201,7 +201,12 @@ export default async function SubmissionDetail({
         <section className="rounded-lg border border-slate-200 bg-white p-5 print:border-0 print:p-0 print:rounded-none">
           <h2 className="text-sm font-semibold text-slate-700 uppercase tracking-wide mb-3 print:hidden">Responses</h2>
           <div className="space-y-4">
-            {blocks.map((block, i) => (
+            {blocks
+              // Blocks hidden on the live form (e.g. the internal "add a second
+              // parent/guardian" toggle when Parent 2 is already on file) stay
+              // hidden on the admin view too.
+              .filter((block) => (block as { hidden?: boolean }).hidden !== true)
+              .map((block, i) => (
               <BlockView
                 key={i}
                 block={block}
