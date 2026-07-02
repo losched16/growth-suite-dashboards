@@ -153,12 +153,17 @@ function pruneEmptyMetadata<T extends Record<string, unknown>>(md: T): T {
 // Map GHL's free-text enrollment status strings to family-graph's
 // constrained enum (inquiry, tour_scheduled, application_submitted,
 // accepted, enrolled, waitlisted, withdrawn, declined).
-// Unknown values fall back to 'enrolled' on the assumption that any
-// contact with student data + household_id is at minimum enrolled —
-// pre-enrollment families typically don't have student rows yet.
-export function normalizeEnrollmentStatus(raw: string, warnings: string[]): string {
+//
+// STRICT: the enrollment status comes purely from the GHL contact record.
+// A blank or unrecognized value returns null → NO enrollment row is created,
+// so the student can never show as "enrolled" (or anything else) by
+// assumption. The fix for a missing status is to set it on the GHL contact —
+// the next sync then picks it up. (Previously blanks defaulted to 'enrolled',
+// which mis-listed admissions-pipeline kids whose student fields were filled
+// in before they actually enrolled.)
+export function normalizeEnrollmentStatus(raw: string, warnings: string[]): string | null {
   const v = raw.trim().toLowerCase();
-  if (!v) return 'enrolled';
+  if (!v) return null; // blank on the contact → no enrollment status, period
   // Direct match (already normalized)
   const allowed = new Set([
     'inquiry', 'tour_scheduled', 'application_submitted',
@@ -177,8 +182,8 @@ export function normalizeEnrollmentStatus(raw: string, warnings: string[]): stri
   if (collapsed === 'tour scheduled' || collapsed === 'tour') return 'tour_scheduled';
   if (collapsed === 'application submitted' || collapsed === 'applied') return 'application_submitted';
   if (collapsed === 'declined' || collapsed === 'rejected' || collapsed === 'denied') return 'declined';
-  warnings.push(`unknown enrollment status "${raw}" — defaulted to "enrolled"`);
-  return 'enrolled';
+  warnings.push(`unrecognized enrollment status "${raw}" — no enrollment row created (fix the value on the GHL contact)`);
+  return null;
 }
 
 // Date normalization: GHL stores dates as ISO strings or ms epochs;
@@ -1000,13 +1005,17 @@ export async function runGhlSync(schoolId: string): Promise<SyncResult> {
         }
 
         const normalizedStatus = normalizeEnrollmentStatus(s.enrollment_status, warnings);
-        await q(
-          `INSERT INTO enrollments
-             (student_id, school_id, classroom_id, academic_year, status, enrolled_at, schedule)
-           VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-          [studentId, schoolId, classroomId, s.academic_year, normalizedStatus, s.enrolled_at, s.schedule],
-        );
-        enrollmentsCreated++;
+        if (normalizedStatus) {
+          await q(
+            `INSERT INTO enrollments
+               (student_id, school_id, classroom_id, academic_year, status, enrolled_at, schedule)
+             VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+            [studentId, schoolId, classroomId, s.academic_year, normalizedStatus, s.enrolled_at, s.schedule],
+          );
+          enrollmentsCreated++;
+        } else if (!s.enrollment_status.trim()) {
+          warnings.push(`no enrollment status on the GHL contact for ${s.first_name} ${s.last_name} — not counted in any roster until it's set`);
+        }
       }
     }
 
@@ -1139,13 +1148,17 @@ export async function insertOneFamily(
     }
 
     const normalizedStatus = normalizeEnrollmentStatus(s.enrollment_status, warnings);
-    await q(
-      `INSERT INTO enrollments
-         (student_id, school_id, classroom_id, academic_year, status, enrolled_at, schedule)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-      [studentId, schoolId, classroomId, s.academic_year, normalizedStatus, s.enrolled_at, s.schedule],
-    );
-    enrollmentsCreated++;
+    if (normalizedStatus) {
+      await q(
+        `INSERT INTO enrollments
+           (student_id, school_id, classroom_id, academic_year, status, enrolled_at, schedule)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        [studentId, schoolId, classroomId, s.academic_year, normalizedStatus, s.enrolled_at, s.schedule],
+      );
+      enrollmentsCreated++;
+    } else if (!s.enrollment_status.trim()) {
+      warnings.push(`no enrollment status on the GHL contact for ${s.first_name} ${s.last_name} — not counted in any roster until it's set`);
+    }
   }
 
   return { familyId, parentsCreated, studentsCreated, enrollmentsCreated };
