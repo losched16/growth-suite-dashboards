@@ -65,6 +65,35 @@ interface FormUpload {
   student_label: string | null;
 }
 
+// Engagement badge for a not-yet-submitted family: did they open the form,
+// or at least log in? Falls back to "never logged in".
+function EngagementCell({
+  familyId, viewedMap, loginMap,
+}: { familyId: string; viewedMap: Map<string, string>; loginMap: Map<string, string> }) {
+  const viewed = viewedMap.get(familyId);
+  const login = loginMap.get(familyId);
+  const fmt = (d: string) => new Date(d).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  if (viewed) {
+    return (
+      <span title="Opened this form but hasn't submitted" className="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-medium text-blue-800">
+        Opened {fmt(viewed)}
+      </span>
+    );
+  }
+  if (login) {
+    return (
+      <span title="Logged in but hasn't opened this form" className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-700">
+        Logged in {fmt(login)}
+      </span>
+    );
+  }
+  return (
+    <span title="Hasn't logged into the portal" className="inline-flex items-center rounded-full bg-rose-100 px-2 py-0.5 text-[11px] font-medium text-rose-700">
+      Never logged in
+    </span>
+  );
+}
+
 export default async function SubmissionsInboxScoped({
   params, searchParams,
 }: { params: Params; searchParams: SearchParams }) {
@@ -212,6 +241,35 @@ export default async function SubmissionsInboxScoped({
     missing = rows;
   }
 
+  // Engagement signals for the "not yet submitted" roster: has the family
+  // logged in at all, and has anyone in it actually OPENED this form? Both
+  // aggregated to the family (a family can have two logins). Lets the office
+  // tell "resend a login invite" apart from "just nudge — they've seen it."
+  const missingFamilyIds = Array.from(new Set(missing.map((m) => m.family_id).filter(Boolean)));
+  const lastLoginByFamily = new Map<string, string>();
+  const viewedByFamily = new Map<string, string>();
+  if (missingFamilyIds.length > 0) {
+    const { rows: loginRows } = await query<{ family_id: string; last_login: string }>(
+      `SELECT p.family_id,
+              to_char(MAX(ps.issued_at), 'YYYY-MM-DD"T"HH24:MI:SSOF') AS last_login
+         FROM parent_sessions ps
+         JOIN parents p ON p.id = ps.parent_id
+        WHERE ps.school_id = $1 AND p.family_id = ANY($2::uuid[])
+        GROUP BY p.family_id`,
+      [schoolId, missingFamilyIds],
+    );
+    for (const r of loginRows) lastLoginByFamily.set(r.family_id, r.last_login);
+    const { rows: viewRows } = await query<{ family_id: string; last_viewed: string }>(
+      `SELECT family_id,
+              to_char(MAX(last_viewed_at), 'YYYY-MM-DD"T"HH24:MI:SSOF') AS last_viewed
+         FROM portal_form_views
+        WHERE school_id = $1 AND form_definition_id = $2 AND family_id = ANY($3::uuid[])
+        GROUP BY family_id`,
+      [schoolId, formId, missingFamilyIds],
+    );
+    for (const r of viewRows) viewedByFamily.set(r.family_id, r.last_viewed);
+  }
+
   // Completion math: test rows AND amendments should never inflate the real %.
   // An amendment is a re-signed change to an existing submission (same family),
   // not a brand-new submission — counting it would double-count the family.
@@ -285,6 +343,7 @@ export default async function SubmissionsInboxScoped({
             <>The bottom section lists families (or family/student pairs, for per-student forms) that have <strong>not</strong> submitted yet. Those are who should still get the email blast.</>,
             <>The progress bar shows your completion rate. <strong>{completionPct}%</strong> of eligible families/students have submitted.</>,
             <>Phone + email on missing-recipient rows are copy-paste targets if you need to follow up manually.</>,
+            <>The <strong>Engagement</strong> column tells you why a family is outstanding: <strong>Opened</strong> = they viewed the form but didn&rsquo;t submit (just nudge them), <strong>Logged in</strong> = active but hasn&rsquo;t reached this form, <strong>Never logged in</strong> = resend their portal invite.</>,
           ]}
         />
 
@@ -390,6 +449,7 @@ export default async function SubmissionsInboxScoped({
                   {def.per_student ? <th className="px-4 py-2 font-medium">Student</th> : null}
                   <th className="px-4 py-2 font-medium">Primary parent email</th>
                   <th className="px-4 py-2 font-medium">Phone</th>
+                  <th className="px-4 py-2 font-medium">Engagement</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-amber-100/60">
@@ -414,6 +474,9 @@ export default async function SubmissionsInboxScoped({
                           {m.parent_phone}
                         </a>
                       ) : <span className="text-xs text-slate-400 italic">—</span>}
+                    </td>
+                    <td className="px-4 py-2">
+                      <EngagementCell familyId={m.family_id} viewedMap={viewedByFamily} loginMap={lastLoginByFamily} />
                     </td>
                   </tr>
                 ))}
