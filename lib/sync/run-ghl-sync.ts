@@ -261,13 +261,19 @@ export function mapContactToFamily(
   forms: SchoolFormDef[] = [],
   opts: MapContactOpts = {},
 ): MappedFamily | null {
-  // A promoted Parent-2 contact (tagged "Parent 2") exists only for email
-  // marketing — we gave it the family's student names for context, but it must
-  // NOT spawn its own family/student rows or the roster double-counts every
-  // enrolled child. The second guardian is already modeled as the secondary
-  // parent on the primary's contact (parent_2_* fields), so skipping this
-  // contact keeps the dashboard clean without losing anyone.
-  if (contact.tags?.some((t) => typeof t === 'string' && t.trim().toLowerCase() === 'parent 2')) {
+  // A promoted Parent-2 contact exists only for email marketing — we gave it
+  // the family's student names for context, but it must NOT spawn its own
+  // family/student rows or the roster double-counts every enrolled child.
+  //
+  // CRITICAL nuance: skip ONLY contacts tagged "parent 2" WITHOUT "parent 1".
+  // Split-household families have two REAL contacts — each parent is the
+  // primary of their own record (tagged "parent 1") and the co-parent on the
+  // other's (so they ALSO carry "parent 2"). Skipping on the bare "parent 2"
+  // tag silently dropped 14 such families (17 enrolled students) from the
+  // roster. Marketing-only contacts never carry "parent 1", so requiring its
+  // absence keeps them out while every real family stays.
+  const tagsLower = (contact.tags ?? []).map((t) => String(t).trim().toLowerCase());
+  if (tagsLower.includes('parent 2') && !tagsLower.includes('parent 1')) {
     return null;
   }
 
