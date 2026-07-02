@@ -49,6 +49,7 @@ export const AVAILABLE_COLUMNS = [
   { key: 'attendance_notes',     label: 'Check-in notes' },
   { key: 'pickup_restrictions',  label: 'NOT authorized pickup' },
   { key: 're_enrolled',          label: 'Re-enrolled' },
+  { key: 'address',              label: 'Home address' },
   { key: 'family',               label: 'Family' },
   { key: 'documents',            label: 'Documents' },
 ] as const;

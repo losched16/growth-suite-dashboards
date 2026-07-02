@@ -37,6 +37,7 @@ const BASE: Record<string, { label: string; value: (s: RosterStudent) => string 
   special_instructions: { label: 'Special Instructions', value: (s) => s.special_instructions ?? '' },
   iep_504:        { label: 'IEP / 504',        value: (s) => [s.iep, s.five04_plan].filter((v) => v && v.toLowerCase() !== 'no').join(' / ') },
   documents:      { label: 'Documents',        value: (s) => s.documents_count },
+  address:        { label: 'Home Address',     value: (s) => s.address ?? '' },
   family:         { label: 'Family',           value: (s) => s.family_display_name ?? s.primary_parent_name },
   lunch:          { label: 'Lunch',            value: (s) => s.lunch ?? '' },
   attendance:     { label: 'Attendance',       value: (s) => s.attendance_status ?? '' },

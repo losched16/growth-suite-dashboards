@@ -94,6 +94,9 @@ export interface RosterStudent {
   program: string | null;
   homeroom: string | null;
   tuition: string | null;
+  // Family home address (GHL-synced student_street/city/state/zip), composed
+  // as one mail-ready line. Null when the contact has no street on file.
+  address: string | null;
   // First day at the school (metadata.initial_start_date), raw string.
   initial_start_date: string | null;
   allergy: string | null;
@@ -639,6 +642,16 @@ export async function fetcher(
     // start with "I decline" in DGM's GHL data, but we also tolerate a
     // bare "declined" string for robustness.
     const has_lunch = !!lunch && !lunchLower.includes('decline');
+    // Mail-ready home address from the GHL-synced address fields (2.0 keys
+    // student_street/…, bare-key fallbacks for other schools).
+    const mdStr = (k: string): string => (typeof md[k] === 'string' ? (md[k] as string).trim() : '');
+    const addrStreet = mdStr('student_street') || mdStr('street');
+    const addrCity = mdStr('student_city') || mdStr('city');
+    const addrState = mdStr('student_state') || mdStr('state');
+    const addrZip = mdStr('student_zip') || mdStr('zip');
+    const address = addrStreet
+      ? [addrStreet, [addrCity, addrState].filter(Boolean).join(', '), addrZip].filter(Boolean).join(', ')
+      : null;
     const primary = `${r.primary_first ?? ''} ${r.primary_last ?? ''}`.trim();
     // has_allergy considers EITHER source — the legacy "Yes" metadata
     // flag (no detail) AND any non-empty health-profile allergy both
@@ -675,6 +688,7 @@ export async function fetcher(
       program,
       homeroom,
       tuition,
+      address,
       initial_start_date: initialStart,
       allergy,
       special_instructions,

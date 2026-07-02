@@ -319,6 +319,10 @@ function renderCell(s: RosterStudent, col: ColumnKey, drilldownDashboard: string
         ? <span className="inline-block rounded bg-violet-100 px-1.5 py-0.5 text-[10px] font-medium uppercase text-violet-800">{tags.join('/')}</span>
         : <span className="text-gray-400">—</span>;
     }
+    case 'address':
+      return s.address
+        ? <span className="text-gray-700">{s.address}</span>
+        : <span className="text-gray-400">—</span>;
     case 'family':
       return (
         <Link href={`/school/${locationId}/${drilldownDashboard}/${s.family_id}`} className="text-emerald-700 hover:underline">
