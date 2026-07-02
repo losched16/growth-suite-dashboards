@@ -40,7 +40,7 @@ const STANDARD_FIELDS: Array<{ key: string; label: string; required?: boolean }>
   { key: 'plan_name',           label: 'Payment plan name' },
   { key: 'sibling_discount',    label: 'Sibling discount amount (optional)' },
   { key: 'scholarship_amount',  label: 'Scholarship / FA amount (optional)' },
-  { key: 'family_account_ref',  label: 'FACTS account # (audit only)' },
+  { key: 'family_account_ref',  label: 'Account / family reference (audit only)' },
   { key: 'payer_first',         label: 'Payer first name (info only)' },
   { key: 'payer_last',          label: 'Payer last name (info only)' },
 ];
@@ -192,10 +192,31 @@ export function FactsImportClient({
               className="mt-1 block w-40 rounded-md border border-gray-300 px-3 py-2 text-sm"
             />
           </label>
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-medium text-gray-800">Paste your tuition CSV</span>
+            <button
+              type="button"
+              onClick={() => {
+                const cols = ['Student First Name', 'Student Last Name', 'Payer Email', 'Student Grade', 'Annual Tuition', 'Payment Plan', 'Sibling Discount', 'Scholarship Amount', 'Account Reference'];
+                const example = ['Jane', 'Doe', 'parent@example.com', 'Kindergarten', '12800', 'Monthly', '0', '0', 'ACCT-1001'];
+                const body = [cols.join(','), example.join(','), ''].join(String.fromCharCode(10));
+                const url = URL.createObjectURL(new Blob([body], { type: 'text/csv' }));
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'tuition-import-template.csv';
+                a.click();
+                URL.revokeObjectURL(url);
+              }}
+              className="text-xs font-medium text-emerald-700 underline hover:text-emerald-900"
+            >
+              Download blank template
+            </button>
+          </div>
           <label className="block">
-            <span className="text-sm font-medium text-gray-800">Paste FACTS CSV</span>
             <span className="block text-[11px] text-gray-500 mt-0.5">
-              Include the header row. Each row should be one family-student-tuition record.
+              Include the header row. Each row is one student&rsquo;s tuition. Columns can be named
+              anything &mdash; you&rsquo;ll map them in the next step. Works with a FACTS / Blackbaud /
+              TADS export or your own spreadsheet.
             </span>
             <textarea
               value={csv}

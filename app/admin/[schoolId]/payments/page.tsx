@@ -342,8 +342,8 @@ export default async function PaymentsPage({
           <h2 className="text-lg font-semibold text-zinc-900 mb-3">Operations</h2>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <Link href={`/admin/${schoolId}/payments/facts-import`} className="rounded-md border border-emerald-200 bg-white p-3 hover:border-emerald-400 hover:shadow-sm">
-              <div className="text-sm font-semibold text-zinc-900">FACTS import</div>
-              <div className="mt-0.5 text-xs text-zinc-600">Paste a FACTS CSV → create/update tuition enrollments in bulk.</div>
+              <div className="text-sm font-semibold text-zinc-900">Bulk tuition import</div>
+              <div className="mt-0.5 text-xs text-zinc-600">Paste any tuition spreadsheet (FACTS, Blackbaud, TADS, or your own CSV) → create/update enrollments in bulk.</div>
             </Link>
             <Link href={`/admin/${schoolId}/payments/products`} className="rounded-md border border-emerald-200 bg-white p-3 hover:border-emerald-400 hover:shadow-sm">
               <div className="text-sm font-semibold text-zinc-900">Product catalog</div>

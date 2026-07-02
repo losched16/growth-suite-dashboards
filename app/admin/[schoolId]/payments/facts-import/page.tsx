@@ -95,11 +95,11 @@ export default async function FactsImportPage({ params }: { params: Params }) {
       </div>
 
       <header>
-        <h1 className="text-2xl font-semibold text-gray-900">FACTS CSV import</h1>
+        <h1 className="text-2xl font-semibold text-gray-900">Bulk tuition import</h1>
         <p className="mt-1 text-sm text-gray-600">
-          Paste {school.name}&rsquo;s FACTS Tuition Management export here. We&rsquo;ll detect the
-          columns, you confirm the mapping, then we create or update each family&rsquo;s tuition
-          enrollment with the actual amounts.
+          Paste a tuition spreadsheet for {school.name} &mdash; an export from FACTS, Blackbaud,
+          TADS, or any CSV of your own. We&rsquo;ll detect the columns, you confirm the mapping,
+          then we create or update each family&rsquo;s tuition enrollment with the actual amounts.
         </p>
       </header>
 
@@ -154,8 +154,8 @@ export default async function FactsImportPage({ params }: { params: Params }) {
         <div className="rounded-md border border-blue-200 bg-blue-50/40 px-3 py-2 text-xs text-blue-900">
           <div className="font-medium">Saved column mapping from previous import</div>
           <div className="mt-0.5 text-blue-800">
-            We&rsquo;ll pre-fill the mapping below with what worked last time. Adjust if FACTS
-            changed their export format.
+            We&rsquo;ll pre-fill the mapping below with what worked last time. Adjust if your
+            spreadsheet&rsquo;s columns changed.
           </div>
         </div>
       ) : null}

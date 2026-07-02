@@ -92,7 +92,7 @@ export async function POST(_request: NextRequest, { params }: { params: Params }
                   total_annual_cents   = $1,
                   payment_plan_id      = COALESCE(payment_plan_id, $2),
                   status               = CASE WHEN status = 'committed' THEN 'committed' ELSE 'draft' END,
-                  internal_note        = COALESCE(internal_note, '') || E'\\n[' || now()::date::text || '] Updated from FACTS import',
+                  internal_note        = COALESCE(internal_note, '') || E'\\n[' || now()::date::text || '] Updated from tuition import',
                   updated_at           = now()
             WHERE id = $3`,
           [row.annual_tuition_cents, row.matched_plan_id ?? null, existing.rows[0].id],
@@ -115,7 +115,7 @@ export async function POST(_request: NextRequest, { params }: { params: Params }
             row.annual_tuition_cents,
             row.matched_plan_id ?? null,
             imp.initiated_by ?? 'operator',
-            `Imported from FACTS on ${new Date().toISOString().slice(0, 10)}`,
+            `Imported from tuition file on ${new Date().toISOString().slice(0, 10)}`,
           ],
         );
         inserted++;
