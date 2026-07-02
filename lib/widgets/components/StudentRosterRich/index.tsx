@@ -483,7 +483,8 @@ function Component({
         </div>
         <div className="flex items-center gap-2 print:hidden">
           <SyncGhlButton locationId={school.locationId} />
-          <StatusToggle value={data.roster_status} current={sp} />
+          {/* Scope is pinned to enrolled on classroom dashboards — no toggle. */}
+          {config.enrolled_only ? null : <StatusToggle value={data.roster_status} current={sp} />}
           <ViewToggle view={view} current={sp} />
           <PrintButton
             label={view === 'allergies' ? 'Print allergies' : view === 'grid' ? 'Print grid' : 'Print roster'}

@@ -257,8 +257,13 @@ export async function fetcher(
   // roster — "removed from the dashboard" without deleting anything, and the
   // status still lives at the source (GHL contact field).
   const rosterStatusRaw = (((searchParams ?? {}).roster_status ?? '').trim());
-  const rosterStatus = (rosterStatusRaw === 'pending' || rosterStatusRaw === 'withdrawn' || rosterStatusRaw === 'all')
-    ? rosterStatusRaw : 'enrolled';
+  // enrolled_only pins the scope to currently-enrolled — the classroom/teacher
+  // dashboards set it so an actual class list can never be widened to
+  // pending/withdrawn kids via the URL toggle.
+  const rosterStatus = config.enrolled_only
+    ? 'enrolled'
+    : (rosterStatusRaw === 'pending' || rosterStatusRaw === 'withdrawn' || rosterStatusRaw === 'all')
+      ? rosterStatusRaw : 'enrolled';
 
   // Grade-cutoff reference dates, derived from the selected year:
   // "2026-27" → Aug 1 2026 and Jan 1 2027. Falls back to the calendar

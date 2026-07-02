@@ -127,6 +127,8 @@ interface FamilyDetail {
   family: { id: string; display_name: string | null; notes: string | null };
   parents: ParentInfo[];
   students: FamilyStudent[];
+  // Family home address (GHL-synced), e.g. "1024 E Frye Road, Phoenix, AZ, 85048".
+  address?: string | null;
   authorized_pickups: AuthorizedPickup[];
   pickup_restrictions: PickupRestriction[];
   health_profiles: HealthProfile[];
@@ -558,6 +560,11 @@ function FamilyDetailPanel({
             <div className="text-[10px] uppercase tracking-wide text-slate-500 font-semibold mb-2">
               Parents ({detail.parents.length})
             </div>
+            {detail.address ? (
+              <div className="mb-2 text-xs text-slate-700">
+                <span className="font-medium">Home address:</span> {detail.address}
+              </div>
+            ) : null}
             {detail.parents.length === 0 ? (
               <div className="text-xs italic text-slate-500">No parent records on file.</div>
             ) : (

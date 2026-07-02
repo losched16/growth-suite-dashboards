@@ -304,11 +304,35 @@ export async function GET(_request: NextRequest, { params }: { params: Params })
     console.warn('[family/detail] extra attrs failed:', e instanceof Error ? e.message : String(e));
   }
 
+  // Family home address — GHL-synced onto each student's metadata
+  // (student_street/city/state/zip, bare-key fallbacks). One address per
+  // family contact, so the first student that carries one wins. Teachers
+  // see it in the Parents (contact info) section of the detail panel.
+  let address: string | null = null;
+  try {
+    const { rows: addrRows } = await query<{ street: string | null; city: string | null; state: string | null; zip: string | null }>(
+      `SELECT COALESCE(s.metadata->>'student_street', s.metadata->>'street') AS street,
+              COALESCE(s.metadata->>'student_city',   s.metadata->>'city')   AS city,
+              COALESCE(s.metadata->>'student_state',  s.metadata->>'state')  AS state,
+              COALESCE(s.metadata->>'student_zip',    s.metadata->>'zip')    AS zip
+         FROM students s
+        WHERE s.family_id = $1 AND s.school_id = $2 AND s.status = 'active'
+          AND btrim(COALESCE(s.metadata->>'student_street', s.metadata->>'street', '')) <> ''
+        LIMIT 1`,
+      [familyId, schoolId],
+    );
+    const a = addrRows[0];
+    if (a?.street) {
+      address = [a.street, [a.city, a.state].filter(Boolean).join(', '), a.zip].filter(Boolean).join(', ');
+    }
+  } catch { /* best-effort — panel just omits the address line */ }
+
   return NextResponse.json({
     ok: true,
     family,
     parents,
     students,
+    address,
     authorized_pickups,
     pickup_restrictions,
     health_profiles,
