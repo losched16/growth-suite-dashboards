@@ -9,7 +9,7 @@ import { notFound } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
 import { query } from '@/lib/db';
 import { loadSchoolByLocationId } from '@/lib/dashboards/loader';
-import { loadSchoolSettings } from '@/lib/school-settings';
+import { loadSchoolSettings, GHL_MENU_ITEMS } from '@/lib/school-settings';
 import { PORTAL_NAV } from '@/lib/portal-nav';
 
 export const dynamic = 'force-dynamic';
@@ -150,6 +150,29 @@ export default async function SchoolSettingsPage({
                   <span className="block text-[11px] text-slate-500">Each second parent/guardian gets their own contact record nightly, tagged and associated with the family, so you can email both parents.</span>
                 </span>
               </label>
+            </div>
+            {/* CRM sidebar menus — hidden per sub-account via the agency
+                Custom JS snippet (docs/ghl-menu-snippet.js). Unchecked = hidden. */}
+            <div className="border-t border-slate-100 pt-4">
+              <h3 className="text-sm font-semibold text-slate-900">CRM sidebar menus</h3>
+              <p className="text-[11px] text-slate-500 mt-0.5 mb-2">
+                Turn CRM sidebar items on or off for this school&rsquo;s account. Cosmetic decluttering — use user permissions for real access control. Takes effect within ~5 minutes of saving (on next page load).
+              </p>
+              <input type="hidden" name="all_crm_menu" value={GHL_MENU_ITEMS.map((m) => m.key).join(',')} />
+              <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 sm:grid-cols-3 text-sm">
+                {GHL_MENU_ITEMS.map((m) => (
+                  <label key={m.key} className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      name="crm_visible"
+                      value={m.key}
+                      defaultChecked={!settings.ghl_hidden_menu.includes(m.key)}
+                      className="h-4 w-4 rounded border-slate-300"
+                    />
+                    <span className="text-slate-800">{m.label}</span>
+                  </label>
+                ))}
+              </div>
             </div>
             <button type="submit" className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800">
               Save school settings

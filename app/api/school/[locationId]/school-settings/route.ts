@@ -32,6 +32,12 @@ export async function POST(request: NextRequest, { params }: { params: Params })
     if (!/^\d{4}-\d{2}$/.test(academicYear)) {
       return back(request, locationId, { err: 'Academic year must look like 2026-27.' });
     }
+    // CRM sidebar: hidden = every known item − the ones left checked
+    // ("crm_visible"), same pattern as the portal-menu toggles.
+    const allCrm = String(form.get('all_crm_menu') ?? '').split(',').map((s) => s.trim()).filter(Boolean);
+    const crmVisible = new Set(form.getAll('crm_visible').map((v) => String(v).trim()).filter(Boolean));
+    const ghlHiddenMenu = allCrm.filter((k) => !crmVisible.has(k));
+
     const patch = {
       academic_year: academicYear,
       // blank = ungated (any active parent can create a login)
@@ -40,6 +46,7 @@ export async function POST(request: NextRequest, { params }: { params: Params })
       promote_parent2: form.get('promote_parent2') === 'on',
       roster_tag_filter: str('roster_tag_filter')
         .split(',').map((t) => t.trim()).filter(Boolean),
+      ghl_hidden_menu: ghlHiddenMenu,
     };
 
     await query(

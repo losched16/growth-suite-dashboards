@@ -21,7 +21,32 @@ export interface SchoolSettings {
   // When non-empty: only contacts carrying one of these tags become roster
   // families ("withdrawn" keeps the family but marks students withdrawn).
   roster_tag_filter: string[];
+  // CRM sidebar items to hide for this school's sub-account (GHL has no
+  // native per-location menu toggle). Values are GHL sidebar element ids
+  // without the "sb_" prefix (e.g. 'payments', 'opportunities'). Applied by
+  // the agency Custom JS snippet, which fetches /api/ghl-menu-config/{loc}.
+  ghl_hidden_menu: string[];
 }
+
+// GHL sidebar items the Custom JS snippet can hide (docs/ghl-menu-snippet.js).
+// `key` = the element id without the `sb_` prefix. Community-stable ids.
+export const GHL_MENU_ITEMS: Array<{ key: string; label: string }> = [
+  { key: 'launchpad', label: 'Launch Pad' },
+  { key: 'dashboard', label: 'Dashboard' },
+  { key: 'conversations', label: 'Conversations' },
+  { key: 'calendars', label: 'Calendars' },
+  { key: 'contacts', label: 'Contacts' },
+  { key: 'opportunities', label: 'Opportunities' },
+  { key: 'payments', label: 'Payments' },
+  { key: 'email-marketing', label: 'Marketing' },
+  { key: 'automation', label: 'Automation' },
+  { key: 'sites', label: 'Sites' },
+  { key: 'memberships', label: 'Memberships' },
+  { key: 'app-media', label: 'Media Storage' },
+  { key: 'reputation', label: 'Reputation' },
+  { key: 'reporting', label: 'Reporting' },
+  { key: 'app-marketplace', label: 'App Marketplace' },
+];
 
 export const SCHOOL_SETTINGS_DEFAULTS: SchoolSettings = {
   academic_year: '2026-27',
@@ -29,6 +54,7 @@ export const SCHOOL_SETTINGS_DEFAULTS: SchoolSettings = {
   auto_student_ids: false,
   promote_parent2: false,
   roster_tag_filter: [],
+  ghl_hidden_menu: [],
 };
 
 export function normalizeSchoolSettings(raw: unknown): SchoolSettings {
@@ -42,6 +68,9 @@ export function normalizeSchoolSettings(raw: unknown): SchoolSettings {
     promote_parent2: r.promote_parent2 === true,
     roster_tag_filter: Array.isArray(r.roster_tag_filter)
       ? r.roster_tag_filter.map((t) => String(t ?? '').trim()).filter(Boolean)
+      : [],
+    ghl_hidden_menu: Array.isArray(r.ghl_hidden_menu)
+      ? r.ghl_hidden_menu.map((t) => String(t ?? '').trim().toLowerCase()).filter(Boolean)
       : [],
   };
 }
