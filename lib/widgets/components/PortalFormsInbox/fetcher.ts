@@ -95,10 +95,16 @@ export async function fetcher(
        d.needs_review AS def_needs_review,
        f.id AS family_id,
        COALESCE(NULLIF(f.display_name, ''),
-                CONCAT_WS(' ', p_lead.first_name, p_lead.last_name),
+                NULLIF(CONCAT_WS(' ', p_lead.first_name, p_lead.last_name), ''),
+                -- Family/parent rows gone (contact deleted in GHL after
+                -- submitting) → fall back to what the submission preserved:
+                -- the signer's name from the responses, then the submitter
+                -- email stamped before the link was severed.
+                NULLIF(CONCAT_WS(' ', s.responses->>'pg1_first_name', s.responses->>'pg1_last_name'), ''),
+                s.submitter_email,
                 '(unnamed family)') AS family_label,
-       CONCAT_WS(' ', p.first_name, p.last_name) AS parent_name,
-       p.email AS parent_email,
+       NULLIF(CONCAT_WS(' ', p.first_name, p.last_name), '') AS parent_name,
+       COALESCE(p.email, s.submitter_email) AS parent_email,
        CASE WHEN st.id IS NOT NULL
             THEN CONCAT_WS(' ', COALESCE(NULLIF(st.preferred_name, ''), st.first_name), st.last_name)
             ELSE NULL END AS student_name,
