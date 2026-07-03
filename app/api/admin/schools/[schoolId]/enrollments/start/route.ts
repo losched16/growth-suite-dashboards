@@ -9,6 +9,7 @@ import type { NextRequest } from 'next/server';
 import crypto from 'node:crypto';
 import { query } from '@/lib/db';
 import { sendBrandedEmail } from '@/lib/email';
+import { authorizeOperatorOrSchool } from '@/lib/auth/dual';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -28,7 +29,7 @@ const PARENT_PORTAL_BASE = process.env.PARENT_PORTAL_BASE_URL
 // scheme/host — otherwise we drop it and fall back to the default. This
 // prevents an open-redirect using the form to bounce users off-host.
 function safeReturnPath(returnTo: string | null, schoolId: string): string {
-  if (returnTo && /^\/(admin|school)\/[A-Za-z0-9_-]+\/enrollments\/start$/.test(returnTo)) {
+  if (returnTo && /^\/(admin|school)\/[A-Za-z0-9_-]+\/(enrollments\/start|forms\/[A-Za-z0-9-]+\/send)$/.test(returnTo)) {
     return returnTo;
   }
   return `/admin/${schoolId}/enrollments/start`;
@@ -51,6 +52,10 @@ function back(
 
 export async function POST(request: NextRequest, { params }: { params: Params }) {
   const { schoolId } = await params;
+  // Operator OR the school itself (school session) — this endpoint sends
+  // parent-facing email, so it must never be anonymous.
+  const auth = await authorizeOperatorOrSchool(schoolId);
+  if (!auth.ok) return auth.response;
   const fd = await request.formData();
 
   // Where to bounce the operator on success/failure. The school-scoped

@@ -196,7 +196,7 @@ function connectFieldTo(f: FieldBlock, gf: GhlField, metadataKeys: string[]): Fi
 
 export function FormBuilderV2({
   schoolId, formId, slug, initialSchema, initialSettings, ghlFields, metadataKeys = [],
-  programOptions = [], gradeOptions = [], tagOptions = [], previewHref, backHref,
+  programOptions = [], gradeOptions = [], tagOptions = [], studentOptions = [], previewHref, backHref,
 }: {
   schoolId: string;
   formId: string;
@@ -209,6 +209,7 @@ export function FormBuilderV2({
   programOptions?: string[];
   gradeOptions?: string[];
   tagOptions?: string[];
+  studentOptions?: Array<{ id: string; name: string; program: string | null }>;
   previewHref: string;
   backHref: string;
 }) {
@@ -433,7 +434,7 @@ export function FormBuilderV2({
             />
           ) : (
             <FormSettingsPanel settings={settings} onPatch={patchSettings}
-              programOptions={programOptions} gradeOptions={gradeOptions} tagOptions={tagOptions} />
+              programOptions={programOptions} gradeOptions={gradeOptions} tagOptions={tagOptions} studentOptions={studentOptions} />
           )}
         </aside>
       </div>
@@ -796,15 +797,19 @@ function FormPreview({ fields, settings, answers, setAnswers }: {
   );
 }
 
-function WhoSeesEditor({ settings, onPatch, programOptions, gradeOptions, tagOptions }: {
+function WhoSeesEditor({ settings, onPatch, programOptions, gradeOptions, tagOptions, studentOptions }: {
   settings: FormSettings; onPatch: (patch: Partial<FormSettings>) => void;
   programOptions: string[]; gradeOptions: string[]; tagOptions: string[];
+  studentOptions: Array<{ id: string; name: string; program: string | null }>;
 }) {
   const at = settings.applies_to ?? {};
   const programs = at.program_match ?? [];
   const grades = at.metadata_match?.grade_level ?? [];
   const tags = at.tag_match ?? [];
-  const hasRule = programs.length > 0 || grades.length > 0 || tags.length > 0;
+  const studentIds = at.student_ids ?? [];
+  const hasRule = programs.length > 0 || grades.length > 0 || tags.length > 0 || studentIds.length > 0;
+  // Student search for the "Specific students" picker.
+  const [stuSearch, setStuSearch] = useState('');
 
   // Checklists = roster values + any value the rule already names (so a
   // renamed/removed program stays visible and removable).
@@ -833,13 +838,27 @@ function WhoSeesEditor({ settings, onPatch, programOptions, gradeOptions, tagOpt
   const toggleIn = (arr: string[], v: string) => (arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v]);
   const cb = 'h-3.5 w-3.5 rounded border-slate-300 text-emerald-600';
 
-  const nothingToTarget = progList.length === 0 && gradeList.length === 0 && tagList.length === 0;
+  // Specific-student targeting (applies_to.student_ids). OR'd with the other
+  // criteria by the portal matcher: a student sees the form if they're picked
+  // here OR match a program/grade/tag.
+  function toggleStudent(id: string) {
+    const next = toggleIn(studentIds, id);
+    const base: FormAppliesTo = { ...(settings.applies_to ?? {}) };
+    if (next.length) base.student_ids = next; else delete base.student_ids;
+    onPatch({ applies_to: Object.keys(base).length === 0 ? null : base });
+  }
+  const stuById = new Map(studentOptions.map((s) => [s.id, s]));
+  const stuMatches = stuSearch.trim()
+    ? studentOptions.filter((s) => s.name.toLowerCase().includes(stuSearch.trim().toLowerCase())).slice(0, 20)
+    : [];
+
+  const nothingToTarget = progList.length === 0 && gradeList.length === 0 && tagList.length === 0 && studentOptions.length === 0;
 
   return (
     <div className="border-t border-slate-100 pt-4">
       <div className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-slate-800"><Users className="h-3.5 w-3.5" /> Who sees this form</div>
       {nothingToTarget ? (
-        <p className="text-[11px] text-slate-400">No programs, grades, or tags found on your records yet — this form shows to everyone.</p>
+        <p className="text-[11px] text-slate-400">No students, programs, grades, or tags found on your records yet — this form shows to everyone.</p>
       ) : (
         <>
           <label className="mb-1.5 flex items-center gap-2 text-sm text-slate-700">
@@ -850,10 +869,38 @@ function WhoSeesEditor({ settings, onPatch, programOptions, gradeOptions, tagOpt
             <input type="radio" checked={hasRule}
               onChange={() => { if (!hasRule) { const first = showProgram && progList.length ? [progList[0]] : []; const t = !first.length && tagList.length ? [tagList[0]] : []; apply({ programs: first, grades: [], tags: t }); } }}
               className="h-4 w-4 text-emerald-600" />
-            Only specific programs, grades, or tags
+            Only specific students, programs, grades, or tags
           </label>
           {hasRule ? (
             <div className="space-y-3 rounded-md border border-slate-200 bg-slate-50 p-2.5">
+              {studentOptions.length > 0 ? (
+                <div>
+                  <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-500">Specific students</div>
+                  {studentIds.map((id) => (
+                    <div key={id} className="flex items-center justify-between gap-2 text-xs text-slate-800">
+                      <span className="truncate">{stuById.get(id)?.name ?? '(student no longer on roster)'}
+                        {stuById.get(id)?.program ? <span className="text-slate-400"> · {stuById.get(id)!.program}</span> : null}</span>
+                      <button onClick={() => toggleStudent(id)} className="shrink-0 text-slate-300 hover:text-rose-500" title="Remove"><X className="h-3.5 w-3.5" /></button>
+                    </div>
+                  ))}
+                  <div className="mt-1 flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2 py-1">
+                    <Search className="h-3 w-3 shrink-0 text-slate-400" />
+                    <input value={stuSearch} onChange={(e) => setStuSearch(e.target.value)} placeholder="Add a student by name…"
+                      className="w-full bg-transparent text-xs text-slate-700 placeholder:text-slate-400 focus:outline-none" />
+                  </div>
+                  {stuMatches.length > 0 ? (
+                    <div className="mt-1 max-h-36 overflow-y-auto rounded-md border border-slate-200 bg-white">
+                      {stuMatches.map((s) => (
+                        <button key={s.id} onClick={() => { toggleStudent(s.id); setStuSearch(''); }}
+                          className="flex w-full items-center justify-between px-2 py-1 text-left text-xs text-slate-700 hover:bg-emerald-50">
+                          <span className="truncate">{s.name}{s.program ? <span className="text-slate-400"> · {s.program}</span> : null}</span>
+                          <span className="shrink-0 text-emerald-600">{studentIds.includes(s.id) ? '✓' : '+'}</span>
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
               {showProgram ? (
                 <div>
                   <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-500">By program</div>
@@ -896,9 +943,10 @@ function WhoSeesEditor({ settings, onPatch, programOptions, gradeOptions, tagOpt
   );
 }
 
-function FormSettingsPanel({ settings, onPatch, programOptions, gradeOptions, tagOptions }: {
+function FormSettingsPanel({ settings, onPatch, programOptions, gradeOptions, tagOptions, studentOptions }: {
   settings: FormSettings; onPatch: (patch: Partial<FormSettings>) => void;
   programOptions: string[]; gradeOptions: string[]; tagOptions: string[];
+  studentOptions: Array<{ id: string; name: string; program: string | null }>;
 }) {
   const input = 'w-full rounded-md border border-slate-300 px-2.5 py-1.5 text-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500';
   const lbl = 'mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-400';
@@ -928,7 +976,7 @@ function FormSettingsPanel({ settings, onPatch, programOptions, gradeOptions, ta
       <label className={toggle}>One form per student<input type="checkbox" checked={settings.per_student} onChange={(e) => onPatch({ per_student: e.target.checked })} className={cb} /></label>
       <label className={toggle}>Allow re-submission<input type="checkbox" checked={settings.resubmission_allowed} onChange={(e) => onPatch({ resubmission_allowed: e.target.checked })} className={cb} /></label>
       <label className={toggle}>Form is live<input type="checkbox" checked={settings.is_active} onChange={(e) => onPatch({ is_active: e.target.checked })} className={cb} /></label>
-      <WhoSeesEditor settings={settings} onPatch={onPatch} programOptions={programOptions} gradeOptions={gradeOptions} tagOptions={tagOptions} />
+      <WhoSeesEditor settings={settings} onPatch={onPatch} programOptions={programOptions} gradeOptions={gradeOptions} tagOptions={tagOptions} studentOptions={studentOptions} />
     </div>
   );
 }

@@ -96,6 +96,19 @@ export default async function FormBuilderPage({ params }: { params: Params }) {
     loadGhlFields(school.id),
   ]);
 
+  // Active students for "Specific students" targeting (applies_to.student_ids).
+  const { rows: studentRows } = await query<{ id: string; name: string; program: string | null }>(
+    `SELECT s.id,
+            CONCAT_WS(' ', COALESCE(NULLIF(s.preferred_name, ''), s.first_name), s.last_name) AS name,
+            s.metadata->>'program' AS program
+       FROM students s
+      WHERE s.school_id = $1 AND s.status = 'active'
+        AND (s.metadata->>'is_demo') IS DISTINCT FROM 'true'
+      ORDER BY 2
+      LIMIT 2000`,
+    [school.id],
+  );
+
   return (
     <FormBuilderV2
       schoolId={school.id}
@@ -118,6 +131,7 @@ export default async function FormBuilderPage({ params }: { params: Params }) {
       programOptions={progRows.rows.map((r) => r.v)}
       gradeOptions={gradeRows.rows.map((r) => r.v)}
       tagOptions={tagRows.rows.map((r) => r.v)}
+      studentOptions={studentRows}
       previewHref={`/school/${locationId}/forms/${formId}/preview?chrome=none`}
       backHref={`/school/${locationId}/forms`}
     />

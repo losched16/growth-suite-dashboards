@@ -10,7 +10,7 @@
 // destroy data silently.
 
 import { useState } from 'react';
-import { Eye, EyeOff, Trash2, Loader2, AlertTriangle, Copy, Bell, BellOff } from 'lucide-react';
+import { Eye, EyeOff, Trash2, Loader2, AlertTriangle, Copy, Bell, BellOff, Send } from 'lucide-react';
 
 export function FormRowActions({
   schoolId, locationId, formId, displayName, slug, isPublished, submissionCount,
@@ -142,6 +142,15 @@ export function FormRowActions({
 
   return (
     <>
+      {locationId && isPublished ? (
+        <a
+          href={`/school/${locationId}/forms/${formId}/send`}
+          className="inline-flex items-center gap-1 rounded border border-emerald-300 bg-white px-2 py-1 text-[11px] font-medium text-emerald-700 hover:bg-emerald-50"
+          title="Send this form to a specific family (emails them a one-click link)"
+        >
+          <Send className="h-3 w-3" /> Send
+        </a>
+      ) : null}
       <button
         type="button"
         onClick={togglePublish}
