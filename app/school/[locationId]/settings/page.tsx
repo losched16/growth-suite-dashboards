@@ -9,6 +9,7 @@ import { notFound } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
 import { query } from '@/lib/db';
 import { loadSchoolByLocationId } from '@/lib/dashboards/loader';
+import { loadSchoolSettings } from '@/lib/school-settings';
 import { PORTAL_NAV } from '@/lib/portal-nav';
 
 export const dynamic = 'force-dynamic';
@@ -43,6 +44,7 @@ export default async function SchoolSettingsPage({
   );
   const b = rows[0] ?? null;
   const hidden = new Set(b?.portal_hidden_nav ?? []);
+  const settings = await loadSchoolSettings(school.id);
   const msg = typeof sp.msg === 'string' ? sp.msg : null;
   const err = typeof sp.err === 'string' ? sp.err : null;
 
@@ -106,6 +108,53 @@ export default async function SchoolSettingsPage({
           <button type="submit" className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800">
             Save settings
           </button>
+        </form>
+
+        {/* School behavior settings (schools.settings) — its own form/endpoint
+            so a branding save can't clobber these and vice versa. */}
+        <form action={`/api/school/${locationId}/school-settings`} method="POST" className="space-y-5">
+          <section className="rounded-xl border border-black/10 bg-white p-5 space-y-4">
+            <div>
+              <h2 className="text-sm font-semibold text-slate-900">School &amp; sync settings</h2>
+              <p className="text-[11px] text-slate-500 mt-0.5">
+                How your Growth Suite data drives the portal. Everything here keys off your contact records.
+              </p>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+              <Field label="Academic year" name="academic_year" defaultValue={settings.academic_year} placeholder="2026-27" mono />
+              <Field
+                label="Portal access opens at pipeline stage (blank = any parent can create a login)"
+                name="portal_gate_stage"
+                defaultValue={settings.portal_gate_stage ?? ''}
+                placeholder="e.g. Pending"
+              />
+              <Field
+                label="Roster tag filter (comma-separated; blank = every contact with student data)"
+                name="roster_tag_filter"
+                defaultValue={settings.roster_tag_filter.join(', ')}
+                placeholder="e.g. 2026-27 stms, withdrawn"
+              />
+            </div>
+            <div className="space-y-2 text-sm">
+              <label className="flex items-start gap-2">
+                <input type="checkbox" name="auto_student_ids" defaultChecked={settings.auto_student_ids} className="mt-0.5 h-4 w-4 rounded border-slate-300" />
+                <span>
+                  <span className="text-slate-800 font-medium">Auto-assign Student IDs</span>
+                  <span className="block text-[11px] text-slate-500">Students missing an ID get a unique 8-digit one, written to the contact record first. Existing IDs are never changed.</span>
+                </span>
+              </label>
+              <label className="flex items-start gap-2">
+                <input type="checkbox" name="promote_parent2" defaultChecked={settings.promote_parent2} className="mt-0.5 h-4 w-4 rounded border-slate-300" />
+                <span>
+                  <span className="text-slate-800 font-medium">Create a contact for Parent 2 (email marketing)</span>
+                  <span className="block text-[11px] text-slate-500">Each second parent/guardian gets their own contact record nightly, tagged and associated with the family, so you can email both parents.</span>
+                </span>
+              </label>
+            </div>
+            <button type="submit" className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800">
+              Save school settings
+            </button>
+          </section>
         </form>
       </div>
     </main>

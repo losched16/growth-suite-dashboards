@@ -13,12 +13,12 @@ import {
   Sparkles, Trash2,
 } from 'lucide-react';
 import { query } from '@/lib/db';
+import { loadSchoolSettings } from '@/lib/school-settings';
 import { loadPaymentAccount, syncStripeAccountState } from '@/lib/stripe/connect-onboarding';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 30;
 
-const CURRENT_YEAR = '2026-27';
 
 type Params = Promise<{ schoolId: string }>;
 type SearchParams = Promise<{ stripe?: string; msg?: string; err?: string; year?: string }>;
@@ -94,6 +94,7 @@ export default async function PaymentsPage({
   params, searchParams,
 }: { params: Params; searchParams: SearchParams }) {
   const { schoolId } = await params;
+  const CURRENT_YEAR = (await loadSchoolSettings(schoolId)).academic_year;
   const sp = await searchParams;
   const yearFilter = sp.year || CURRENT_YEAR;
 

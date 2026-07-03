@@ -19,11 +19,9 @@ import { loadGhlClient, type GhlClient } from '@/lib/ghl/client';
 import { upsertContactByEmail } from '@/lib/ghl/contacts';
 import { linkContacts } from '@/lib/ghl/associations';
 
-// Schools where the promote-parent2 pass runs automatically (on the sync cron).
-// Other schools can still trigger it on demand from the admin UI.
-export const PROMOTE_PARENT2_SCHOOLS = new Set<string>([
-  '005c2872-dd27-4c43-9b3c-5fd353b8db44', // Desert Garden Montessori 2.0
-]);
+// Schools opt into the automatic promote-parent2 pass via
+// settings.promote_parent2 (school Settings page); the cron filters on it.
+// Any school can still trigger a run on demand from the admin UI.
 
 // Email-marketing tags applied to each parent contact during promotion.
 const P1_TAGS = ['Parent 1', 'Parent'];

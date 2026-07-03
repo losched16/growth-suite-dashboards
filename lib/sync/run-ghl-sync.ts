@@ -716,14 +716,12 @@ export async function runGhlSync(schoolId: string): Promise<SyncResult> {
   // that carries student data becomes a family — driven purely by what the
   // location holds, nothing school-specific.
   const requireHousehold = !!config.family_fields?.householdId;
-  // Per-school ROSTER TAG FILTER: for schools listed here, ONLY contacts carrying
-  // one of these tags become roster families (Spruce Tree = the "2026-27 stms"
-  // enrolling class + withdrawn). Contacts tagged "withdrawn" are kept but marked
-  // withdrawn. Schools not listed are unaffected (data-driven as before).
-  const ROSTER_TAG_FILTER: Record<string, string[]> = {
-    '4aba0898-ec93-42ed-8e87-5374ca211738': ['2026-27 stms', 'withdrawn'], // Spruce Tree Montessori
-  };
-  const rosterTags = (ROSTER_TAG_FILTER[schoolId] ?? []).map((t) => t.toLowerCase());
+  // Per-school ROSTER TAG FILTER (settings.roster_tag_filter): when set, ONLY
+  // contacts carrying one of these tags become roster families (e.g. Spruce
+  // Tree = the "2026-27 stms" enrolling class + withdrawn). Contacts tagged
+  // "withdrawn" are kept but marked withdrawn. Empty = no filter (default).
+  const schoolSettings = await import('@/lib/school-settings').then((m) => m.loadSchoolSettings(schoolId));
+  const rosterTags = schoolSettings.roster_tag_filter.map((t) => t.toLowerCase());
   const tagsLower = (c: GhlContact) => (c.tags ?? []).map((t) => String(t).trim().toLowerCase());
   const passesRosterFilter = (c: GhlContact) => rosterTags.length === 0 || rosterTags.some((rt) => tagsLower(c).includes(rt));
   const isWithdrawn = (c: GhlContact) => tagsLower(c).includes('withdrawn');

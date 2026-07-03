@@ -13,6 +13,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
 import { query } from '@/lib/db';
+import { loadSchoolSettings } from '@/lib/school-settings';
 import { loadSchoolByLocationId } from '@/lib/dashboards/loader';
 import { HelpCallout } from '@/components/HelpCallout';
 import {
@@ -26,7 +27,6 @@ export const maxDuration = 30;
 type Params = Promise<{ locationId: string }>;
 type SearchParams = Promise<{ msg?: string; err?: string; family?: string }>;
 
-const CURRENT_YEAR = '2026-27';
 
 export default async function StartEnrollmentScoped({
   params, searchParams,
@@ -37,6 +37,7 @@ export default async function StartEnrollmentScoped({
   const school = await loadSchoolByLocationId(locationId);
   if (!school) notFound();
   const schoolId = school.id;
+  const CURRENT_YEAR = (await loadSchoolSettings(schoolId)).academic_year;
 
   const [{ rows: families }, { rows: students }, { rows: grids }, { rows: plans }, { rows: cfg }] =
     await Promise.all([

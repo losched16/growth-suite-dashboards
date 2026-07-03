@@ -1,6 +1,6 @@
 // Auto-assign a Student ID to any active student that doesn't have one yet.
 //
-// For opted-in schools (AUTO_STUDENT_ID_SCHOOLS) we generate a random, unique
+// For opted-in schools (settings.auto_student_ids) we generate a random, unique
 // 8-digit Student ID for each new student. The ID is written to the GHL
 // contact FIRST (student_<slot>_student_id) so it lands in the source of truth
 // and survives the destructive snapshot sync, then mirrored to
@@ -14,10 +14,7 @@
 import { query } from '@/lib/db';
 import { loadGhlClient, type GhlClient } from '@/lib/ghl/client';
 
-// Schools that have opted into auto-generated Student IDs.
-export const AUTO_STUDENT_ID_SCHOOLS = new Set<string>([
-  '005c2872-dd27-4c43-9b3c-5fd353b8db44', // Desert Garden Montessori 2.0
-]);
+import { loadSchoolSettings } from '@/lib/school-settings';
 
 export interface StudentIdBackfillResult {
   ran: boolean;
@@ -39,7 +36,8 @@ function candidateKeys(slot: number): string[] {
 }
 
 export async function backfillStudentIds(schoolId: string): Promise<StudentIdBackfillResult> {
-  if (!AUTO_STUDENT_ID_SCHOOLS.has(schoolId)) return { ran: false, assigned: 0, ghl_written: 0, errors: [] };
+  const settings = await loadSchoolSettings(schoolId);
+  if (!settings.auto_student_ids) return { ran: false, assigned: 0, ghl_written: 0, errors: [] };
 
   const { rows: students } = await query<{ id: string; slot: number; contact_id: string | null }>(
     `SELECT s.id,

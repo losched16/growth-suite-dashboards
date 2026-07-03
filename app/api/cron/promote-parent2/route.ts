@@ -11,7 +11,7 @@ import crypto from 'node:crypto';
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { query } from '@/lib/db';
-import { promoteParent2sForSchool, PROMOTE_PARENT2_SCHOOLS, type PromoteResult } from '@/lib/sync/promote-parent2';
+import { promoteParent2sForSchool, type PromoteResult } from '@/lib/sync/promote-parent2';
 
 export const maxDuration = 300;
 
@@ -67,12 +67,16 @@ async function run(request: NextRequest): Promise<NextResponse> {
     );
     schools = rows;
   } else {
+    // Scheduled (all-schools) runs only touch schools that opted in via
+    // settings.promote_parent2 (school Settings page). A specific school_id
+    // can still be triggered on demand from the admin UI for any school.
     const { rows } = await query<SchoolRow>(
-      `SELECT id, name FROM schools WHERE ghl_pit_encrypted IS NOT NULL ORDER BY name`,
+      `SELECT id, name FROM schools
+        WHERE ghl_pit_encrypted IS NOT NULL
+          AND settings->>'promote_parent2' = 'true'
+        ORDER BY name`,
     );
-    // Scheduled (all-schools) runs only touch opted-in schools. A specific
-    // school_id can still be triggered on demand from the admin UI for any school.
-    schools = rows.filter((r) => PROMOTE_PARENT2_SCHOOLS.has(r.id));
+    schools = rows;
   }
 
   const results: PerSchoolResult[] = [];

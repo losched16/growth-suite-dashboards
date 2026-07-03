@@ -15,6 +15,7 @@
 import Link from 'next/link';
 import { Plus, Trash2, Sparkles, Edit3, X, Pencil, Search } from 'lucide-react';
 import { query } from '@/lib/db';
+import { loadSchoolSettings } from '@/lib/school-settings';
 import { HelpCallout } from '@/components/HelpCallout';
 import { deriveEmbedToken } from '@/lib/auth/embed';
 
@@ -34,7 +35,6 @@ function viewAsParentHref(familyId: string, locationId: string): string {
 
 // The current enrollment year. Matches the same constant on the
 // "Start an enrollment" screen so the two stay in lockstep.
-const CURRENT_YEAR = '2026-27';
 
 interface EnrollmentRow {
   id: string;
@@ -93,6 +93,7 @@ export async function PaymentsHubPlans({
   // (so the input keeps the typed value on rerender). Bound to `?q=`.
   familySearch?: string;
 }) {
+  const CURRENT_YEAR = (await loadSchoolSettings(schoolId)).academic_year;
   // Normalize the search term for case-insensitive matching. Empty
   // string means "no filter" — handled by passing NULL to the SQL,
   // which the WHERE branches on.

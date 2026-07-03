@@ -7,6 +7,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
 import { query } from '@/lib/db';
+import { loadSchoolSettings } from '@/lib/school-settings';
 import {
   EnrollmentSetupForm,
   type FamilyOpt, type StudentOpt, type GridOpt, type PlanOpt,
@@ -18,12 +19,12 @@ export const maxDuration = 30;
 type Params = Promise<{ schoolId: string }>;
 type SearchParams = Promise<{ msg?: string; err?: string }>;
 
-const CURRENT_YEAR = '2026-27';
 
 export default async function StartEnrollmentAdmin({
   params, searchParams,
 }: { params: Params; searchParams: SearchParams }) {
   const { schoolId } = await params;
+  const CURRENT_YEAR = (await loadSchoolSettings(schoolId)).academic_year;
   const sp = await searchParams;
 
   const { rows: schoolRows } = await query<{ id: string; name: string }>(
