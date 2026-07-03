@@ -16,46 +16,18 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import axios from 'axios';
-import crypto from 'node:crypto';
 import { query, withTransaction } from '@/lib/db';
 import { encrypt } from '@/lib/crypto';
+import { DASHBOARD_TEMPLATES } from '@/lib/dashboards/templates';
 
 export const maxDuration = 30;
 
-// Mirrors scripts/provision-school.mjs so the UI-driven onboard matches
-// what the CLI used to do. Lift to a shared lib if a third caller appears.
-function familyHubLayout() {
-  return [{
-    instance_id: crypto.randomUUID(),
-    widget_id: 'family_hub_table',
-    config: {
-      page_size: 50,
-      shown_columns: ['family', 'phone', 'students', 'enrollment', 'payment_plan', 'total_tuition', 'active'],
-      shown_filters: ['family_status', 'enrollment_status', 'program', 'payment_plan'],
-      show_stat_cards: true,
-      drilldown_dashboard_slug: 'family-hub',
-    },
-    position: { x: 0, y: 0, w: 12, h: 12 },
-  }];
-}
-function studentRosterLayout() {
-  return [{
-    instance_id: crypto.randomUUID(),
-    widget_id: 'student_roster_rich',
-    config: {
-      page_size: 100,
-      enable_views: ['list', 'grid', 'allergies'],
-      shown_columns: ['student', 'gender_age', 'program', 'homeroom', 'lead_teacher', 'schedule', 'status', 'allergy', 'iep_504', 'family'],
-      shown_filters: ['program', 'homeroom', 'schedule', 'lead_teacher', 'allergies_only', 'iep_504_only'],
-      drilldown_dashboard_slug: 'family-hub',
-    },
-    position: { x: 0, y: 0, w: 12, h: 12 },
-  }];
-}
-const CORE_DASHBOARDS = [
-  { slug: 'family-hub',     name: 'Family Hub',     description: 'Browse families and drill into their full picture.', position: 1, layout: familyHubLayout() },
-  { slug: 'student-roster', name: 'Student Roster', description: 'Browse all students with filters.',                  position: 2, layout: studentRosterLayout() },
-];
+// Starter dashboards come from the shared template registry
+// (lib/dashboards/templates.ts) — the SAME templates the school's own
+// "Add dashboard" gallery offers, so there is one source of truth. These
+// three don't query the DB, so building before the first sync is safe;
+// the school adds more (incl. classroom hubs) from its gallery later.
+const STARTER_TEMPLATE_KEYS = ['family-hub', 'student-roster', 'enrollment-hub'];
 
 export async function POST(request: NextRequest) {
   try {
@@ -63,6 +35,10 @@ export async function POST(request: NextRequest) {
     const name = String(form.get('name') ?? '').trim();
     const locationId = String(form.get('ghl_location_id') ?? '').trim();
     const pit = String(form.get('ghl_pit') ?? '').trim();
+    const academicYear = String(form.get('academic_year') ?? '').trim() || '2026-27';
+    if (!/^\d{4}-\d{2}$/.test(academicYear)) {
+      return back(request, { err: 'Academic year must look like 2026-27.' });
+    }
 
     if (!name) return back(request, { err: 'School name is required.' });
     if (!locationId) return back(request, { err: 'GHL Location ID is required.' });
@@ -103,23 +79,28 @@ export async function POST(request: NextRequest) {
     const { ciphertext, iv, tag } = encrypt(pit);
     const schoolId = await withTransaction(async (q) => {
       const { rows } = await q<{ id: string }>(
-        `INSERT INTO schools (name, ghl_location_id, ghl_pit_encrypted, ghl_pit_iv, ghl_pit_tag)
-         VALUES ($1, $2, $3, $4, $5)
+        `INSERT INTO schools (name, ghl_location_id, ghl_pit_encrypted, ghl_pit_iv, ghl_pit_tag, settings)
+         VALUES ($1, $2, $3, $4, $5, $6::jsonb)
          RETURNING id`,
-        [name, locationId, ciphertext, iv, tag],
+        [name, locationId, ciphertext, iv, tag, JSON.stringify({ academic_year: academicYear })],
       );
       const id = rows[0].id;
 
-      // Core dashboards (family-hub + student-roster). Mirrors the CLI
-      // provisioner's output exactly.
-      for (const d of CORE_DASHBOARDS) {
-        await q(
-          `INSERT INTO school_dashboards
-             (school_id, dashboard_slug, display_name, description, layout, is_enabled, position)
-           VALUES ($1, $2, $3, $4, $5::jsonb, true, $6)
-           ON CONFLICT (school_id, dashboard_slug) DO NOTHING`,
-          [id, d.slug, d.name, d.description, JSON.stringify(d.layout), d.position],
-        );
+      // Starter dashboards from the shared template registry.
+      let position = 0;
+      for (const key of STARTER_TEMPLATE_KEYS) {
+        const template = DASHBOARD_TEMPLATES.find((x) => x.key === key);
+        if (!template) continue;
+        for (const d of await template.build(id, academicYear)) {
+          position++;
+          await q(
+            `INSERT INTO school_dashboards
+               (school_id, dashboard_slug, display_name, description, layout, is_enabled, position)
+             VALUES ($1, $2, $3, $4, $5::jsonb, true, $6)
+             ON CONFLICT (school_id, dashboard_slug) DO NOTHING`,
+            [id, d.dashboard_slug, d.display_name, d.description, JSON.stringify(d.layout), position],
+          );
+        }
       }
 
       // Payment config row — billing_active defaults to false (dry-run
@@ -149,8 +130,9 @@ export async function POST(request: NextRequest) {
     url.pathname = `/admin/${schoolId}`;
     url.search = '';
     url.searchParams.set('msg',
-      `Created "${name}" with default dashboards (Family Hub, Student Roster) and payment config (dry-run mode). ` +
-      `Next: run "Sync from GHL" to pull their families, then provision tuition grids in Payments → Settings.`,
+      `Created "${name}" (${academicYear}) with starter dashboards + payment config (dry-run mode). ` +
+      `Next: run "Sync from GHL" — after that the school self-serves: Settings (branding, menus, access gate), ` +
+      `Add dashboard (incl. classroom hubs), Forms → New form (templates), and Payments (tuition grids + plans).`,
     );
     return NextResponse.redirect(url, 303);
   } catch (err) {

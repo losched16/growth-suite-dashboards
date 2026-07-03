@@ -85,6 +85,21 @@ export default async function NewSchoolPage({
             </div>
           </label>
 
+          <label className="block">
+            <span className="text-sm font-medium text-zinc-900">Academic year</span>
+            <input
+              type="text"
+              name="academic_year"
+              required
+              defaultValue="2026-27"
+              pattern="\d{4}-\d{2}"
+              className="mt-1 w-40 rounded border border-zinc-300 bg-white px-3 py-2 text-sm font-mono focus:border-emerald-600 focus:outline-none"
+            />
+            <p className="mt-1 text-[11px] text-zinc-500">
+              The active enrollment year for this school (changeable later in their Settings page).
+            </p>
+          </label>
+
           <div className="flex items-center gap-3 pt-2 border-t border-zinc-100">
             <button
               type="submit"
