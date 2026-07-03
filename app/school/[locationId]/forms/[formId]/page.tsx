@@ -108,6 +108,19 @@ export default async function FormEditPageScoped({
   );
   const tagOptions = tagRows.map((r) => r.tag);
 
+  // Active students for the "Specific students" targeting picker.
+  const { rows: studentRows } = await query<{ id: string; name: string; program: string | null }>(
+    `SELECT s.id,
+            CONCAT_WS(' ', COALESCE(NULLIF(s.preferred_name, ''), s.first_name), s.last_name) AS name,
+            s.metadata->>'program' AS program
+       FROM students s
+      WHERE s.school_id = $1 AND s.status = 'active'
+        AND (s.metadata->>'is_demo') IS DISTINCT FROM 'true'
+      ORDER BY 2 LIMIT 2000`,
+    [school.id],
+  );
+
+
   return (
     <main className="flex flex-1 flex-col items-center bg-slate-50 p-6 min-h-screen">
       <div className="w-full max-w-4xl space-y-4">
@@ -132,6 +145,12 @@ export default async function FormEditPageScoped({
               className="inline-flex items-center gap-1.5 rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700"
             >
               <Wand2 className="h-3.5 w-3.5" /> New builder
+            </Link>
+            <Link
+              href={`/school/${locationId}/forms/${formId}/send`}
+              className="inline-flex items-center gap-1.5 rounded-md border border-emerald-300 bg-white px-3 py-1.5 text-xs font-medium text-emerald-700 hover:bg-emerald-50"
+            >
+              Send to a family
             </Link>
             <Link
               href={`/school/${locationId}/forms/${formId}/submissions`}
@@ -179,6 +198,7 @@ export default async function FormEditPageScoped({
           }}
           programOptions={programOptions}
           gradeOptions={gradeOptions}
+          studentOptions={studentRows}
           tagOptions={tagOptions}
         />
       </div>

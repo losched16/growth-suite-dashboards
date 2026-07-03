@@ -99,6 +99,19 @@ export default async function FormEditPage({
   );
   const tagOptions = tagRows.map((r) => r.tag);
 
+  // Active students for the "Specific students" targeting picker.
+  const { rows: studentRows } = await query<{ id: string; name: string; program: string | null }>(
+    `SELECT s.id,
+            CONCAT_WS(' ', COALESCE(NULLIF(s.preferred_name, ''), s.first_name), s.last_name) AS name,
+            s.metadata->>'program' AS program
+       FROM students s
+      WHERE s.school_id = $1 AND s.status = 'active'
+        AND (s.metadata->>'is_demo') IS DISTINCT FROM 'true'
+      ORDER BY 2 LIMIT 2000`,
+    [schoolId],
+  );
+
+
   return (
     <main className="flex flex-1 flex-col items-center bg-zinc-50 p-6">
       <div className="w-full max-w-4xl space-y-4">
@@ -163,6 +176,7 @@ export default async function FormEditPage({
           }}
           programOptions={programOptions}
           gradeOptions={gradeOptions}
+          studentOptions={studentRows}
           tagOptions={tagOptions}
         />
       </div>

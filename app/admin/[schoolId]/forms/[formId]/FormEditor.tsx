@@ -124,7 +124,7 @@ const FIELD_TYPE_OPTIONS: Array<{ value: FieldType; label: string; group: string
 ];
 
 export function FormEditor({
-  schoolId, formId, slug, initial, programOptions = [], gradeOptions = [], tagOptions = [],
+  schoolId, formId, slug, initial, programOptions = [], gradeOptions = [], tagOptions = [], studentOptions = [],
 }: {
   schoolId: string;
   formId: string;
@@ -143,6 +143,8 @@ export function FormEditor({
   // Primary program with grade_level="kindergarten"). Backed by
   // applies_to.metadata_match.grade_level — sync-safe (additive merge).
   gradeOptions?: string[];
+  // Active students for the "Specific students" picker (applies_to.student_ids).
+  studentOptions?: Array<{ id: string; name: string; program: string | null }>;
 }) {
   const router = useRouter();
 
@@ -173,12 +175,12 @@ export function FormEditor({
   // metadata_match keys like aftercare) are stashed and merged back in
   // untouched on save, so this screen can never clobber an advanced rule
   // set up out-of-band.
-  const otherCriteria = useMemo<Omit<FormAppliesTo, 'program_match' | 'tag_match'>>(() => {
-    const { program_match, tag_match, metadata_match, ...rest } = initial.applies_to ?? {};
-    void program_match; void tag_match;
+  const otherCriteria = useMemo<Omit<FormAppliesTo, 'program_match' | 'tag_match' | 'student_ids'>>(() => {
+    const { program_match, tag_match, student_ids, metadata_match, ...rest } = initial.applies_to ?? {};
+    void program_match; void tag_match; void student_ids;
     // Preserve every metadata_match key EXCEPT grade_level, which this
     // screen owns. Keeps e.g. the DHS form's `aftercare` rule intact.
-    const out: Omit<FormAppliesTo, 'program_match' | 'tag_match'> = { ...rest };
+    const out: Omit<FormAppliesTo, 'program_match' | 'tag_match' | 'student_ids'> = { ...rest };
     if (metadata_match) {
       const { grade_level, ...mmRest } = metadata_match;
       void grade_level;
@@ -212,10 +214,15 @@ export function FormEditor({
   const [selectedTags, setSelectedTags] = useState<string[]>(
     initial.applies_to?.tag_match ?? [],
   );
+  const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>(
+    initial.applies_to?.student_ids ?? [],
+  );
+  const [studentSearch, setStudentSearch] = useState('');
   const restrictedInitially =
     (initial.applies_to?.program_match?.length ?? 0) > 0 ||
     (initial.applies_to?.metadata_match?.grade_level?.length ?? 0) > 0 ||
-    (initial.applies_to?.tag_match?.length ?? 0) > 0;
+    (initial.applies_to?.tag_match?.length ?? 0) > 0 ||
+    (initial.applies_to?.student_ids?.length ?? 0) > 0;
   const [audienceMode, setAudienceMode] = useState<'all' | 'restricted'>(
     restrictedInitially ? 'restricted' : 'all',
   );
@@ -228,6 +235,7 @@ export function FormEditor({
     if (audienceMode === 'restricted') {
       if (selectedPrograms.length > 0) base.program_match = selectedPrograms;
       if (selectedTags.length > 0) base.tag_match = selectedTags;
+      if (selectedStudentIds.length > 0) base.student_ids = selectedStudentIds;
       if (selectedGrades.length > 0) {
         base.metadata_match = { ...(base.metadata_match ?? {}), grade_level: selectedGrades };
       }
@@ -404,13 +412,50 @@ export function FormEditor({
               <input type="radio" name="audience" checked={audienceMode === 'restricted'}
                 onChange={() => setAudienceMode('restricted')} className="mt-0.5 h-4 w-4" />
               <span>
-                <span className="text-zinc-800">Only specific programs, grades, or tags</span>
+                <span className="text-zinc-800">Only specific students, programs, grades, or tags</span>
                 <span className="block text-[10px] text-zinc-500">Pick below — the form hides for anyone not matching.</span>
               </span>
             </label>
 
             {audienceMode === 'restricted' ? (
               <div className="ml-6 space-y-3">
+                {meta.per_student && studentOptions.length > 0 ? (
+                  <div className="rounded-md border border-zinc-200 bg-zinc-50/40 p-3 space-y-1.5">
+                    <div className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">Specific students</div>
+                    {selectedStudentIds.map((id) => {
+                      const s = studentOptions.find((x) => x.id === id);
+                      return (
+                        <div key={id} className="flex items-center justify-between gap-2 text-sm">
+                          <span className="truncate text-zinc-800">{s?.name ?? '(no longer on roster)'}{s?.program ? <span className="text-zinc-400"> · {s.program}</span> : null}</span>
+                          <button type="button" onClick={() => setSelectedStudentIds(selectedStudentIds.filter((x) => x !== id))}
+                            className="shrink-0 text-xs text-zinc-400 hover:text-red-600">remove</button>
+                        </div>
+                      );
+                    })}
+                    <input
+                      value={studentSearch}
+                      onChange={(e) => setStudentSearch(e.target.value)}
+                      placeholder="Add a student by name…"
+                      className="block w-full rounded border border-zinc-300 px-2 py-1 text-sm"
+                    />
+                    {studentSearch.trim() ? (
+                      <div className="max-h-36 overflow-y-auto rounded border border-zinc-200 bg-white">
+                        {studentOptions
+                          .filter((s) => s.name.toLowerCase().includes(studentSearch.trim().toLowerCase()))
+                          .slice(0, 15)
+                          .map((s) => (
+                            <button key={s.id} type="button"
+                              onClick={() => { if (!selectedStudentIds.includes(s.id)) setSelectedStudentIds([...selectedStudentIds, s.id]); setStudentSearch(''); }}
+                              className="block w-full px-2 py-1 text-left text-sm text-zinc-700 hover:bg-emerald-50">
+                              {s.name}{s.program ? <span className="text-zinc-400"> · {s.program}</span> : null}
+                            </button>
+                          ))}
+                      </div>
+                    ) : null}
+                    <p className="text-[10px] text-zinc-500">The form shows ONLY for the students picked here (plus anyone matching a program/grade/tag below).</p>
+                  </div>
+                ) : null}
+
                 {meta.per_student && programChecklist.length > 0 ? (
                   <div className="rounded-md border border-zinc-200 bg-zinc-50/40 p-3 space-y-1.5">
                     <div className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">By program</div>
@@ -490,13 +535,16 @@ export function FormEditor({
                   </p>
                 ) : null}
 
-                {selectedPrograms.length === 0 && selectedGrades.length === 0 && selectedTags.length === 0 ? (
+                {selectedPrograms.length === 0 && selectedGrades.length === 0 && selectedTags.length === 0 && selectedStudentIds.length === 0 ? (
                   <p className="text-[11px] text-amber-700">
-                    Select at least one program, grade, or tag — otherwise this form shows to everyone.
+                    Select at least one student, program, grade, or tag — otherwise this form shows to everyone.
                   </p>
                 ) : (
                   <p className="text-[11px] text-zinc-500">
-                    Visible only to: {[...selectedPrograms, ...selectedGrades, ...selectedTags].join(', ')}.
+                    Visible only to: {[
+                      ...selectedStudentIds.map((id) => studentOptions.find((s) => s.id === id)?.name ?? 'a removed student'),
+                      ...selectedPrograms, ...selectedGrades, ...selectedTags,
+                    ].join(', ')}.
                   </p>
                 )}
               </div>
