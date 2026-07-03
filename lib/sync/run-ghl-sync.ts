@@ -715,6 +715,12 @@ export async function runGhlSync(schoolId: string): Promise<SyncResult> {
   // contact = one family (e.g. a fresh per-family import), so every contact
   // that carries student data becomes a family — driven purely by what the
   // location holds, nothing school-specific.
+  //
+  // A school opts OUT of household gating by storing an explicitly EMPTY
+  // householdId in its schema row (the loader merges the DG preset underneath
+  // saved configs, so absence alone gets resurrected — '' overrides it).
+  // The create-school flow stores '' automatically when the location has no
+  // household field, so kit-provisioned schools map one-contact-per-family.
   const requireHousehold = !!config.family_fields?.householdId;
   // Per-school ROSTER TAG FILTER (settings.roster_tag_filter): when set, ONLY
   // contacts carrying one of these tags become roster families (e.g. Spruce

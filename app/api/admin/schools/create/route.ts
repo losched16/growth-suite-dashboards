@@ -19,6 +19,8 @@ import axios from 'axios';
 import { query, withTransaction } from '@/lib/db';
 import { encrypt } from '@/lib/crypto';
 import { DASHBOARD_TEMPLATES } from '@/lib/dashboards/templates';
+import { deriveFieldSchemaFromKeys } from '@/lib/sync/derive-field-schema';
+import { upsertSchoolFieldSchema } from '@/lib/sync/schema-loader';
 
 export const maxDuration = 30;
 
@@ -55,9 +57,12 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Probe GHL to validate the PIT before storing anything
+    // Probe GHL to validate the PIT before storing anything. The response
+    // doubles as the input for the derived field schema below.
+    let locationFieldKeys: string[] = [];
     try {
-      await axios.get(`https://services.leadconnectorhq.com/locations/${locationId}/customFields`, {
+      const { data } = await axios.get<{ customFields?: Array<{ fieldKey?: string }> }>(
+        `https://services.leadconnectorhq.com/locations/${locationId}/customFields`, {
         headers: {
           Authorization: `Bearer ${pit}`,
           Version: '2021-07-28',
@@ -65,6 +70,7 @@ export async function POST(request: NextRequest) {
         },
         timeout: 10_000,
       });
+      locationFieldKeys = (data.customFields ?? []).map((f) => String(f.fieldKey ?? '')).filter(Boolean);
     } catch (err) {
       const status = (err as { response?: { status?: number } }).response?.status;
       const msg = (err as { response?: { data?: { message?: string } } }).response?.data?.message;
@@ -125,6 +131,30 @@ export async function POST(request: NextRequest) {
 
       return id;
     });
+
+    // Derive + store the field schema from the location's actual custom
+    // fields. Without this the sync falls back to a preset that expects a
+    // household_id field — and a kit-provisioned location (one contact = one
+    // family, no household grouping) would silently map zero families.
+    try {
+      const derived = deriveFieldSchemaFromKeys(locationFieldKeys);
+      await upsertSchoolFieldSchema(schoolId, {
+        // Explicit '' when the location has no household field — the schema
+        // loader merges the DG preset underneath saved rows, and only an
+        // explicit empty value overrides the preset's householdId (absence
+        // gets resurrected → the sync would gate on a nonexistent field and
+        // map zero families).
+        family_fields: { householdId: '', ...derived.family_fields },
+        parent2_fields: derived.parent2_fields,
+        student_fields: derived.student_fields,
+        max_student_slots: derived.max_student_slots,
+        default_academic_year: academicYear,
+        notes: 'auto-derived at onboarding',
+        allow_parent_only_families: false,
+      });
+    } catch (e) {
+      console.warn('[schools/create] field-schema derivation failed (sync will use defaults):', e);
+    }
 
     const url = request.nextUrl.clone();
     url.pathname = `/admin/${schoolId}`;
