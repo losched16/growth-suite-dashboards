@@ -131,8 +131,9 @@ export async function POST(request: NextRequest) {
     url.search = '';
     url.searchParams.set('msg',
       `Created "${name}" (${academicYear}) with starter dashboards + payment config (dry-run mode). ` +
-      `Next: run "Sync from GHL" — after that the school self-serves: Settings (branding, menus, access gate), ` +
-      `Add dashboard (incl. classroom hubs), Forms → New form (templates), and Payments (tuition grids + plans).`,
+      `Next: 1) run the Field audit (/admin/${schoolId}/field-audit) to verify the location's custom fields, ` +
+      `2) "Sync from GHL" — after that the school self-serves: Settings, Add dashboard (incl. classroom hubs), ` +
+      `Forms → New form (templates), and Payments (tuition grids + plans).`,
     );
     return NextResponse.redirect(url, 303);
   } catch (err) {
