@@ -6,6 +6,11 @@ Desktop session: review, test against a real school, then deploy. This is
 gap-filling for the self-serve platform — closing per-school steps that used to
 require SQL/scripts.*
 
+> **Two repos to deploy.** Most of this is in `growth-suite-dashboards`
+> (branch `claude/recent-updates-visibility-rh79by`). The academic-year fix
+> (Shipped list item below / remaining #5) is in **`growth-suite-parent-portal`**
+> on a branch of the **same name**. Both share the DB; deploy both.
+
 ## Shipped in this batch
 
 ### 1. Grid add-ons are now school-editable (billing gap #1)
@@ -216,13 +221,11 @@ step that currently forces you into scripts/SQL or the operator console.
    The whole FA loop is now self-serve: a school sets its policy, decides
    awards, and the tuition discount is created/updated/removed automatically.
 
-5. **Portal hardcoded academic year (bug).** Two constants bypass
-   `settings.academic_year` in the **parent-portal** repo:
-   `app/(portal)/tuition/page.tsx:21` and
-   `lib/billing/create-enrollment-invoices.ts:45` (both `'2026-27'`). Wire them
-   to `loadSchoolSettings().academic_year` so a school on a different year
-   doesn't get mismatched rows. *Small.* (Parent-portal repo — needs its own
-   branch; this session's branch is dashboards-only.)
+5. **Portal hardcoded academic year (bug) — DONE.** Both `'2026-27'` constants
+   (`app/(portal)/tuition/page.tsx`, `lib/billing/create-enrollment-invoices.ts`)
+   now read `loadSchoolSettings().academic_year`. Shipped in the
+   **parent-portal** repo on branch `claude/recent-updates-visibility-rh79by`
+   (separate repo — see "Two repos to deploy" below). Typecheck + eslint clean.
 
 6. **"Create missing fields" button on the field-audit page.** The GHL field
    API supports creating custom fields; the audit page
