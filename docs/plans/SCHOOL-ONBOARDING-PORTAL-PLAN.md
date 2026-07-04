@@ -64,8 +64,8 @@ links to `school_id` once provisioned.
   (document submissions, manual acknowledgements, operator sign-offs):
   `onboarding_id`, `task_key`, `status` (`pending`|`submitted`|`approved`|`rejected`|`skipped`),
   `submitted_at`, `reviewed_by_email`, `review_note`, `updated_at`.
-  Derived tasks (school created, roster imported, Stripe connected, tuition set,
-  live) need **no rows** — they're computed live.
+  Derived tasks (school created, field audit green, roster imported, dashboards
+  set up, forms published, branding set) need **no rows** — they're computed live.
 - **`onboarding_documents`** — school-uploaded intake files (mirror
   `school_documents`): `onboarding_id`, `task_key`, `title`, `original_filename`,
   `mime_type`, `size_bytes`, `contents` (bytea), `status`
@@ -150,10 +150,12 @@ technique as the billing-status page, but over the non-billing setup signals.
 ## Build phases (suggested order)
 
 1. **Truth layer** — data model migration + task registry + `computeOnboarding`
-   (extends billing-status queries). No UI yet; unit-verifiable.
+   (reuses the billing-status derivation *technique* over non-billing signals).
+   No UI yet; unit-verifiable.
 2. **School-facing page** — checklist + doc upload + instructions + magic-link
    auth. (Chosen "school-facing first".)
-3. **Ops board** — extend billing-status; doc review + manual sign-offs.
+3. **Ops board** — new `/admin/onboarding` (same grid technique, non-billing
+   signals); doc review + manual sign-offs.
 4. **GHL sync** — pipeline mapping + nightly status writeback + reminder
    workflows.
 5. **Content + polish** — per-step instructions (the non-billing steps from
