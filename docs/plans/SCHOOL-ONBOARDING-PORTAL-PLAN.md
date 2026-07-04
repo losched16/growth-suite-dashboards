@@ -147,6 +147,25 @@ technique as the billing-status page, but over the non-billing setup signals.
   endpoint authenticates (school token OR operator), same pattern as the FA
   settings route we just dual-authed.
 
+## Build status
+
+**Phase 1 foundation — BUILT (on branch, typecheck+eslint-clean, not deployed):**
+- `migrations/072_school_onboarding.sql` — `school_onboarding`,
+  `onboarding_task_state`, `onboarding_documents`.
+- `lib/onboarding/checklist.ts` — the task registry with the four task types,
+  including the **`intake`** type (grade levels / programs / schedules /
+  classrooms as option-list vocabularies). Sensible starter set; edit freely.
+- `lib/onboarding/status.ts` — `computeOnboarding()` status engine (derived +
+  stored state → resolved checklist + stage + percent).
+- `lib/onboarding/apply-intake.ts` — pushes submitted intake vocabularies into
+  the GHL sub-account (PUT customField options across student slots). Reuses
+  `loadGhlClient`. **⚠️ live GHL write — must be tested on the desktop against a
+  real sub-account before trusting; apply BEFORE roster import.**
+
+**Not yet built:** the UI surfaces (school-facing page, ops board), the API
+routes (submit intake, upload doc, apply, review), auth wiring (magic-link),
+and the GHL status writeback + reminder workflows.
+
 ## Build phases (suggested order)
 
 1. **Truth layer** — data model migration + task registry + `computeOnboarding`
