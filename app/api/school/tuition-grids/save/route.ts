@@ -36,6 +36,38 @@ function dollarsToCents(raw: string): number {
   return Math.round(n * 100);
 }
 
+// A rate-card add-on (extended day, hot lunch, materials fee, etc.). Stored
+// on tuition_grids.addons as jsonb and consumed by the enrollment generator
+// (lib/billing/tuition-plan-generator.ts — shape: {key,label,amount_cents,
+// required?}). `key` is the stable id the enrollment snapshot ticks; we
+// derive it from the label but persist it in a hidden field so renaming a
+// label on a later edit keeps the same key.
+interface AddonInput { key: string; label: string; amount_cents: number; required: boolean }
+
+function slugify(s: string): string {
+  return s.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 40) || 'addon';
+}
+
+// The Add-ons editor renders a fixed set of slots (addon_label_0..N,
+// addon_amount_0..N, addon_required_0..N, addon_key_0..N). We parse every
+// slot with a non-empty label and replace the grid's whole addons array.
+const ADDON_SLOTS = 8;
+function parseAddons(fd: FormData): AddonInput[] {
+  const out: AddonInput[] = [];
+  const seen = new Set<string>();
+  for (let i = 0; i < ADDON_SLOTS; i++) {
+    const label = String(fd.get(`addon_label_${i}`) ?? '').trim();
+    if (!label) continue; // empty slot — skip
+    const amount_cents = dollarsToCents(String(fd.get(`addon_amount_${i}`) ?? ''));
+    const required = String(fd.get(`addon_required_${i}`) ?? '').trim() !== '';
+    let key = String(fd.get(`addon_key_${i}`) ?? '').trim() || slugify(label);
+    while (seen.has(key)) key = `${key}_${i}`; // guarantee uniqueness within the grid
+    seen.add(key);
+    out.push({ key, label, amount_cents, required });
+  }
+  return out;
+}
+
 export async function POST(request: NextRequest) {
   const ck = await cookies();
   const session = await verifySchoolSession(ck.get(SCHOOL_SESSION_COOKIE)?.value);
@@ -65,6 +97,9 @@ export async function POST(request: NextRequest) {
       if (!displayName) return bounce(request, returnTo, { err: 'Display name is required.' });
       if (annualCents <= 0) return bounce(request, returnTo, { err: 'Annual tuition must be greater than $0.' });
 
+      // Optional add-ons defined inline on the create form.
+      const addons = parseAddons(fd);
+
       // The table has a UNIQUE constraint on (school_id, academic_year,
       // program, grade_level). Catch that as a friendly error.
       try {
@@ -72,8 +107,9 @@ export async function POST(request: NextRequest) {
           `INSERT INTO tuition_grids
              (school_id, academic_year, program, grade_level, display_name,
               annual_tuition_cents, addons, is_active, position)
-           VALUES ($1, $2, $3, $4, $5, $6, '[]'::jsonb, true, $7)`,
-          [session.school_id, academicYear, program, gradeLevel, displayName, annualCents, position],
+           VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, true, $8)`,
+          [session.school_id, academicYear, program, gradeLevel, displayName, annualCents,
+           JSON.stringify(addons), position],
         );
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
@@ -84,8 +120,9 @@ export async function POST(request: NextRequest) {
         }
         throw e;
       }
+      const addonNote = addons.length ? ` with ${addons.length} add-on${addons.length === 1 ? '' : 's'}` : '';
       return bounce(request, returnTo, {
-        msg: `Created grid "${displayName}" at $${(annualCents / 100).toLocaleString()} annual.`,
+        msg: `Created grid "${displayName}" at $${(annualCents / 100).toLocaleString()} annual${addonNote}.`,
       });
     }
 
@@ -128,6 +165,26 @@ export async function POST(request: NextRequest) {
         [id, session.school_id],
       );
       return bounce(request, returnTo, { msg: 'Grid reactivated.' });
+    }
+
+    if (op === 'set_addons') {
+      const id = String(fd.get('id') ?? '').trim();
+      if (!id) return bounce(request, returnTo, { err: 'Missing grid id.' });
+      const addons = parseAddons(fd);
+      // Replace the whole addons array. Existing enrollments are unaffected —
+      // they captured an addon snapshot at creation time. Only NEW enrollments
+      // pick up the revised catalog.
+      const { rowCount } = await query(
+        `UPDATE tuition_grids SET addons = $1::jsonb, updated_at = now()
+          WHERE id = $2 AND school_id = $3`,
+        [JSON.stringify(addons), id, session.school_id],
+      );
+      if (!rowCount) return bounce(request, returnTo, { err: 'Grid not found.' });
+      return bounce(request, returnTo, {
+        msg: addons.length
+          ? `Saved ${addons.length} add-on${addons.length === 1 ? '' : 's'}.`
+          : 'Cleared all add-ons for this grid.',
+      });
     }
 
     return bounce(request, returnTo, { err: `Unknown op: ${op}` });
