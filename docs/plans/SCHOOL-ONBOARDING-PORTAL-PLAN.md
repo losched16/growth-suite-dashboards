@@ -173,10 +173,28 @@ technique as the billing-status page, but over the non-billing setup signals.
 - These routes are NOT proxy-gated (they're pre-tenant) — they self-auth via
   the signed token, following the security-plan lesson (no auto-mint).
 
-**Still to build:** ops board (create onboarding + mint/email the link, review
-docs, trigger `applyAllIntake`), and the GHL status writeback + reminder
-workflows. To test Phase 2 today: insert a `school_onboarding` row, mint a token
-with `mintOnboardingToken(id)`, open `/onboarding/<token>`.
+**Phase 3 — ops board BUILT (typecheck+eslint-clean, not deployed):**
+- `app/admin/onboarding/page.tsx` — cross-school board: live progress, stage,
+  pending-doc counts, lead-vs-linked, + a "start onboarding" form. Operator-only.
+- `app/admin/onboarding/[id]/page.tsx` — detail: the shareable link (minted),
+  editable meta (link `school_id`, target date, assignee, notes), the full
+  checklist with submitted intake values + submitted docs, and the **Apply
+  intake to GHL** button.
+- `app/api/admin/onboarding/create` + `[id]/update` (meta / ops sign-off) +
+  `[id]/review-doc` (accept/reject) + `[id]/apply-intake` (calls `applyAllIntake`)
+  + `doc/[docId]` (authenticated download). Every route self-authenticates on
+  the operator session (the `/api/admin` proxy gap — security-plan lesson).
+
+**Now testable end-to-end (once deployed + `ONBOARDING_TOKEN_SECRET` set):**
+operator creates an onboarding at `/admin/onboarding` → copies the link → school
+opens it, submits intake + uploads docs → operator reviews docs and clicks
+Apply-to-GHL. The only piece needing a live sub-account to verify is the GHL
+push itself.
+
+**Still to build (optional / later):** email the link automatically (vs
+copy-paste), the GHL status writeback + reminder workflows (nightly cron pushes
+`stage`/`percent` onto the GHL contact so workflows can nudge), and persisting
+`percent_complete`/`stage` so the board doesn't recompute per row at scale.
 
 ## Build phases (suggested order)
 
