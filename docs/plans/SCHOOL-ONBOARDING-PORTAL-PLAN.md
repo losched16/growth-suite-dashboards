@@ -212,6 +212,20 @@ remains an optional later add if you want reminders inside GHL specifically.
 (for absolute email links), `RESEND_API_KEY` (already set for other email),
 `CRON_SECRET` (already set for other crons).
 
+**Phase 5 — polish BUILT (typecheck+eslint-clean, not deployed):**
+- **"Do it in your dashboard →" deep-links** on config tasks (branding,
+  portal, dashboards, forms) — `ctaHref` on the registry; the school-facing
+  page renders them once the tenant has a `ghl_location_id`, so a school can
+  jump straight to the surface that completes a derived step.
+- **"Send reminder now"** button (ops) — manual nudge outside the cron cadence
+  (`[id]/send-reminder`).
+- **Archive/restore** (migration 074 `archived_at`): archived onboardings drop
+  off the active board (with a Show-archived toggle) and are skipped by the
+  reminder cron. `[id]/archive`.
+- **Admin nav link** — "Onboarding →" on the `/admin` home.
+
+Migrations to run: 072, 073, 074.
+
 ## Build phases (suggested order)
 
 1. **Truth layer** — data model migration + task registry + `computeOnboarding`

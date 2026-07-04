@@ -19,11 +19,14 @@ interface Row {
 
 export default async function OnboardingBoardPage({
   searchParams,
-}: { searchParams: Promise<{ msg?: string; err?: string }> }) {
+}: { searchParams: Promise<{ msg?: string; err?: string; archived?: string }> }) {
   const sp = await searchParams;
+  const showArchived = sp.archived === '1';
   const { rows } = await query<Row>(
     `SELECT id, school_name, contact_email, school_id, created_at
-       FROM school_onboarding ORDER BY created_at DESC`,
+       FROM school_onboarding
+      WHERE archived_at IS ${showArchived ? 'NOT NULL' : 'NULL'}
+      ORDER BY created_at DESC`,
   );
 
   // Compute live status for each (fine at current scale; if this grows,
@@ -40,9 +43,14 @@ export default async function OnboardingBoardPage({
   return (
     <main className="min-h-screen bg-slate-50 p-6">
       <div className="mx-auto w-full max-w-5xl space-y-5">
-        <div>
-          <h1 className="text-2xl font-semibold text-slate-900">School onboarding</h1>
-          <p className="text-sm text-slate-500">Track what each school has done, submitted, or still needs.</p>
+        <div className="flex items-baseline justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-semibold text-slate-900">School onboarding{showArchived ? ' — archived' : ''}</h1>
+            <p className="text-sm text-slate-500">Track what each school has done, submitted, or still needs.</p>
+          </div>
+          <Link href={showArchived ? '/admin/onboarding' : '/admin/onboarding?archived=1'} className="whitespace-nowrap text-xs text-slate-500 hover:text-slate-700 hover:underline">
+            {showArchived ? '← Active' : 'Show archived'}
+          </Link>
         </div>
 
         {sp.msg ? <div className="rounded border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">{sp.msg}</div> : null}

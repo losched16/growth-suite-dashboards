@@ -29,6 +29,7 @@ interface Meta {
   target_launch_date: string | null;
   assigned_ops_email: string | null;
   notes: string | null;
+  archived_at: string | null;
 }
 
 export default async function OnboardingDetailPage({ params, searchParams }: { params: Params; searchParams: SearchParams }) {
@@ -38,7 +39,8 @@ export default async function OnboardingDetailPage({ params, searchParams }: { p
   const { rows: metaRows } = await query<Meta>(
     `SELECT id, school_name, contact_email, contact_name, ghl_location_id, school_id,
             to_char(target_launch_date, 'YYYY-MM-DD') AS target_launch_date,
-            assigned_ops_email, notes
+            assigned_ops_email, notes,
+            to_char(archived_at, 'YYYY-MM-DD"T"HH24:MI:SSZ') AS archived_at
        FROM school_onboarding WHERE id = $1`,
     [id],
   );
@@ -92,11 +94,18 @@ export default async function OnboardingDetailPage({ params, searchParams }: { p
           <h2 className="text-sm font-semibold text-slate-900">Onboarding link for the school</h2>
           <p className="mt-0.5 text-[11px] text-slate-500">Send this to {meta.contact_email}. No login needed; valid 30 days.</p>
           <input readOnly value={link} className="mt-2 w-full rounded-md border border-slate-300 bg-slate-50 px-3 py-1.5 font-mono text-[11px] text-slate-700" />
-          <form action={`/api/admin/onboarding/${id}/send-link`} method="POST" className="mt-2">
-            <button type="submit" className="rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700">
-              Email the link to {meta.contact_email}
-            </button>
-          </form>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <form action={`/api/admin/onboarding/${id}/send-link`} method="POST">
+              <button type="submit" className="rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700">
+                Email the link to {meta.contact_email}
+              </button>
+            </form>
+            <form action={`/api/admin/onboarding/${id}/send-reminder`} method="POST">
+              <button type="submit" className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50">
+                Send reminder now
+              </button>
+            </form>
+          </div>
         </section>
 
         {/* Meta / linking */}
@@ -206,6 +215,14 @@ export default async function OnboardingDetailPage({ params, searchParams }: { p
             </section>
           );
         })}
+
+        {/* Archive / restore */}
+        <form action={`/api/admin/onboarding/${id}/archive`} method="POST" className="pt-2">
+          <input type="hidden" name="archive" value={meta.archived_at ? '0' : '1'} />
+          <button type="submit" className="text-[11px] text-slate-400 hover:text-slate-700 hover:underline">
+            {meta.archived_at ? 'Restore this onboarding' : 'Archive this onboarding'}
+          </button>
+        </form>
       </div>
     </main>
   );

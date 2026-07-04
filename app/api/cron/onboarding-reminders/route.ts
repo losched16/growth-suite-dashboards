@@ -37,7 +37,7 @@ function authorize(request: NextRequest): boolean {
 
 async function run(): Promise<NextResponse> {
   const { rows } = await query<{ id: string; created_at: string; last_reminded_at: string | null }>(
-    `SELECT id, created_at, last_reminded_at FROM school_onboarding`,
+    `SELECT id, created_at, last_reminded_at FROM school_onboarding WHERE archived_at IS NULL`,
   );
 
   let recomputed = 0, reminded = 0, skipped = 0;

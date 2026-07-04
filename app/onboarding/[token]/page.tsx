@@ -44,6 +44,13 @@ export default async function OnboardingPage({
   const snap = await computeOnboarding(onboardingId);
   if (!snap) notFound();
 
+  // Location id (once provisioned) enables "do it in your dashboard" deep-links.
+  const { rows: obMeta } = await query<{ ghl_location_id: string | null }>(
+    `SELECT ghl_location_id FROM school_onboarding WHERE id = $1`,
+    [onboardingId],
+  );
+  const locationId = obMeta[0]?.ghl_location_id ?? null;
+
   // Current intake values (to prefill) + uploaded docs (to show what's in).
   const { rows: stateRows } = await query<{ task_key: string; payload: { values?: string[] } }>(
     `SELECT task_key, payload FROM onboarding_task_state WHERE onboarding_id = $1`,
@@ -96,6 +103,7 @@ export default async function OnboardingPage({
                   key={t.key}
                   task={t}
                   token={token}
+                  locationId={locationId}
                   values={valuesByKey.get(t.key) ?? []}
                   docs={docsByKey.get(t.key) ?? []}
                 />
@@ -113,10 +121,11 @@ export default async function OnboardingPage({
 }
 
 function TaskCard({
-  task, token, values, docs,
+  task, token, locationId, values, docs,
 }: {
   task: ResolvedTask;
   token: string;
+  locationId: string | null;
   values: string[];
   docs: { name: string; status: string }[];
 }) {
@@ -124,6 +133,9 @@ function TaskCard({
   const blockedTitles = task.status === 'blocked'
     ? task.blockedBy.map((k) => CHECKLIST_BY_KEY[k]?.title ?? k)
     : [];
+  const cta = def?.ctaHref && locationId && task.status !== 'done' && task.status !== 'blocked'
+    ? def.ctaHref(locationId)
+    : null;
 
   return (
     <div className={`rounded-lg border bg-white p-4 ${task.status === 'done' ? 'border-emerald-200' : 'border-slate-200'}`}>
@@ -158,6 +170,17 @@ function TaskCard({
 
       {def?.type === 'manual' && def.owner === 'school' && task.status !== 'blocked' ? (
         <ManualForm taskKey={task.key} token={token} done={task.status === 'done'} />
+      ) : null}
+
+      {cta ? (
+        <a
+          href={cta}
+          target="_blank"
+          rel="noreferrer"
+          className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 hover:underline"
+        >
+          Do it in your dashboard →
+        </a>
       ) : null}
     </div>
   );

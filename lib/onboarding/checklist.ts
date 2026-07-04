@@ -42,6 +42,10 @@ interface BaseTask {
   owner: Owner;
   instructions: string;       // markdown shown to the school
   blockedBy?: string[];       // task keys that must be `done` first
+  // Optional deep-link into the embedded dashboard shell that completes this
+  // step (only meaningful once the tenant is provisioned / locationId known).
+  // Rendered as a "Do it in your dashboard →" link.
+  ctaHref?: (locationId: string) => string;
 }
 
 export interface DerivedTask extends BaseTask {
@@ -162,7 +166,8 @@ export const ONBOARDING_CHECKLIST: OnboardingTask[] = [
   {
     key: 'branding_set', type: 'derived', phase: 'config', owner: 'school',
     title: 'Branding configured',
-    instructions: 'Your portal logo and colors are set.',
+    instructions: 'Set your portal logo and colors.',
+    ctaHref: (loc) => `/school/${loc}/settings`,
     deriveDone: async (ctx) =>
       ctx.schoolId != null &&
       countExists(`SELECT COUNT(*)::int n FROM school_branding WHERE school_id = $1 AND logo_url IS NOT NULL`, [ctx.schoolId]),
@@ -170,7 +175,8 @@ export const ONBOARDING_CHECKLIST: OnboardingTask[] = [
   {
     key: 'portal_configured', type: 'derived', phase: 'config', owner: 'school',
     title: 'Parent portal set up',
-    instructions: 'Academic year and portal settings are configured.',
+    instructions: 'Set your academic year and choose which portal sections parents see.',
+    ctaHref: (loc) => `/school/${loc}/settings`,
     deriveDone: async (ctx) =>
       ctx.schoolId != null &&
       countExists(`SELECT COUNT(*)::int n FROM schools WHERE id = $1 AND settings ? 'academic_year'`, [ctx.schoolId]),
@@ -178,8 +184,9 @@ export const ONBOARDING_CHECKLIST: OnboardingTask[] = [
   {
     key: 'dashboards_setup', type: 'derived', phase: 'config', owner: 'school',
     title: 'Dashboards set up',
-    instructions: 'At least one dashboard has been added from the template gallery.',
+    instructions: 'Add at least one dashboard from the template gallery.',
     blockedBy: ['roster_imported'],
+    ctaHref: (loc) => `/school/${loc}/dashboards/new`,
     deriveDone: async (ctx) =>
       ctx.schoolId != null &&
       countExists(`SELECT COUNT(*)::int n FROM school_dashboards WHERE school_id = $1`, [ctx.schoolId]),
@@ -187,7 +194,8 @@ export const ONBOARDING_CHECKLIST: OnboardingTask[] = [
   {
     key: 'forms_published', type: 'derived', phase: 'config', owner: 'school',
     title: 'Forms published',
-    instructions: 'At least one parent form has been created and published.',
+    instructions: 'Create at least one parent form from a template and publish it.',
+    ctaHref: (loc) => `/school/${loc}/forms/new`,
     deriveDone: async (ctx) =>
       ctx.schoolId != null &&
       countExists(`SELECT COUNT(*)::int n FROM portal_form_definitions WHERE school_id = $1`, [ctx.schoolId]),
