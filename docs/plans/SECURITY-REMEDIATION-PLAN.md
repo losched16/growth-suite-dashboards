@@ -59,6 +59,53 @@ Each item below has: what/why, the exact files, the fix, and how to verify.
 
 ---
 
+## Interim posture for MCH (the one live school taking payments)
+
+**Decision: keep MCH live and accepting payments.** Shutting them off is not
+necessary and would not address any of the findings — the holes are
+data-exposure and integrity, not payment-breaking or theft-to-attacker. MCH's
+payment path is sound: amounts are server-authoritative, cards are tokenized,
+and funds settle into **MCH's own Stripe account** (an attacker cannot redirect
+a parent's payment to themselves).
+
+What is actually at risk for MCH during the interim window, and how bad:
+- **Data exposure (breach):** MCH's roster + financial-aid tax docs are
+  reachable by anyone who knows MCH's `location_id` (auto-mint 1.1 + public CSV
+  export 1.5). Gated only by obscurity today.
+- **Revenue integrity (griefing):** `family-credits` (1.4) can mark an MCH
+  invoice paid without payment; the ungated `void` route can void MCH invoices.
+  MCH silently loses revenue — attacker gains nothing.
+- **The one that touches MCH's money flow:** unauthenticated Connect
+  OAuth-start (1.3) could re-point MCH's payout account. Weight this highest
+  for a school actively collecting.
+
+All are gated only by knowledge of MCH's `location_id`/`school_id` today — so
+this is "close the window soon," not "actively on fire," absent targeting.
+
+### Quick MCH-scoped mitigations (afternoon of work; do BEFORE full Phase 1)
+
+Ordered by value. All are tenant-scoped so they can't break other schools.
+
+- [ ] **Set `require_staff_login = true` for MCH** — one DB row, no deploy.
+  Immediately kills the auto-mint (1.1) *for MCH only*; embedded access then
+  requires the staff magic-link / operator cookie. Highest-value single action.
+  Confirm MCH staff have a working `/staff` login path first so you don't lock
+  them out.
+- [ ] **Confirm `PARENT_DEMO_BYPASS` is NOT set in prod** (Phase 0 urgent item).
+- [ ] **Verify MCH's Stripe connected account is unchanged** (compare
+  `payment_accounts.stripe_account_id` to the known-good value) and, if it's a
+  small change, auth `connect-oauth/start` (1.3) so the payout account can't be
+  re-pointed.
+- [ ] **Gate the two export routes MCH data flows through** (1.5) — switch
+  `student-roster` / `family-hub` / `facts` off `authorizeExportPublic`.
+- [ ] Point `family-credits` at the session `school_id` (1.4) — small, targeted.
+
+This narrows MCH's worst-exposure window to near-zero within days, while the
+full Phase 1 build proceeds on the normal timeline. Do NOT onboard any new
+school under the partner brand until Phase 1 is fully shipped.
+
+---
+
 ## Phase 0 — Confirm runtime facts (do first; sets severity)
 
 These three facts are not knowable from code alone and change how urgent some
