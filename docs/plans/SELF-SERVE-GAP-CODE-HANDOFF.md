@@ -144,7 +144,52 @@ adds the policy/config layer.
 3. Confirm the operator `/admin` FA settings page still works (operator
    branch of the dual-auth).
 
-**Verification done in the cloud session (all four features):**
+### 5. FA award → tuition discount auto-conversion (closes the FA loop)
+
+**Why:** Converting an approved FA award into a tuition discount was a manual
+operator step (a "Create FA discount" button that POSTed `fa-to-discount`).
+Now a school decides an award and the discount is created automatically — no
+extra step, and reversing/zeroing an award cleanly removes it.
+
+**Files changed / added (3):**
+- `lib/billing/fa-discount.ts` (new) — `syncFaDiscountForApplication(q, schoolId,
+  faId)`: the single source of the award→discount mapping. Idempotent and
+  reversible — decided + award > 0 creates/updates one active
+  `discount_policies` row (`kind='financial_aid'`, keyed to the FA app,
+  applied to `['tuition','tuition_addon']`); any other state (declined,
+  withdrawn, award zeroed, back to under_review) **deactivates** the policy.
+  Takes a `q` so it runs inside a transaction.
+- `app/api/school/fa-applications/set-award/route.ts` — calls the sync inside
+  the existing award transaction, so the FA decision and its discount are
+  always atomic/consistent. This is the auto-conversion.
+- `app/api/admin/schools/[schoolId]/payments/fa-to-discount/route.ts` —
+  refactored to delegate to the shared helper (removes ~55 lines of duplicated
+  upsert logic). Keeps its operator-facing validation/errors; it's now a
+  manual re-sync / safety net rather than the primary path.
+
+**Correctness notes for review:**
+- The discount evaluator (`lib/billing/discounts.ts`) already loads only
+  `is_active = true` policies AND live-checks `fa_applications.status='decided'`
+  — so reversal is double-covered (deactivation + live status gate).
+- Auto-conversion affects **future** invoice generation only (same as the old
+  manual button); it does not retroactively rewrite already-generated invoices.
+- **Schema:** none — `discount_policies` already has the `fa_application_id`,
+  `kind='financial_aid'` columns this uses (migration 069).
+
+**Minor follow-up (not done):** the FA-Queue "Create FA discount" button
+(`FinancialAidQueue/QueueTable.tsx`) still works (idempotent re-sync) but its
+copy says "created" even when it's now a re-sync. Worth relabeling to "Re-sync
+FA discount" since creation is automatic — cosmetic, low priority.
+
+**Test on desktop:**
+1. Decide an FA award for a family → confirm a `financial_aid` discount_policy
+   appears automatically (no button click) and future tuition invoices apply it.
+2. Change that award amount and re-save → the policy's amount updates.
+3. Flip the decision to declined (or zero the award) → the policy deactivates
+   and new invoices no longer discount.
+4. The manual "Create FA discount" button still returns ok (now a re-sync).
+
+**Verification done in the cloud session (all five features):**
 - `npx tsc --noEmit` → **0 errors project-wide** (deps installed to check).
 - `npx eslint` on every changed file → clean.
 
@@ -167,10 +212,9 @@ step that currently forces you into scripts/SQL or the operator console.
    operator console" (`payments/tabs/Plans.tsx`). Add a per-installment
    due-date/amount editor to the plan-template form. *Small–medium.*
 
-4. **FA settings school tab — DONE (see Shipped #4). FA→discount — remaining.**
-   The settings tab now ships. Still operator-only: converting an approved FA
-   award into a tuition discount (`payments/fa-to-discount`) is a manual
-   operator step. Optionally auto-convert award→discount on approval. *Small–medium.*
+4. **FA settings school tab — DONE (Shipped #4). FA→discount — DONE (Shipped #5).**
+   The whole FA loop is now self-serve: a school sets its policy, decides
+   awards, and the tuition discount is created/updated/removed automatically.
 
 5. **Portal hardcoded academic year (bug).** Two constants bypass
    `settings.academic_year` in the **parent-portal** repo:
