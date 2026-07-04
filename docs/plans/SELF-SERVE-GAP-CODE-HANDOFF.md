@@ -11,6 +11,11 @@ require SQL/scripts.*
 > (Shipped list item below / remaining #5) is in **`growth-suite-parent-portal`**
 > on a branch of the **same name**. Both share the DB; deploy both.
 
+> ⚠️ **One item is NOT coded here on purpose — see "Investigation needed:
+> payment-plan schedules" near the bottom.** It's a real latent billing bug
+> that must be fixed with a running app + test enrollment (MCH is live), so I
+> documented it instead of shipping blind.
+
 ## Shipped in this batch
 
 ### 1. Grid add-ons are now school-editable (billing gap #1)
@@ -213,9 +218,12 @@ step that currently forces you into scripts/SQL or the operator console.
    operator-only pending confirmation it's actually consumed by the charge
    logic. *Trivial to surface once confirmed.*
 
-3. **Custom installment schedules.** Plans beyond 1/2/4/10/12 punt to "the
-   operator console" (`payments/tabs/Plans.tsx`). Add a per-installment
-   due-date/amount editor to the plan-template form. *Small–medium.*
+3. **Custom installment schedules — BLOCKED on a schedule-computation bug.**
+   Not just a missing UI: the schedule layer is inconsistent for non-standard
+   counts. See "Investigation needed: payment-plan schedules" below. Fix that
+   (with a test enrollment) first, then the UI is trivial — the route already
+   accepts count 1–36. Deliberately not coded in the cloud session because it's
+   live-billing date math I can't runtime-verify.
 
 4. **FA settings school tab — DONE (Shipped #4). FA→discount — DONE (Shipped #5).**
    The whole FA loop is now self-serve: a school sets its policy, decides
@@ -235,4 +243,55 @@ step that currently forces you into scripts/SQL or the operator console.
 
 Say the word and I'll implement any of these the same way — coded on the
 branch, typecheck-clean, with a test checklist, for you to review and deploy.
+
+---
+
+## Investigation needed: payment-plan schedules (real latent billing bug)
+
+**Do NOT ship a fix without a running app + a test enrollment. MCH is live and
+billing real families — a wrong fix here silently mis-dates real invoices.**
+This is why custom installment schedules were "deferred to the operator
+console." Found during the cloud session; documented, not patched.
+
+**The bug.** Two code paths compute installment due dates in
+`lib/billing/tuition-plan-generator.ts`, and they disagree with what the plans
+route stores (`defaultScheduleFor` in
+`app/api/admin/schools/[schoolId]/payments/plans/route.ts`):
+
+- `defaultScheduleFor` STORES `schedule_template.kind` as one of:
+  `single`, `semiannual`, `quarterly`, `monthly_10`, `monthly_12`, or
+  `custom` with `{ installments: N }` (no `dates`).
+- `computeDueDates` (the no-anchor path) only UNDERSTANDS
+  `single | monthly | semiannual | custom({dates})`. So:
+  - `quarterly` / `monthly_10` / `monthly_12` → `throw "Unknown schedule kind"`
+    → **enrollment generation fails**.
+  - arbitrary count → `custom` with no `dates` → `tpl.dates.map` on undefined →
+    **TypeError**.
+- `datesFromAnchor` (the path used when an enrollment has an absolute first-due
+  date — which the operator enrollment form makes REQUIRED, so it's the common
+  path) ignores the plan's month layout and steps `+1 month` each (`+6` only
+  for `semiannual`). So an anchored **quarterly plan bills 4 consecutive
+  monthly** payments instead of every-3-months — **wrong cadence, silently**.
+
+Net today: non-standard plans are only "safe" when an absolute first-due date
+is set AND a monthly cadence is acceptable. Anything else crashes or mis-spaces.
+
+**Recommended fix (in this order, verifying with a dry-run enrollment each time):**
+1. `defaultScheduleFor`: emit ONLY consumer-understood kinds — `single`,
+   `semiannual` (2), and `monthly` with the correct `months[]` for 4/10/12 AND
+   for any arbitrary N (generate an N-length month spread across the school
+   year). Stop emitting `quarterly` / `monthly_10` / `monthly_12` /
+   `custom({installments})`.
+2. Harden `computeDueDates` to tolerate LEGACY stored templates so existing
+   plan rows don't crash: treat `quarterly`/`monthly_10`/`monthly_12` as
+   `monthly` via their `.months`; treat `custom` without `dates` as a monthly
+   spread. (Additive — no migration needed.)
+3. Fix `datesFromAnchor` to honor the template's month cadence rather than
+   always stepping +1, so anchored quarterly/custom plans space correctly.
+4. THEN the UI is trivial: the route already accepts installment_count 1–36;
+   optionally add an explicit per-installment date editor that stores
+   `custom` with a real `dates[]` (which `computeDueDates` already supports).
+5. Verify: generate an enrollment for 1/2/4/6/10/12-pay, each WITH and WITHOUT
+   a first-due anchor, and eyeball every due date. Use a non-live school (or a
+   dry-run `billing_active=false` enrollment) — never MCH — for the test.
 </content>
