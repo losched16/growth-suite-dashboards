@@ -103,7 +103,48 @@ operator/infra work until the Vercel Domains API is wired (see remaining #1).
 setting the same host on a second school → friendly "already in use" error; hit
 the portal on that host (once DNS is pointed) → school branding resolves.
 
-**Verification done in the cloud session (all three features):**
+### 4. Financial-aid settings as a school-facing tab (policy self-serve)
+
+**Why:** FA settings were operator-only (`/admin/[schoolId]/financial-aid/settings`).
+A school couldn't set its own FA policy — enable/disable, required documents,
+award caps, cost-of-living context, decision-letter template, parent intro.
+Now they self-serve it from a new **Financial Aid** tab in the Payments hub.
+
+**Files changed / added (3):**
+- `app/api/admin/schools/[schoolId]/financial-aid/settings/route.ts` — auth
+  changed from operator-only (`requireOperator`) to **dual-auth**
+  (`authorizeOperatorOrSchool(schoolId)`) on GET + PUT. Still fully
+  authenticated: unauth → 401, a school session for a *different* school →
+  403 (`forbidden_cross_school`). The settings only ever affect that school's
+  own FA, so there is no cross-tenant exposure.
+- `app/school/[locationId]/payments/tabs/FinancialAid.tsx` — new tab that
+  **reuses the existing operator `SettingsForm`** client component (no
+  duplicated form logic), loading the school's settings + the shared document
+  catalog.
+- `app/school/[locationId]/payments/page.tsx` — new "Financial Aid" tab wired
+  into the hub (`school.name` passed through for the form).
+
+**Schema:** none — `school_financial_aid_settings` already exists (migration 045).
+
+**Security note for review:** this deliberately widens FA settings from
+operator-only to school-editable, per the product decision that schools own
+their own aid policy. It is NOT a new unauthenticated surface — it swaps one
+auth guard (`requireOperator`) for a stricter-scoped one
+(`authorizeOperatorOrSchool`), which is exactly the pattern the security
+remediation plan wants on every `/api/admin` route. Award *decisions*
+(`set-award`) and the FA queue were already school-session-authed; this only
+adds the policy/config layer.
+
+**Test on desktop:**
+1. In a school's Payments hub, open the **Financial Aid** tab. Toggle
+   enabled, set required docs + a max-award cap + intro copy, Save → confirm
+   it persists (reload) and the parent portal FA page reflects it.
+2. Confirm a school session cannot reach another school's FA settings
+   (the route 403s cross-school).
+3. Confirm the operator `/admin` FA settings page still works (operator
+   branch of the dual-auth).
+
+**Verification done in the cloud session (all four features):**
 - `npx tsc --noEmit` → **0 errors project-wide** (deps installed to check).
 - `npx eslint` on every changed file → clean.
 
@@ -126,11 +167,10 @@ step that currently forces you into scripts/SQL or the operator console.
    operator console" (`payments/tabs/Plans.tsx`). Add a per-installment
    due-date/amount editor to the plan-template form. *Small–medium.*
 
-4. **Financial-aid settings as a school-facing tab.** FA award settings +
-   FA→discount are operator-only (`app/admin/[schoolId]/financial-aid/*`); no
-   school tab, and award→discount is a manual conversion. Surface an FA tab in
-   the school Payments hub (dual-auth the settings route), optionally
-   auto-convert award→discount on approval. *Medium.*
+4. **FA settings school tab — DONE (see Shipped #4). FA→discount — remaining.**
+   The settings tab now ships. Still operator-only: converting an approved FA
+   award into a tuition discount (`payments/fa-to-discount`) is a manual
+   operator step. Optionally auto-convert award→discount on approval. *Small–medium.*
 
 5. **Portal hardcoded academic year (bug).** Two constants bypass
    `settings.academic_year` in the **parent-portal** repo:

@@ -1,15 +1,16 @@
 // GET  /api/admin/schools/{schoolId}/financial-aid/settings  → load
 // PUT  /api/admin/schools/{schoolId}/financial-aid/settings  → upsert
 //
-// Operator-only (uses the same SESSION_COOKIE the rest of /admin
-// pages check). Stores the row in school_financial_aid_settings.
-// Upsert keyed by (school_id) so re-saving updates in place.
+// Dual-auth: an operator OR the school's own session (scoped to this
+// schoolId — authorizeOperatorOrSchool 403s a cross-school session).
+// Schools self-serve their own FA policy from the Payments hub; the row
+// only ever affects that school's own financial aid. Stored in
+// school_financial_aid_settings, upsert keyed by (school_id).
 
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { cookies } from 'next/headers';
 import { query } from '@/lib/db';
-import { SESSION_COOKIE, verifySessionToken } from '@/lib/auth/operator';
+import { authorizeOperatorOrSchool } from '@/lib/auth/dual';
 import { getFinancialAidSettings, LEGACY_FA_DEFAULTS } from '@/lib/financial-aid/settings';
 
 export const runtime = 'nodejs';
@@ -17,21 +18,18 @@ export const dynamic = 'force-dynamic';
 
 type Params = Promise<{ schoolId: string }>;
 
-async function requireOperator() {
-  const ck = await cookies();
-  return verifySessionToken(ck.get(SESSION_COOKIE)?.value);
-}
-
 export async function GET(_req: NextRequest, { params }: { params: Params }) {
-  if (!(await requireOperator())) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   const { schoolId } = await params;
+  const auth = await authorizeOperatorOrSchool(schoolId);
+  if (!auth.ok) return auth.response;
   const settings = await getFinancialAidSettings(schoolId);
   return NextResponse.json({ settings });
 }
 
 export async function PUT(request: NextRequest, { params }: { params: Params }) {
-  if (!(await requireOperator())) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   const { schoolId } = await params;
+  const auth = await authorizeOperatorOrSchool(schoolId);
+  if (!auth.ok) return auth.response;
 
   const body = await request.json().catch(() => null) as Partial<typeof LEGACY_FA_DEFAULTS> | null;
   if (!body) return NextResponse.json({ error: 'bad_body' }, { status: 400 });
