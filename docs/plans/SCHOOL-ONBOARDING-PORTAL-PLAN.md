@@ -162,9 +162,21 @@ technique as the billing-status page, but over the non-billing setup signals.
   `loadGhlClient`. **⚠️ live GHL write — must be tested on the desktop against a
   real sub-account before trusting; apply BEFORE roster import.**
 
-**Not yet built:** the UI surfaces (school-facing page, ops board), the API
-routes (submit intake, upload doc, apply, review), auth wiring (magic-link),
-and the GHL status writeback + reminder workflows.
+**Phase 2 — school-facing slice BUILT (typecheck+eslint-clean, not deployed):**
+- `lib/onboarding/token.ts` — pre-tenant HMAC access token
+  (`ONBOARDING_TOKEN_SECRET`, falls back to `SESSION_SECRET`; 30-day TTL).
+- `app/onboarding/[token]/page.tsx` — the school-facing checklist: progress bar,
+  tasks grouped by phase, with per-type controls (intake textarea, file upload,
+  manual check-off). Token-authed, no login, server-rendered plain forms.
+- `app/api/onboarding/{submit-intake,upload-doc,toggle-manual}/route.ts` — the
+  school actions, all token-authed. Uploads → `onboarding_documents` (bytea).
+- These routes are NOT proxy-gated (they're pre-tenant) — they self-auth via
+  the signed token, following the security-plan lesson (no auto-mint).
+
+**Still to build:** ops board (create onboarding + mint/email the link, review
+docs, trigger `applyAllIntake`), and the GHL status writeback + reminder
+workflows. To test Phase 2 today: insert a `school_onboarding` row, mint a token
+with `mintOnboardingToken(id)`, open `/onboarding/<token>`.
 
 ## Build phases (suggested order)
 
