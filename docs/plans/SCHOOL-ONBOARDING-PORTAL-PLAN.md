@@ -9,19 +9,26 @@ invention.*
 
 A guided onboarding experience where a new school logs in (before they're even a
 full tenant), sees a **checklist of what's done / pending / needs-them**,
-**submits their setup documents** (roster CSV, rate card, logo, etc.), reads
-**step-by-step instructions**, and gets **automated reminders** about what's
-outstanding. The truth of "done vs pending" is **derived from real system
-state** in your DB (not self-reported), and GHL is the engine that sends the
-nudges. It's essentially a friendly wrapper + tracker over the self-serve
-capabilities already built (settings, dashboards, forms, tuition, Stripe,
-go-live).
+**submits the materials you need to build their software** (roster/import files,
+branding assets, intake vocabulary, handbook), reads **step-by-step
+instructions**, and gets **automated reminders** about what's outstanding. The
+truth of "done vs pending" is **derived from real system state** in your DB (not
+self-reported), and GHL is the engine that sends the nudges. It serves two
+audiences at once: it collects what a school must submit to get their instance
+built, and it gives **your team a live view of what's done vs missing** per
+school.
+
+> **Out of scope: billing.** Tuition, Stripe, invoicing, and go-live are handled
+> **separately by the partner** and are deliberately NOT part of this portal.
+> No task here touches payments. This portal is about getting the school's
+> *software* (roster, dashboards, forms, parent portal, branding) stood up.
 
 ## Division of labor (why this beats either extreme)
 
 - **GHL client portal alone can't do this** — it has no window into your
-  Supabase state (roster synced? Stripe connected? tuition live?), so it could
-  only show self-reported status. That's the exact thing you want to track.
+  Supabase state (roster synced? field kit provisioned? dashboards built?
+  forms published?), so it could only show self-reported status. That's the
+  exact thing you and your team want to see truthfully.
 - **A full second parent-portal-style build is overkill** — you'd duplicate
   auth/hosting/security for what is a checklist + uploads + instructions.
 - **So:** your app owns the *truth* (derived status) and the *checklist UI*;
@@ -32,7 +39,8 @@ go-live).
 
 | Need | Reuse |
 |---|---|
-| Per-school real-status derivation | `app/admin/billing-status/page.tsx` already derives Stripe/enrollments/invoices/billing_active per school — extend its queries to all onboarding steps |
+| Per-school real-status derivation | `app/admin/billing-status/page.tsx` is the *technique* to copy (per-school COUNT/EXISTS subqueries into a status grid) — but this portal derives from **non-billing** signals: field audit, roster sync, dashboards, forms, settings. Build a new `/admin/onboarding` board rather than extending the billing one |
+| Field-readiness signal | `lib/onboarding/field-audit.ts` + `app/admin/[schoolId]/field-audit` already grade a location's GHL fields (green/blocking) — a ready-made derived task |
 | Document upload storage | `school_documents` (migration 049) — bytea-in-row pattern; add a school→us intake variant |
 | Pre-tenant auth (login before they're a tenant) | `lib/auth/staff-magic-link.ts` — signed, single-use, 15-min links emailed via Resend |
 | Post-provision auth | existing embedded school shell (`/school/[locationId]/*`) |
@@ -51,7 +59,7 @@ links to `school_id` once provisioned.
   `id`, `ghl_contact_id` (the lead), `ghl_location_id` (once known),
   `school_id` (NULL until provisioned), `school_name`, `contact_name`,
   `contact_email`, `stage` (denormalized from derivation for GHL sync),
-  `target_go_live`, `assigned_ops_email`, `notes`, `created_at`, `updated_at`.
+  `target_launch_date`, `assigned_ops_email`, `notes`, `created_at`, `updated_at`.
 - **`onboarding_task_state`** — state for the *non-derived* tasks only
   (document submissions, manual acknowledgements, operator sign-offs):
   `onboarding_id`, `task_key`, `status` (`pending`|`submitted`|`approved`|`rejected`|`skipped`),
@@ -70,21 +78,25 @@ A single source-of-truth list in `lib/onboarding/checklist.ts` defining every
 onboarding step. Each task is one of three types:
 
 - **`derived`** — status computed from DB (has a `deriveStatus(ctx)` fn).
-  Examples: *Account created* (`schools` row), *Roster imported*
-  (`families` count > 0), *Stripe connected* (`payment_accounts.charges_enabled`),
-  *Tuition configured* (`tuition_grids` + `payment_plans` exist),
-  *Dashboards set up* (`school_dashboards` count), *Forms published*
-  (`portal_form_definitions` count), *Billing live* (`billing_active`).
-- **`document`** — school uploads a file (roster CSV, rate card, logo, W-9,
-  handbook). Status from `onboarding_documents`.
-- **`manual`** — a checkbox/acknowledgement (e.g. "watched the setup video",
-  "confirmed intake vocabulary") or an operator sign-off. Status from
-  `onboarding_task_state`.
+  Examples (all NON-billing): *Account created* (`schools` row exists),
+  *GHL fields provisioned / audit green* (`lib/onboarding/field-audit.ts`),
+  *Roster imported* (`families`/`students` count > 0), *Dashboards set up*
+  (`school_dashboards` count > 0), *Forms published*
+  (`portal_form_definitions` where published), *Branding set*
+  (`school_branding` has logo/colors), *Parent portal configured*
+  (`schools.settings` academic_year + gate set).
+- **`document`** — school uploads a file: roster/import file, logo + brand
+  colors, intake vocabulary sheet (grade levels / programs / classrooms),
+  parent handbook, calendar. Status from `onboarding_documents`.
+- **`manual`** — a checkbox/acknowledgement (e.g. "watched the setup walkthrough",
+  "confirmed intake vocabulary is correct", "reviewed the built dashboards") or
+  an **operator sign-off** (e.g. ops marks "roster reviewed & imported"). Status
+  from `onboarding_task_state`.
 
 Each task also carries: `title`, `instructions` (markdown), `owner`
-(`school`|`ops`), `phase` (maps to your 5-phase model), `blockedBy` (task keys),
-`ctaHref` (deep-link into the actual self-serve surface that completes it —
-e.g. the Stripe connect tab, the tuition Grids tab).
+(`school`|`ops`), `phase`, `blockedBy` (task keys), `ctaHref` (deep-link into
+the surface that completes it — e.g. the field-audit page, the dashboard
+template gallery, the form builder, the portal settings page).
 
 ## Status-derivation engine
 
@@ -93,7 +105,8 @@ onboarding row, resolves `school_id` if present, runs each task's
 `deriveStatus`/state lookup, applies `blockedBy` gating, and returns the full
 checklist with `{ status, completedAt, blocked, ctaHref }` plus an overall
 `stage` + `percentComplete`. This is the shared truth used by the school view,
-the ops board, and the GHL writeback. Extends the existing billing-status query.
+the ops board, and the GHL writeback. Uses the same per-school COUNT/EXISTS
+technique as the billing-status page, but over the non-billing setup signals.
 
 ## Surfaces to build
 
@@ -107,10 +120,11 @@ the ops board, and the GHL writeback. Extends the existing billing-status query.
 - Reuses the form/file-upload UI + `sendBrandedEmail` for confirmations.
 
 ### 2. Ops onboarding board
-- Extend `/admin/billing-status` into `/admin/onboarding`: every prospect/school,
-  their stage, `% complete`, days-in-stage, what's blocking, last activity,
-  pending doc reviews. Operator can approve/reject submitted docs, mark manual
-  sign-offs, and trigger a reminder (fires the GHL workflow).
+- A new `/admin/onboarding` board (same grid technique as billing-status, but
+  non-billing signals): every prospect/school, `% complete`, days-in-stage,
+  what's blocking, last activity, pending doc reviews. Your team can
+  approve/reject submitted docs, mark manual sign-offs, and trigger a reminder
+  (fires the GHL workflow). This is the "what's done vs missing" view for the team.
 
 ### 3. GHL integration (the comms engine)
 - A **"School Onboarding" pipeline** in the agency location; each
@@ -142,15 +156,18 @@ the ops board, and the GHL writeback. Extends the existing billing-status query.
 3. **Ops board** — extend billing-status; doc review + manual sign-offs.
 4. **GHL sync** — pipeline mapping + nightly status writeback + reminder
    workflows.
-5. **Content + polish** — per-step instructions (from SCHOOL_ONBOARDING.md),
-   email templates, target-go-live tracking, "stuck" highlighting.
+5. **Content + polish** — per-step instructions (the non-billing steps from
+   SCHOOL_ONBOARDING.md, rewritten for schools), email templates, target-launch
+   tracking, "stuck" highlighting.
 
 ## How this ties to the self-serve work already shipped
 
-Every `derived` task's "done" state is literally one of the self-serve features
-from this session (settings configured, dashboards added, forms published,
-tuition/grids/plans set, Stripe connected, go-live). So the onboarding portal is
-the **guided front-door** that walks a school through the self-serve platform
-and tracks their progress through it — the capstone that makes "sign up → live"
-feel like one flow instead of a pile of separate tabs.
+Every `derived` task's "done" state is one of the **non-billing** self-serve
+features from this session — parent-portal settings configured, dashboards added
+from the gallery, forms published from templates, branding set, field kit
+provisioned / audit green, roster synced. So the onboarding portal is the
+**guided front-door** that walks a school through standing up their software and
+tracks their progress — the capstone that makes "sign up → software built" feel
+like one flow instead of a pile of separate tabs. (Billing/tuition setup runs on
+the partner's separate track and is intentionally absent here.)
 </content>
