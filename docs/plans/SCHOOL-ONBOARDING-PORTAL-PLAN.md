@@ -191,10 +191,26 @@ opens it, submits intake + uploads docs → operator reviews docs and clicks
 Apply-to-GHL. The only piece needing a live sub-account to verify is the GHL
 push itself.
 
-**Still to build (optional / later):** email the link automatically (vs
-copy-paste), the GHL status writeback + reminder workflows (nightly cron pushes
-`stage`/`percent` onto the GHL contact so workflows can nudge), and persisting
-`percent_complete`/`stage` so the board doesn't recompute per row at scale.
+**Phase 4 — email + automated reminders BUILT (typecheck+eslint-clean, not deployed):**
+- `lib/onboarding/email.ts` — `sendOnboardingLinkEmail` + `sendOnboardingReminderEmail`
+  via the shared `sendBrandedEmail` (schoolId null → generic Growth Suite sender
+  for leads). Absolute links from `APP_BASE_URL` (falls back to the vercel domain).
+- `app/api/admin/onboarding/[id]/send-link` + an "Email the link" button on the
+  detail page.
+- `app/api/cron/onboarding-reminders` (migration 073 adds `last_reminded_at` +
+  `last_status_at`) — nightly: recomputes + **persists** `percent_complete`/`stage`
+  (fixes the per-row recompute-at-scale concern) and nudges schools with
+  outstanding actionable items (2-day grace after creation, 4-day reminder
+  cadence, fail-closed cron auth). Scheduled in `vercel.json` at 15:00 UTC.
+
+Note: reminders go out **directly via Resend** (we own the status + the email),
+rather than routing through GHL — simpler and no agency-GHL-API dependency. A
+GHL-contact status writeback (so GHL workflows can also branch on progress)
+remains an optional later add if you want reminders inside GHL specifically.
+
+**Env needed:** `ONBOARDING_TOKEN_SECRET` (or `SESSION_SECRET`), `APP_BASE_URL`
+(for absolute email links), `RESEND_API_KEY` (already set for other email),
+`CRON_SECRET` (already set for other crons).
 
 ## Build phases (suggested order)
 

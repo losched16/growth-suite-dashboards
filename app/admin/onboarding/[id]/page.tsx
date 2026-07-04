@@ -92,6 +92,11 @@ export default async function OnboardingDetailPage({ params, searchParams }: { p
           <h2 className="text-sm font-semibold text-slate-900">Onboarding link for the school</h2>
           <p className="mt-0.5 text-[11px] text-slate-500">Send this to {meta.contact_email}. No login needed; valid 30 days.</p>
           <input readOnly value={link} className="mt-2 w-full rounded-md border border-slate-300 bg-slate-50 px-3 py-1.5 font-mono text-[11px] text-slate-700" />
+          <form action={`/api/admin/onboarding/${id}/send-link`} method="POST" className="mt-2">
+            <button type="submit" className="rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700">
+              Email the link to {meta.contact_email}
+            </button>
+          </form>
         </section>
 
         {/* Meta / linking */}
