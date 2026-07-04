@@ -25,6 +25,7 @@ interface BrandingRow {
   primary_color_fg: string | null;
   support_email: string | null;
   support_phone: string | null;
+  custom_host: string | null;
   portal_hidden_nav: string[] | null;
 }
 
@@ -38,7 +39,7 @@ export default async function SchoolSettingsPage({
 
   const { rows } = await query<BrandingRow>(
     `SELECT display_name, logo_url, primary_color, primary_color_soft, primary_color_fg,
-            support_email, support_phone, portal_hidden_nav
+            support_email, support_phone, custom_host, portal_hidden_nav
        FROM school_branding WHERE school_id = $1`,
     [school.id],
   );
@@ -74,6 +75,23 @@ export default async function SchoolSettingsPage({
               <Field label="Foreground (text on soft)" name="primary_color_fg" defaultValue={b?.primary_color_fg ?? '#064e3b'} mono />
               <Field label="Support email" name="support_email" type="email" defaultValue={b?.support_email ?? ''} />
               <Field label="Support phone" name="support_phone" type="tel" defaultValue={b?.support_phone ?? ''} />
+            </div>
+            <div className="border-t border-slate-100 pt-3">
+              <label className="block">
+                <span className="text-[11px] font-medium text-slate-600">Custom portal domain (optional)</span>
+                <input
+                  type="text"
+                  name="custom_host"
+                  defaultValue={b?.custom_host ?? ''}
+                  placeholder="portal.yourschool.org"
+                  className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm font-mono focus:border-emerald-600 focus:outline-none"
+                />
+              </label>
+              <p className="mt-1 text-[11px] text-slate-500">
+                The domain parents use to reach your portal. Enter just the hostname — no{' '}
+                <span className="font-mono">https://</span>. <strong>Coordinate with us first:</strong>{' '}
+                the domain only works once DNS + hosting are pointed to Growth Suite. Leave blank to use the default portal URL.
+              </p>
             </div>
           </section>
 

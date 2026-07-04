@@ -99,11 +99,10 @@ export async function PaymentsHubSettings({
         </div>
         <form action={`/api/admin/schools/${schoolId}/payments/config`} method="POST" className="space-y-3">
           <input type="hidden" name="return_to" value={settingsReturnTo} />
-          {/* Round-trip fields this compact form doesn't edit so the
-              shared config endpoint doesn't reset them to defaults. */}
+          {/* autopay_days isn't edited in this compact form; round-trip it
+              so the shared config endpoint doesn't reset it. The late-fee
+              fields ARE edited below (see the "Late fees" group). */}
           <input type="hidden" name="autopay_days" value={(cfg.autopay_days ?? [1, 15]).join(', ')} />
-          <input type="hidden" name="late_fee_amount" value={((cfg.late_fee_amount_cents ?? 0) / 100).toFixed(2)} />
-          <input type="hidden" name="late_fee_grace_days" value={String(cfg.late_fee_grace_days ?? 3)} />
           <SettingsGroup title="Payment methods accepted">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <Toggle name="card_enabled" defaultChecked={cfg.card_enabled} label="Credit / debit cards" />
@@ -160,6 +159,27 @@ export async function PaymentsHubSettings({
                 />
                 <span>days</span>
               </label>
+            </div>
+          </SettingsGroup>
+
+          <SettingsGroup
+            title="Late fees"
+            description="Optional. When set, an overdue tuition invoice is charged this flat late fee once, after the grace period passes. Set the amount to $0 to turn late fees off entirely.">
+            <div className="flex flex-wrap items-end gap-4">
+              <Field label="Late fee amount ($)">
+                <input
+                  type="number" step="0.01" min="0" name="late_fee_amount"
+                  defaultValue={((cfg.late_fee_amount_cents ?? 0) / 100).toFixed(2)}
+                  className={inputCls + ' w-28 text-right font-mono tabular-nums'}
+                />
+              </Field>
+              <Field label="Grace period (days)">
+                <input
+                  type="number" min="0" max="90" name="late_fee_grace_days"
+                  defaultValue={String(cfg.late_fee_grace_days ?? 3)}
+                  className={inputCls + ' w-24 text-right tabular-nums'}
+                />
+              </Field>
             </div>
           </SettingsGroup>
 
