@@ -49,9 +49,6 @@ export default async function OnboardingBoardPage({
             <p className="text-sm text-slate-500">Track what each school has done, submitted, or still needs.</p>
           </div>
           <div className="flex items-center gap-3">
-            <Link href="/admin/onboarding/guides" className="whitespace-nowrap text-xs text-blue-700 hover:underline">
-              Edit guides
-            </Link>
             <Link href={showArchived ? '/admin/onboarding' : '/admin/onboarding?archived=1'} className="whitespace-nowrap text-xs text-slate-500 hover:text-slate-700 hover:underline">
               {showArchived ? '← Active' : 'Show archived'}
             </Link>

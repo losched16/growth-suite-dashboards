@@ -11,7 +11,6 @@ import { notFound } from 'next/navigation';
 import { query } from '@/lib/db';
 import { verifyOnboardingToken } from '@/lib/onboarding/token';
 import { computeOnboarding, type ResolvedTask } from '@/lib/onboarding/status';
-import { loadGuides, type TaskGuide } from '@/lib/onboarding/guides';
 import {
   CHECKLIST_BY_KEY, PHASE_ORDER, PHASE_LABELS,
   type IntakeTask, type DocumentTask, type Phase,
@@ -71,10 +70,6 @@ export default async function OnboardingPage({
     docsByKey.set(d.task_key, arr);
   }
 
-  // Per-task help content (Freshdesk article + optional video). Content lives
-  // in Freshdesk; we just link to it.
-  const guides = await loadGuides();
-
   return (
     <Shell>
       {/* Header + progress */}
@@ -89,6 +84,15 @@ export default async function OnboardingPage({
             {snap.counts.done}/{snap.counts.total} · {snap.percentComplete}%
           </span>
         </div>
+      </div>
+
+      {/* Point to the Support Center for step-by-step how-to's. The how-to
+          guides live in the Help Center (a separate menu item), NOT inline —
+          this page is only for setting up the school's system. */}
+      <div className="mb-6 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
+        💬 <span className="font-semibold">Need step-by-step help with any task?</span>{' '}
+        Open <span className="font-semibold">Help &amp; Guides</span> from your menu — it has a
+        walkthrough for every step (booking calendar, business settings, and more).
       </div>
 
       {sp.msg ? <Toast kind="ok" text={sp.msg} /> : null}
@@ -109,7 +113,6 @@ export default async function OnboardingPage({
                   task={t}
                   token={token}
                   locationId={locationId}
-                  guide={guides.get(t.key) ?? null}
                   values={valuesByKey.get(t.key) ?? []}
                   docs={docsByKey.get(t.key) ?? []}
                 />
@@ -127,12 +130,11 @@ export default async function OnboardingPage({
 }
 
 function TaskCard({
-  task, token, locationId, guide, values, docs,
+  task, token, locationId, values, docs,
 }: {
   task: ResolvedTask;
   token: string;
   locationId: string | null;
-  guide: TaskGuide | null;
   values: string[];
   docs: { name: string; status: string }[];
 }) {
@@ -159,24 +161,6 @@ function TaskCard({
         </div>
         <StatusBadge status={task.status} />
       </div>
-
-      {/* Help content — links to the Freshdesk guide + optional video. */}
-      {guide && (guide.guide_url || guide.video_url) ? (
-        <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1">
-          {guide.guide_url ? (
-            <a href={guide.guide_url} target="_blank" rel="noreferrer"
-               className="inline-flex items-center gap-1 text-xs font-semibold text-blue-700 hover:underline">
-              📘 {guide.guide_label || 'Step-by-step guide'} →
-            </a>
-          ) : null}
-          {guide.video_url ? (
-            <a href={guide.video_url} target="_blank" rel="noreferrer"
-               className="inline-flex items-center gap-1 text-xs font-semibold text-blue-700 hover:underline">
-              ▶ Watch the walkthrough
-            </a>
-          ) : null}
-        </div>
-      ) : null}
 
       {task.status === 'blocked' ? (
         <p className="mt-2 text-[11px] text-slate-500 italic">
