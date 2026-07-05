@@ -232,7 +232,8 @@ function Component({
             Portal Forms — {school.schoolName}
           </h2>
           <p className="mt-1 text-xs text-gray-600">
-            {data.stats.total_students} enrolled students across {data.stats.enrolled_families} families ·{' '}
+            {data.stats.total_students - (data.stats.pending_students ?? 0)} enrolled students
+            {data.stats.pending_students ? ` + ${data.stats.pending_students} pending` : ''} across {data.stats.enrolled_families} families ·{' '}
             Last loaded {new Date(data.last_loaded_at).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit', second: '2-digit' })}
           </p>
           {config.enrolled_tag || config.excluded_tag ? (
@@ -259,10 +260,10 @@ function Component({
           for context. */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <StatCard
-          value={data.stats.total_students}
+          value={data.stats.total_students - (data.stats.pending_students ?? 0)}
           label="Enrolled Students"
           color="text-emerald-700"
-          sublabel={`${data.stats.enrolled_families} families`}
+          sublabel={`${data.stats.enrolled_families} families${data.stats.pending_students ? ` · +${data.stats.pending_students} pending` : ''}`}
         />
         <StatCard
           value={data.stats.students_fully_complete}

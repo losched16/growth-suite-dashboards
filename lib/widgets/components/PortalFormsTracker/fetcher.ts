@@ -6,6 +6,7 @@
 //      from portal_form_submissions
 
 import { query } from '@/lib/db';
+import { loadSchoolSettings } from '@/lib/school-settings';
 import type { SchoolContext, WidgetSearchParams } from '@/lib/widgets/types';
 import type { PortalFormsTrackerConfig } from './config';
 
@@ -61,6 +62,10 @@ export interface PortalFormsTrackerData {
     // applicable per-student form for them AND every family-level form
     // for their family has been submitted.
     total_students: number;
+    // Of total_students, how many are pending (only nonzero when the
+    // include_pending config is on) — surfaced so the header can label
+    // them instead of silently inflating the "enrolled" number.
+    pending_students: number;
     students_fully_complete: number;
     students_in_progress: number;
     students_not_started: number;
@@ -83,6 +88,7 @@ interface DbStudent {
   first_name: string;
   last_name: string;
   preferred_name: string | null;
+  enrollment_status: string | null;
 }
 
 interface DbFamilyMeta {
@@ -138,15 +144,31 @@ export async function fetcher(
     [school.schoolId, categories],
   );
 
-  // 2. Enrolled families + students
+  // 2. Enrolled students — the SAME strict rule as the Student Roster:
+  //    active student whose current-year enrollment status (from the GHL
+  //    contact record, via the enrollments table) is 'enrolled'. Demo
+  //    records excluded like every other hub. include_pending widens the
+  //    scope to mid-admissions families doing their enrollment paperwork.
+  const settings = await loadSchoolSettings(school.schoolId);
+  const enrollmentScope = config.include_pending ? ['enrolled', 'pending'] : ['enrolled'];
   const { rows: students } = await query<DbStudent>(
     `SELECT s.id AS student_id, s.family_id,
-            s.first_name, s.last_name, s.preferred_name
+            s.first_name, s.last_name, s.preferred_name,
+            e.status AS enrollment_status
        FROM students s
+       LEFT JOIN LATERAL (
+         -- Prefer the selected academic year's enrollment; fall back to
+         -- the most recent one (mirrors StudentRosterRich).
+         SELECT e2.status FROM enrollments e2 WHERE e2.student_id = s.id
+          ORDER BY (e2.academic_year = $2) DESC, e2.created_at DESC LIMIT 1
+       ) e ON true
       WHERE s.school_id = $1 AND s.status = 'active'
+        AND (s.metadata->>'is_demo') IS DISTINCT FROM 'true'
+        AND e.status = ANY($3::text[])
       ORDER BY s.family_id, s.first_name`,
-    [school.schoolId],
+    [school.schoolId, settings.academic_year, enrollmentScope],
   );
+  const scopedFamilyIds = [...new Set(students.map((s) => s.family_id))];
 
   // 3. Family metadata + primary parent. The optional tag filter
   // (enrolled_tag / excluded_tag) checks every parent on the family —
@@ -164,10 +186,10 @@ export async function fetcher(
             (SELECT ghl_contact_id FROM parents p WHERE p.family_id = f.id AND p.is_primary = true LIMIT 1) AS primary_ghl_contact_id
        FROM families f
       WHERE f.school_id = $1
-        AND EXISTS (
-          SELECT 1 FROM students s
-           WHERE s.family_id = f.id AND s.school_id = $1 AND s.status = 'active'
-        )
+        -- Only families with at least one in-scope (enrolled) student —
+        -- derived from the scoped student list above so the family count
+        -- can never disagree with the student count.
+        AND f.id = ANY($4::uuid[])
         AND ($2::text = '' OR EXISTS (
           SELECT 1 FROM parents p
             JOIN ghl_contact_tags t ON t.ghl_contact_id = p.ghl_contact_id AND t.school_id = $1
@@ -180,7 +202,7 @@ export async function fetcher(
            WHERE p.family_id = f.id AND p.status = 'active'
              AND lower(t.tag) = $3
         ))`,
-    [school.schoolId, enrolledTag, excludedTag],
+    [school.schoolId, enrolledTag, excludedTag, scopedFamilyIds],
   );
 
   // 4. All submissions for these forms (one query, then bucketed in code)
@@ -374,6 +396,7 @@ export async function fetcher(
     families_in_progress: rows.filter((r) => r.status === 'in_progress').length,
     families_not_started: rows.filter((r) => r.status === 'not_started').length,
     total_students: rows.reduce((acc, r) => acc + r.enrolled_student_count, 0),
+    pending_students: students.filter((s) => s.enrollment_status === 'pending').length,
     students_fully_complete: studentsFullyComplete,
     students_in_progress: studentsInProgress,
     students_not_started: studentsNotStarted,
