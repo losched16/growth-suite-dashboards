@@ -28,6 +28,12 @@ export interface PortalFormsTrackerConfig {
   // GHL workflow Joe set up: tag a contact "withdrawn" → they fall
   // out of the dashboards on the next refresh.
   excluded_tag?: string;
+  // Also include students whose current-year enrollment status is
+  // 'pending' (mid-admissions families doing their enrollment
+  // paperwork). Off by default: the tracker counts ONLY
+  // currently-enrolled students — the same strict GHL
+  // enrollment-status rule as the Student Roster, so the two agree.
+  include_pending?: boolean;
 }
 
 export const portalFormsTrackerDefaults: PortalFormsTrackerConfig = {
@@ -38,12 +44,14 @@ export const portalFormsTrackerDefaults: PortalFormsTrackerConfig = {
   categories: [],
   enrolled_tag: 'enrolled - 26/27',
   excluded_tag: 'withdrawn',
+  include_pending: false,
 };
 
 export const portalFormsTrackerSchema: ConfigSchema = {
   fields: [
     { key: 'enrolled_tag', label: 'Enrolled tag (case-insensitive, leave empty for all families)', type: 'text' },
     { key: 'excluded_tag', label: 'Excluded tag (e.g. "withdrawn")', type: 'text' },
+    { key: 'include_pending', label: 'Also show pending (mid-admissions) students', type: 'boolean' },
     { key: 'auto_refresh_ms', label: 'Auto-refresh interval (ms, 0 = off)', type: 'number', min: 0, max: 600_000 },
   ],
 };
