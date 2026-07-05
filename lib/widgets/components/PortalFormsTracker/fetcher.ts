@@ -46,6 +46,10 @@ export interface FamilyRow {
   complete_count: number;
   pct: number;
   status: 'complete' | 'in_progress' | 'not_started';
+  // How many of this family's tracked students are pending (mid-admissions).
+  // Nonzero → the row gets a "pending" badge so the office can tell who's
+  // still in process vs. currently enrolled.
+  pending_student_count: number;
 }
 
 export interface PortalFormsTrackerData {
@@ -150,7 +154,10 @@ export async function fetcher(
   //    records excluded like every other hub. include_pending widens the
   //    scope to mid-admissions families doing their enrollment paperwork.
   const settings = await loadSchoolSettings(school.schoolId);
-  const enrollmentScope = config.include_pending ? ['enrolled', 'pending'] : ['enrolled'];
+  // Default ON — only an explicit false pins the tracker to enrolled-only,
+  // so widgets saved before this option existed get the intended behavior.
+  const includePending = config.include_pending !== false;
+  const enrollmentScope = includePending ? ['enrolled', 'pending'] : ['enrolled'];
   const { rows: students } = await query<DbStudent>(
     `SELECT s.id AS student_id, s.family_id,
             s.first_name, s.last_name, s.preferred_name,
@@ -340,6 +347,7 @@ export async function fetcher(
       complete_count: completeCount,
       pct,
       status,
+      pending_student_count: familyStudents.filter((s) => s.enrollment_status === 'pending').length,
     });
   }
 
