@@ -12,6 +12,7 @@ import type { NextRequest } from 'next/server';
 import { cookies } from 'next/headers';
 import { SCHOOL_SESSION_COOKIE, verifySchoolSession } from '@/lib/auth/school';
 import { query, withTransaction } from '@/lib/db';
+import { syncFaDiscountForApplication } from '@/lib/billing/fa-discount';
 
 export const dynamic = 'force-dynamic';
 
@@ -91,6 +92,12 @@ export async function POST(request: NextRequest) {
         applicationId,
       ],
     );
+
+    // Auto-convert the award into a tuition discount (or deactivate it if
+    // the award was reversed). Runs in the same transaction so the FA
+    // decision and its discount are always consistent — no separate
+    // "convert to discount" operator step needed.
+    await syncFaDiscountForApplication(q, session.school_id, applicationId);
   });
 
   // Fire-and-forget parent notification on decision. We look up the

@@ -9,8 +9,15 @@
 // _reseed_dgm_tuition.mjs) for ongoing grid management. Operators
 // adjust grids in-iframe; no script runs needed.
 
-import { Plus, Edit3, Power, PowerOff } from 'lucide-react';
+import { Plus, Edit3, Power, PowerOff, Layers } from 'lucide-react';
 import { query } from '@/lib/db';
+
+interface Addon {
+  key: string;
+  label: string;
+  amount_cents: number;
+  required?: boolean;
+}
 
 interface GridRow {
   id: string;
@@ -21,6 +28,7 @@ interface GridRow {
   annual_tuition_cents: number;
   is_active: boolean;
   position: number;
+  addons: Addon[] | null;
 }
 
 export async function PaymentsHubGrids({
@@ -28,7 +36,7 @@ export async function PaymentsHubGrids({
 }: { schoolId: string; locationId: string }) {
   const { rows } = await query<GridRow>(
     `SELECT id, academic_year, program, grade_level, display_name,
-            annual_tuition_cents, is_active, position
+            annual_tuition_cents, is_active, position, addons
        FROM tuition_grids
       WHERE school_id = $1
       ORDER BY academic_year DESC, position, display_name`,
@@ -106,6 +114,16 @@ export async function PaymentsHubGrids({
             </Field>
           </div>
 
+          <details className="rounded-md border border-slate-200 bg-slate-50/60">
+            <summary className="cursor-pointer list-none px-3 py-2 flex items-center gap-2 text-xs font-semibold text-slate-700 hover:bg-slate-100">
+              <Layers className="h-3.5 w-3.5" />
+              Optional: add-ons (extended day, hot lunch, materials fee&hellip;)
+            </summary>
+            <div className="px-3 pb-3 pt-1">
+              <AddonEditor existing={[]} />
+            </div>
+          </details>
+
           <div className="flex items-center gap-2 pt-2">
             <button type="submit" className="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">
               Create grid
@@ -137,6 +155,7 @@ export async function PaymentsHubGrids({
                 <th className="px-4 py-2 font-medium">Program</th>
                 <th className="px-4 py-2 font-medium">Grade level</th>
                 <th className="px-4 py-2 font-medium text-right">Annual</th>
+                <th className="px-4 py-2 font-medium">Add-ons</th>
                 <th className="px-4 py-2 font-medium text-right">Position</th>
                 <th className="px-4 py-2 font-medium text-center">Active</th>
                 <th className="px-4 py-2 font-medium text-right">Actions</th>
@@ -176,6 +195,21 @@ function GridRowEditor({
       <td className="px-4 py-2 text-xs text-slate-700">{grid.grade_level ?? '—'}</td>
       <td className="px-4 py-2 text-right font-mono text-sm text-slate-900 tabular-nums">
         ${(grid.annual_tuition_cents / 100).toLocaleString()}
+      </td>
+      <td className="px-4 py-2 text-xs text-slate-600">
+        {(grid.addons?.length ?? 0) === 0 ? (
+          <span className="text-slate-400">—</span>
+        ) : (
+          <ul className="space-y-0.5">
+            {grid.addons!.map((a) => (
+              <li key={a.key} className="whitespace-nowrap">
+                {a.label}{' '}
+                <span className="font-mono tabular-nums text-slate-500">${(a.amount_cents / 100).toLocaleString()}</span>
+                {a.required ? <span className="ml-1 text-[9px] font-bold uppercase text-amber-700">req</span> : null}
+              </li>
+            ))}
+          </ul>
+        )}
       </td>
       <td className="px-4 py-2 text-right text-xs tabular-nums text-slate-500">{grid.position}</td>
       <td className="px-4 py-2 text-center">
@@ -239,8 +273,71 @@ function GridRowEditor({
             </button>
           </form>
         )}
+        {' '}
+        <details className="inline-block">
+          <summary className="cursor-pointer list-none inline-flex items-center gap-1 rounded border border-slate-300 bg-white px-2 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-50">
+            <Layers className="h-3 w-3" /> Add-ons{(grid.addons?.length ?? 0) > 0 ? ` (${grid.addons!.length})` : ''}
+          </summary>
+          <form action={apiUrl} method="POST" className="absolute right-4 z-10 mt-1 w-[26rem] rounded-md border border-slate-300 bg-white p-3 shadow-lg space-y-2 text-left">
+            <input type="hidden" name="op" value="set_addons" />
+            <input type="hidden" name="id" value={grid.id} />
+            <input type="hidden" name="return_to" value={returnTo} />
+            <p className="text-[11px] text-slate-500">
+              Rate-card add-ons for this grid. Leave a row blank to remove it. Changes apply to
+              <strong> new</strong> enrollments only.
+            </p>
+            <AddonEditor existing={grid.addons ?? []} />
+            <button type="submit" className="rounded-md bg-blue-600 px-3 py-1 text-xs font-semibold text-white hover:bg-blue-700">
+              Save add-ons
+            </button>
+          </form>
+        </details>
       </td>
     </tr>
+  );
+}
+
+// ── Add-ons editor: fixed set of slots, prefilled from existing ────────
+// Renders ADDON_SLOTS rows of (label, amount, required, hidden key). The
+// save route (parseAddons) reads addon_label_i / addon_amount_i /
+// addon_required_i / addon_key_i and replaces the grid's whole addons array.
+// Server-rendered, no client JS — matching the rest of this hub.
+const ADDON_SLOTS = 8;
+
+function AddonEditor({ existing }: { existing: Addon[] }) {
+  // Show every existing add-on plus 2 spare blank rows (capped at ADDON_SLOTS)
+  // so a school can add a couple without any client-side "add row" JS.
+  const shown = Math.min(ADDON_SLOTS, Math.max(existing.length + 2, 3));
+  const slots = Array.from({ length: shown }, (_, i) => existing[i] ?? null);
+  return (
+    <div className="space-y-1.5">
+      <div className="grid grid-cols-[1fr_5.5rem_auto] gap-2 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+        <span>Label</span>
+        <span className="text-right">Amount $</span>
+        <span title="Force this add-on onto every enrollment for this grid">Req</span>
+      </div>
+      {slots.map((a, i) => (
+        <div key={i} className="grid grid-cols-[1fr_5.5rem_auto] gap-2 items-center">
+          <input
+            type="text" name={`addon_label_${i}`} defaultValue={a?.label ?? ''} maxLength={80}
+            placeholder="e.g. Extended Day"
+            className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-200"
+          />
+          <input
+            type="number" step="0.01" min="0" name={`addon_amount_${i}`}
+            defaultValue={a ? (a.amount_cents / 100).toFixed(2) : ''}
+            placeholder="0.00"
+            className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs font-mono text-right tabular-nums focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-200"
+          />
+          <input type="hidden" name={`addon_key_${i}`} defaultValue={a?.key ?? ''} />
+          <input
+            type="checkbox" name={`addon_required_${i}`} defaultChecked={a?.required ?? false}
+            className="h-4 w-4 justify-self-center rounded border-slate-300 text-blue-600 focus:ring-blue-200"
+            title="Required — always billed for this grid"
+          />
+        </div>
+      ))}
+    </div>
   );
 }
 

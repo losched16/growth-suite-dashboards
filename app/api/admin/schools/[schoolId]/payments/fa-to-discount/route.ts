@@ -15,6 +15,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { query } from '@/lib/db';
+import { syncFaDiscountForApplication } from '@/lib/billing/fa-discount';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -60,61 +61,15 @@ export async function POST(request: NextRequest, { params }: { params: Params })
   if (!Number.isFinite(awardDollars) || awardDollars <= 0) {
     return NextResponse.json({ error: 'no_recommended_award' }, { status: 409 });
   }
-  const awardCents = Math.round(awardDollars * 100);
 
-  // Idempotent: return existing policy if one already points at this FA app.
-  const { rows: existingRows } = await query<{ id: string }>(
-    `SELECT id FROM discount_policies
-      WHERE school_id = $1 AND fa_application_id = $2 LIMIT 1`,
-    [schoolId, faId],
-  );
-  if (existingRows[0]) {
-    // Refresh the amount in case the operator bumped the award since the
-    // policy was first created. Re-activates if it was disabled.
-    await query(
-      `UPDATE discount_policies
-          SET amount_cents = $1,
-              max_discount_cents = $1,
-              is_active = true,
-              updated_at = now()
-        WHERE id = $2`,
-      [awardCents, existingRows[0].id],
-    );
-    return NextResponse.json({ ok: true, discount_policy_id: existingRows[0].id, action: 'updated' });
-  }
-
-  // Resolve family display name for the policy label
-  const { rows: famRows } = await query<{ display_name: string | null }>(
-    `SELECT COALESCE(NULLIF(f.display_name, ''),
-                     CONCAT_WS(' ', p.first_name, p.last_name),
-                     '(unnamed family)') AS display_name
-       FROM families f
-       LEFT JOIN LATERAL (
-         SELECT first_name, last_name FROM parents
-         WHERE family_id = f.id AND is_primary = true LIMIT 1
-       ) p ON true
-      WHERE f.id = $1`,
-    [fa.family_id],
-  );
-  const familyName = famRows[0]?.display_name ?? 'Family';
-
-  const ins = await query<{ id: string }>(
-    `INSERT INTO discount_policies
-       (school_id, kind, display_name, amount_cents, max_discount_cents,
-        applies_to_categories, conditions, fa_application_id, is_active)
-     VALUES ($1, 'financial_aid', $2, $3, $3, $4, '{}'::jsonb, $5, true)
-     RETURNING id`,
-    [
-      schoolId,
-      `Financial aid — ${familyName} (${fa.academic_year})`,
-      awardCents,
-      // Cap which line categories this can be subtracted from. Tuition +
-      // tuition_addon line categories cover the installment generator's
-      // output. Leave 'trip' etc. unaffected.
-      ['tuition', 'tuition_addon'],
-      faId,
-    ],
-  );
-
-  return NextResponse.json({ ok: true, discount_policy_id: ins.rows[0].id, action: 'created' });
+  // Delegate the actual create/update to the shared sync helper so the
+  // manual button and the automatic fa/set-award path can never drift.
+  // (Note: set-award now auto-syncs on decision, so this button is a
+  // manual re-sync / safety net rather than the primary path.)
+  const result = await syncFaDiscountForApplication(query, schoolId, faId);
+  return NextResponse.json({
+    ok: true,
+    discount_policy_id: result.discountPolicyId,
+    action: result.action,
+  });
 }

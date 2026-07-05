@@ -35,6 +35,16 @@ export async function POST(request: NextRequest, { params }: { params: Params })
     const support_email = strOrNull(form.get('support_email'));
     const support_phone = strOrNull(form.get('support_phone'));
 
+    // Custom portal domain. Normalize to a bare lowercase hostname; the
+    // parent portal matches on lower(custom_host) and a unique index keeps
+    // two schools from claiming the same host (parent-portal migration 009).
+    const custom_host = normalizeHost(strOrNull(form.get('custom_host')));
+    if (custom_host && !/^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/.test(custom_host)) {
+      return back(request, locationId, {
+        err: `"${custom_host}" doesn't look like a valid domain. Enter just the hostname, e.g. portal.yourschool.org.`,
+      });
+    }
+
     // Portal menus: hidden = every nav href − the ones left checked ("visible").
     const all = String(form.get('all_nav') ?? '').split(',').map((s) => s.trim()).filter(Boolean);
     const visible = new Set(form.getAll('visible').map((v) => String(v).trim()).filter(Boolean));
@@ -43,8 +53,8 @@ export async function POST(request: NextRequest, { params }: { params: Params })
     await query(
       `INSERT INTO school_branding
          (school_id, display_name, logo_url, primary_color, primary_color_soft,
-          primary_color_fg, support_email, support_phone, portal_hidden_nav)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+          primary_color_fg, support_email, support_phone, custom_host, portal_hidden_nav)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
        ON CONFLICT (school_id) DO UPDATE SET
          display_name = EXCLUDED.display_name,
          logo_url = EXCLUDED.logo_url,
@@ -53,13 +63,21 @@ export async function POST(request: NextRequest, { params }: { params: Params })
          primary_color_fg = EXCLUDED.primary_color_fg,
          support_email = EXCLUDED.support_email,
          support_phone = EXCLUDED.support_phone,
+         custom_host = EXCLUDED.custom_host,
          portal_hidden_nav = EXCLUDED.portal_hidden_nav`,
       [school.id, display_name, logo_url, primary_color, primary_color_soft,
-       primary_color_fg, support_email, support_phone, hidden],
+       primary_color_fg, support_email, support_phone, custom_host, hidden],
     );
 
     return back(request, locationId, { msg: 'Portal settings saved.' });
   } catch (err) {
+    // Unique-index violation on lower(custom_host): another school owns it.
+    const code = (err as { code?: string })?.code;
+    if (code === '23505') {
+      return back(request, locationId, {
+        err: 'That custom domain is already in use by another school. Pick a different hostname.',
+      });
+    }
     return back(request, locationId, { err: `Save failed: ${err instanceof Error ? err.message : String(err)}` });
   }
 }
@@ -68,6 +86,20 @@ function strOrNull(v: FormDataEntryValue | null): string | null {
   if (v === null) return null;
   const s = String(v).trim();
   return s.length > 0 ? s : null;
+}
+
+// Reduce whatever the school typed to a bare lowercase hostname:
+// strip scheme, any path, and a trailing port. "https://Portal.School.org/"
+// → "portal.school.org". Returns null for empty input.
+function normalizeHost(raw: string | null): string | null {
+  if (!raw) return null;
+  const h = raw
+    .trim()
+    .toLowerCase()
+    .replace(/^https?:\/\//, '')
+    .replace(/\/.*$/, '')
+    .replace(/:\d+$/, '');
+  return h || null;
 }
 
 function back(request: NextRequest, locationId: string, q: { msg?: string; err?: string }) {

@@ -232,7 +232,10 @@ function Component({
             Portal Forms — {school.schoolName}
           </h2>
           <p className="mt-1 text-xs text-gray-600">
-            {data.stats.total_students} enrolled students across {data.stats.enrolled_families} families ·{' '}
+            {data.stats.total_students} students across {data.stats.enrolled_families} families
+            {data.stats.pending_students
+              ? ` (${data.stats.total_students - data.stats.pending_students} enrolled · ${data.stats.pending_students} pending)`
+              : ''} ·{' '}
             Last loaded {new Date(data.last_loaded_at).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit', second: '2-digit' })}
           </p>
           {config.enrolled_tag || config.excluded_tag ? (
@@ -260,9 +263,11 @@ function Component({
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <StatCard
           value={data.stats.total_students}
-          label="Enrolled Students"
+          label="Students Tracked"
           color="text-emerald-700"
-          sublabel={`${data.stats.enrolled_families} families`}
+          sublabel={data.stats.pending_students
+            ? `${data.stats.total_students - data.stats.pending_students} enrolled · ${data.stats.pending_students} pending · ${data.stats.enrolled_families} families`
+            : `${data.stats.enrolled_families} families`}
         />
         <StatCard
           value={data.stats.students_fully_complete}
@@ -345,6 +350,14 @@ function Component({
                     >
                       {r.family_display_name}
                     </Link>
+                    {r.pending_student_count > 0 ? (
+                      <span
+                        className="ml-1.5 inline-flex items-center rounded-full bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-800 align-middle"
+                        title="Mid-admissions: this family has students whose enrollment status is still Pending — they aren't enrolled until their forms are done."
+                      >
+                        pending
+                      </span>
+                    ) : null}
                     <div className="text-[11px] text-gray-500">{r.primary_parent_email || '—'}</div>
                     <a
                       href={viewAsParentHref(r.family_id, school.locationId)}

@@ -49,13 +49,25 @@ function back(
 //   quarterly     — four equal payments (Aug, Nov, Feb, May)
 //   monthly_10    — Aug through May, the 10 instructional months
 //   monthly_12    — every month of the year
+// N consecutive months starting in August (academic-year order), for N <= 12.
+// The enrollment generator (computeDueDates) advances the year on wrap, so a
+// count > 12 still produces N non-colliding monthly dates from this seed.
+function monthsSpread(count: number): string[] {
+  const order = ['08', '09', '10', '11', '12', '01', '02', '03', '04', '05', '06', '07'];
+  return Array.from({ length: Math.min(count, 12) }, (_, i) => order[i % 12]);
+}
+
+// Emit ONLY schedule kinds the enrollment generator understands
+// (single / semiannual / monthly with a real months[] / custom with dates[]).
+// Previously this emitted `quarterly`/`monthly_10`/`monthly_12`/
+// `custom({installments})`, which the generator's computeDueDates couldn't
+// parse — a non-standard installment count crashed enrollment generation.
+// Everything above 2 is now N monthly installments; true every-3-months
+// "quarterly" spacing is available via a custom-dates plan instead.
 function defaultScheduleFor(slug: string, installmentCount: number): Record<string, unknown> {
-  if (installmentCount === 1) return { kind: 'single' };
+  if (installmentCount <= 1) return { kind: 'single' };
   if (installmentCount === 2) return { kind: 'semiannual', months: ['08', '01'] };
-  if (installmentCount === 4) return { kind: 'quarterly', months: ['08', '11', '02', '05'] };
-  if (installmentCount === 10) return { kind: 'monthly_10', months: ['08','09','10','11','12','01','02','03','04','05'] };
-  if (installmentCount === 12) return { kind: 'monthly_12', months: ['08','09','10','11','12','01','02','03','04','05','06','07'] };
-  return { kind: 'custom', installments: installmentCount };
+  return { kind: 'monthly', months: monthsSpread(installmentCount) };
 }
 
 // Normalize either a MM-DD string or a YYYY-MM-DD <input type="date">
