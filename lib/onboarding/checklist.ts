@@ -196,9 +196,11 @@ export const ONBOARDING_CHECKLIST: OnboardingTask[] = [
     title: 'Forms published',
     instructions: 'Create at least one parent form from a template and publish it.',
     ctaHref: (loc) => `/school/${loc}/forms/new`,
+    // Only a PUBLISHED (is_active) form counts — a draft created from a
+    // template but not yet published shouldn't mark this step done.
     deriveDone: async (ctx) =>
       ctx.schoolId != null &&
-      countExists(`SELECT COUNT(*)::int n FROM portal_form_definitions WHERE school_id = $1`, [ctx.schoolId]),
+      countExists(`SELECT COUNT(*)::int n FROM portal_form_definitions WHERE school_id = $1 AND is_active = true`, [ctx.schoolId]),
   },
 
   // ── Phase: launch ──
