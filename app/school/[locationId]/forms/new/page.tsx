@@ -68,14 +68,14 @@ export default async function NewSchoolFormPage({
             <form action={`/api/school/${locationId}/forms/import`} method="POST" encType="multipart/form-data"
               className="rounded-lg border border-zinc-200 bg-white p-3">
               <label className="flex items-center gap-1.5 text-xs font-medium text-zinc-800">
-                <Upload className="h-3.5 w-3.5 text-emerald-700" /> Upload a PDF
+                <Upload className="h-3.5 w-3.5 text-emerald-700" /> Upload PDF(s)
               </label>
-              <input type="file" name="pdf" accept="application/pdf" required
+              <input type="file" name="pdf" accept="application/pdf" multiple required
                 className="mt-2 block w-full text-[11px] text-zinc-600 file:mr-2 file:rounded file:border-0 file:bg-emerald-600 file:px-2 file:py-1 file:text-[11px] file:font-medium file:text-white hover:file:bg-emerald-700" />
               <button type="submit" className="mt-3 w-full rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700">
-                Import PDF →
+                Import PDF(s) →
               </button>
-              <p className="mt-1 text-[10px] text-zinc-400">Takes ~30s. Max 12 MB.</p>
+              <p className="mt-1 text-[10px] text-zinc-400">Select one or several. ~30s each · max 12 MB each · up to 8 at once.</p>
             </form>
             {/* Google Form link */}
             <form action={`/api/school/${locationId}/forms/import`} method="POST"

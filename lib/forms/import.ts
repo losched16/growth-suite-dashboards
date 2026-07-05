@@ -63,12 +63,19 @@ Each Block is one of these shapes. Use ONLY these "type" values:
 - { "type": "checkbox", "key": string, "label": string, "required"?: boolean, "options": [...] }          // check all that apply / a single acknowledgement
 - { "type": "signature_typed", "key": string, "label": string, "required"?: boolean }                     // a signature line
 
+CRITICAL — COPY ALL HUMAN-VISIBLE TEXT VERBATIM:
+- Every piece of visible text — field labels, section headings, instructions, intro/policy/consent/medical/liability language, and every option label — MUST be copied EXACTLY from the source, word for word, including the original wording, punctuation, capitalization, spelling, and numbering.
+- Do NOT reword, paraphrase, summarize, shorten, expand, rephrase, translate, correct spelling or grammar, modernize, or "clean up" ANY text. Even if the source has a typo or awkward phrasing, reproduce it EXACTLY as written.
+- Do NOT add any sentence, heading, label, option, help text, or instruction that is not present in the source.
+- Do NOT omit, drop, or truncate any text that is present in the source. Long legal/consent paragraphs must be reproduced in full.
+- These are real legal forms whose exact language is binding. Faithful, verbatim reproduction is mandatory. The ONLY things you generate are the internal "key" identifiers, the "value" strings for options, and the "type" mapping — you NEVER generate or alter any human-visible text.
+
 Rules:
-- "key" is a short snake_case identifier unique within the form, derived from the label (e.g. "student_name", "emergency_contact_phone"). section/paragraph blocks have NO key.
-- Map the source's field types sensibly: short answer→text, long answer/comments→textarea, email→email, phone→tel, a single date→date, "choose one"→radio (or select if there are many options), "check all"→checkbox, a signature line→signature_typed, an acknowledgement checkbox ("I agree…")→checkbox with a single option.
-- Preserve dropdown/multiple-choice OPTIONS exactly as written. option value = a snake_case of the label.
-- Preserve section headings and any intro/instructions/legal text as section/paragraph blocks in the right place.
-- Mark a field "required": true only when the source clearly indicates it (asterisk, "required", or it's obviously essential like the student's name / a signature).
+- "key" is a short snake_case identifier unique within the form, derived from the label (e.g. "student_name", "emergency_contact_phone"). section/paragraph blocks have NO key. (The key is internal — it is the one thing you invent; the label stays verbatim.)
+- Map the source's field types sensibly: short answer→text, long answer/comments→textarea, email→email, phone→tel, a single date→date, "choose one"→radio (or select if there are many options), "check all"→checkbox, a signature line→signature_typed, an acknowledgement checkbox ("I agree…")→checkbox with a single option. Choosing the type does NOT let you change the label text.
+- Reproduce dropdown/multiple-choice OPTION LABELS exactly as written (verbatim). option value = a snake_case of the label (the value is internal).
+- Reproduce section headings and ALL intro/instructions/legal text as section/paragraph blocks, verbatim and complete, in the source's order and position.
+- Mark a field "required": true only when the source clearly indicates it (asterisk, "required", or it's obviously essential like the student's name / a signature). This is metadata, not text — it never changes any wording.
 - Only add "visible_when" if the source EXPLICITLY shows conditional logic (e.g. "If yes, explain:" following a yes/no question). Reference the controlling field's key and the value that reveals it. When unsure, omit it — the school adds conditional logic in the builder.
 - Do NOT invent fields that aren't in the source. Do NOT add prefill or GHL mappings — the school sets those after import.
 - If the source is unreadable or clearly not a form, return field_schema as an empty array and name "Imported form".`;
@@ -89,34 +96,34 @@ function sanitizeSchema(raw: unknown): ImportedBlock[] {
     const block: ImportedBlock = { type };
 
     if (type === 'paragraph') {
-      block.text = String(b.text ?? b.label ?? '').slice(0, 4000);
+      block.text = String(b.text ?? b.label ?? '').slice(0, 12000);
       if (!block.text.trim()) continue;
       out.push(block);
       continue;
     }
     if (type === 'section') {
-      block.label = String(b.label ?? b.text ?? 'Section').slice(0, 200);
+      block.label = String(b.label ?? b.text ?? 'Section').slice(0, 800);
       out.push(block);
       continue;
     }
 
     // Field blocks need a unique key + a label.
-    const label = String(b.label ?? '').slice(0, 300).trim() || 'Field';
+    const label = String(b.label ?? '').slice(0, 1500).trim() || 'Field';
     let key = slug(String(b.key ?? '') || label) || 'field';
     for (let i = 2; usedKeys.has(key); i++) key = `${slug(String(b.key ?? '') || label) || 'field'}_${i}`;
     usedKeys.add(key);
     block.key = key;
     block.label = label;
     if (b.required === true) block.required = true;
-    if (typeof b.placeholder === 'string' && b.placeholder.trim()) block.placeholder = b.placeholder.slice(0, 200);
-    if (typeof b.help === 'string' && b.help.trim()) block.help = b.help.slice(0, 500);
+    if (typeof b.placeholder === 'string' && b.placeholder.trim()) block.placeholder = b.placeholder.slice(0, 400);
+    if (typeof b.help === 'string' && b.help.trim()) block.help = b.help.slice(0, 1500);
 
     if (CHOICE_TYPES.has(type)) {
       const opts = Array.isArray(b.options) ? b.options : [];
       const cleaned = opts
         .map((o) => {
           const oo = (o && typeof o === 'object') ? o as Record<string, unknown> : { label: String(o) };
-          const lbl = String(oo.label ?? oo.value ?? '').slice(0, 200).trim();
+          const lbl = String(oo.label ?? oo.value ?? '').slice(0, 600).trim();
           if (!lbl) return null;
           return { value: slug(String(oo.value ?? '') || lbl) || 'option', label: lbl };
         })
@@ -169,7 +176,8 @@ function client(): Anthropic {
 export async function parseFormFromPdf(base64Pdf: string): Promise<ImportedForm> {
   const response = await client().messages.create({
     model: MODEL,
-    max_tokens: 4096,
+    max_tokens: 8192,
+    temperature: 0, // deterministic + verbatim — no creative rewording
     system: [{ type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }],
     messages: [{
       role: 'user',
@@ -211,7 +219,8 @@ export async function parseFormFromGoogleForm(url: string): Promise<ImportedForm
 
   const response = await client().messages.create({
     model: MODEL,
-    max_tokens: 4096,
+    max_tokens: 8192,
+    temperature: 0, // deterministic + verbatim — no creative rewording
     system: [{ type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }],
     messages: [{
       role: 'user',
