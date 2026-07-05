@@ -15,7 +15,7 @@
 
 import type { NextRequest } from 'next/server';
 import {
-  authorizeExportPublic,
+  authorizeExport,
   unauthorizedCsvResponse,
   csvResponse,
   toCsv,
@@ -45,7 +45,7 @@ export async function GET(request: NextRequest, { params }: { params: Params }) 
   // the Download link navigated the top frame out of the embedded iframe
   // (the partitioned session cookie isn't sent on that navigation), so the
   // download failed. The CSV is no more sensitive than the on-screen table.
-  const school = await authorizeExportPublic(request, locationId);
+  const school = await authorizeExport(request, locationId);
   if (!school) return unauthorizedCsvResponse();
 
   const sp: WidgetSearchParams = {};
