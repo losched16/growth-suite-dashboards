@@ -5,6 +5,7 @@
 import { randomUUID } from 'node:crypto';
 import type { NextRequest } from 'next/server';
 import { query } from '@/lib/db';
+import { authorizeOperatorOrSchool } from '@/lib/auth/dual';
 import { editorRedirect } from '@/lib/dashboards/editor-redirect';
 import { getWidget } from '@/lib/widgets/registry';
 import type { WidgetInstance } from '@/lib/widgets/types';
@@ -13,6 +14,8 @@ type Params = Promise<{ schoolId: string; dashboardId: string }>;
 
 export async function POST(request: NextRequest, { params }: { params: Params }) {
   const { schoolId, dashboardId } = await params;
+  const _auth = await authorizeOperatorOrSchool(schoolId);
+  if (!_auth.ok) return _auth.response;
   try {
     const form = await request.formData();
     const widgetId = String(form.get('widget_id') ?? '').trim();

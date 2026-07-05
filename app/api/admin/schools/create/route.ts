@@ -15,9 +15,11 @@
 
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { cookies } from 'next/headers';
 import axios from 'axios';
 import { query, withTransaction } from '@/lib/db';
 import { encrypt } from '@/lib/crypto';
+import { SESSION_COOKIE, verifySessionToken } from '@/lib/auth/operator';
 import { DASHBOARD_TEMPLATES } from '@/lib/dashboards/templates';
 import { deriveFieldSchemaFromKeys } from '@/lib/sync/derive-field-schema';
 import { upsertSchoolFieldSchema } from '@/lib/sync/schema-loader';
@@ -32,6 +34,14 @@ export const maxDuration = 30;
 const STARTER_TEMPLATE_KEYS = ['family-hub', 'student-roster', 'enrollment-hub'];
 
 export async function POST(request: NextRequest) {
+  // OPERATOR-ONLY (security remediation 1.2). Creating a school (which stores
+  // an encrypted GHL PIT and provisions a tenant) was fully anonymous — anyone
+  // could POST here. There is no schoolId to scope to, so this requires a
+  // platform operator session, never a school session.
+  const ck = await cookies();
+  if (!verifySessionToken(ck.get(SESSION_COOKIE)?.value)) {
+    return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+  }
   try {
     const form = await request.formData();
     const name = String(form.get('name') ?? '').trim();

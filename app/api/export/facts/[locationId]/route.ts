@@ -7,7 +7,7 @@
 import type { NextRequest } from 'next/server';
 import { query } from '@/lib/db';
 import {
-  authorizeExportPublic, unauthorizedCsvResponse, csvResponse, toCsv, dateStamp,
+  authorizeExport, unauthorizedCsvResponse, csvResponse, toCsv, dateStamp,
   type CsvColumn,
 } from '@/lib/exports/csv';
 
@@ -48,7 +48,7 @@ const dollars = (cents: number | null | undefined): string =>
 
 export async function GET(request: NextRequest, { params }: { params: Params }) {
   const { locationId } = await params;
-  const school = await authorizeExportPublic(request, locationId);
+  const school = await authorizeExport(request, locationId);
   if (!school) return unauthorizedCsvResponse();
   const year = (request.nextUrl.searchParams.get('year') ?? '2026-27').trim();
 

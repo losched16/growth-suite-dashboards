@@ -8,7 +8,7 @@
 import type { NextRequest } from 'next/server';
 import { query } from '@/lib/db';
 import {
-  authorizeExportPublic, unauthorizedCsvResponse, csvResponse, toCsv, dateStamp,
+  authorizeExport, unauthorizedCsvResponse, csvResponse, toCsv, dateStamp,
   type CsvColumn,
 } from '@/lib/exports/csv';
 import { fetcher, type RosterStudent } from '@/lib/widgets/components/StudentRosterRich/fetcher';
@@ -46,7 +46,7 @@ const BASE: Record<string, { label: string; value: (s: RosterStudent) => string 
 
 export async function GET(request: NextRequest, { params }: { params: Params }) {
   const { locationId } = await params;
-  const school = await authorizeExportPublic(request, locationId);
+  const school = await authorizeExport(request, locationId);
   if (!school) return unauthorizedCsvResponse();
 
   // Pull the school's saved roster config (their column choices + order).

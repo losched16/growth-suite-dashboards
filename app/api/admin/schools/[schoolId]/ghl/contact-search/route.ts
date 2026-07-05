@@ -7,6 +7,7 @@
 
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { authorizeOperatorOrSchool } from '@/lib/auth/dual';
 import { loadGhlClient } from '@/lib/ghl/client';
 
 export const runtime = 'nodejs';
@@ -25,6 +26,8 @@ interface GhlSearchContact {
 
 export async function GET(request: NextRequest, { params }: { params: Params }) {
   const { schoolId } = await params;
+  const _auth = await authorizeOperatorOrSchool(schoolId);
+  if (!_auth.ok) return _auth.response;
   const q = (request.nextUrl.searchParams.get('q') ?? '').trim();
   if (q.length < 2) return NextResponse.json({ contacts: [] });
 

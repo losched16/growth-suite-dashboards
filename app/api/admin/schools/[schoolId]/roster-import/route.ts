@@ -18,6 +18,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { withTransaction } from '@/lib/db';
+import { authorizeOperatorOrSchool } from '@/lib/auth/dual';
 import { parseRosterCsv } from '@/lib/roster/csv-parser';
 import { previewRosterImport, applyRosterImport } from '@/lib/roster/importer';
 
@@ -29,6 +30,8 @@ type Params = Promise<{ schoolId: string }>;
 
 export async function POST(request: NextRequest, { params }: { params: Params }) {
   const { schoolId } = await params;
+  const _auth = await authorizeOperatorOrSchool(schoolId);
+  if (!_auth.ok) return _auth.response;
 
   let fd: FormData;
   try { fd = await request.formData(); }

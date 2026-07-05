@@ -4,6 +4,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { query } from '@/lib/db';
+import { authorizeOperatorOrSchool } from '@/lib/auth/dual';
 import { loadGhlClient } from '@/lib/ghl/client';
 import { uploadMediaToGhl } from '@/lib/ghl/media';
 import { sendMessage } from '@/lib/ghl/conversations';
@@ -26,6 +27,14 @@ interface UploadRow {
 
 export async function POST(request: NextRequest, { params }: { params: Params }) {
   const { uploadId } = await params;
+  // AUTH (security remediation 1.2): resolve the owning school from the upload
+  // and require an operator OR that school's session. Parent uploads are
+  // student PII (medical forms, IDs), so this must not be publicly reachable.
+  const _up = await query<{ school_id: string }>(
+    `SELECT school_id FROM parent_uploads WHERE id = const { uploadId } = await params;`, [uploadId]);
+  if (_up.rows.length === 0) return NextResponse.json({ error: 'not_found' }, { status: 404 });
+  const _auth = await authorizeOperatorOrSchool(_up.rows[0].school_id);
+  if (!_auth.ok) return _auth.response;
   try {
     const { rows } = await query<UploadRow>(
       `SELECT id, school_id, family_id, parent_id, student_id, display_name,

@@ -17,6 +17,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { query } from '@/lib/db';
+import { authorizeOperatorOrSchool } from '@/lib/auth/dual';
 import { generateTuitionEnrollment } from '@/lib/billing/tuition-plan-generator';
 
 export const runtime = 'nodejs';
@@ -42,6 +43,8 @@ function back(request: NextRequest, schoolId: string, q: { msg?: string; err?: s
 
 export async function POST(request: NextRequest, { params }: { params: Params }) {
   const { schoolId } = await params;
+  const _auth = await authorizeOperatorOrSchool(schoolId);
+  if (!_auth.ok) return _auth.response;
   const fd = await request.formData();
   const op = String(fd.get('op') ?? 'create').trim();
   // Where to bounce back after handling — keeps the operator inside the

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { authorizeOperatorOrSchool } from '@/lib/auth/dual';
 import { provisionDefaults } from '@/lib/dashboards/provision';
 
 // Form-handler counterpart to /api/v1/schools/{id}/provision-defaults.
@@ -8,6 +9,8 @@ type Params = Promise<{ schoolId: string }>;
 
 export async function POST(request: NextRequest, { params }: { params: Params }) {
   const { schoolId } = await params;
+  const _auth = await authorizeOperatorOrSchool(schoolId);
+  if (!_auth.ok) return _auth.response;
   const ok = (msg: string) => redirectBack(request, schoolId, { msg });
   const fail = (err: string) => redirectBack(request, schoolId, { err });
 

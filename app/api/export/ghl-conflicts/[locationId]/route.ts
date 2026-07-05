@@ -9,7 +9,7 @@
 import type { NextRequest } from 'next/server';
 import { query } from '@/lib/db';
 import {
-  authorizeExportPublic, unauthorizedCsvResponse, csvResponse, toCsv, dateStamp,
+  authorizeExport, unauthorizedCsvResponse, csvResponse, toCsv, dateStamp,
   type CsvColumn,
 } from '@/lib/exports/csv';
 import { ghlContactUrl } from '@/lib/ghl/contact-url';
@@ -38,7 +38,7 @@ const human = (k: string) => LABELS[k] ?? k.replace(/_/g, ' ').replace(/\b\w/g, 
 
 export async function GET(request: NextRequest, { params }: { params: Params }) {
   const { locationId } = await params;
-  const school = await authorizeExportPublic(request, locationId);
+  const school = await authorizeExport(request, locationId);
   if (!school) return unauthorizedCsvResponse();
 
   const { rows: students } = await query<{

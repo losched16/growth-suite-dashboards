@@ -5,6 +5,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { query } from '@/lib/db';
+import { authorizeOperatorOrSchool } from '@/lib/auth/dual';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -13,6 +14,8 @@ type Params = Promise<{ schoolId: string; invoiceId: string }>;
 
 export async function POST(request: NextRequest, { params }: { params: Params }) {
   const { schoolId, invoiceId } = await params;
+  const _auth = await authorizeOperatorOrSchool(schoolId);
+  if (!_auth.ok) return _auth.response;
   const fd = await request.formData();
   const reason = String(fd.get('reason') ?? '').trim() || 'No reason given';
   // School-scoped pages send a /school/{locationId}/payments/invoices/{id}
