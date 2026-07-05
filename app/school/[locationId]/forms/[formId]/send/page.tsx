@@ -1,7 +1,7 @@
-// /school/[locationId]/forms/[formId]/send — send THIS form to a specific
-// family (optionally a specific child). Creates a tracked invite and can
-// email every active parent in the family a one-click magic link
-// ("Action needed: <form>"). Backed by the same invite engine as
+// /school/[locationId]/forms/[formId]/send — push THIS form to one family
+// (optionally a specific child), to ALL families, or to a group (by contact
+// tag, program, or grade). Creates tracked invites and emails each family a
+// "form waiting in your portal" link. Backed by the same invite engine as
 // enrollments/start; school-scoped (school session OR operator).
 
 import Link from 'next/link';
@@ -52,14 +52,42 @@ export default async function SendFormPage({
       ORDER BY 2`,
     [school.id],
   );
-  const { rows: students } = await query<{ id: string; family_id: string; name: string }>(
+  const { rows: students } = await query<{
+    id: string; family_id: string; name: string;
+    program: string | null; grade: string | null; enr_status: string | null;
+  }>(
     `SELECT s.id, s.family_id,
-            CONCAT_WS(' ', COALESCE(NULLIF(s.preferred_name, ''), s.first_name), s.last_name) AS name
+            CONCAT_WS(' ', COALESCE(NULLIF(s.preferred_name, ''), s.first_name), s.last_name) AS name,
+            s.metadata->>'program' AS program,
+            s.metadata->>'grade_level' AS grade,
+            e.status AS enr_status
        FROM students s
+       LEFT JOIN LATERAL (
+         SELECT e2.status FROM enrollments e2 WHERE e2.student_id = s.id
+          ORDER BY e2.created_at DESC LIMIT 1
+       ) e ON true
       WHERE s.school_id = $1 AND s.status = 'active'
-      ORDER BY 2`,
+        AND (s.metadata->>'is_demo') IS DISTINCT FROM 'true'
+      ORDER BY 3`,
     [school.id],
   );
+
+  // Family → contact tags, for the "by tag" recipient estimate.
+  const { rows: famTagRows } = await query<{ family_id: string; tag: string }>(
+    `SELECT DISTINCT p.family_id, t.tag
+       FROM ghl_contact_tags t
+       JOIN parents p ON p.ghl_contact_id = t.ghl_contact_id
+      WHERE t.school_id = $1 AND p.school_id = $1 AND p.status = 'active'
+        AND btrim(coalesce(t.tag, '')) <> ''`,
+    [school.id],
+  );
+  const familyTags: Record<string, string[]> = {};
+  for (const r of famTagRows) {
+    (familyTags[r.family_id] ??= []).push(r.tag);
+  }
+  const tagOptions = [...new Set(famTagRows.map((r) => r.tag))].sort((a, b) => a.localeCompare(b));
+  const programOptions = [...new Set(students.map((s) => s.program).filter((v): v is string => !!v))].sort();
+  const gradeOptions = [...new Set(students.map((s) => s.grade).filter((v): v is string => !!v))].sort();
 
   // After a send, show the tracked invite's shareable link.
   let inviteLink: string | null = null;
@@ -86,8 +114,9 @@ export default async function SendFormPage({
             <SendIcon className="h-5 w-5 text-emerald-700" /> Send &ldquo;{def.display_name}&rdquo;
           </h1>
           <p className="text-xs text-slate-500 mt-0.5">
-            Sends every active parent in the family an email with a one-click link to this form
-            {def.per_student ? ' for the child you pick' : ''}. You can also just copy the link and share it yourself.
+            Push this form to one family, to everyone, or to a group (by tag, program, or grade).
+            It appears in their portal Forms list, and each parent gets a &ldquo;form waiting for
+            you&rdquo; email with a one-click link.
           </p>
         </div>
 
@@ -108,10 +137,15 @@ export default async function SendFormPage({
         <SendFormClient
           schoolId={school.id}
           formId={def.id}
+          formName={def.display_name}
           perStudent={def.per_student}
           returnTo={`/school/${locationId}/forms/${formId}/send`}
           families={families}
           students={students}
+          familyTags={familyTags}
+          tagOptions={tagOptions}
+          programOptions={programOptions}
+          gradeOptions={gradeOptions}
         />
       </div>
     </main>
