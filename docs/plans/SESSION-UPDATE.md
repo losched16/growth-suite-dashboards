@@ -55,15 +55,18 @@ onboarding SOP + client-expectations docs written.
 
 ---
 
-## 🟡 Needs you (two things)
+## ✅ Onboarding email layer — now LIVE
+Resend key wired into the dashboards project + redeployed; verified a real send
+end-to-end. The "Email the link" button and reminder cron now actually send.
+Sender is `onboarding@montessori.org` (a verified domain) as an interim —
+**optional:** verify `mygrowthsuite.com` in Resend (5-min DNS) if you'd rather
+onboarding emails come from a Growth Suite address.
 
-1. **Resend API key** → paste it so I can set it in the *dashboards* project.
-   That lights up the onboarding "Email the link" button + reminder emails
-   (sender domain is already verified — it's a one-paste fix).
-2. **Auto-mint / embed-token migration** (the last security item) — this one
-   touches DGM's GHL menu links, so we should do it together. It removes the
-   credential-free session mint by first putting embed tokens on each school's
-   menu links.
+## 🟡 Needs you (one thing left)
+
+- **Auto-mint / embed-token migration** (the last security item) — touches
+  DGM's GHL menu links, so we do it together. It removes the credential-free
+  session mint by first putting embed tokens on each school's menu links.
 
 ---
 
