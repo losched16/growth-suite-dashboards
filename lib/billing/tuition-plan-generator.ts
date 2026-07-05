@@ -150,7 +150,7 @@ export async function generateTuitionEnrollment(opts: GenerateOpts): Promise<Gen
   // wins over the plan's month-day default.
   const anchor = parseAnchorDate(opts.firstDueDate);
   const dueDates = anchor
-    ? datesFromAnchor(anchor, plan.schedule_template.kind, plan.installment_count)
+    ? datesFromAnchor(anchor, plan.schedule_template, plan.installment_count)
     : computeDueDates(plan.schedule_template, opts.academicYear, plan.installment_count, plan.first_due_month_day);
   if (dueDates.length !== plan.installment_count) {
     throw new Error(`Plan installment_count (${plan.installment_count}) doesn't match generated schedule (${dueDates.length} dates).`);
@@ -558,7 +558,11 @@ function parseAnchorDate(s: string | null | undefined): Date | null {
 // school's chosen first-payment date). monthly = +1 month each, semi =
 // +6 months each, single/annual = the anchor itself. The day-of-month
 // is clamped to each month's length (e.g. anchor 31st → Feb 28).
-function datesFromAnchor(anchor: Date, kind: string, count: number): Date[] {
+function datesFromAnchor(
+  anchor: Date,
+  tpl: ScheduleTemplate | { kind: string; months?: string[]; dates?: string[] },
+  count: number,
+): Date[] {
   const y = anchor.getUTCFullYear();
   const mo = anchor.getUTCMonth();   // 0-11
   const day = anchor.getUTCDate();
@@ -568,8 +572,23 @@ function datesFromAnchor(anchor: Date, kind: string, count: number): Date[] {
     const lastDay = new Date(Date.UTC(tgtY, tgtM + 1, 0)).getUTCDate();
     return new Date(Date.UTC(tgtY, tgtM, Math.min(day, lastDay), 12, 0, 0));
   };
+  const kind = tpl.kind;
   if (kind === 'single') return [anchor];
-  const stepMonths = kind === 'semiannual' ? 6 : 1; // monthly + fallback
+  // Explicit custom dates win over the anchor — mirrors computeDueDates, so a
+  // custom-dates plan bills its stated dates whether or not an anchor is set.
+  const dates = (tpl as { dates?: string[] }).dates;
+  if (kind === 'custom' && Array.isArray(dates) && dates.length > 0) {
+    return dates.map((s) => {
+      const d = new Date(s);
+      if (Number.isNaN(d.getTime())) throw new Error(`Invalid custom date: ${s}`);
+      return d;
+    });
+  }
+  // semiannual = every 6 months; everything else (monthly, plus any legacy
+  // kind like quarterly/monthly_10/monthly_12 or a custom template with no
+  // dates) = one payment per month from the anchor. This preserves the
+  // existing monthly (+1) and semiannual (+6) cadences exactly.
+  const stepMonths = kind === 'semiannual' ? 6 : 1;
   return Array.from({ length: count }, (_, i) => at(i * stepMonths));
 }
 
@@ -629,35 +648,66 @@ function computeDueDates(
     return new Date(Date.UTC(year, month - 1, safeDay, 12, 0, 0));
   };
 
-  if (tpl.kind === 'single') {
+  // Normalize legacy / non-canonical kinds so no stored schedule can crash
+  // the generator (previously `quarterly`/`monthly_10`/`monthly_12` threw
+  // "Unknown schedule kind", and a `custom` template carrying only an
+  // installment count — not explicit `dates` — hit `tpl.dates.map` on
+  // undefined). All "N specific months" schedules collapse to monthly; a
+  // custom template with no explicit dates collapses to a monthly spread.
+  let kind: string = tpl.kind;
+  let months: string[] | undefined = (tpl as { months?: string[] }).months;
+  if (kind === 'quarterly' || kind === 'monthly_10' || kind === 'monthly_12') {
+    kind = 'monthly';
+  } else if (kind === 'custom' && !Array.isArray((tpl as { dates?: string[] }).dates)) {
+    kind = 'monthly';
+    months = undefined;
+  }
+
+  if (kind === 'single') {
     // Single annual payment: use anchor if provided, otherwise Aug 15.
     const m = anchorMonth ?? 8;
     const d = anchorDay ?? 15;
     return [dateAt(yearOf(m), m, d)];
   }
 
-  if (tpl.kind === 'monthly' || tpl.kind === 'semiannual') {
-    // If an anchor is set we re-anchor the FIRST month to the anchor
-    // month and apply the anchor day across all months. Subsequent
-    // months stay as defined in the template — schools usually want
-    // "Aug 1, Sep 1, Oct 1..." not "Aug 1, Aug 1, Aug 1...".
+  if (kind === 'monthly' || kind === 'semiannual') {
+    // Fallback for monthly schedules whose stored `months` array doesn't
+    // match the installment count (arbitrary N, count > 12, or a legacy
+    // template with no usable months): generate N consecutive monthly dates
+    // from the start month, advancing the year on wrap so there are never
+    // duplicate/colliding dates. Plans WITH a correct-length months array
+    // (every existing single/semiannual/monthly plan) skip this and keep
+    // their exact current dates.
+    if (!(Array.isArray(months) && months.length === installmentCount)) {
+      const dayOfMonth = anchorDay ?? 1;
+      const first = dateAt(yearOf(startMonth), startMonth, dayOfMonth);
+      return Array.from({ length: installmentCount }, (_, i) => {
+        const tgt = new Date(Date.UTC(first.getUTCFullYear(), first.getUTCMonth() + i, 1, 12, 0, 0));
+        return dateAt(tgt.getUTCFullYear(), tgt.getUTCMonth() + 1, dayOfMonth);
+      });
+    }
+    // Anchor present → re-anchor the FIRST month to the anchor month and
+    // apply the anchor day across all months. Subsequent months stay as
+    // defined in the template — schools usually want "Aug 1, Sep 1, Oct 1…"
+    // not "Aug 1, Aug 1, Aug 1…". `months` here is the (correct-length)
+    // stored array, so existing plans keep their exact dates.
     const dayOfMonth = anchorDay ?? 1;
-    let months = tpl.months;
+    let scheduleMonths: string[] = months;
 
     if (anchorMonth != null) {
-      // Find the anchor month in the template's months array. If
-      // present, rotate so it's first. If not present, prepend it and
-      // drop the original first month (keeps installment_count stable).
-      const idx = months.findIndex((mm) => parseInt(mm, 10) === anchorMonth);
+      // Find the anchor month in the template's months array. If present,
+      // rotate so it's first. If not present, prepend it and drop the
+      // original first month (keeps installment_count stable).
+      const idx = scheduleMonths.findIndex((mm) => parseInt(mm, 10) === anchorMonth);
       if (idx > 0) {
-        months = [...months.slice(idx), ...months.slice(0, idx)];
+        scheduleMonths = [...scheduleMonths.slice(idx), ...scheduleMonths.slice(0, idx)];
       } else if (idx === -1) {
         const padded = String(anchorMonth).padStart(2, '0');
-        months = [padded, ...months.slice(0, months.length - 1)];
+        scheduleMonths = [padded, ...scheduleMonths.slice(0, scheduleMonths.length - 1)];
       }
     }
 
-    return months.map((mm) => {
+    return scheduleMonths.map((mm) => {
       const m = parseInt(mm, 10);
       if (!Number.isFinite(m) || m < 1 || m > 12) {
         throw new Error(`Invalid month in schedule: ${mm}`);
@@ -666,16 +716,20 @@ function computeDueDates(
     });
   }
 
-  if (tpl.kind === 'custom') {
-    // Custom-date schedules ignore the anchor — explicit dates win.
-    return tpl.dates.map((s) => {
+  if (kind === 'custom') {
+    // Custom-date schedules ignore the anchor — explicit dates win. (A
+    // custom template with no dates was normalized to monthly above, so
+    // `dates` is a real array here.)
+    const dates = (tpl as { dates?: string[] }).dates ?? [];
+    return dates.map((s) => {
       const d = new Date(s);
       if (Number.isNaN(d.getTime())) throw new Error(`Invalid custom date: ${s}`);
       return d;
     });
   }
 
-  // Fallback (shouldn't reach if installment_count matches)
+  // Unreachable: every kind normalizes to single/monthly/semiannual/custom
+  // above. Kept as a defensive guard rather than a silent wrong result.
   void installmentCount;
-  throw new Error(`Unknown schedule kind: ${(tpl as { kind: string }).kind}`);
+  throw new Error(`Unknown schedule kind: ${kind}`);
 }
