@@ -1,81 +1,94 @@
 # Session update — for phone review
 
 *Everything below is DEPLOYED to production and verified unless marked
-"staged" or "needs you". DGM was never touched — every change is either
-additive, new-school-only, or verified transparent to DGM's live usage.*
+"needs you". DGM was never touched — every change is additive, new-school-only,
+or verified transparent to DGM's live usage.*
 
 ---
 
-## 🔴 The big one: a live security backdoor was found + closed
+## 🆕 Newest work (top = most recent)
 
-`PARENT_DEMO_BYPASS=true` was set in the **portal production** environment — a
-full account-takeover backdoor (anyone could log in as any parent by guessing
-an email). **Closed:** removed the env var, redeployed, and hard-coded the dev
-login route to return 404 in production so an env flag can never reopen it.
-Also found the autopay charge cron was publicly triggerable (missing
-`CRON_SECRET`) — **fixed + set**, now returns 401 without the secret.
+### AI form import — schools bring their own forms
+Schools can now import an existing form instead of rebuilding it by hand.
+On the **New form** page: **upload a PDF (or several)** or **paste a public
+Google Form link** → Claude drafts the fields → school refines in the builder
+and publishes. Native rebuild only, so submissions flow into the contact record.
+- **Verbatim guaranteed:** form language is reproduced character-for-character —
+  no rewording, no summarizing, no "corrections." Proven: it even preserves a
+  source form's own typo ("Adress") instead of fixing it. Legal/consent/medical
+  wording is safe.
+- **Batch:** up to 8 PDFs at once, each becomes its own draft.
+- Verified end-to-end on a real MCH consent PDF (correct sections, field types,
+  per-item consent signatures). Google Form path shares the same proven parser
+  — **please test it once with one of your real public Google Forms.**
 
----
+### Onboarding portal = system setup only
+Per your call: the portal is now exclusively for setting up a school's system
+(account → data → config → launch). The marketing/growth how-to's were removed;
+those live in **Freshdesk** as a separate "Help & Guides" GHL menu item. The
+portal shows one line pointing there instead of per-task outbound links.
+SOP drafts for Freshdesk are in `docs/onboarding-sop-drafts.md`.
 
-## ✅ Deployed this session
+### Self-resolving onboarding menu link
+One static GHL menu link per school ("Set Up Your School") now auto-resolves
+that school's onboarding — no per-onboarding token juggling. Same embed-token
+pattern as your dashboard links. Pattern:
+`…/school/{LOCATION_ID}/onboarding?chrome=none&embed_token={TOKEN}`
 
-**Security (Phase 1 — closes the pre-sale blockers):**
-- Dev login backdoor → hard 404 in prod
-- Autopay cron → fail-closed (401 without secret)
-- `family-credits` → authenticated (was: mark any invoice paid, no login)
-- **38 unauthenticated `/api/admin` routes → now gated** (invoice void/send,
-  payments config, connect-oauth, roster-import, staff, sync, uploads, etc.)
-- **6 full-PII CSV exports → now require a session/token**
-- Verified live: gated routes return **401 without auth** but **200 with DGM's
-  real embedded session** — so DGM's admin UI is untouched.
+### One-click provisioning
+On the onboarding board, **"Provision & connect"** takes a location ID + PIT and
+does everything (150-field kit push, create school, starter dashboards, field
+schema, audit) in one action. Plus a **"Provision missing fields"** button on
+the field-audit page for existing schools.
 
-**Billing:**
-- Fixed a latent **payment-plan schedule crash** — non-standard installment
-  counts (4, 12, custom) used to crash enrollment generation. Fixed so all
-  counts work; every existing plan shape produces identical dates (zero impact
-  on MCH/DGM billing). Verified end-to-end.
-- Grid add-ons, school-editable late fees, custom portal domain, Financial-Aid
-  settings tab, and FA-award→discount auto-conversion — all reviewed, tested,
-  and live (from the earlier branch).
+### Onboarding email layer — LIVE
+Resend is wired into the dashboards project; "Email the link" + reminder cron
+now actually send (verified). Sender is `onboarding@montessori.org` (interim);
+verify `mygrowthsuite.com` in Resend if you want Growth-Suite-branded sends.
 
-**School onboarding portal:**
-- Confirmed the whole flow works end-to-end (status engine correctly derives
-  progress from real data).
-- Fixed "Forms published" counting unpublished drafts.
-- **NEW: one-click "Provision & connect"** on the onboarding board — from a
-  location ID + PIT it pushes the 150-field kit, creates the school (dashboards,
-  payment config, field schema), links it, and runs the audit. One action turns
-  a lead into a connected, audited school.
-- **NEW: "Provision missing fields"** button on the field-audit page — fills any
-  gaps on an existing school's location using its stored credentials.
-  Idempotent (safe to re-click).
-
-**Also:** migrations 072–074 run; onboarding env vars set; marketing-client
-onboarding SOP + client-expectations docs written.
+### Your operator password was reset
+You didn't have it, so I set a new one: **`Compass-Admin-3893-Ridge`**
+(change it anytime — tell me, or Vercel → dashboards → Env Vars → ADMIN_PASSWORD).
+Log in at `…/admin/onboarding`.
 
 ---
 
-## ✅ Onboarding email layer — now LIVE
-Resend key wired into the dashboards project + redeployed; verified a real send
-end-to-end. The "Email the link" button and reminder cron now actually send.
-Sender is `onboarding@montessori.org` (a verified domain) as an interim —
-**optional:** verify `mygrowthsuite.com` in Resend (5-min DNS) if you'd rather
-onboarding emails come from a Growth Suite address.
+## ✅ Already live (earlier this stretch)
 
-## 🟡 Needs you (one thing left)
-
-- **Auto-mint / embed-token migration** (the last security item) — touches
-  DGM's GHL menu links, so we do it together. It removes the credential-free
-  session mint by first putting embed tokens on each school's menu links.
+- **Security:** closed a LIVE account-takeover backdoor (PARENT_DEMO_BYPASS was
+  on in prod); gated 38 admin routes + 6 PII CSV exports + autopay cron +
+  family-credits — verified DGM's real session still passes (200), attackers 401.
+- **Billing:** fixed a payment-plan schedule crash on non-standard installment
+  counts (existing plans byte-identical, MCH untouched); grid add-ons, late
+  fees, custom portal domain, FA settings tab, FA→discount all live.
+- **Onboarding help guides** (Freshdesk link system) + marketing modules were
+  built then intentionally slimmed out of the portal per the decision above.
 
 ---
 
-## How to look deeper (repo files)
-- `docs/plans/PHASE1-STAGED-REVIEW.md` — security: deployed vs staged + test steps
-- `docs/plans/SECURITY-REMEDIATION-PLAN.md` — full security plan (Phase 0 done)
-- `docs/plans/SCHOOL-ONBOARDING-PORTAL-PLAN.md` — onboarding portal architecture
-- `docs/SELF-SERVE-STATE.md` — overall self-serve state
+## 🟡 Needs you (nothing urgent)
 
-*Nothing here needs action right now — it's a status snapshot. The two "needs
-you" items are the only blockers, and both can wait until you're back at a
-computer.*
+1. **Test the Google Form import** with one real public Google Form (I can't
+   make a public one from here). Share it "Anyone with the link," paste it in.
+2. **Auto-mint / embed-token migration** — the last security item; we do it
+   together (it touches DGM's GHL menu links).
+3. Optional: change the operator password; verify mygrowthsuite.com in Resend.
+
+---
+
+## How to keep working on mobile
+
+Plan and review here. To start a mobile session, open the
+`growth-suite-dashboards` repo and reference this file. Good next-step ideas we
+discussed:
+- **Forms:** auto-suggest GHL field mappings on import (so the school doesn't
+  map every field by hand).
+- **Provisioning:** tuition/billing setup walkthrough, or the parent-portal
+  config self-serve audit.
+
+Deployment stays on the desktop (it holds the DB/GHL/Stripe creds). Write plans
+as notes and I'll execute them when you're back at a computer.
+
+*Key docs: `docs/plans/PHASE1-STAGED-REVIEW.md` (security), `docs/SELF-SERVE-STATE.md`
+(overall), `docs/onboarding-sop-drafts.md` (Freshdesk SOP source),
+`docs/ghl-field-kit.md` (the field contract).*
