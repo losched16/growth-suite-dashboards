@@ -20,7 +20,7 @@
 import { query } from '@/lib/db';
 
 export type TaskType = 'derived' | 'document' | 'manual' | 'intake';
-export type Phase = 'account' | 'data' | 'config' | 'launch';
+export type Phase = 'account' | 'data' | 'config' | 'marketing' | 'launch';
 export type Owner = 'school' | 'ops';
 
 // Resolved status of a single task for a given onboarding.
@@ -203,6 +203,29 @@ export const ONBOARDING_CHECKLIST: OnboardingTask[] = [
       countExists(`SELECT COUNT(*)::int n FROM portal_form_definitions WHERE school_id = $1 AND is_active = true`, [ctx.schoolId]),
   },
 
+  // ── Phase: marketing / growth (self-guided; school follows the linked
+  //    guide in GHL, then marks it done — we can't detect these in our DB) ──
+  {
+    key: 'connect_calendar', type: 'manual', phase: 'marketing', owner: 'school',
+    title: 'Set up your tour booking calendar',
+    instructions: 'Create the calendar families use to book a tour or intro call, so inquiries can self-schedule. Follow the guide, then mark this done.',
+  },
+  {
+    key: 'connect_social', type: 'manual', phase: 'marketing', owner: 'school',
+    title: 'Connect your social accounts',
+    instructions: 'Link your Facebook, Instagram, and Google Business profiles so you can post and capture leads from one place. Follow the guide, then mark this done.',
+  },
+  {
+    key: 'setup_reviews', type: 'manual', phase: 'marketing', owner: 'school',
+    title: 'Turn on review requests',
+    instructions: 'Enable automatic Google review requests so happy families boost your reputation and enrollment. Follow the guide, then mark this done.',
+  },
+  {
+    key: 'setup_nurture', type: 'manual', phase: 'marketing', owner: 'school',
+    title: 'Turn on lead follow-up',
+    instructions: 'Activate the automated follow-up so new inquiries get nurtured toward a tour without manual work. Follow the guide, then mark this done.',
+  },
+
   // ── Phase: launch ──
   {
     key: 'confirm_ready', type: 'manual', phase: 'launch', owner: 'school',
@@ -223,10 +246,11 @@ export const CHECKLIST_BY_KEY: Record<string, OnboardingTask> = Object.fromEntri
   ONBOARDING_CHECKLIST.map((t) => [t.key, t]),
 );
 
-export const PHASE_ORDER: Phase[] = ['account', 'data', 'config', 'launch'];
+export const PHASE_ORDER: Phase[] = ['account', 'data', 'config', 'marketing', 'launch'];
 export const PHASE_LABELS: Record<Phase, string> = {
   account: 'Account setup',
   data: 'Your data',
   config: 'Configuration',
+  marketing: 'Marketing & growth',
   launch: 'Launch',
 };
