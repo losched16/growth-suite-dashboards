@@ -11,6 +11,7 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { promoteParent2sForSchool } from '@/lib/sync/promote-parent2';
 import { query } from '@/lib/db';
+import { authorizeOperatorOrSchool } from '@/lib/auth/dual';
 
 export const maxDuration = 300; // up to 5 min for large schools
 
@@ -18,6 +19,8 @@ type Params = Promise<{ schoolId: string }>;
 
 export async function POST(request: NextRequest, { params }: { params: Params }) {
   const { schoolId } = await params;
+  const _auth = await authorizeOperatorOrSchool(schoolId);
+  if (!_auth.ok) return _auth.response;
   const started = Date.now();
   try {
     const form = await request.formData();

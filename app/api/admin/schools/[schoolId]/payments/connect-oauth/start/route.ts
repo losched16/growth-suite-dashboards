@@ -10,6 +10,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { query } from '@/lib/db';
+import { authorizeOperatorOrSchool } from '@/lib/auth/dual';
 import { signOAuthState, buildAuthorizeUrl } from '@/lib/stripe/connect-oauth';
 
 export const runtime = 'nodejs';
@@ -20,6 +21,8 @@ type Params = Promise<{ schoolId: string }>;
 
 export async function POST(request: NextRequest, { params }: { params: Params }) {
   const { schoolId } = await params;
+  const _auth = await authorizeOperatorOrSchool(schoolId);
+  if (!_auth.ok) return _auth.response;
 
   // Pull the school's location id so we can route any error redirect
   // back to a valid /school/<locationId>/payments page (the old code

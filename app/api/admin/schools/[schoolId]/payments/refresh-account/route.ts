@@ -12,6 +12,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { query } from '@/lib/db';
+import { authorizeOperatorOrSchool } from '@/lib/auth/dual';
 import { stripe } from '@/lib/stripe/client';
 
 export const runtime = 'nodejs';
@@ -38,6 +39,8 @@ function back(request: NextRequest, schoolId: string, q: { msg?: string; err?: s
 
 export async function POST(request: NextRequest, { params }: { params: Params }) {
   const { schoolId } = await params;
+  const _auth = await authorizeOperatorOrSchool(schoolId);
+  if (!_auth.ok) return _auth.response;
   const fd = await request.formData().catch(() => null);
   const returnTo = fd ? (String(fd.get('return_to') ?? '').trim() || null) : null;
 

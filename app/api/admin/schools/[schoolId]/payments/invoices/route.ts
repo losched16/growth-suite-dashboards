@@ -17,6 +17,7 @@ import { randomBytes } from 'node:crypto';
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { query, withTransaction } from '@/lib/db';
+import { authorizeOperatorOrSchool } from '@/lib/auth/dual';
 import { sendInvoiceEmail } from '@/lib/billing/send-invoice-email';
 import { evaluateDiscounts, recordDiscountApplications } from '@/lib/billing/discounts';
 import { scheduleOneoffAutopay } from '@/lib/billing/oneoff-autopay';
@@ -75,6 +76,8 @@ interface LineInput {
 
 export async function POST(request: NextRequest, { params }: { params: Params }) {
   const { schoolId } = await params;
+  const _auth = await authorizeOperatorOrSchool(schoolId);
+  if (!_auth.ok) return _auth.response;
   const fd = await request.formData();
 
   // Where to bounce on success/failure. School-scoped pages send a

@@ -20,6 +20,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { query } from '@/lib/db';
+import { authorizeOperatorOrSchool } from '@/lib/auth/dual';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -44,6 +45,8 @@ async function uniqueSlug(schoolId: string, baseSlug: string): Promise<string> {
 
 export async function POST(_request: NextRequest, { params }: { params: Params }) {
   const { schoolId, formId } = await params;
+  const _auth = await authorizeOperatorOrSchool(schoolId);
+  if (!_auth.ok) return _auth.response;
 
   // Read the source row. We re-select every column so a future
   // ALTER TABLE doesn't silently drop fields from the clone.
