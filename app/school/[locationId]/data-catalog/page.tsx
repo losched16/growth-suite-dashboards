@@ -11,7 +11,7 @@
 
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ArrowLeft, Sparkles, Database, AlertTriangle, Plus, X } from 'lucide-react';
+import { ArrowLeft, Sparkles, Database, AlertTriangle, Plus, X, FileSpreadsheet } from 'lucide-react';
 import { query } from '@/lib/db';
 import { loadSchoolByLocationId } from '@/lib/dashboards/loader';
 import { loadFieldCatalog } from '@/lib/sync/field-catalog';
@@ -89,6 +89,9 @@ export default async function DataCatalogPage({ params, searchParams }: { params
           Add any field you added in GHL as a column or filter on any of your dashboards — the main
           roster or a specific classroom hub — in one click.
         </p>
+        <Link href={`/school/${locationId}/data-migration`} className="inline-flex items-center gap-1.5 rounded-md border border-emerald-300 bg-white px-3 py-1.5 text-xs font-medium text-emerald-800 hover:bg-emerald-50">
+          <FileSpreadsheet className="h-3.5 w-3.5" /> Import from a spreadsheet
+        </Link>
 
         {msg ? <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">{msg}</div> : null}
         {err ? <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{err}</div> : null}
