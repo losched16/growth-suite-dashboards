@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import {
   FileText, Users, GraduationCap, TrendingUp, Megaphone, CreditCard, BarChart3, Upload, Settings,
-  FilePen, Bell, BookOpen, LayoutDashboard,
+  FilePen, Bell, BookOpen, LayoutDashboard, Database,
   type LucideIcon,
 } from 'lucide-react';
 import type { SchoolDashboardRow } from '@/lib/dashboards/types';
@@ -75,6 +75,13 @@ export function DashboardNav({ schoolName, locationId, dashboards, activeSlug, i
         >
           <LayoutDashboard className="h-4 w-4 shrink-0" />
           <span className="truncate">Add dashboard</span>
+        </Link>
+        <Link
+          href={`/school/${locationId}/data-catalog`}
+          className="flex items-center gap-2 rounded px-2 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
+        >
+          <Database className="h-4 w-4 shrink-0" />
+          <span className="truncate">Data catalog</span>
         </Link>
         <Link
           href={`/school/${locationId}/roster-import`}
