@@ -165,7 +165,12 @@ export const DASHBOARD_TEMPLATES: DashboardTemplate[] = [
             shown_filters: ['program', 'schedule', 'allergies_only', 'iep_504_only', 'lunch_only'],
             documents_audience: 'teacher',
             default_homeroom_filter: r.name,
-            drilldown_dashboard_slug: 'family-hub',
+            // Teacher-facing: no click-through to the Family Hub (it shows
+            // tuition columns) — the inline row dropdown is the family view.
+            drilldown_dashboard_slug: '',
+            // Contact info, health, pickups, docs — never tuition/payment
+            // info in the row dropdown.
+            detail_sections: ['parents', 'students', 'authorized_pickups', 'pickup_restrictions', 'per_student'],
           },
           position: { h: 32, w: 12, x: 0, y: 0 },
           widget_id: 'student_roster_rich',

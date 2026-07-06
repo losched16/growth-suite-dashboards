@@ -768,6 +768,7 @@ function FamilyDetailPanel({
                   em={em}
                   medicalForms={medForms}
                   locationId={locationId}
+                  showTuition={show('tuition')}
                 />
               );
             })}
@@ -779,13 +780,16 @@ function FamilyDetailPanel({
 }
 
 function StudentDetailCard({
-  name, hp, em, medicalForms, locationId,
+  name, hp, em, medicalForms, locationId, showTuition = true,
 }: {
   name: string;
   hp: HealthProfile | undefined;
   em: EnrollmentMeta | undefined;
   medicalForms: MedicalForm[];
   locationId: string;
+  // Off on teacher-facing dashboards — hides the payment plan line and
+  // the tuition/discount breakdown (sensitive financial info).
+  showTuition?: boolean;
 }) {
   // Render an allergy as a red-tagged callout vs a benign "None on file"
   // — same logic the roster uses for its allergy badge.
@@ -931,7 +935,7 @@ function StudentDetailCard({
               Enrollment
             </div>
             {em.program ? <div><span className="font-medium">Program:</span> {em.program}</div> : null}
-            {em.payment_plan ? <div><span className="font-medium">Payment plan:</span> {em.payment_plan}</div> : null}
+            {showTuition && em.payment_plan ? <div><span className="font-medium">Payment plan:</span> {em.payment_plan}</div> : null}
             {em.hours_of_attendance ? <div><span className="font-medium">Hours:</span> {em.hours_of_attendance}</div> : null}
             {em.days_of_attendance && em.days_of_attendance.length > 0 ? (
               <div>
@@ -950,8 +954,8 @@ function StudentDetailCard({
           </div>
         ) : null}
 
-        {/* Tuition / billing — only render if we have a tuition blob */}
-        {em?.tuition ? <TuitionBlock t={em.tuition} /> : null}
+        {/* Tuition / billing — sensitive; gated off on teacher dashboards */}
+        {showTuition && em?.tuition ? <TuitionBlock t={em.tuition} /> : null}
       </div>
     </div>
   );

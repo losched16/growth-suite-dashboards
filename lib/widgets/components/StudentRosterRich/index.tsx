@@ -324,6 +324,12 @@ function renderCell(s: RosterStudent, col: ColumnKey, drilldownDashboard: string
         ? <span className="text-gray-700">{s.address}</span>
         : <span className="text-gray-400">—</span>;
     case 'family':
+      // Empty drilldown slug = no click-through (teacher dashboards: the
+      // inline row dropdown is the whole family view; the Family Hub it
+      // would link to shows tuition columns).
+      if (!drilldownDashboard) {
+        return <span className="text-gray-700">{s.family_display_name ?? `${s.last_name} Family`}</span>;
+      }
       return (
         <Link href={`/school/${locationId}/${drilldownDashboard}/${s.family_id}`} className="text-emerald-700 hover:underline">
           {s.family_display_name ?? `${s.last_name} Family`}
@@ -344,14 +350,12 @@ function GridView({ rows, locationId, drilldownDashboard }: { rows: RosterStuden
   if (rows.length === 0) {
     return <div className="rounded-lg border border-gray-200 bg-white p-6 text-center text-sm text-gray-500">No students match.</div>;
   }
+  const cardCls = 'group block rounded-lg border border-gray-200 bg-white p-3 hover:border-emerald-400 hover:shadow-sm';
   return (
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-      {rows.map((s) => (
-        <Link
-          key={s.student_id}
-          href={`/school/${locationId}/${drilldownDashboard}/${s.family_id}`}
-          className="group block rounded-lg border border-gray-200 bg-white p-3 hover:border-emerald-400 hover:shadow-sm"
-        >
+      {rows.map((s) => {
+        const card = (
+          <>
           <div className="flex items-start gap-2">
             <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-xs font-semibold text-emerald-800">
               {(s.preferred_name?.[0] ?? s.first_name[0])}{s.last_name[0]}
@@ -378,8 +382,16 @@ function GridView({ rows, locationId, drilldownDashboard }: { rows: RosterStuden
               </span>
             </div>
           ) : null}
-        </Link>
-      ))}
+          </>
+        );
+        return drilldownDashboard ? (
+          <Link key={s.student_id} href={`/school/${locationId}/${drilldownDashboard}/${s.family_id}`} className={cardCls}>
+            {card}
+          </Link>
+        ) : (
+          <div key={s.student_id} className={cardCls}>{card}</div>
+        );
+      })}
     </div>
   );
 }
