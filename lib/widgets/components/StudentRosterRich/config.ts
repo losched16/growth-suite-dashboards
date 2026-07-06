@@ -64,6 +64,10 @@ export const DETAIL_SECTIONS = [
   { key: 'authorized_pickups',  label: 'Authorized for pickup' },
   { key: 'pickup_restrictions', label: 'NOT authorized for pickup' },
   { key: 'per_student',         label: 'Per-student detail (health, enrollment, medical forms)' },
+  // Sensitive: payment plan + the full tuition/discount breakdown. Off on
+  // teacher-facing dashboards (classroom hubs); undefined config keeps it
+  // on for office rosters (back-compat).
+  { key: 'tuition',             label: 'Tuition / billing (sensitive — hide on teacher dashboards)' },
 ] as const;
 export type DetailSectionKey = typeof DETAIL_SECTIONS[number]['key'];
 
