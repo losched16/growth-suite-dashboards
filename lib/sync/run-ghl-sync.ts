@@ -1071,6 +1071,24 @@ export async function runGhlSync(schoolId: string): Promise<SyncResult> {
     };
   });
 
+  // Self-adapting data layer, Phase 1: discover the location's fields + tags
+  // into the per-school catalog. Best-effort — discovery must never fail the
+  // sync. Runs after the rebuild commits so tag discovery sees the fresh
+  // ghl_contact_tags. Reads GHL + writes only our catalog tables.
+  try {
+    const { refreshFieldCatalog } = await import('./field-catalog');
+    const cat = await refreshFieldCatalog(schoolId);
+    if (cat.newFields.length || cat.newTags.length || cat.missingFields.length || cat.newOptions.length) {
+      warnings.push(
+        `catalog: +${cat.newFields.length} field(s), +${cat.newTags.length} tag(s)` +
+        `${cat.newOptions.length ? `, +${cat.newOptions.length} field(s) gained options` : ''}` +
+        `${cat.missingFields.length ? `, ${cat.missingFields.length} field(s) went missing` : ''}`,
+      );
+    }
+  } catch (err) {
+    warnings.push(`field-catalog refresh failed: ${err instanceof Error ? err.message : String(err)}`);
+  }
+
   return {
     ghl_contacts_scanned: allContacts.length,
     ghl_contacts_with_household_id: withHouseholdId,
