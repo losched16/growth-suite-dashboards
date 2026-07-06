@@ -493,7 +493,7 @@ function Component({
               still exists if the office ever wants the list. */}
         </div>
         <div className="flex items-center gap-2 print:hidden">
-          <SyncGhlButton locationId={school.locationId} />
+          {config.show_customize === false ? null : <SyncGhlButton locationId={school.locationId} />}
           {/* Scope is pinned to enrolled on classroom dashboards — no toggle. */}
           {config.enrolled_only ? null : <StatusToggle value={data.roster_status} current={sp} />}
           <ViewToggle view={view} current={sp} />
@@ -513,13 +513,15 @@ function Component({
           >
             <Download className="h-3 w-3" /> Export CSV
           </a>
-          <a
-            href={`/school/${school.locationId}/roster-settings`}
-            className="rounded-md border border-gray-300 bg-white px-2 py-1 text-xs text-gray-700 hover:bg-gray-50"
-            title="Pick filters & columns from your tags, contact fields, and opportunity stages"
-          >
-            ⚙ Customize
-          </a>
+          {config.show_customize === false ? null : (
+            <a
+              href={`/school/${school.locationId}/roster-settings`}
+              className="rounded-md border border-gray-300 bg-white px-2 py-1 text-xs text-gray-700 hover:bg-gray-50"
+              title="Pick filters & columns from your tags, contact fields, and opportunity stages"
+            >
+              ⚙ Customize
+            </a>
+          )}
         </div>
       </div>
 

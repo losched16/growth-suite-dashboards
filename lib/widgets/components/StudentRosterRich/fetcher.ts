@@ -733,8 +733,13 @@ export async function fetcher(
   const fProg = (sp.program ?? config.default_program_filter ?? '').trim();
   // URL param wins; otherwise fall back to the widget-config default.
   // Per-classroom dashboards set this in their layout so the roster
-  // pre-scopes to one classroom on first render.
-  const fHome = (sp.homeroom ?? config.default_homeroom_filter ?? '').trim();
+  // pre-scopes to one classroom on first render. lock_homeroom (teacher
+  // dashboards): the config's classroom pin always wins — `?homeroom=` in
+  // the URL (including an EMPTY value, which would clear the filter and
+  // expose the whole school) is ignored.
+  const fHome = (config.lock_homeroom && config.default_homeroom_filter
+    ? config.default_homeroom_filter
+    : (sp.homeroom ?? config.default_homeroom_filter ?? '')).trim();
   const fSched = (sp.schedule ?? '').trim();
   const fTeacher = (sp.lead_teacher ?? '').trim();
   const fGender = (sp.gender ?? '').trim();

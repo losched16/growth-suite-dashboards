@@ -165,8 +165,12 @@ export const DASHBOARD_TEMPLATES: DashboardTemplate[] = [
             shown_filters: ['program', 'schedule', 'allergies_only', 'iep_504_only', 'lunch_only'],
             documents_audience: 'teacher',
             default_homeroom_filter: r.name,
-            // Teacher-facing: no click-through to the Family Hub (it shows
+            // Teacher-facing lockdown: the homeroom pin can't be widened via
+            // URL, and the Customize/Sync buttons (school-wide roster editor)
+            // are hidden. No click-through to the Family Hub (it shows
             // tuition columns) — the inline row dropdown is the family view.
+            lock_homeroom: true,
+            show_customize: false,
             drilldown_dashboard_slug: '',
             // Contact info, health, pickups, docs — never tuition/payment
             // info in the row dropdown.
