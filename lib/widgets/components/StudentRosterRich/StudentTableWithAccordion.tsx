@@ -565,8 +565,8 @@ function FamilyDetailPanel({
               Parents ({detail.parents.length})
             </div>
             {detail.address ? (
-              <div className="mb-2 text-xs text-slate-700">
-                <span className="font-medium">Home address:</span> {detail.address}
+              <div className="mb-2 rounded border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs text-slate-800">
+                <span className="font-semibold">🏠 Home address:</span> {detail.address}
               </div>
             ) : null}
             {detail.parents.length === 0 ? (
