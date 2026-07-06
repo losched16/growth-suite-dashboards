@@ -12,6 +12,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { query } from '@/lib/db';
+import { authorizeOperatorOrSchool } from '@/lib/auth/dual';
 import { beginConnectOnboarding } from '@/lib/stripe/connect-onboarding';
 
 export const runtime = 'nodejs';
@@ -22,6 +23,8 @@ type Params = Promise<{ schoolId: string }>;
 
 export async function POST(request: NextRequest, { params }: { params: Params }) {
   const { schoolId } = await params;
+  const _auth = await authorizeOperatorOrSchool(schoolId);
+  if (!_auth.ok) return _auth.response;
 
   const { rows } = await query<{ name: string }>(
     `SELECT name FROM schools WHERE id = $1`, [schoolId],

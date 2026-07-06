@@ -6,7 +6,7 @@
 
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ArrowLeft, CheckCircle2, AlertTriangle, XCircle, Info, RefreshCw } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, AlertTriangle, XCircle, Info, RefreshCw, Wand2 } from 'lucide-react';
 import { query } from '@/lib/db';
 import { loadGhlClient } from '@/lib/ghl/client';
 import { auditGhlFields, type GhlFieldDef, type AuditLevel } from '@/lib/onboarding/field-audit';
@@ -15,6 +15,7 @@ export const dynamic = 'force-dynamic';
 export const maxDuration = 30;
 
 type Params = Promise<{ schoolId: string }>;
+type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
 const LEVEL_STYLE: Record<AuditLevel, { icon: typeof CheckCircle2; cls: string; badge: string }> = {
   ok:   { icon: CheckCircle2,  cls: 'border-emerald-200 bg-emerald-50/50', badge: 'text-emerald-700' },
@@ -23,8 +24,11 @@ const LEVEL_STYLE: Record<AuditLevel, { icon: typeof CheckCircle2; cls: string; 
   info: { icon: Info,          cls: 'border-slate-200 bg-white',           badge: 'text-slate-500' },
 };
 
-export default async function FieldAuditPage({ params }: { params: Params }) {
+export default async function FieldAuditPage({ params, searchParams }: { params: Params; searchParams: SearchParams }) {
   const { schoolId } = await params;
+  const sp = await searchParams;
+  const msg = typeof sp.msg === 'string' ? sp.msg : null;
+  const errMsg = typeof sp.err === 'string' ? sp.err : null;
   const { rows } = await query<{ id: string; name: string }>(
     `SELECT id, name FROM schools WHERE id = $1`, [schoolId]);
   if (rows.length === 0) notFound();
@@ -57,11 +61,25 @@ export default async function FieldAuditPage({ params }: { params: Params }) {
               Checks this location&rsquo;s custom fields against the platform contract — structure is standardized, the school&rsquo;s own grade/classroom names are collected at intake.
             </p>
           </div>
-          <Link href={`/admin/${schoolId}/field-audit`}
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50">
-            <RefreshCw className="h-3.5 w-3.5" /> Re-run
-          </Link>
+          <div className="flex shrink-0 items-center gap-2">
+            {/* Push the field kit using the school's stored PIT. Idempotent —
+                fills only what's missing, safe on a fully-provisioned location. */}
+            <form action={`/api/admin/schools/${schoolId}/provision-fields`} method="POST">
+              <button type="submit"
+                className="inline-flex items-center gap-1.5 rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700"
+                title="Create any missing Growth Suite fields on this location (idempotent)">
+                <Wand2 className="h-3.5 w-3.5" /> Provision missing fields
+              </button>
+            </form>
+            <Link href={`/admin/${schoolId}/field-audit`}
+              className="inline-flex items-center gap-1.5 rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50">
+              <RefreshCw className="h-3.5 w-3.5" /> Re-run
+            </Link>
+          </div>
         </div>
+
+        {msg ? <div className="rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">{msg}</div> : null}
+        {errMsg ? <div className="rounded-lg border border-rose-300 bg-rose-50 px-3 py-2 text-sm text-rose-800">{errMsg}</div> : null}
 
         {error ? (
           <div className="rounded-lg border border-rose-300 bg-rose-50 p-4 text-sm text-rose-800">

@@ -108,6 +108,43 @@ export default async function OnboardingDetailPage({ params, searchParams }: { p
           </div>
         </section>
 
+        {/* Provision & connect — one-click tenant creation from a location + PIT */}
+        {!meta.school_id ? (
+          <section className="rounded-lg border border-emerald-200 bg-emerald-50/40 p-4">
+            <h2 className="text-sm font-semibold text-slate-900">Provision &amp; connect this school</h2>
+            <p className="mt-0.5 text-[11px] text-slate-500">
+              One click: pushes the Growth Suite field kit into the GHL sub-account, creates the
+              school (starter dashboards, payment config, derived field schema), links it here, and
+              runs the field audit. Idempotent — safe to re-run.
+            </p>
+            <form action={`/api/admin/onboarding/${id}/provision`} method="POST" className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <M label="School name" name="name" defaultValue={meta.school_name} />
+              <M label="Academic year" name="academic_year" placeholder="2026-27" />
+              <M label="GHL location ID" name="ghl_location_id" defaultValue={meta.ghl_location_id ?? ''} placeholder="sub-account location id" />
+              <M label="Private Integration Token" name="ghl_pit" placeholder="pit-…" />
+              <label className="flex items-center gap-2 text-xs text-slate-600 sm:col-span-2">
+                <input type="checkbox" name="skip_field_kit" className="h-4 w-4 rounded border-slate-300" />
+                Skip field-kit push (this location already has the fields)
+              </label>
+              <div className="sm:col-span-2">
+                <button type="submit" className="rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700">
+                  Provision &amp; connect
+                </button>
+                <span className="ml-2 text-[11px] text-slate-500">Takes ~30–60s (creates ~150 fields).</span>
+              </div>
+            </form>
+          </section>
+        ) : (
+          <section className="rounded-lg border border-emerald-200 bg-emerald-50 p-4">
+            <h2 className="text-sm font-semibold text-emerald-900">✓ Connected to a school</h2>
+            <p className="mt-0.5 text-[11px] text-emerald-800">
+              school_id <span className="font-mono">{meta.school_id.slice(0, 8)}…</span> ·{' '}
+              <a className="underline" href={`/admin/${meta.school_id}/field-audit`}>field audit</a> ·{' '}
+              <a className="underline" href={`/admin/${meta.school_id}`}>school admin</a>
+            </p>
+          </section>
+        )}
+
         {/* Meta / linking */}
         <section className="rounded-lg border border-slate-200 bg-white p-4">
           <h2 className="mb-3 text-sm font-semibold text-slate-900">Details</h2>

@@ -86,6 +86,15 @@ export default async function OnboardingPage({
         </div>
       </div>
 
+      {/* Point to the Support Center for step-by-step how-to's. The how-to
+          guides live in the Help Center (a separate menu item), NOT inline —
+          this page is only for setting up the school's system. */}
+      <div className="mb-6 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
+        💬 <span className="font-semibold">Need step-by-step help with any task?</span>{' '}
+        Open <span className="font-semibold">Help &amp; Guides</span> from your menu — it has a
+        walkthrough for every step (booking calendar, business settings, and more).
+      </div>
+
       {sp.msg ? <Toast kind="ok" text={sp.msg} /> : null}
       {sp.err ? <Toast kind="err" text={sp.err} /> : null}
 

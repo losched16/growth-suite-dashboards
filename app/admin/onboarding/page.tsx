@@ -48,9 +48,11 @@ export default async function OnboardingBoardPage({
             <h1 className="text-2xl font-semibold text-slate-900">School onboarding{showArchived ? ' — archived' : ''}</h1>
             <p className="text-sm text-slate-500">Track what each school has done, submitted, or still needs.</p>
           </div>
-          <Link href={showArchived ? '/admin/onboarding' : '/admin/onboarding?archived=1'} className="whitespace-nowrap text-xs text-slate-500 hover:text-slate-700 hover:underline">
-            {showArchived ? '← Active' : 'Show archived'}
-          </Link>
+          <div className="flex items-center gap-3">
+            <Link href={showArchived ? '/admin/onboarding' : '/admin/onboarding?archived=1'} className="whitespace-nowrap text-xs text-slate-500 hover:text-slate-700 hover:underline">
+              {showArchived ? '← Active' : 'Show archived'}
+            </Link>
+          </div>
         </div>
 
         {sp.msg ? <div className="rounded border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">{sp.msg}</div> : null}

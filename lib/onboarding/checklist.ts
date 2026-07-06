@@ -196,10 +196,17 @@ export const ONBOARDING_CHECKLIST: OnboardingTask[] = [
     title: 'Forms published',
     instructions: 'Create at least one parent form from a template and publish it.',
     ctaHref: (loc) => `/school/${loc}/forms/new`,
+    // Only a PUBLISHED (is_active) form counts — a draft created from a
+    // template but not yet published shouldn't mark this step done.
     deriveDone: async (ctx) =>
       ctx.schoolId != null &&
-      countExists(`SELECT COUNT(*)::int n FROM portal_form_definitions WHERE school_id = $1`, [ctx.schoolId]),
+      countExists(`SELECT COUNT(*)::int n FROM portal_form_definitions WHERE school_id = $1 AND is_active = true`, [ctx.schoolId]),
   },
+
+  // NOTE: marketing / growth how-to's (booking calendar, socials, reviews,
+  // lead follow-up) intentionally do NOT live here. This portal is only for
+  // setting up the school's Growth Suite system. Those how-to's live in the
+  // Freshdesk Help Center, surfaced as a separate GHL menu item.
 
   // ── Phase: launch ──
   {

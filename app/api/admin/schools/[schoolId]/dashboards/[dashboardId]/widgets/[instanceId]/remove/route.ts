@@ -2,6 +2,7 @@
 
 import type { NextRequest } from 'next/server';
 import { query } from '@/lib/db';
+import { authorizeOperatorOrSchool } from '@/lib/auth/dual';
 import { editorRedirect } from '@/lib/dashboards/editor-redirect';
 import type { WidgetInstance } from '@/lib/widgets/types';
 
@@ -9,6 +10,8 @@ type Params = Promise<{ schoolId: string; dashboardId: string; instanceId: strin
 
 export async function POST(_request: NextRequest, { params }: { params: Params }) {
   const { schoolId, dashboardId, instanceId } = await params;
+  const _auth = await authorizeOperatorOrSchool(schoolId);
+  if (!_auth.ok) return _auth.response;
   try {
     const { rows } = await query<{ layout: WidgetInstance[] }>(
       `SELECT layout FROM school_dashboards WHERE id = $1 AND school_id = $2`,

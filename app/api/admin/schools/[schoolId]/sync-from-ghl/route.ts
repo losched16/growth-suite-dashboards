@@ -7,6 +7,7 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { runGhlSync } from '@/lib/sync/run-ghl-sync';
 import { query } from '@/lib/db';
+import { authorizeOperatorOrSchool } from '@/lib/auth/dual';
 
 export const maxDuration = 60;
 
@@ -14,6 +15,8 @@ type Params = Promise<{ schoolId: string }>;
 
 export async function POST(request: NextRequest, { params }: { params: Params }) {
   const { schoolId } = await params;
+  const _auth = await authorizeOperatorOrSchool(schoolId);
+  if (!_auth.ok) return _auth.response;
   const started = Date.now();
   try {
     const r = await runGhlSync(schoolId);

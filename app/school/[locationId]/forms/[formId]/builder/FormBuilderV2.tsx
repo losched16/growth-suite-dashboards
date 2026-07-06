@@ -25,6 +25,16 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 
 interface Option { value: string; label: string; amount_cents?: number }
+// One conditional test (mirrors the portal's VisibilityCondition).
+export interface VisCondition { field: string; equals: string[] }
+// Block-level conditional visibility. Legacy single `{ field, equals }` OR
+// multi `{ match, conditions }` (AND / OR). Must stay in sync with the portal
+// (lib/forms/types.ts + prefill.ts isBlockVisible). The builder only writes
+// the multi shape for 2+ conditions, so single rules keep the legacy shape.
+export type VisibleWhen =
+  | VisCondition
+  | { match: 'all' | 'any'; conditions: VisCondition[] };
+
 export interface FieldBlock {
   type: string;
   key?: string;
@@ -35,11 +45,40 @@ export interface FieldBlock {
   readOnly?: boolean;
   placeholder?: string;
   options?: Option[];
-  visible_when?: { field: string; equals: string[] };
+  visible_when?: VisibleWhen;
   prefill?: string;
   ghl_field_key?: string;
   _uid?: string;
   [k: string]: unknown;
+}
+
+// Normalize either visible_when shape into an editable {match, conditions}.
+function readRule(vw: VisibleWhen | undefined): { match: 'all' | 'any'; conditions: VisCondition[] } | null {
+  if (!vw) return null;
+  if ('conditions' in vw) {
+    return { match: vw.match === 'any' ? 'any' : 'all', conditions: Array.isArray(vw.conditions) ? vw.conditions : [] };
+  }
+  if (vw.field) return { match: 'all', conditions: [{ field: vw.field, equals: vw.equals ?? [] }] };
+  return null;
+}
+// Serialize back: drop empty conditions; 1 → legacy shape, 2+ → multi shape.
+function writeRule(match: 'all' | 'any', conditions: VisCondition[]): VisibleWhen | undefined {
+  const clean = conditions.filter((c) => c.field);
+  if (clean.length === 0) return undefined;
+  if (clean.length === 1) return { field: clean[0].field, equals: clean[0].equals };
+  return { match, conditions: clean };
+}
+// Evaluate a rule against live answers — mirror of the portal's isBlockVisible.
+function evalRule(vw: VisibleWhen | undefined, answers: Record<string, string | string[]>): boolean {
+  const rule = readRule(vw);
+  if (!rule || rule.conditions.length === 0) return true;
+  const one = (c: VisCondition) => {
+    const cur = answers[c.field];
+    const vals = Array.isArray(cur) ? cur : cur == null || cur === '' ? [] : [cur];
+    return c.equals.some((e) => vals.includes(e));
+  };
+  const res = rule.conditions.map(one);
+  return rule.match === 'any' ? res.some(Boolean) : res.every(Boolean);
 }
 
 export interface GhlField { key: string; name: string; dataType: string; options: string[] }
@@ -599,17 +638,17 @@ function ConditionEditor({ field, allFields, onPatch, input }: {
   field: FieldBlock; allFields: FieldBlock[];
   onPatch: (patch: Partial<FieldBlock>) => void; input: string;
 }) {
-  const vw = field.visible_when;
+  const rule = readRule(field.visible_when);
   const candidates = allFields.filter((f) => f.key && f.key !== field.key && f.type !== 'section' && f.type !== 'paragraph');
 
-  if (!vw) {
+  if (!rule) {
     if (candidates.length === 0) {
       return <p className="text-[11px] text-slate-400">Always shown — add another field first to build a rule.</p>;
     }
     return (
       <div>
         <p className="mb-2 text-[11px] text-slate-500">Always shown.</p>
-        <button onClick={() => onPatch({ visible_when: { field: candidates[0].key as string, equals: [] } })}
+        <button onClick={() => onPatch({ visible_when: writeRule('all', [{ field: candidates[0].key as string, equals: [] }]) })}
           className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700 hover:underline">
           <Plus className="h-3.5 w-3.5" /> Add a rule
         </button>
@@ -617,37 +656,75 @@ function ConditionEditor({ field, allFields, onPatch, input }: {
     );
   }
 
-  const ref = allFields.find((f) => f.key === vw.field);
-  const refOptions: Option[] = ref?.options ?? (ref?.type === 'checkbox' ? [{ value: '1', label: 'Checked' }] : []);
-  const toggle = (v: string) => {
-    const set = new Set(vw.equals);
-    if (set.has(v)) set.delete(v); else set.add(v);
-    onPatch({ visible_when: { field: vw.field, equals: [...set] } });
-  };
+  const { match, conditions } = rule;
+  const commit = (m: 'all' | 'any', cs: VisCondition[]) => onPatch({ visible_when: writeRule(m, cs) });
+  const setCond = (i: number, patch: Partial<VisCondition>) =>
+    commit(match, conditions.map((c, j) => (j === i ? { ...c, ...patch } : c)));
 
   return (
     <div className="space-y-2 rounded-md border border-slate-200 bg-slate-50 p-2.5">
-      <select className={input} value={vw.field} onChange={(e) => onPatch({ visible_when: { field: e.target.value, equals: [] } })}>
-        {candidates.map((f) => <option key={f.key} value={f.key as string}>{f.label || f.key}</option>)}
-      </select>
-      <p className="text-[11px] text-slate-500">is any of</p>
-      {refOptions.length > 0 ? (
-        <div className="space-y-1">
-          {refOptions.map((o) => (
-            <label key={o.value} className="flex items-center gap-2 text-xs text-slate-700">
-              <input type="checkbox" checked={vw.equals.includes(o.value)} onChange={() => toggle(o.value)} className="h-3.5 w-3.5 rounded border-slate-300 text-emerald-600" />
-              {o.label || o.value}
-            </label>
-          ))}
+      {conditions.length > 1 ? (
+        <div className="flex items-center gap-2 text-[11px] text-slate-600">
+          <span>Match</span>
+          <select className="rounded border border-slate-300 bg-white px-1.5 py-0.5 text-[11px]" value={match}
+            onChange={(e) => commit(e.target.value === 'any' ? 'any' : 'all', conditions)}>
+            <option value="all">all conditions (AND)</option>
+            <option value="any">any condition (OR)</option>
+          </select>
         </div>
-      ) : (
-        <input className={input} value={vw.equals.join(', ')} placeholder="Comma-separated values"
-          onChange={(e) => onPatch({ visible_when: { field: vw.field, equals: e.target.value.split(',').map((s) => s.trim()).filter(Boolean) } })} />
-      )}
-      <button onClick={() => onPatch({ visible_when: undefined })}
-        className="inline-flex items-center gap-1 text-[11px] text-slate-400 hover:text-rose-500">
-        <X className="h-3 w-3" /> Remove rule
-      </button>
+      ) : null}
+
+      {conditions.map((c, i) => {
+        const ref = allFields.find((f) => f.key === c.field);
+        const refOptions: Option[] = ref?.options ?? (ref?.type === 'checkbox' ? [{ value: '1', label: 'Checked' }] : []);
+        const toggle = (v: string) => {
+          const set = new Set(c.equals);
+          if (set.has(v)) set.delete(v); else set.add(v);
+          setCond(i, { equals: [...set] });
+        };
+        return (
+          <div key={i} className={i > 0 ? 'space-y-2 border-t border-slate-200 pt-2' : 'space-y-2'}>
+            {i > 0 ? (
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{match === 'any' ? 'or' : 'and'}</p>
+            ) : null}
+            <select className={input} value={c.field} onChange={(e) => setCond(i, { field: e.target.value, equals: [] })}>
+              {candidates.map((f) => <option key={f.key} value={f.key as string}>{f.label || f.key}</option>)}
+            </select>
+            <p className="text-[11px] text-slate-500">is any of</p>
+            {refOptions.length > 0 ? (
+              <div className="space-y-1">
+                {refOptions.map((o) => (
+                  <label key={o.value} className="flex items-center gap-2 text-xs text-slate-700">
+                    <input type="checkbox" checked={c.equals.includes(o.value)} onChange={() => toggle(o.value)} className="h-3.5 w-3.5 rounded border-slate-300 text-emerald-600" />
+                    {o.label || o.value}
+                  </label>
+                ))}
+              </div>
+            ) : (
+              <input className={input} value={c.equals.join(', ')} placeholder="Comma-separated values"
+                onChange={(e) => setCond(i, { equals: e.target.value.split(',').map((s) => s.trim()).filter(Boolean) })} />
+            )}
+            {conditions.length > 1 ? (
+              <button onClick={() => commit(match, conditions.filter((_, j) => j !== i))}
+                className="inline-flex items-center gap-1 text-[11px] text-slate-400 hover:text-rose-500">
+                <X className="h-3 w-3" /> Remove this condition
+              </button>
+            ) : null}
+          </div>
+        );
+      })}
+
+      <div className="flex items-center justify-between border-t border-slate-200 pt-2">
+        <button onClick={() => commit(match, [...conditions, { field: (candidates[0]?.key as string) ?? '', equals: [] }])}
+          disabled={candidates.length === 0}
+          className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-700 hover:underline disabled:text-slate-300 disabled:no-underline">
+          <Plus className="h-3 w-3" /> Add condition
+        </button>
+        <button onClick={() => onPatch({ visible_when: undefined })}
+          className="inline-flex items-center gap-1 text-[11px] text-slate-400 hover:text-rose-500">
+          <X className="h-3 w-3" /> Remove rule
+        </button>
+      </div>
     </div>
   );
 }
@@ -661,13 +738,7 @@ function FormPreview({ fields, settings, answers, setAnswers }: {
   answers: PreviewAnswers; setAnswers: (u: (a: PreviewAnswers) => PreviewAnswers) => void;
 }) {
   const set = (key: string, value: string | string[]) => setAnswers((a) => ({ ...a, [key]: value }));
-  const visible = (f: FieldBlock): boolean => {
-    const vw = f.visible_when;
-    if (!vw) return true;
-    const cur = answers[vw.field];
-    const vals = Array.isArray(cur) ? cur : cur == null || cur === '' ? [] : [cur];
-    return vw.equals.some((e) => vals.includes(e));
-  };
+  const visible = (f: FieldBlock): boolean => evalRule(f.visible_when, answers);
   const input = 'w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 disabled:bg-slate-50 disabled:text-slate-500';
   const muted = 'rounded-lg border border-dashed border-slate-300 bg-slate-50 px-3 py-2.5 text-xs text-slate-500';
 

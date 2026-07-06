@@ -31,6 +31,7 @@ import { randomBytes } from 'node:crypto';
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { query, withTransaction } from '@/lib/db';
+import { authorizeOperatorOrSchool } from '@/lib/auth/dual';
 import { sendInvoiceEmail } from '@/lib/billing/send-invoice-email';
 import { scheduleOneoffAutopay } from '@/lib/billing/oneoff-autopay';
 
@@ -62,6 +63,8 @@ function dollarsToCents(raw: string): number {
 
 export async function POST(request: NextRequest, { params }: { params: Params }) {
   const { schoolId } = await params;
+  const _auth = await authorizeOperatorOrSchool(schoolId);
+  if (!_auth.ok) return _auth.response;
   const fd = await request.formData();
   const returnTo = String(fd.get('return_to') ?? '').trim() || null;
 

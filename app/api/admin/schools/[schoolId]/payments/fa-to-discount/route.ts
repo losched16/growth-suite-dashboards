@@ -15,6 +15,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { query } from '@/lib/db';
+import { authorizeOperatorOrSchool } from '@/lib/auth/dual';
 import { syncFaDiscountForApplication } from '@/lib/billing/fa-discount';
 
 export const runtime = 'nodejs';
@@ -26,6 +27,8 @@ interface Body { fa_application_id?: string }
 
 export async function POST(request: NextRequest, { params }: { params: Params }) {
   const { schoolId } = await params;
+  const _auth = await authorizeOperatorOrSchool(schoolId);
+  if (!_auth.ok) return _auth.response;
 
   let body: Body = {};
   try { body = await request.json(); }

@@ -5,6 +5,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { query } from '@/lib/db';
+import { authorizeOperatorOrSchool } from '@/lib/auth/dual';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -48,6 +49,8 @@ function dollarsToCents(raw: string): number {
 
 export async function POST(request: NextRequest, { params }: { params: Params }) {
   const { schoolId } = await params;
+  const _auth = await authorizeOperatorOrSchool(schoolId);
+  if (!_auth.ok) return _auth.response;
   const fd = await request.formData();
   const returnTo = String(fd.get('return_to') ?? '').trim() || null;
 

@@ -19,6 +19,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { query, withTransaction } from '@/lib/db';
+import { authorizeOperatorOrSchool } from '@/lib/auth/dual';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -44,6 +45,16 @@ export async function POST(request: NextRequest) {
   const returnTo = String(fd.get('return_to') ?? '').trim() || null;
   const schoolId = String(fd.get('school_id') ?? '').trim();
   if (!schoolId) return back(request, { err: 'school_id required' }, returnTo);
+
+  // AUTH (security remediation 1.4). This route was unauthenticated — an
+  // action=apply POST could mark ANY invoice paid with no payment. Require an
+  // operator session (cross-school) OR a school session whose school_id
+  // matches the posted school_id (a school session for school A cannot touch
+  // school B). Transparent to the embedded /school + operator /admin UIs,
+  // which both already carry their session cookie — same guard the sibling
+  // tuition-grids/save and go-live routes use.
+  const auth = await authorizeOperatorOrSchool(schoolId);
+  if (!auth.ok) return auth.response;
 
   if (action === 'add') {
     const familyId = String(fd.get('family_id') ?? '').trim();
