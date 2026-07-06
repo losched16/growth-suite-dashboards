@@ -92,7 +92,7 @@ export async function fetcher(
        d.uploaded_by, d.uploaded_at,
        d.visible_to_teacher, d.visible_to_parent, d.expires_at
      FROM student_documents d
-     JOIN students s   ON s.id = d.student_id
+     JOIN students s   ON s.id = d.student_id AND d.is_complete = true
      LEFT JOIN LATERAL (
        SELECT classroom_id FROM enrollments
         WHERE student_id = s.id

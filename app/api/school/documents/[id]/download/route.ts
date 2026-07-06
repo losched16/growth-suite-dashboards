@@ -30,7 +30,7 @@ export async function GET(_request: NextRequest, { params }: { params: Params })
   }>(
     `SELECT file_name, mime_type, file_bytes, size_bytes
        FROM student_documents
-      WHERE id = $1 AND school_id = $2`,
+      WHERE id = $1 AND school_id = $2 AND is_complete = true`,
     [id, session.school_id],
   );
   if (rows.length === 0 || !rows[0].file_bytes) {

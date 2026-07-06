@@ -312,7 +312,7 @@ export async function fetcher(
      ) e ON true
      LEFT JOIN classrooms c ON c.id = e.classroom_id
      LEFT JOIN LATERAL (
-       SELECT COUNT(*)::int AS n FROM student_documents sd WHERE sd.student_id = s.id
+       SELECT COUNT(*)::int AS n FROM student_documents sd WHERE sd.student_id = s.id AND sd.is_complete = true
      ) dc ON true
      LEFT JOIN daily_attendance da
        ON da.student_id = s.id

@@ -7,6 +7,14 @@
 // Stored as bytea in student_documents.file_bytes. 10MB cap is enforced
 // both client-side (HTML accept) and server-side (size_bytes CHECK in
 // the table) — we reject early here if the upload is over.
+//
+// Chunked uploads: Vercel rejects request bodies over ~4.5MB at the
+// gateway (FUNCTION_PAYLOAD_TOO_LARGE), so big files never reach us in
+// one request. The client slices them: this route receives the FIRST
+// chunk with `expected_total_bytes` set — the row is created with
+// is_complete=false — and /api/school/documents/{id}/append receives
+// the rest. Single-request uploads (no expected_total_bytes) are
+// unchanged and complete immediately.
 
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
@@ -52,6 +60,16 @@ export async function POST(request: NextRequest) {
   if (file.size > MAX_BYTES) {
     return NextResponse.json({ ok: false, error: `file too large (max ${MAX_BYTES} bytes)` }, { status: 413 });
   }
+  // Chunked upload? The declared final size governs the cap; this
+  // request's blob is just the first slice.
+  const expectedTotalRaw = String(fd.get('expected_total_bytes') ?? '').trim();
+  const expectedTotal = /^\d+$/.test(expectedTotalRaw) ? parseInt(expectedTotalRaw, 10) : null;
+  if (expectedTotal !== null && (expectedTotal <= file.size || expectedTotal > MAX_BYTES)) {
+    return NextResponse.json({
+      ok: false,
+      error: expectedTotal > MAX_BYTES ? `file too large (max ${MAX_BYTES} bytes)` : 'expected_total_bytes must exceed the first chunk',
+    }, { status: expectedTotal > MAX_BYTES ? 413 : 400 });
+  }
   // Resolve allowed categories for this school. School-specific list
   // (managed via /api/school/document-categories) wins; legacy
   // hardcoded list is the fallback for schools that haven't seeded
@@ -85,19 +103,36 @@ export async function POST(request: NextRequest) {
 
   const bytes = Buffer.from(await file.arrayBuffer());
 
+  // Opportunistic cleanup: abandoned chunked uploads (browser closed
+  // mid-flight) should not linger as invisible rows.
+  try {
+    await query(
+      `DELETE FROM student_documents
+        WHERE school_id = $1 AND is_complete = false AND created_at < now() - interval '1 hour'`,
+      [session.school_id],
+    );
+  } catch { /* best-effort */ }
+
   const { rows: insertRows } = await query<{ id: string }>(
     `INSERT INTO student_documents
        (school_id, student_id, title, category, description,
         file_name, mime_type, size_bytes, file_bytes,
-        uploaded_by, visible_to_teacher, visible_to_parent, expires_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+        uploaded_by, visible_to_teacher, visible_to_parent, expires_at, is_complete)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
      RETURNING id`,
     [
       session.school_id, studentId, title, category, description,
-      file.name, file.type || 'application/octet-stream', bytes.length, bytes,
+      file.name, file.type || 'application/octet-stream',
+      expectedTotal ?? bytes.length, bytes,
       session.user_email ?? null, visibleToTeacher, visibleToParent, expiresAt,
+      expectedTotal === null,
     ],
   );
 
-  return NextResponse.json({ ok: true, id: insertRows[0].id, size_bytes: bytes.length });
+  return NextResponse.json({
+    ok: true,
+    id: insertRows[0].id,
+    size_bytes: expectedTotal ?? bytes.length,
+    complete: expectedTotal === null,
+  });
 }

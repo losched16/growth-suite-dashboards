@@ -17,6 +17,7 @@ export function UploadForm({
 }) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   // Categories the user sees in the dropdown. We mutate this when they
   // create a new one inline so the next upload they do in the same
@@ -56,17 +57,51 @@ export function UploadForm({
     }
   }
 
+  // Vercel rejects request bodies over ~4.5MB at the gateway, so anything
+  // bigger goes up in slices: first slice creates the (invisible) row,
+  // /append assembles the rest, the last slice completes it.
+  const CHUNK_BYTES = 3 * 1024 * 1024;
+
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (busy) return;
     setBusy(true); setErr(null);
     try {
-      const fd = new FormData(e.currentTarget);
-      const r = await fetch('/api/school/documents/upload', { method: 'POST', body: fd });
-      const data = await r.json();
-      if (!r.ok || !data.ok) {
-        setErr(data.error || `Upload failed (${r.status})`);
-        return;
+      const form = e.currentTarget;
+      const fd = new FormData(form);
+      const file = fd.get('file');
+
+      if (file instanceof File && file.size > CHUNK_BYTES) {
+        // Chunked path. First request: metadata + first slice + total size.
+        setProgress(`Uploading… 0/${Math.ceil(file.size / CHUNK_BYTES)}`);
+        fd.set('file', file.slice(0, CHUNK_BYTES), file.name);
+        fd.set('expected_total_bytes', String(file.size));
+        const first = await fetch('/api/school/documents/upload', { method: 'POST', body: fd });
+        const fj = await first.json().catch(() => ({}));
+        if (!first.ok || !fj.ok) {
+          setErr(fj.error || `Upload failed (${first.status})`);
+          return;
+        }
+        const totalChunks = Math.ceil(file.size / CHUNK_BYTES);
+        for (let i = 1; i < totalChunks; i++) {
+          setProgress(`Uploading… ${i}/${totalChunks}`);
+          const cfd = new FormData();
+          cfd.set('file', file.slice(i * CHUNK_BYTES, (i + 1) * CHUNK_BYTES), file.name);
+          cfd.set('is_last', i === totalChunks - 1 ? '1' : '0');
+          const r = await fetch(`/api/school/documents/${encodeURIComponent(fj.id)}/append`, { method: 'POST', body: cfd });
+          const j = await r.json().catch(() => ({}));
+          if (!r.ok || !j.ok) {
+            setErr(j.error || `Upload failed on part ${i + 1} (${r.status})`);
+            return;
+          }
+        }
+      } else {
+        const r = await fetch('/api/school/documents/upload', { method: 'POST', body: fd });
+        const data = await r.json();
+        if (!r.ok || !data.ok) {
+          setErr(data.error || `Upload failed (${r.status})`);
+          return;
+        }
       }
       // Reload to refresh the list. Could be smarter (optimistic insert)
       // later, but reload is simple and correct.
@@ -75,6 +110,7 @@ export function UploadForm({
       setErr(e instanceof Error ? e.message : String(e));
     } finally {
       setBusy(false);
+      setProgress(null);
     }
   }
 
@@ -206,7 +242,7 @@ export function UploadForm({
       <div className="flex items-center gap-2">
         <button type="submit" disabled={busy}
           className="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:bg-blue-300">
-          {busy ? 'Uploading…' : 'Upload'}
+          {busy ? (progress ?? 'Uploading…') : 'Upload'}
         </button>
       </div>
     </form>
