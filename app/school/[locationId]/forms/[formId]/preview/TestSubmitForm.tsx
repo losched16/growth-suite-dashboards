@@ -16,27 +16,43 @@ import { useRouter } from 'next/navigation';
 import { AlertCircle, Loader2 } from 'lucide-react';
 
 type Block = Record<string, unknown>;
-type VisibleWhen = { field?: string; equals?: string[] } | null | undefined;
+type VisCond = { field?: string; equals?: string[] };
+type VisMulti = { match?: 'all' | 'any'; conditions?: VisCond[] };
+type VisibleWhen = VisCond | VisMulti | null | undefined;
+
+function isMultiRule(vw: NonNullable<VisibleWhen>): vw is VisMulti {
+  return Array.isArray((vw as VisMulti).conditions);
+}
 
 // Mirror of the parent-portal's conditional-visibility semantics
 // (lib/forms/prefill.ts). Kept in sync so the staff Test-mode preview
 // hides/shows exactly what a real parent sees on the live form.
-//
-// Field-level: a block with no `visible_when` is always shown; otherwise
-// it shows only when the referenced field's CURRENT value is one of
-// `equals` — an empty/unselected reference field means HIDDEN.
-function isBlockVisible(vw: VisibleWhen, values: Record<string, string>): boolean {
-  if (!vw || !vw.field) return true;
-  const cur = values[vw.field];
+function matchCond(c: VisCond, values: Record<string, string>): boolean {
+  if (!c || !c.field) return true;
+  const cur = values[c.field];
   const curStr = cur == null ? '' : String(cur);
-  return (vw.equals ?? []).map(String).includes(curStr);
+  return (c.equals ?? []).map(String).includes(curStr);
 }
 
-// Option-level: like the above, EXCEPT an empty/unselected reference field
-// means SHOW the option (we don't filter until the parent has picked the
-// thing the option depends on). Matches FormRenderer's PricingSelect filter.
+// Field-level: a block with no `visible_when` is always shown. A single
+// condition shows only when the referenced field's CURRENT value is one of
+// `equals` (empty reference = HIDDEN). A multi rule ANDs/ORs its conditions.
+function isBlockVisible(vw: VisibleWhen, values: Record<string, string>): boolean {
+  if (!vw) return true;
+  if (isMultiRule(vw)) {
+    const conds = (vw.conditions ?? []).filter((c) => c && c.field);
+    if (conds.length === 0) return true;
+    const res = conds.map((c) => matchCond(c, values));
+    return vw.match === 'any' ? res.some(Boolean) : res.every(Boolean);
+  }
+  return matchCond(vw, values);
+}
+
+// Option-level: single-condition only (pricing option filters never use the
+// multi shape), EXCEPT an empty/unselected reference field means SHOW the
+// option. Matches FormRenderer's PricingSelect filter.
 function isOptionVisible(vw: VisibleWhen, values: Record<string, string>): boolean {
-  if (!vw || !vw.field) return true;
+  if (!vw || isMultiRule(vw) || !vw.field) return true;
   const v = values[vw.field];
   if (v == null || v === '') return true;
   return (vw.equals ?? []).map(String).includes(String(v));
