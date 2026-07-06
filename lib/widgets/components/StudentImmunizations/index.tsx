@@ -494,7 +494,12 @@ function StudentDetail({ data, studentId, backHref }: { data: Data; studentId: s
         <p className="text-[11px] text-slate-500 mb-2">Enter dose dates, mark exemptions or documented immunity, or flag a missing certificate. Saving recomputes the grid and the NC reports.</p>
         <ImmunizationEditor
           studentId={studentId}
-          vaccines={status.vaccines.map((v) => v.vaccine)}
+          /* Offer EVERY vaccine for entry (all 9), not just the ones
+             required for the auto-resolved context. Staff must be able to
+             record Tdap + Meningococcal for older students and any dose on
+             a student whose grade/DOB metadata is incomplete — the report
+             logic still decides what's *required* per context. */
+          vaccines={CANON_ORDER}
           initialDoses={doses}
           initialFlags={flags}
           initialProfile={profile}
