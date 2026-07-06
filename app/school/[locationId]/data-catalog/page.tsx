@@ -1,16 +1,17 @@
 // /school/[locationId]/data-catalog — the self-adapting data layer's discovery
 // hub. Shows the school their entire field + tag surface (auto-discovered from
 // GHL on each sync), highlights what's NEW, flags any core field that vanished
-// (possible break), and lets them add a discovered field to the Student Roster
-// as a column or filter in one click (it promotes the field into the usable
-// filter catalog and selects it — the roster already resolves the value).
+// (possible break), and lets them add a discovered field as a column or filter
+// to ANY dashboard that has a Student Roster — the main roster, a classroom
+// hub, etc. (it promotes the field into the usable filter catalog and selects
+// it; the roster already resolves the value).
 //
-// Reads our catalog + the roster config; writes happen via the add-to-roster
+// Reads our catalog + dashboard configs; writes happen via the add-to-roster
 // route. No GHL writes.
 
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ArrowLeft, Sparkles, Database, AlertTriangle, Plus, Check } from 'lucide-react';
+import { ArrowLeft, Sparkles, Database, AlertTriangle, Plus, X } from 'lucide-react';
 import { query } from '@/lib/db';
 import { loadSchoolByLocationId } from '@/lib/dashboards/loader';
 import { loadFieldCatalog } from '@/lib/sync/field-catalog';
@@ -20,12 +21,20 @@ export const maxDuration = 30;
 
 type Params = Promise<{ locationId: string }>;
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
+type WidgetLayout = Array<{ widget_id: string; config: Record<string, unknown> }>;
+
+const ROSTER_WIDGET = 'student_roster_rich';
 
 const prettyType: Record<string, string> = {
   TEXT: 'Text', LARGE_TEXT: 'Long text', NUMERICAL: 'Number', PHONE: 'Phone',
   DATE: 'Date', MONETORY: 'Money', SINGLE_OPTIONS: 'Dropdown', MULTIPLE_OPTIONS: 'Multi-select',
   RADIO: 'Choice', CHECKBOX: 'Checkboxes',
 };
+
+function attrList(config: Record<string, unknown>, key: 'extra_columns' | 'extra_filters'): string[] {
+  const v = config?.[key];
+  return Array.isArray(v) ? (v as unknown[]).filter((x): x is string => typeof x === 'string') : [];
+}
 
 export default async function DataCatalogPage({ params, searchParams }: { params: Params; searchParams: SearchParams }) {
   const { locationId } = await params;
@@ -42,14 +51,28 @@ export default async function DataCatalogPage({ params, searchParams }: { params
   const shownTags = tags.filter((t) => !t.is_reserved);
   const newFieldCount = discovered.filter((f) => !f.surfaced).length;
 
-  // Which discovered fields are already on the roster (as cf:<key>).
-  const { rows: dashRows } = await query<{ layout: Array<{ widget_id: string; config: Record<string, unknown> }> }>(
-    `SELECT layout FROM school_dashboards WHERE school_id = $1 AND dashboard_slug = 'student-roster'`,
+  // Every dashboard that has a Student Roster widget — the main roster plus any
+  // classroom / program hubs. A discovered field can be added to any of them.
+  const { rows: dashRows } = await query<{ dashboard_slug: string; display_name: string | null; layout: WidgetLayout }>(
+    `SELECT dashboard_slug, display_name, layout FROM school_dashboards
+      WHERE school_id = $1 ORDER BY position NULLS LAST, display_name`,
     [school.id]);
-  const rosterWidget = dashRows[0]?.layout?.find((w) => w.widget_id === 'student_roster_rich');
-  const hasRoster = !!rosterWidget;
-  const onCol = new Set((Array.isArray(rosterWidget?.config?.extra_columns) ? rosterWidget!.config.extra_columns as string[] : []));
-  const onFilter = new Set((Array.isArray(rosterWidget?.config?.extra_filters) ? rosterWidget!.config.extra_filters as string[] : []));
+  const rosterDashboards = dashRows
+    .map((d) => {
+      const w = (d.layout ?? []).find((x) => x.widget_id === ROSTER_WIDGET);
+      if (!w) return null;
+      return {
+        slug: d.dashboard_slug,
+        name: d.display_name || d.dashboard_slug,
+        cols: new Set(attrList(w.config, 'extra_columns')),
+        filters: new Set(attrList(w.config, 'extra_filters')),
+      };
+    })
+    .filter((d): d is NonNullable<typeof d> => d !== null);
+  const hasRoster = rosterDashboards.length > 0;
+  const dashOptions = rosterDashboards.map((d) => ({ slug: d.slug, name: d.name }));
+  // Default the picker to the main Student Roster when present.
+  const defaultSlug = rosterDashboards.find((d) => d.slug === 'student-roster')?.slug ?? dashOptions[0]?.slug ?? '';
 
   return (
     <main className="flex flex-1 flex-col items-center bg-slate-50 p-6 min-h-screen">
@@ -63,7 +86,8 @@ export default async function DataCatalogPage({ params, searchParams }: { params
         </div>
         <p className="max-w-2xl text-sm text-slate-600">
           Every field and tag in your Growth Suite account, discovered automatically on each sync.
-          Add any field you added in GHL straight to your Student Roster as a column or filter — in one click.
+          Add any field you added in GHL as a column or filter on any of your dashboards — the main
+          roster or a specific classroom hub — in one click.
         </p>
 
         {msg ? <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">{msg}</div> : null}
@@ -72,7 +96,7 @@ export default async function DataCatalogPage({ params, searchParams }: { params
         {newFieldCount > 0 ? (
           <div className="flex items-center gap-2 rounded-lg border border-emerald-300 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
             <Sparkles className="h-4 w-4 shrink-0 text-emerald-700" />
-            <span><span className="font-semibold">{newFieldCount} new field{newFieldCount === 1 ? '' : 's'}</span> discovered — add the ones you want to your roster below.</span>
+            <span><span className="font-semibold">{newFieldCount} new field{newFieldCount === 1 ? '' : 's'}</span> discovered — add the ones you want to a dashboard below.</span>
           </div>
         ) : null}
 
@@ -88,12 +112,12 @@ export default async function DataCatalogPage({ params, searchParams }: { params
 
         {!hasRoster ? (
           <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-            You don&rsquo;t have a Student Roster dashboard yet. Add it from{' '}
+            You don&rsquo;t have a roster-style dashboard yet. Add a Student Roster from{' '}
             <Link href={`/school/${locationId}/dashboards/new`} className="underline">Add dashboard</Link> to use fields as columns.
           </div>
         ) : null}
 
-        {/* Discovered fields — one-click add to the roster */}
+        {/* Discovered fields — one-click add to any roster dashboard */}
         <section className="rounded-xl border border-black/10 bg-white p-4">
           <h2 className="text-sm font-semibold text-slate-900">Discovered fields ({discovered.length})</h2>
           <p className="text-[11px] text-slate-500">Fields you added in GHL beyond the standard set.</p>
@@ -103,32 +127,33 @@ export default async function DataCatalogPage({ params, searchParams }: { params
             <div className="mt-3 divide-y divide-slate-100">
               {discovered.map((f) => {
                 const attrKey = `cf:${f.field_key}`;
-                const isCol = onCol.has(attrKey);
-                const isFilter = onFilter.has(attrKey);
                 const isChoice = (f.data_type ?? '').toUpperCase().includes('OPTION') || f.options.length > 0;
+                const placements = rosterDashboards.flatMap((d) => [
+                  ...(d.cols.has(attrKey) ? [{ slug: d.slug, name: d.name, kind: 'column' as const }] : []),
+                  ...(d.filters.has(attrKey) ? [{ slug: d.slug, name: d.name, kind: 'filter' as const }] : []),
+                ]);
                 return (
-                  <div key={f.field_key} className="flex items-center justify-between gap-3 py-2">
-                    <div className="min-w-0">
-                      <div className="truncate text-sm text-slate-800">
-                        {f.label || f.field_key}
-                        {!f.surfaced ? <span className="ml-2 rounded bg-emerald-100 px-1 py-0.5 text-[9px] font-semibold uppercase text-emerald-700">new</span> : null}
+                  <div key={f.field_key} className="py-2.5">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="truncate text-sm text-slate-800">
+                          {f.label || f.field_key}
+                          {!f.surfaced ? <span className="ml-2 rounded bg-emerald-100 px-1 py-0.5 text-[9px] font-semibold uppercase text-emerald-700">new</span> : null}
+                        </div>
+                        <div className="text-[10px] text-slate-400">
+                          {prettyType[f.data_type ?? ''] ?? f.data_type ?? 'Text'}{f.options.length > 0 ? ` · ${f.options.length} options` : ''}
+                        </div>
                       </div>
-                      <div className="text-[10px] text-slate-400">
-                        {prettyType[f.data_type ?? ''] ?? f.data_type ?? 'Text'}{f.options.length > 0 ? ` · ${f.options.length} options` : ''}
-                      </div>
+                      {hasRoster ? (
+                        <AddControls locationId={locationId} fieldKey={f.field_key} isChoice={isChoice} dashboards={dashOptions} defaultSlug={defaultSlug} />
+                      ) : null}
                     </div>
-                    {hasRoster ? (
-                      <div className="flex shrink-0 items-center gap-1.5">
-                        {isCol ? (
-                          <RemoveBtn locationId={locationId} fieldKey={f.field_key} kind="column" label="✓ Column" />
-                        ) : (
-                          <AddBtn locationId={locationId} fieldKey={f.field_key} kind="column" label="+ Column" />
-                        )}
-                        {isChoice ? (
-                          isFilter
-                            ? <RemoveBtn locationId={locationId} fieldKey={f.field_key} kind="filter" label="✓ Filter" />
-                            : <AddBtn locationId={locationId} fieldKey={f.field_key} kind="filter" label="+ Filter" />
-                        ) : null}
+                    {placements.length > 0 ? (
+                      <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                        <span className="text-[10px] uppercase tracking-wide text-slate-400">On:</span>
+                        {placements.map((p) => (
+                          <PlacementChip key={`${p.slug}:${p.kind}`} locationId={locationId} fieldKey={f.field_key} slug={p.slug} name={p.name} kind={p.kind} />
+                        ))}
                       </div>
                     ) : null}
                   </div>
@@ -165,26 +190,48 @@ export default async function DataCatalogPage({ params, searchParams }: { params
   );
 }
 
-function AddBtn({ locationId, fieldKey, kind, label }: { locationId: string; fieldKey: string; kind: string; label: string }) {
+// Pick a target dashboard, then add the field to it as a column or filter.
+// One form: the select carries dashboard_slug; each button carries its kind.
+function AddControls({ locationId, fieldKey, isChoice, dashboards, defaultSlug }: {
+  locationId: string; fieldKey: string; isChoice: boolean;
+  dashboards: Array<{ slug: string; name: string }>; defaultSlug: string;
+}) {
+  const btn = 'inline-flex items-center gap-1 rounded border border-emerald-300 bg-emerald-50 px-2 py-1 text-[11px] font-medium text-emerald-800 hover:bg-emerald-100';
   return (
-    <form action={`/api/school/${locationId}/data-catalog/add-to-roster`} method="POST">
+    <form action={`/api/school/${locationId}/data-catalog/add-to-roster`} method="POST" className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
       <input type="hidden" name="field_key" value={fieldKey} />
-      <input type="hidden" name="kind" value={kind} />
-      <button type="submit" className="inline-flex items-center gap-1 rounded border border-emerald-300 bg-emerald-50 px-2 py-1 text-[11px] font-medium text-emerald-800 hover:bg-emerald-100">
-        <Plus className="h-3 w-3" /> {label}
+      {dashboards.length > 1 ? (
+        <select name="dashboard_slug" defaultValue={defaultSlug} className="max-w-[10rem] rounded border border-slate-300 bg-white px-1.5 py-1 text-[11px] text-slate-700">
+          {dashboards.map((d) => <option key={d.slug} value={d.slug}>{d.name}</option>)}
+        </select>
+      ) : (
+        <input type="hidden" name="dashboard_slug" value={defaultSlug} />
+      )}
+      <button type="submit" name="kind" value="column" className={btn}>
+        <Plus className="h-3 w-3" /> Column
       </button>
+      {isChoice ? (
+        <button type="submit" name="kind" value="filter" className={btn}>
+          <Plus className="h-3 w-3" /> Filter
+        </button>
+      ) : null}
     </form>
   );
 }
 
-function RemoveBtn({ locationId, fieldKey, kind, label }: { locationId: string; fieldKey: string; kind: string; label: string }) {
+// A current placement, shown as a removable chip: "Tower Hub · filter ✕".
+function PlacementChip({ locationId, fieldKey, slug, name, kind }: {
+  locationId: string; fieldKey: string; slug: string; name: string; kind: 'column' | 'filter';
+}) {
   return (
-    <form action={`/api/school/${locationId}/data-catalog/add-to-roster`} method="POST" title="Click to remove from the roster">
+    <form action={`/api/school/${locationId}/data-catalog/add-to-roster`} method="POST" title="Click to remove from this dashboard">
       <input type="hidden" name="field_key" value={fieldKey} />
+      <input type="hidden" name="dashboard_slug" value={slug} />
       <input type="hidden" name="kind" value={kind} />
       <input type="hidden" name="remove" value="1" />
-      <button type="submit" className="inline-flex items-center gap-1 rounded border border-slate-300 bg-slate-50 px-2 py-1 text-[11px] font-medium text-slate-600 hover:bg-slate-100">
-        <Check className="h-3 w-3 text-emerald-600" /> {label}
+      <button type="submit" className="inline-flex items-center gap-1 rounded-full border border-slate-300 bg-slate-50 px-2 py-0.5 text-[10px] text-slate-600 hover:border-rose-300 hover:bg-rose-50 hover:text-rose-600">
+        {name} · {kind}
+        <X className="h-2.5 w-2.5" />
       </button>
     </form>
   );
