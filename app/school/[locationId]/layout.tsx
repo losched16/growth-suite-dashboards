@@ -20,6 +20,13 @@ export const revalidate = 0;
 // no sidebar, no school header. Operators copy a separate embed URL for
 // each dashboard they want to show.
 //
+// `?chrome=classrooms`: teacher-safe nav. Renders the shell with ONLY the
+// classroom hubs in the sidebar (no office dashboards, no Parent Portal /
+// Tools sections), so one GHL menu link can serve every teacher and they
+// switch rooms inside the iframe. Nav links carry the param so the mode
+// survives navigation (schools in the proxy's force-no-chrome list would
+// otherwise unwrap to bare pages on the first click).
+//
 // Per brief §10.3, the CSP `frame-ancestors` header is set in
 // next.config.ts so GHL can iframe-embed us.
 
@@ -38,9 +45,11 @@ export default async function SchoolLayout({
   // none` when the operator passes `?chrome=none`, and forces it on for
   // the GHL-native Payments hub (which brings its own header).
   const reqHeaders = await headers();
-  if (reqHeaders.get('x-chrome') === 'none') {
+  const chromeMode = reqHeaders.get('x-chrome');
+  if (chromeMode === 'none') {
     return <div className="min-h-screen bg-gray-50">{children}</div>;
   }
+  const classroomsOnly = chromeMode === 'classrooms';
 
   // Standalone schools: the full-shell experience requires a signed-in
   // staff session (or an operator session) — anonymous hits bounce to
@@ -57,7 +66,10 @@ export default async function SchoolLayout({
     ? schoolSession.user_name || schoolSession.user_email
     : null;
 
-  const dashboards = await listSchoolDashboards(school.id, { onlyEnabled: true });
+  const allDashboards = await listSchoolDashboards(school.id, { onlyEnabled: true });
+  const dashboards = classroomsOnly
+    ? allDashboards.filter((d) => d.dashboard_slug.startsWith('classroom'))
+    : allDashboards;
 
   // Build a slug → icon map from the static registry so the nav knows
   // which icon to show for each dashboard.
@@ -75,6 +87,8 @@ export default async function SchoolLayout({
       activeSlug={null /* pages override the highlight via the URL */}
       iconBySlug={iconBySlug}
       signedInAs={signedInAs}
+      linkSuffix={classroomsOnly ? '?chrome=classrooms' : ''}
+      minimal={classroomsOnly}
     >
       {children}
     </DashboardShell>

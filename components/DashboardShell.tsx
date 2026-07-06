@@ -10,10 +10,15 @@ interface Props {
   // Shown for staff magic-link sessions (standalone schools) — renders
   // a sign-out control above the content.
   signedInAs?: string | null;
+  // Appended to every dashboard nav link (e.g. '?chrome=classrooms') so a
+  // scoped-nav mode survives navigation inside the iframe.
+  linkSuffix?: string;
+  // Hide the Parent Portal + Tools sections (teacher-facing scoped nav).
+  minimal?: boolean;
   children: React.ReactNode;
 }
 
-export function DashboardShell({ schoolName, locationId, dashboards, activeSlug, iconBySlug, signedInAs, children }: Props) {
+export function DashboardShell({ schoolName, locationId, dashboards, activeSlug, iconBySlug, signedInAs, linkSuffix, minimal, children }: Props) {
   return (
     <div className="flex min-h-screen bg-gray-50">
       <DashboardNav
@@ -22,6 +27,8 @@ export function DashboardShell({ schoolName, locationId, dashboards, activeSlug,
         dashboards={dashboards}
         activeSlug={activeSlug}
         iconBySlug={iconBySlug}
+        linkSuffix={linkSuffix}
+        minimal={minimal}
       />
       <main className="flex-1 min-w-0 p-6 overflow-x-auto">
         {signedInAs ? (
