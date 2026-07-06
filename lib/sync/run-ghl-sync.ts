@@ -871,6 +871,17 @@ export async function runGhlSync(schoolId: string): Promise<SyncResult> {
       [schoolId],
     );
 
+    // Preserve immunization records across the snapshot rebuild. These
+    // tables FK to students(id) ON DELETE CASCADE, so the DELETE below
+    // wipes them — but student ids are preserved (reuseStudentId), so we
+    // stash the rows now and re-insert them after the rebuild for every
+    // student that still exists. Without this, every 15-min sync would
+    // erase all the immunization data staff enter. Same pattern as the
+    // password preservation above. ON COMMIT DROP scopes them to this txn.
+    await q(`CREATE TEMP TABLE _imm_doses_preserve   ON COMMIT DROP AS SELECT * FROM student_immunization_doses   WHERE school_id = $1`, [schoolId]);
+    await q(`CREATE TEMP TABLE _imm_profile_preserve ON COMMIT DROP AS SELECT * FROM student_immunization_profile WHERE school_id = $1`, [schoolId]);
+    await q(`CREATE TEMP TABLE _imm_flags_preserve   ON COMMIT DROP AS SELECT * FROM student_vaccine_flags        WHERE school_id = $1`, [schoolId]);
+
     // Before the rebuild, stamp submitter_email onto any submission missing it,
     // from its current parent. If that parent (or the whole family) is later
     // removed from GHL, we null the dangling parent_id/family_id below — and the
@@ -1038,6 +1049,26 @@ export async function runGhlSync(schoolId: string): Promise<SyncResult> {
          FROM _pw_preserve t
         WHERE p.id = t.id`,
     );
+
+    // Restore preserved immunization records onto the rebuilt student
+    // rows (student ids are preserved, so the FK is satisfied). We only
+    // restore rows whose student still exists after the rebuild — a
+    // child removed from GHL leaves no student to attach to. The temp
+    // tables have identical columns to their source, so SELECT * lines up.
+    let immRestored = 0;
+    for (const tbl of [
+      ['student_immunization_profile', '_imm_profile_preserve'],
+      ['student_immunization_doses', '_imm_doses_preserve'],
+      ['student_vaccine_flags', '_imm_flags_preserve'],
+    ] as const) {
+      const res = await q(
+        `INSERT INTO ${tbl[0]} SELECT p.* FROM ${tbl[1]} p
+          WHERE EXISTS (SELECT 1 FROM students s WHERE s.id = p.student_id)
+          ON CONFLICT DO NOTHING`,
+      );
+      immRestored += res.rowCount ?? 0;
+    }
+    if (immRestored > 0) warnings.push(`Preserved ${immRestored} immunization record(s) across the sync.`);
 
     // Robustness guard: a portal submission points at student / parent / family
     // rows by id. When one of those is removed from GHL (contact deleted, or a
