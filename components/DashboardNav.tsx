@@ -16,9 +16,11 @@ interface Props {
   dashboards: SchoolDashboardRow[];
   activeSlug: string | null;
   iconBySlug: Record<string, string>;
+  linkSuffix?: string;
+  minimal?: boolean;
 }
 
-export function DashboardNav({ schoolName, locationId, dashboards, activeSlug, iconBySlug }: Props) {
+export function DashboardNav({ schoolName, locationId, dashboards, activeSlug, iconBySlug, linkSuffix = '', minimal = false }: Props) {
   return (
     <aside className="w-56 shrink-0 border-r border-gray-200 bg-white py-3">
       <div className="px-4 pb-3 mb-2 border-b border-gray-100">
@@ -33,7 +35,7 @@ export function DashboardNav({ schoolName, locationId, dashboards, activeSlug, i
           return (
             <Link
               key={d.id}
-              href={`/school/${locationId}/${d.dashboard_slug}`}
+              href={`/school/${locationId}/${d.dashboard_slug}${linkSuffix}`}
               className={`flex items-center gap-2 rounded px-2 py-1.5 text-sm ${
                 active
                   ? 'bg-emerald-50 text-emerald-800 font-medium'
@@ -46,6 +48,7 @@ export function DashboardNav({ schoolName, locationId, dashboards, activeSlug, i
           );
         })}
       </nav>
+      {minimal ? null : (<>
       {/* Parent Portal — everything that manages what parents see/do. */}
       <div className="px-2 mt-4 pt-3 border-t border-gray-100">
         <div className="px-2 pb-1 text-[10px] font-semibold uppercase tracking-wide text-gray-400">Parent Portal</div>
@@ -91,6 +94,7 @@ export function DashboardNav({ schoolName, locationId, dashboards, activeSlug, i
           <span className="truncate">Import roster (CSV)</span>
         </Link>
       </div>
+      </>)}
     </aside>
   );
 }
