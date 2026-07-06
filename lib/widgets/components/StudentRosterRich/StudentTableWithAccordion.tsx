@@ -212,6 +212,7 @@ export function StudentTableWithAccordion({
             family: data.family,
             parents: data.parents,
             students: data.students,
+            address: data.address ?? null,
             authorized_pickups: data.authorized_pickups ?? [],
             pickup_restrictions: data.pickup_restrictions ?? [],
             health_profiles: data.health_profiles ?? [],
