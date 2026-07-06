@@ -26,7 +26,9 @@ import { CSS } from '@dnd-kit/utilities';
 
 interface Option { value: string; label: string; amount_cents?: number }
 // One conditional test (mirrors the portal's VisibilityCondition).
-export interface VisCondition { field: string; equals: string[] }
+// `source:'prefill'` → `field` is a GHL/catalog fact (a `meta:<key>` prefill
+// source) read from the family's data, not an answer on this form.
+export interface VisCondition { field: string; equals: string[]; source?: 'field' | 'prefill' }
 // Block-level conditional visibility. Legacy single `{ field, equals }` OR
 // multi `{ match, conditions }` (AND / OR). Must stay in sync with the portal
 // (lib/forms/types.ts + prefill.ts isBlockVisible). The builder only writes
@@ -61,24 +63,44 @@ function readRule(vw: VisibleWhen | undefined): { match: 'all' | 'any'; conditio
   if (vw.field) return { match: 'all', conditions: [{ field: vw.field, equals: vw.equals ?? [] }] };
   return null;
 }
-// Serialize back: drop empty conditions; 1 → legacy shape, 2+ → multi shape.
+// Serialize back: drop empty conditions. A single IN-FORM condition collapses
+// to the legacy `{field,equals}` shape (byte-identical, nothing to migrate); a
+// single PREFILL condition keeps the multi shape so its `source` survives.
 function writeRule(match: 'all' | 'any', conditions: VisCondition[]): VisibleWhen | undefined {
-  const clean = conditions.filter((c) => c.field);
+  const clean = conditions.filter((c) => c.field).map((c) =>
+    c.source === 'prefill' ? { field: c.field, equals: c.equals, source: 'prefill' as const } : { field: c.field, equals: c.equals });
   if (clean.length === 0) return undefined;
-  if (clean.length === 1) return { field: clean[0].field, equals: clean[0].equals };
+  if (clean.length === 1 && !('source' in clean[0])) return { field: clean[0].field, equals: clean[0].equals };
   return { match, conditions: clean };
 }
 // Evaluate a rule against live answers — mirror of the portal's isBlockVisible.
+// A prefill-sourced condition reads the simulated fact under `@prefill:<field>`.
 function evalRule(vw: VisibleWhen | undefined, answers: Record<string, string | string[]>): boolean {
   const rule = readRule(vw);
   if (!rule || rule.conditions.length === 0) return true;
   const one = (c: VisCondition) => {
-    const cur = answers[c.field];
+    const cur = answers[c.source === 'prefill' ? `@prefill:${c.field}` : c.field];
     const vals = Array.isArray(cur) ? cur : cur == null || cur === '' ? [] : [cur];
     return c.equals.some((e) => vals.includes(e));
   };
   const res = rule.conditions.map(one);
   return rule.match === 'any' ? res.some(Boolean) : res.every(Boolean);
+}
+
+// Distinct prefill (GHL-fact) sources referenced by any field's rule, with the
+// union of values each is tested against — powers the preview "simulate" panel.
+function prefillSourcesInForm(fields: FieldBlock[]): Array<{ source: string; values: string[] }> {
+  const map = new Map<string, Set<string>>();
+  for (const f of fields) {
+    const rule = readRule(f.visible_when);
+    if (!rule) continue;
+    for (const c of rule.conditions) {
+      if (c.source !== 'prefill' || !c.field) continue;
+      if (!map.has(c.field)) map.set(c.field, new Set());
+      for (const v of c.equals) map.get(c.field)!.add(v);
+    }
+  }
+  return [...map.entries()].map(([source, vals]) => ({ source, values: [...vals] }));
 }
 
 export interface GhlField { key: string; name: string; dataType: string; options: string[] }
@@ -468,6 +490,7 @@ export function FormBuilderV2({
               field={selField}
               allFields={fields}
               ghlFields={ghlFields}
+              metadataKeys={metadataKeys}
               onPatch={(patch) => sel != null && patchField(sel, patch)}
               onConnect={connectSelected}
             />
@@ -521,7 +544,7 @@ function SortableFieldCard({ field, selected, onSelect, onDelete }: {
   );
 }
 
-function Inspector({ field, allFields, ghlFields, onPatch, onConnect }: { field: FieldBlock; allFields: FieldBlock[]; ghlFields: GhlField[]; onPatch: (patch: Partial<FieldBlock>) => void; onConnect: (gf: GhlField | null) => void }) {
+function Inspector({ field, allFields, ghlFields, metadataKeys, onPatch, onConnect }: { field: FieldBlock; allFields: FieldBlock[]; ghlFields: GhlField[]; metadataKeys: string[]; onPatch: (patch: Partial<FieldBlock>) => void; onConnect: (gf: GhlField | null) => void }) {
   const isLayout = field.type === 'section' || field.type === 'paragraph';
   const hasOptions = HAS_OPTIONS.has(field.type);
   // A canonical record source (student.*, parent.*, today) — set as prefill
@@ -628,27 +651,35 @@ function Inspector({ field, allFields, ghlFields, onPatch, onConnect }: { field:
 
       <div className="border-t border-slate-100 pt-3">
         <label className={lbl}>Show this field when</label>
-        <ConditionEditor field={field} allFields={allFields} onPatch={onPatch} input={input} />
+        <ConditionEditor field={field} allFields={allFields} ghlFields={ghlFields} metadataKeys={metadataKeys} onPatch={onPatch} input={input} />
       </div>
     </div>
   );
 }
 
-function ConditionEditor({ field, allFields, onPatch, input }: {
-  field: FieldBlock; allFields: FieldBlock[];
+function ConditionEditor({ field, allFields, ghlFields, metadataKeys, onPatch, input }: {
+  field: FieldBlock; allFields: FieldBlock[]; ghlFields: GhlField[]; metadataKeys: string[];
   onPatch: (patch: Partial<FieldBlock>) => void; input: string;
 }) {
   const rule = readRule(field.visible_when);
   const candidates = allFields.filter((f) => f.key && f.key !== field.key && f.type !== 'section' && f.type !== 'paragraph');
 
+  // A GHL fact's condition `field` is the same `meta:<key>` prefill source the
+  // renderer resolves — so reuse the exact key alias-matching used for prefill.
+  const metaKeyFor = (gf: GhlField) => `meta:${resolvePrefillKey(gf.key, metadataKeys)}`;
+  const gfForCond = (c: VisCondition) => c.source === 'prefill' ? ghlFields.find((g) => metaKeyFor(g) === c.field) : undefined;
+  const defaultCond = (): VisCondition =>
+    candidates[0]?.key ? { field: candidates[0].key, equals: [] }
+      : ghlFields[0] ? { field: metaKeyFor(ghlFields[0]), equals: [], source: 'prefill' }
+      : { field: '', equals: [] };
+  const canBuild = candidates.length > 0 || ghlFields.length > 0;
+
   if (!rule) {
-    if (candidates.length === 0) {
-      return <p className="text-[11px] text-slate-400">Always shown — add another field first to build a rule.</p>;
-    }
+    if (!canBuild) return <p className="text-[11px] text-slate-400">Always shown — add another field first to build a rule.</p>;
     return (
       <div>
         <p className="mb-2 text-[11px] text-slate-500">Always shown.</p>
-        <button onClick={() => onPatch({ visible_when: writeRule('all', [{ field: candidates[0].key as string, equals: [] }]) })}
+        <button onClick={() => onPatch({ visible_when: writeRule('all', [defaultCond()]) })}
           className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700 hover:underline">
           <Plus className="h-3.5 w-3.5" /> Add a rule
         </button>
@@ -660,6 +691,19 @@ function ConditionEditor({ field, allFields, onPatch, input }: {
   const commit = (m: 'all' | 'any', cs: VisCondition[]) => onPatch({ visible_when: writeRule(m, cs) });
   const setCond = (i: number, patch: Partial<VisCondition>) =>
     commit(match, conditions.map((c, j) => (j === i ? { ...c, ...patch } : c)));
+  // Picking from the "Facts we know" group prefixes the value with @ghl:.
+  const onPickField = (i: number, value: string) => {
+    if (value.startsWith('@ghl:')) {
+      const gf = ghlFields.find((g) => g.key === value.slice(5));
+      if (gf) setCond(i, { field: metaKeyFor(gf), equals: [], source: 'prefill' });
+    } else {
+      setCond(i, { field: value, equals: [], source: 'field' });
+    }
+  };
+  const selectValue = (c: VisCondition) => {
+    if (c.source === 'prefill') { const gf = gfForCond(c); return gf ? `@ghl:${gf.key}` : ''; }
+    return c.field;
+  };
 
   return (
     <div className="space-y-2 rounded-md border border-slate-200 bg-slate-50 p-2.5">
@@ -675,8 +719,16 @@ function ConditionEditor({ field, allFields, onPatch, input }: {
       ) : null}
 
       {conditions.map((c, i) => {
-        const ref = allFields.find((f) => f.key === c.field);
-        const refOptions: Option[] = ref?.options ?? (ref?.type === 'checkbox' ? [{ value: '1', label: 'Checked' }] : []);
+        // Value options for the "is any of" picker: for a GHL fact use that
+        // field's picklist; for an in-form field use its options.
+        let refOptions: Option[] = [];
+        if (c.source === 'prefill') {
+          const gf = gfForCond(c);
+          refOptions = gf ? gf.options.map((o) => ({ value: o, label: o })) : [];
+        } else {
+          const ref = allFields.find((f) => f.key === c.field);
+          refOptions = ref?.options ?? (ref?.type === 'checkbox' ? [{ value: '1', label: 'Checked' }] : []);
+        }
         const toggle = (v: string) => {
           const set = new Set(c.equals);
           if (set.has(v)) set.delete(v); else set.add(v);
@@ -687,9 +739,21 @@ function ConditionEditor({ field, allFields, onPatch, input }: {
             {i > 0 ? (
               <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{match === 'any' ? 'or' : 'and'}</p>
             ) : null}
-            <select className={input} value={c.field} onChange={(e) => setCond(i, { field: e.target.value, equals: [] })}>
-              {candidates.map((f) => <option key={f.key} value={f.key as string}>{f.label || f.key}</option>)}
+            <select className={input} value={selectValue(c)} onChange={(e) => onPickField(i, e.target.value)}>
+              {candidates.length > 0 ? (
+                <optgroup label="Fields on this form">
+                  {candidates.map((f) => <option key={f.key} value={f.key as string}>{f.label || f.key}</option>)}
+                </optgroup>
+              ) : null}
+              {ghlFields.length > 0 ? (
+                <optgroup label="Facts we know (from GHL)">
+                  {ghlFields.map((g) => <option key={g.key} value={`@ghl:${g.key}`}>{g.name}</option>)}
+                </optgroup>
+              ) : null}
             </select>
+            {c.source === 'prefill' ? (
+              <p className="text-[10px] text-emerald-700">A fact we already know about the family — no question added to the form.</p>
+            ) : null}
             <p className="text-[11px] text-slate-500">is any of</p>
             {refOptions.length > 0 ? (
               <div className="space-y-1">
@@ -715,8 +779,8 @@ function ConditionEditor({ field, allFields, onPatch, input }: {
       })}
 
       <div className="flex items-center justify-between border-t border-slate-200 pt-2">
-        <button onClick={() => commit(match, [...conditions, { field: (candidates[0]?.key as string) ?? '', equals: [] }])}
-          disabled={candidates.length === 0}
+        <button onClick={() => commit(match, [...conditions, defaultCond()])}
+          disabled={!canBuild}
           className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-700 hover:underline disabled:text-slate-300 disabled:no-underline">
           <Plus className="h-3 w-3" /> Add condition
         </button>
@@ -741,12 +805,35 @@ function FormPreview({ fields, settings, answers, setAnswers }: {
   const visible = (f: FieldBlock): boolean => evalRule(f.visible_when, answers);
   const input = 'w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 disabled:bg-slate-50 disabled:text-slate-500';
   const muted = 'rounded-lg border border-dashed border-slate-300 bg-slate-50 px-3 py-2.5 text-xs text-slate-500';
+  // GHL facts any rule gates on — real families supply these at runtime; here
+  // the operator sets them by hand to watch the conditional logic react.
+  const simSources = prefillSourcesInForm(fields);
 
   const shown = fields.filter(visible);
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
       <h2 className="text-lg font-semibold text-slate-900">{settings.display_name}</h2>
       {settings.description ? <p className="mt-1 text-sm text-slate-500">{settings.description}</p> : null}
+      {simSources.length > 0 ? (
+        <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50/60 p-3">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-800">Simulate family data</p>
+          <p className="mb-2 text-[11px] text-emerald-700">These facts come from GHL for the real family — set them here to test your rules.</p>
+          <div className="space-y-2">
+            {simSources.map((s) => {
+              const cur = answers[`@prefill:${s.source}`];
+              return (
+                <label key={s.source} className="block text-xs font-medium text-slate-700">
+                  {s.source.replace(/^meta:/, '').replace(/_/g, ' ')}
+                  <select className={input} value={typeof cur === 'string' ? cur : ''} onChange={(e) => set(`@prefill:${s.source}`, e.target.value)}>
+                    <option value="">— not set —</option>
+                    {s.values.map((v) => <option key={v} value={v}>{v}</option>)}
+                  </select>
+                </label>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
       <div className="mt-5 space-y-5">
         {shown.length === 0 ? <p className="text-sm text-slate-400">Nothing to show yet.</p> : null}
         {shown.map((f, i) => {
