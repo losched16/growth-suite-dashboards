@@ -81,6 +81,15 @@ export interface StudentRosterConfig {
   // classroom without the operator having to pick the filter. URL param
   // `?homeroom=...` still wins if explicitly set (operator can override).
   default_homeroom_filter?: string;
+  // Teacher dashboards: pin the roster to default_homeroom_filter — the
+  // `?homeroom=` URL param is IGNORED, so a teacher can't widen a
+  // classroom hub to the whole school by editing the URL.
+  lock_homeroom?: boolean;
+  // Hide the ⚙ Customize + Sync buttons (teacher dashboards). Customize
+  // opens the school-wide roster-settings editor, which links to (and
+  // edits) the full Student Roster — an escape hatch teachers must not
+  // have. Default true (office rosters unchanged).
+  show_customize?: boolean;
   // Program-scoped dashboards (Upper El, MYHS) set this — these are
   // multi-classroom teacher groups where students share a program but
   // not a single homeroom. URL `?program=...` still wins.
