@@ -116,6 +116,9 @@ export interface FormAppliesTo {
   addon_keys?: string[];
   student_ids?: string[];
   metadata_match?: Record<string, string[]>;
+  // Exclusion: families carrying any of these tags never see the form,
+  // regardless of the inclusion rules (office pushes still override).
+  tag_exclude?: string[];
 }
 
 export interface FormSettings {
@@ -965,6 +968,9 @@ function WhoSeesEditor({ settings, onPatch, programOptions, gradeOptions, tagOpt
   const grades = at.metadata_match?.grade_level ?? [];
   const tags = at.tag_match ?? [];
   const studentIds = at.student_ids ?? [];
+  const excl = at.tag_exclude ?? [];
+  // Exclusion deliberately does NOT count as a "rule": "Everyone (except
+  // tagged-out families)" keeps the Everyone radio selected.
   const hasRule = programs.length > 0 || grades.length > 0 || tags.length > 0 || studentIds.length > 0;
   // Student search for the "Specific students" picker.
   const [stuSearch, setStuSearch] = useState('');
@@ -1020,7 +1026,9 @@ function WhoSeesEditor({ settings, onPatch, programOptions, gradeOptions, tagOpt
       ) : (
         <>
           <label className="mb-1.5 flex items-center gap-2 text-sm text-slate-700">
-            <input type="radio" checked={!hasRule} onChange={() => onPatch({ applies_to: null })} className="h-4 w-4 text-emerald-600" />
+            <input type="radio" checked={!hasRule}
+              onChange={() => onPatch({ applies_to: excl.length ? { tag_exclude: excl } : null })}
+              className="h-4 w-4 text-emerald-600" />
             Everyone
           </label>
           <label className="mb-2 flex items-center gap-2 text-sm text-slate-700">
@@ -1093,6 +1101,28 @@ function WhoSeesEditor({ settings, onPatch, programOptions, gradeOptions, tagOpt
                 <p className="text-[11px] text-amber-600">Turn on “One form per student” above to target by program or grade.</p>
               ) : null}
               <p className="text-[11px] text-slate-400">A family only sees the form for the children who match. Pick at least one — otherwise it shows to everyone.</p>
+            </div>
+          ) : null}
+          {tagList.length > 0 || excl.length > 0 ? (
+            <div className="mt-3 rounded-md border border-rose-200 bg-rose-50/50 p-2.5">
+              <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-rose-700">Hide from families with these tags</div>
+              <p className="mb-1.5 text-[11px] text-slate-500">
+                Tagged families never see this form — even with &ldquo;Everyone&rdquo; selected. Typical use:
+                hide the enrollment agreement from already-enrolled families. Sending it directly to a
+                family still overrides this.
+              </p>
+              {Array.from(new Set([...tagOptions, ...excl])).map((t) => (
+                <label key={t} className="flex items-center gap-2 text-xs text-slate-700">
+                  <input type="checkbox" checked={excl.includes(t)}
+                    onChange={() => {
+                      const next = toggleIn(excl, t);
+                      const base: FormAppliesTo = { ...(settings.applies_to ?? {}) };
+                      if (next.length) base.tag_exclude = next; else delete base.tag_exclude;
+                      onPatch({ applies_to: Object.keys(base).length === 0 ? null : base });
+                    }}
+                    className="h-3.5 w-3.5 rounded border-rose-300 text-rose-600" />{t}
+                </label>
+              ))}
             </div>
           ) : null}
         </>

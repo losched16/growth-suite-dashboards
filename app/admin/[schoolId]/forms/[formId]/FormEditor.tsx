@@ -77,6 +77,9 @@ interface FormAppliesTo {
   metadata_match?: Record<string, string[]>;
   addon_keys?: string[];
   student_ids?: string[];
+  // Exclusion: families carrying any of these tags never see the form,
+  // regardless of the inclusion rules above (office pushes still override).
+  tag_exclude?: string[];
 }
 
 interface InitialState {
@@ -175,12 +178,12 @@ export function FormEditor({
   // metadata_match keys like aftercare) are stashed and merged back in
   // untouched on save, so this screen can never clobber an advanced rule
   // set up out-of-band.
-  const otherCriteria = useMemo<Omit<FormAppliesTo, 'program_match' | 'tag_match' | 'student_ids'>>(() => {
-    const { program_match, tag_match, student_ids, metadata_match, ...rest } = initial.applies_to ?? {};
-    void program_match; void tag_match; void student_ids;
+  const otherCriteria = useMemo<Omit<FormAppliesTo, 'program_match' | 'tag_match' | 'student_ids' | 'tag_exclude'>>(() => {
+    const { program_match, tag_match, student_ids, tag_exclude, metadata_match, ...rest } = initial.applies_to ?? {};
+    void program_match; void tag_match; void student_ids; void tag_exclude;
     // Preserve every metadata_match key EXCEPT grade_level, which this
     // screen owns. Keeps e.g. the DHS form's `aftercare` rule intact.
-    const out: Omit<FormAppliesTo, 'program_match' | 'tag_match' | 'student_ids'> = { ...rest };
+    const out: Omit<FormAppliesTo, 'program_match' | 'tag_match' | 'student_ids' | 'tag_exclude'> = { ...rest };
     if (metadata_match) {
       const { grade_level, ...mmRest } = metadata_match;
       void grade_level;
@@ -217,6 +220,15 @@ export function FormEditor({
   const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>(
     initial.applies_to?.student_ids ?? [],
   );
+  // Exclusion tags — independent of the show-to radio: families carrying
+  // any of these never see the form even when "everyone" is selected.
+  const [excludedTags, setExcludedTags] = useState<string[]>(
+    initial.applies_to?.tag_exclude ?? [],
+  );
+  const excludeChecklist = useMemo(() => {
+    const stored = initial.applies_to?.tag_exclude ?? [];
+    return Array.from(new Set([...tagOptions, ...stored]));
+  }, [tagOptions, initial.applies_to]);
   const [studentSearch, setStudentSearch] = useState('');
   const restrictedInitially =
     (initial.applies_to?.program_match?.length ?? 0) > 0 ||
@@ -240,6 +252,8 @@ export function FormEditor({
         base.metadata_match = { ...(base.metadata_match ?? {}), grade_level: selectedGrades };
       }
     }
+    // Exclusion applies in BOTH modes — "everyone except…" is the whole point.
+    if (excludedTags.length > 0) base.tag_exclude = excludedTags;
     return Object.keys(base).length ? base : null;
   }
 
@@ -549,6 +563,43 @@ export function FormEditor({
                 )}
               </div>
             ) : null}
+
+            {/* Exclusion — independent of the show-to radio above. */}
+            <div className="rounded-md border border-rose-200 bg-rose-50/40 p-3 space-y-1.5">
+              <div className="text-[10px] font-semibold uppercase tracking-wide text-rose-700">
+                Hide from families with these tags
+              </div>
+              <p className="text-[10px] text-zinc-600 -mt-0.5">
+                Families whose GHL contact carries a checked tag never see this form — even when
+                &ldquo;everyone&rdquo; is selected above. Typical use: hide the enrollment agreement from
+                already-enrolled families while new families still get it. Sending the form directly
+                to a family (the Send button) still works and overrides this.
+              </p>
+              {excludeChecklist.length === 0 ? (
+                <p className="text-[11px] italic text-zinc-500">No synced tags yet.</p>
+              ) : excludeChecklist.map((tag) => (
+                <label key={tag} className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={excludedTags.includes(tag)}
+                    onChange={(e) => {
+                      setExcludedTags(
+                        e.target.checked
+                          ? [...excludedTags, tag]
+                          : excludedTags.filter((x) => x !== tag),
+                      );
+                    }}
+                    className="h-4 w-4 rounded border-rose-300"
+                  />
+                  <span className="text-zinc-800">{tag}</span>
+                </label>
+              ))}
+              {excludedTags.length > 0 ? (
+                <p className="text-[11px] text-rose-700">
+                  Hidden from families tagged: {excludedTags.join(', ')}.
+                </p>
+              ) : null}
+            </div>
 
             {hasOtherCriteria ? (
               <p className="text-[11px] rounded-md bg-sky-50 border border-sky-200 px-2.5 py-2 text-sky-800">

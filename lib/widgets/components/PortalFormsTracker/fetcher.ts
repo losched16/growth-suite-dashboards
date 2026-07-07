@@ -84,6 +84,10 @@ interface DbForm {
   category: string | null;
   per_student: boolean;
   position: number;
+  // Tag-based visibility rules (subset of applies_to the tracker can
+  // evaluate at the family level). A form hidden from a family must not
+  // count as "missing" for them.
+  applies_to: { tag_match?: string[]; tag_exclude?: string[] } | null;
 }
 
 interface DbStudent {
@@ -127,7 +131,7 @@ export async function fetcher(
 
   // 1. Active parent-portal forms
   const { rows: forms } = await query<DbForm>(
-    `SELECT id, slug, display_name, category, per_student,
+    `SELECT id, slug, display_name, category, per_student, applies_to,
             COALESCE((field_schema->'sort')::int, 0) AS position
        FROM portal_form_definitions
       WHERE school_id = $1
@@ -249,6 +253,38 @@ export async function fetcher(
     studentsByFamily.get(s.family_id)!.push(s);
   }
 
+  // ── Family → contact tags, to honor tag-based form visibility ─────
+  // A form hidden from a family (applies_to.tag_exclude, or tag_match
+  // they don't carry) must not count as "missing" for them — otherwise
+  // hiding e.g. the enrollment agreement from already-enrolled families
+  // would flip every enrolled family to "not started".
+  const tagsByFamily = new Map<string, Set<string>>();
+  if (familyIds.length > 0) {
+    const { rows: ftRows } = await query<{ family_id: string; tag: string }>(
+      `SELECT DISTINCT p.family_id, LOWER(t.tag) AS tag
+         FROM ghl_contact_tags t
+         JOIN parents p ON p.ghl_contact_id = t.ghl_contact_id
+        WHERE t.school_id = $1 AND p.family_id = ANY($2::uuid[])`,
+      [school.schoolId, familyIds],
+    );
+    for (const r of ftRows) {
+      if (!tagsByFamily.has(r.family_id)) tagsByFamily.set(r.family_id, new Set());
+      tagsByFamily.get(r.family_id)!.add(r.tag);
+    }
+  }
+  function formVisibleToFamily(form: DbForm, familyId: string): boolean {
+    const rule = form.applies_to;
+    if (!rule) return true;
+    const have = tagsByFamily.get(familyId) ?? new Set<string>();
+    if (rule.tag_exclude?.length && rule.tag_exclude.some((t) => have.has(t.toLowerCase()))) {
+      return false;
+    }
+    if (rule.tag_match?.length && !rule.tag_match.some((t) => have.has(t.toLowerCase()))) {
+      return false;
+    }
+    return true;
+  }
+
   // ── Submission lookup tables ────────────────────────────────────
   // For per_student forms: key = `${formId}|${studentId}` → submission
   // For family-level forms: key = `${formId}|${familyId}` → submission
@@ -290,6 +326,11 @@ export async function fetcher(
     let applicableCount = 0;
     let completeCount = 0;
     for (const form of formsForBuild) {
+      // Hidden from this family by tag rules → not applicable, blank cell.
+      if (!formVisibleToFamily(forms.find((f) => f.id === form.id)!, fam.family_id)) {
+        cells[form.id] = [];
+        continue;
+      }
       if (form.per_student) {
         // One chip per student in the family. All of them are "applicable"
         // by default; per-school applicability rules would land here later.
