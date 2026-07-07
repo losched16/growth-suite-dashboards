@@ -18,9 +18,12 @@ interface Props {
   iconBySlug: Record<string, string>;
   linkSuffix?: string;
   minimal?: boolean;
+  // Parent-Portal-only nav (?chrome=portal): hide the Tools section; the
+  // dashboards list is already empty in this mode.
+  portalOnly?: boolean;
 }
 
-export function DashboardNav({ schoolName, locationId, dashboards, activeSlug, iconBySlug, linkSuffix = '', minimal = false }: Props) {
+export function DashboardNav({ schoolName, locationId, dashboards, activeSlug, iconBySlug, linkSuffix = '', minimal = false, portalOnly = false }: Props) {
   return (
     <aside className="w-56 shrink-0 border-r border-gray-200 bg-white py-3">
       <div className="px-4 pb-3 mb-2 border-b border-gray-100">
@@ -53,10 +56,10 @@ export function DashboardNav({ schoolName, locationId, dashboards, activeSlug, i
       <div className="px-2 mt-4 pt-3 border-t border-gray-100">
         <div className="px-2 pb-1 text-[10px] font-semibold uppercase tracking-wide text-gray-400">Parent Portal</div>
         {([
-          { href: `/school/${locationId}/forms`, label: 'Forms', Icon: FilePen },
-          { href: `/school/${locationId}/notifications`, label: 'Notifications', Icon: Bell },
-          { href: `/school/${locationId}/resources`, label: 'Important Documents', Icon: BookOpen },
-          { href: `/school/${locationId}/settings`, label: 'Portal settings', Icon: Settings },
+          { href: `/school/${locationId}/forms${linkSuffix}`, label: 'Forms', Icon: FilePen },
+          { href: `/school/${locationId}/notifications${linkSuffix}`, label: 'Notifications', Icon: Bell },
+          { href: `/school/${locationId}/resources${linkSuffix}`, label: 'Important Documents', Icon: BookOpen },
+          { href: `/school/${locationId}/settings${linkSuffix}`, label: 'Portal settings', Icon: Settings },
         ] as const).map(({ href, label, Icon }) => (
           <Link
             key={href}
@@ -69,6 +72,7 @@ export function DashboardNav({ schoolName, locationId, dashboards, activeSlug, i
         ))}
       </div>
 
+      {portalOnly ? null : (<>
       {/* Tools — data/admin utilities. */}
       <div className="px-2 mt-3 pt-3 border-t border-gray-100">
         <div className="px-2 pb-1 text-[10px] font-semibold uppercase tracking-wide text-gray-400">Tools</div>
@@ -94,6 +98,7 @@ export function DashboardNav({ schoolName, locationId, dashboards, activeSlug, i
           <span className="truncate">Import roster (CSV)</span>
         </Link>
       </div>
+      </>)}
       </>)}
     </aside>
   );

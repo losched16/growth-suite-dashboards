@@ -50,6 +50,11 @@ export default async function SchoolLayout({
     return <div className="min-h-screen bg-gray-50">{children}</div>;
   }
   const classroomsOnly = chromeMode === 'classrooms';
+  // `?chrome=portal`: one GHL menu link for the whole Parent Portal admin
+  // area — sidebar shows ONLY the Parent Portal tools (Forms,
+  // Notifications, Important Documents, Portal settings). No dashboard
+  // list, no Tools section.
+  const portalOnly = chromeMode === 'portal';
 
   // Standalone schools: the full-shell experience requires a signed-in
   // staff session (or an operator session) — anonymous hits bounce to
@@ -67,9 +72,11 @@ export default async function SchoolLayout({
     : null;
 
   const allDashboards = await listSchoolDashboards(school.id, { onlyEnabled: true });
-  const dashboards = classroomsOnly
-    ? allDashboards.filter((d) => d.dashboard_slug.startsWith('classroom'))
-    : allDashboards;
+  const dashboards = portalOnly
+    ? []
+    : classroomsOnly
+      ? allDashboards.filter((d) => d.dashboard_slug.startsWith('classroom'))
+      : allDashboards;
 
   // Build a slug → icon map from the static registry so the nav knows
   // which icon to show for each dashboard.
@@ -87,8 +94,9 @@ export default async function SchoolLayout({
       activeSlug={null /* pages override the highlight via the URL */}
       iconBySlug={iconBySlug}
       signedInAs={signedInAs}
-      linkSuffix={classroomsOnly ? '?chrome=classrooms' : ''}
+      linkSuffix={classroomsOnly ? '?chrome=classrooms' : portalOnly ? '?chrome=portal' : ''}
       minimal={classroomsOnly}
+      portalOnly={portalOnly}
     >
       {children}
     </DashboardShell>

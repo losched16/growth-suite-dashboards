@@ -15,10 +15,12 @@ interface Props {
   linkSuffix?: string;
   // Hide the Parent Portal + Tools sections (teacher-facing scoped nav).
   minimal?: boolean;
+  // Parent-Portal-only nav (?chrome=portal).
+  portalOnly?: boolean;
   children: React.ReactNode;
 }
 
-export function DashboardShell({ schoolName, locationId, dashboards, activeSlug, iconBySlug, signedInAs, linkSuffix, minimal, children }: Props) {
+export function DashboardShell({ schoolName, locationId, dashboards, activeSlug, iconBySlug, signedInAs, linkSuffix, minimal, portalOnly, children }: Props) {
   return (
     <div className="flex min-h-screen bg-gray-50">
       <DashboardNav
@@ -29,6 +31,7 @@ export function DashboardShell({ schoolName, locationId, dashboards, activeSlug,
         iconBySlug={iconBySlug}
         linkSuffix={linkSuffix}
         minimal={minimal}
+        portalOnly={portalOnly}
       />
       <main className="flex-1 min-w-0 p-6 overflow-x-auto">
         {signedInAs ? (
