@@ -254,6 +254,20 @@ interface SchoolFormDef {
   per_student: boolean;
 }
 
+// Placeholder text some imports stuff into the Parent 2 fields when a
+// family has a single parent ("ONLY ONE PARENT", "N/A", "NONE"). Treat
+// those as "no second parent" — otherwise every such family gets a fake
+// active parent record (DGM had 15 of them).
+function isPlaceholderParent2(first: string, last: string, email: string): boolean {
+  const PLACEHOLDER = /^(only\s*one\s*parent|none|n\/?a|no\s*(second\s*)?parent|same)$/i;
+  const name = `${first} ${last}`.replace(/\s+/g, ' ').trim();
+  if (name && PLACEHOLDER.test(name)) return true;
+  if (first && PLACEHOLDER.test(first.trim()) && (!last || PLACEHOLDER.test(last.trim()))) return true;
+  const e = email.trim();
+  if (e && !e.includes('@') && PLACEHOLDER.test(e.replace(/\s+/g, ' '))) return true;
+  return false;
+}
+
 export function mapContactToFamily(
   contact: GhlContact,
   schema: FieldSchema,
@@ -311,7 +325,7 @@ export function mapContactToFamily(
   const p2Last = PARENT2.lastName ? getField(contact, PARENT2.lastName, schema) : '';
   const p2Email = PARENT2.email ? getField(contact, PARENT2.email, schema) : '';
   const p2Phone = PARENT2.phone ? getField(contact, PARENT2.phone, schema) : '';
-  if (p2First || p2Last || p2Email || p2Phone) {
+  if ((p2First || p2Last || p2Email || p2Phone) && !isPlaceholderParent2(p2First, p2Last, p2Email)) {
     parents.push({
       ghl_contact_id: null,
       first_name: p2First,
@@ -532,7 +546,7 @@ function buildProspectiveFamily(
         is_primary: true,
         role: 'parent',
       },
-      ...(p2First || p2Last || p2Email || p2Phone
+      ...((p2First || p2Last || p2Email || p2Phone) && !isPlaceholderParent2(p2First, p2Last, p2Email)
         ? [{
             ghl_contact_id: null,
             first_name: p2First,
