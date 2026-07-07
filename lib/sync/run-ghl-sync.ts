@@ -735,7 +735,18 @@ export async function runGhlSync(schoolId: string): Promise<SyncResult> {
     if (!passesRosterFilter(c)) continue;
     const family = mapContactToFamily(c, schema, config, formDefs, { requireHousehold });
     if (family) {
-      if (isWithdrawn(c)) for (const s of family.students) s.enrollment_status = 'withdrawn';
+      if (isWithdrawn(c)) {
+        for (const s of family.students) s.enrollment_status = 'withdrawn';
+      } else if (rosterTags.length > 0) {
+        // Tag-filtered rosters (settings.roster_tag_filter): the roster tag
+        // itself (e.g. "2026-27 stms") IS the enrolled-class marker — these
+        // schools have no separate enrollment-status field to map, so each
+        // student otherwise defaults to the placeholder "unknown" and never
+        // gets an enrollment row. Force non-withdrawn tagged students to
+        // enrolled so they land on the Student Roster / Family Hub, which
+        // default to the enrolled-only scope.
+        for (const s of family.students) s.enrollment_status = 'enrolled';
+      }
       withHouseholdId++;
       enrolledContactIds.add(c.id);
       mapped.push(family);
