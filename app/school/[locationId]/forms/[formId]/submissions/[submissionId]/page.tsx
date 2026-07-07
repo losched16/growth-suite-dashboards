@@ -204,8 +204,11 @@ export default async function SubmissionDetail({
             {blocks
               // Blocks hidden on the live form (e.g. the internal "add a second
               // parent/guardian" toggle when Parent 2 is already on file) stay
-              // hidden on the admin view too.
-              .filter((block) => (block as { hidden?: boolean }).hidden !== true)
+              // hidden on the admin view too. hide_on_review additionally hides
+              // a field from THIS view/print only (it still shows on the live
+              // form) — e.g. section-reveal toggles that are noise on the PDF.
+              .filter((block) => (block as { hidden?: boolean }).hidden !== true
+                && (block as { hide_on_review?: boolean }).hide_on_review !== true)
               .map((block, i) => (
               <BlockView
                 key={i}

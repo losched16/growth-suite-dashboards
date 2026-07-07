@@ -331,13 +331,17 @@ function SubmissionRow({
 }) {
   // Build a label map so we can show "Student name" instead of raw keys.
   const labelByKey: Record<string, string> = {};
+  const hideOnReview = new Set<string>();
   for (const f of fieldSchema ?? []) {
     if (f.key && f.label) labelByKey[f.key] = f.label;
+    // Fields flagged hide_on_review (e.g. section-reveal toggles like "add a
+    // second parent/guardian") are noise on the reviewed submission.
+    if (f.key && (f as { hide_on_review?: boolean }).hide_on_review === true) hideOnReview.add(f.key);
   }
   // Hide internal `_`/`__` markers (amendment diff, review flags, signed-at
   // timestamps) from the raw response list — rendered specially below.
   const responseEntries = Object.entries(s.responses ?? {}).filter(([k, v]) =>
-    !k.startsWith('_') &&
+    !k.startsWith('_') && !hideOnReview.has(k) &&
     v !== null && v !== undefined && v !== '' && (!Array.isArray(v) || v.length > 0),
   );
 
