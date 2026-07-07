@@ -5,6 +5,7 @@
 import { query } from '@/lib/db';
 import type { SchoolContext, WidgetSearchParams } from '@/lib/widgets/types';
 import type { StudentRosterConfig } from './config';
+import { ghlContactUrl } from '@/lib/ghl/contact-url';
 
 // Filler / no-detail values teachers commonly see in legacy GHL data.
 // Treat these as "no useful prose" — when the field is just "Yes" or
@@ -74,6 +75,9 @@ function ageAtDate(dob: string | null, ref: Date): string {
 export interface RosterStudent {
   student_id: string;
   family_id: string;
+  // Deep-link to the family's GHL contact record (null when no contact id
+  // is on file). Built server-side so the CRM base URL stays off the client.
+  ghl_contact_url: string | null;
   family_display_name: string | null;
   primary_parent_name: string;
   first_name: string;
@@ -708,6 +712,8 @@ export async function fetcher(
       pickup_restrictions: Array.isArray(r.pickup_restrictions_json) ? r.pickup_restrictions_json : [],
       re_enrolled: r.re_enrolled_flag === true,
       search_haystack: haystack,
+      ghl_contact_url: (typeof md.ghl_contact_id === 'string' && md.ghl_contact_id)
+        ? ghlContactUrl(school.locationId, md.ghl_contact_id) : null,
       dynamic: resolveDynamic(r.student_id, r.family_id, md),
     };
   });

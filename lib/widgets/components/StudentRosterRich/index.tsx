@@ -323,18 +323,25 @@ function renderCell(s: RosterStudent, col: ColumnKey, drilldownDashboard: string
       return s.address
         ? <span className="text-gray-700">{s.address}</span>
         : <span className="text-gray-400">—</span>;
-    case 'family':
+    case 'family': {
       // Empty drilldown slug = no click-through (teacher dashboards: the
       // inline row dropdown is the whole family view; the Family Hub it
-      // would link to shows tuition columns).
-      if (!drilldownDashboard) {
-        return <span className="text-gray-700">{s.family_display_name ?? `${s.last_name} Family`}</span>;
-      }
+      // would link to shows tuition columns). Either way, offer an "Open in
+      // GHL" deep-link to the family's contact record (operators flip to the
+      // full CRM record constantly).
+      const famName = s.family_display_name ?? `${s.last_name} Family`;
+      const nameEl = drilldownDashboard
+        ? <Link href={`/school/${locationId}/${drilldownDashboard}/${s.family_id}`} className="text-emerald-700 hover:underline">{famName}</Link>
+        : <span className="text-gray-700">{famName}</span>;
       return (
-        <Link href={`/school/${locationId}/${drilldownDashboard}/${s.family_id}`} className="text-emerald-700 hover:underline">
-          {s.family_display_name ?? `${s.last_name} Family`}
-        </Link>
+        <div className="flex flex-col gap-0.5">
+          {nameEl}
+          {s.ghl_contact_url
+            ? <a href={s.ghl_contact_url} target="_blank" rel="noopener noreferrer" className="text-[11px] text-gray-500 hover:text-emerald-700 hover:underline">Open in GHL ↗</a>
+            : null}
+        </div>
       );
+    }
     case 'documents':
       return (
         <DocumentsCell
