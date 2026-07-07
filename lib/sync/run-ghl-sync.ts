@@ -671,6 +671,126 @@ function buildProspectiveStudents(args: {
   return out;
 }
 
+// ----- Co-parent duplicate merge (opt-in per school) ------------------------
+//
+// Some schools' GHL has each parent of a two-parent family as a SEPARATE
+// contact, and BOTH contacts list the family's children. With no household
+// link, the mapper produces one family per contact, so every child ends up
+// duplicated (one student row per parent). This collapses those: families
+// that share a student (same normalized name + COMPATIBLE date of birth —
+// equal, or one side blank) are merged into a single family carrying both
+// parents and one copy of each child.
+//
+// Safety:
+//   - Gated behind settings.merge_coparent_students (default false), so any
+//     school with one-contact-per-family is a strict no-op (no shared
+//     students → nothing merges).
+//   - A shared NAME with DIFFERENT non-null DOBs is treated as two different
+//     children and left separate (surfaced in `conflicts`), so we never fuse
+//     two genuinely distinct students that happen to share a name.
+//   - Deterministic: the surviving family/primary is chosen by sorted GHL
+//     contact id, so ids stay stable sync-to-sync (portal references hold).
+
+function normStudentName(first: string, last: string): string {
+  return `${first ?? ''} ${last ?? ''}`
+    .toLowerCase().replace(/[^a-z ]/g, '').replace(/\s+/g, ' ').trim();
+}
+
+const _STATUS_RANK: Record<string, number> = {
+  enrolled: 5, accepted: 4, pending: 3, application_submitted: 2,
+  tour_scheduled: 1, inquiry: 0, waitlisted: -1, withdrawn: -2, declined: -3,
+};
+function _statusRank(s: string): number {
+  return _STATUS_RANK[String(s ?? '').toLowerCase().replace(/[\s-]+/g, '_')] ?? -5;
+}
+// Choose the record to keep when the same child appears on two contacts:
+// most-progressed enrollment wins; tie → the one with a DOB; then richer
+// metadata. Backfill DOB/gender from the loser so no detail is lost.
+function pickRicherStudent(a: MappedStudent, b: MappedStudent): MappedStudent {
+  let win = a, lose = b;
+  const ra = _statusRank(a.enrollment_status), rb = _statusRank(b.enrollment_status);
+  if (rb > ra) { win = b; lose = a; }
+  else if (rb === ra) {
+    if (!a.date_of_birth && b.date_of_birth) { win = b; lose = a; }
+    else if (Object.keys(b.metadata).length > Object.keys(a.metadata).length) { win = b; lose = a; }
+  }
+  const merged = { ...win };
+  if (!merged.date_of_birth && lose.date_of_birth) merged.date_of_birth = lose.date_of_birth;
+  if (!merged.gender && lose.gender) merged.gender = lose.gender;
+  return merged;
+}
+
+export function mergeCoparentFamilies(
+  families: MappedFamily[],
+): { merged: MappedFamily[]; mergedGroups: number; conflicts: string[] } {
+  const n = families.length;
+  const uf = Array.from({ length: n }, (_, i) => i);
+  const find = (x: number): number => { while (uf[x] !== x) { uf[x] = uf[uf[x]]; x = uf[x]; } return x; };
+  const union = (a: number, b: number) => { const ra = find(a), rb = find(b); if (ra !== rb) uf[ra] = rb; };
+
+  // name → [{ fam, dob }]
+  const byName = new Map<string, Array<{ fam: number; dob: string | null }>>();
+  families.forEach((f, i) => {
+    for (const s of f.students) {
+      const k = normStudentName(s.first_name, s.last_name);
+      if (!k) continue;
+      (byName.get(k) ?? byName.set(k, []).get(k)!).push({ fam: i, dob: s.date_of_birth ?? null });
+    }
+  });
+
+  const conflicts: string[] = [];
+  for (const [name, recs] of byName) {
+    const distinctDobs = new Set(recs.map((r) => r.dob).filter(Boolean));
+    if (distinctDobs.size >= 2) { conflicts.push(name); continue; } // ambiguous → don't merge
+    const fams = [...new Set(recs.map((r) => r.fam))];
+    for (let j = 1; j < fams.length; j++) union(fams[0], fams[j]);
+  }
+
+  const groups = new Map<number, number[]>();
+  for (let i = 0; i < n; i++) { const r = find(i); (groups.get(r) ?? groups.set(r, []).get(r)!).push(i); }
+
+  let mergedGroups = 0;
+  const out: MappedFamily[] = [];
+  for (const idxs of groups.values()) {
+    if (idxs.length === 1) { out.push(families[idxs[0]]); continue; }
+    mergedGroups++;
+    const gcOf = (f: MappedFamily) => f.parents.find((p) => p.is_primary)?.ghl_contact_id ?? '';
+    const grp = idxs.map((i) => families[i]).sort((a, b) => (gcOf(a) < gcOf(b) ? -1 : gcOf(a) > gcOf(b) ? 1 : 0));
+
+    // Merge parents — dedupe by contact id / email / name.
+    const parents: MappedParent[] = [];
+    const seen = new Set<string>();
+    for (const f of grp) for (const p of f.parents) {
+      const pk = (p.ghl_contact_id || p.email?.toLowerCase() || `${p.first_name} ${p.last_name}`.toLowerCase()).trim();
+      if (!pk || seen.has(pk)) continue;
+      seen.add(pk); parents.push({ ...p });
+    }
+    let hasPrimary = false;
+    for (const p of parents) { if (p.is_primary && !hasPrimary) hasPrimary = true; else p.is_primary = false; }
+    if (!hasPrimary && parents[0]) parents[0].is_primary = true;
+
+    // Merge students — one per normalized name (families here don't have a
+    // DOB conflict for any shared name, so name is a safe key within the group).
+    const byKey = new Map<string, MappedStudent>();
+    for (const f of grp) for (const s of f.students) {
+      const k = normStudentName(s.first_name, s.last_name) || `${s.first_name}|${s.last_name}`;
+      const ex = byKey.get(k);
+      byKey.set(k, ex ? pickRicherStudent(ex, s) : s);
+    }
+    const students = [...byKey.values()];
+    const primary = parents.find((p) => p.is_primary) ?? parents[0];
+    const lastName = primary?.last_name || students[0]?.last_name || '';
+    out.push({
+      display_name: lastName ? `${lastName} Family` : grp[0].display_name,
+      notes: grp[0].notes,
+      status: 'active',
+      parents,
+      students,
+    });
+  }
+  return { merged: out, mergedGroups, conflicts };
+}
+
 // ----- Orchestrator ---------------------------------------------------------
 
 export interface SyncResult {
@@ -685,6 +805,7 @@ export interface SyncResult {
   enrollments_created: number;
   classrooms_created: number;
   p2_contact_ids_carried_forward: number;
+  coparent_families_merged: number;
   warnings: string[];
 }
 
@@ -801,6 +922,26 @@ export async function runGhlSync(schoolId: string): Promise<SyncResult> {
     ));
     prospectiveCreated++;
   }
+
+  // Co-parent duplicate collapse (opt-in per school). Runs on the fully-built
+  // family set (Phase 1 + Phase 2) so a child listed on both parents'
+  // contacts becomes ONE student in ONE family. No-op unless the school has
+  // settings.merge_coparent_students set (default off → existing schools
+  // unaffected).
+  let familiesToInsert = mapped;
+  let coparentMerged = 0;
+  if (schoolSettings.merge_coparent_students) {
+    const { merged, mergedGroups, conflicts } = mergeCoparentFamilies(mapped);
+    familiesToInsert = merged;
+    coparentMerged = mergedGroups;
+    if (mergedGroups > 0) {
+      warnings.push(`Merged ${mergedGroups} co-parent duplicate famil${mergedGroups === 1 ? 'y' : 'ies'} (same child listed on two contacts).`);
+    }
+    if (conflicts.length > 0) {
+      warnings.push(`${conflicts.length} name(s) had conflicting DOBs across contacts and were left separate for review: ${conflicts.slice(0, 15).join(', ')}${conflicts.length > 15 ? '…' : ''}`);
+    }
+  }
+
   const result = await withTransaction(async (q) => {
     // Carry forward P2 ghl_contact_id across the snapshot. Once Parent 2 is
     // promoted to a standalone GHL contact, we don't want a subsequent sync
@@ -917,7 +1058,7 @@ export async function runGhlSync(schoolId: string): Promise<SyncResult> {
     let enrollmentsCreated = 0;
     let classroomsCreated = 0;
 
-    for (const fam of mapped) {
+    for (const fam of familiesToInsert) {
       // P1 contact id from this family (used to look up carryover for the
       // family's P2, and to preserve ids across the rebuild). Phase-1 /
       // Phase-2 both put P1 first and only one P1 per family, so this is
@@ -1094,6 +1235,7 @@ export async function runGhlSync(schoolId: string): Promise<SyncResult> {
     enrollments_created: result.enrollmentsCreated,
     classrooms_created: result.classroomsCreated,
     p2_contact_ids_carried_forward: result.p2ContactIdCarriedForward,
+    coparent_families_merged: coparentMerged,
     warnings,
   };
 }
