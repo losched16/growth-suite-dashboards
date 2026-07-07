@@ -48,6 +48,11 @@ interface Submission {
   is_addendum: boolean;
   parent_submission_id: string | null;
   parent_submitted_at: string | null;
+  cosign_status: string | null;
+  cosign_name: string | null;
+  cosign_email: string | null;
+  cosign_signature: string | null;
+  cosign_signed_at: string | null;
 }
 
 interface MissingRecipient {
@@ -87,6 +92,8 @@ export default async function SubmissionsInboxPage({
             COALESCE(s.is_addendum, false) AS is_addendum,
             s.parent_submission_id,
             ps.submitted_at AS parent_submitted_at,
+            s.cosign_status, s.cosign_name, s.cosign_email,
+            s.cosign_signature, s.cosign_signed_at,
             COALESCE(NULLIF(f.display_name, ''),
                      CONCAT_WS(' ', p.first_name, p.last_name),
                      '(unnamed family)') AS family_label,
@@ -421,6 +428,27 @@ function SubmissionRow({
               ) : (
                 <div className="mt-1 text-[11px] text-blue-700 italic">Fields were re-affirmed (no value change detected).</div>
               )}
+            </div>
+          ) : null}
+
+          {/* Second-guardian (co-sign) status — the office reviews from this
+              inline view constantly, so both signatures must be visible here,
+              not just on the print/detail page. */}
+          {s.cosign_status ? (
+            <div className={`rounded-md border p-3 ${s.cosign_status === 'signed'
+              ? 'border-emerald-200 bg-emerald-50' : 'border-amber-200 bg-amber-50'}`}>
+              <div className={`text-xs font-semibold ${s.cosign_status === 'signed' ? 'text-emerald-900' : 'text-amber-900'}`}>
+                {s.cosign_status === 'signed'
+                  ? '✓ Fully signed — both guardians'
+                  : `⏳ Awaiting second guardian${s.cosign_name ? ` (${s.cosign_name})` : ''}`}
+              </div>
+              {s.cosign_status === 'signed' ? (
+                <div className="mt-1 text-[11px] text-emerald-800">
+                  Second guardian: <strong>{s.cosign_name || s.cosign_email || '—'}</strong>
+                  {s.cosign_signature ? <> · signature: <span className="font-serif italic">{s.cosign_signature}</span></> : null}
+                  {s.cosign_signed_at ? <> · signed {new Date(s.cosign_signed_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</> : null}
+                </div>
+              ) : null}
             </div>
           ) : null}
 
