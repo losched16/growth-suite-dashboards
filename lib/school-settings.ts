@@ -26,6 +26,15 @@ export interface SchoolSettings {
   // without the "sb_" prefix (e.g. 'payments', 'opportunities'). Applied by
   // the agency Custom JS snippet, which fetches /api/ghl-menu-config/{loc}.
   ghl_hidden_menu: string[];
+  // Collapse the same child across co-parent contacts into ONE student.
+  // For schools whose GHL has each parent as a SEPARATE contact that both
+  // list the family's children (no household link), the sync would otherwise
+  // create a student row per parent → duplicates. When true, families that
+  // share a student (same name + compatible DOB) are merged into one family
+  // with both parents and one copy of each child. Default false — every
+  // school that uses one-contact-per-family is unaffected (no shared students
+  // → no-op). Name-collisions with DIFFERENT DOBs are left separate.
+  merge_coparent_students: boolean;
 }
 
 // GHL sidebar items the Custom JS snippet can hide (docs/ghl-menu-snippet.js).
@@ -55,6 +64,7 @@ export const SCHOOL_SETTINGS_DEFAULTS: SchoolSettings = {
   promote_parent2: false,
   roster_tag_filter: [],
   ghl_hidden_menu: [],
+  merge_coparent_students: false,
 };
 
 export function normalizeSchoolSettings(raw: unknown): SchoolSettings {
@@ -72,6 +82,7 @@ export function normalizeSchoolSettings(raw: unknown): SchoolSettings {
     ghl_hidden_menu: Array.isArray(r.ghl_hidden_menu)
       ? r.ghl_hidden_menu.map((t) => String(t ?? '').trim().toLowerCase()).filter(Boolean)
       : [],
+    merge_coparent_students: r.merge_coparent_students === true,
   };
 }
 
