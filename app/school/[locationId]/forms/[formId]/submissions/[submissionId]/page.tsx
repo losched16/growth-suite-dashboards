@@ -16,11 +16,12 @@ import { ArrowLeft, Printer, Image as ImageIcon } from 'lucide-react';
 import { loadSchoolByLocationId } from '@/lib/dashboards/loader';
 import { query } from '@/lib/db';
 import { PrintSubmissionButton } from './PrintSubmissionButton';
+import { VoidSubmissionButton } from './VoidSubmissionButton';
 
 export const dynamic = 'force-dynamic';
 
 type Params = Promise<{ locationId: string; formId: string; submissionId: string }>;
-type SearchParams = Promise<{ print?: string }>;
+type SearchParams = Promise<{ print?: string; msg?: string; err?: string }>;
 
 interface FormDef {
   id: string;
@@ -59,6 +60,9 @@ interface Submission {
   cosign_email: string | null;
   cosign_signature: string | null;
   cosign_signed_at: string | null;
+  voided_at: string | null;
+  voided_by_admin_email: string | null;
+  voided_reason: string | null;
 }
 
 function fmtDateTime(iso: string): string {
@@ -101,7 +105,9 @@ export default async function SubmissionDetail({
             st.first_name AS student_first, st.last_name AS student_last,
             st.preferred_name AS student_preferred,
             s.cosign_status, s.cosign_name, s.cosign_email, s.cosign_signature,
-            to_char(s.cosign_signed_at, 'YYYY-MM-DD"T"HH24:MI:SSOF') AS cosign_signed_at
+            to_char(s.cosign_signed_at, 'YYYY-MM-DD"T"HH24:MI:SSOF') AS cosign_signed_at,
+            to_char(s.voided_at, 'YYYY-MM-DD"T"HH24:MI:SSOF') AS voided_at,
+            s.voided_by_admin_email, s.voided_reason
        FROM portal_form_submissions s
        LEFT JOIN families f ON f.id = s.family_id
        LEFT JOIN parents p ON p.id = s.parent_id
@@ -138,8 +144,32 @@ export default async function SubmissionDetail({
           >
             <ArrowLeft className="h-3 w-3" /> Back
           </Link>
-          <PrintSubmissionButton autoPrint={autoPrint} />
+          <div className="flex items-center gap-2">
+            {sub.status !== 'voided' && sub.status !== 'paid' && sub.status !== 'pending_payment' ? (
+              <VoidSubmissionButton
+                submissionId={sub.id}
+                returnTo={`/school/${locationId}/forms/${formId}/submissions/${sub.id}`}
+              />
+            ) : null}
+            <PrintSubmissionButton autoPrint={autoPrint} />
+          </div>
         </div>
+
+        {sub.status === 'voided' ? (
+          <div className="mb-3 rounded-lg border border-rose-300 bg-rose-50 px-4 py-3 text-sm text-rose-900 print:border print:border-rose-300">
+            <strong>Voided</strong>
+            {sub.voided_at ? ` on ${fmtDateTime(sub.voided_at)}` : ''}
+            {sub.voided_by_admin_email ? ` by ${sub.voided_by_admin_email}` : ''}
+            {sub.voided_reason ? ` — ${sub.voided_reason}` : ''}.
+            {' '}This copy no longer counts as completed; the family can fill the form out again.
+          </div>
+        ) : null}
+        {typeof sp.msg === 'string' && sp.msg ? (
+          <div className="mb-3 rounded-lg border border-emerald-300 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 print:hidden">{sp.msg}</div>
+        ) : null}
+        {typeof sp.err === 'string' && sp.err ? (
+          <div className="mb-3 rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-900 print:hidden">{sp.err}</div>
+        ) : null}
 
         {/* Print-friendly header */}
         <header className="rounded-lg border border-slate-200 bg-white p-5 print:border-0 print:p-0 print:rounded-none mb-3">
