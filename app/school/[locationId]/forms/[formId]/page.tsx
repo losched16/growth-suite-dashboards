@@ -71,6 +71,21 @@ export default async function FormEditPageScoped({
   if (rows.length === 0) notFound();
   const form = rows[0];
 
+  // Official-PDF template attached to this form (DocuSign-style flow):
+  // parents fill the portal form; answers are written onto the actual PDF.
+  const { rows: tplRows } = await query<{
+    file_name: string; page_count: number | null; field_count: number; updated_at: string;
+  }>(
+    `SELECT file_name, page_count, jsonb_array_length(field_inventory) AS field_count,
+            updated_at::text AS updated_at
+       FROM portal_form_pdf_templates WHERE form_definition_id = $1`,
+    [formId],
+  );
+  const pdfTemplate = tplRows[0] ?? null;
+  const mappedCount = (form.field_schema ?? []).filter(
+    (b) => typeof (b as { pdf_field?: unknown }).pdf_field === 'string',
+  ).length;
+
   // Distinct program values on this school's roster — drives the
   // "Who sees this form" checklist. Demo/test students excluded so the
   // list reflects real programs only.
@@ -174,6 +189,51 @@ export default async function FormEditPageScoped({
         {sp.err ? (
           <div className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{sp.err}</div>
         ) : null}
+
+        {/* Official-PDF template — for unmodifiable state/agency forms.
+            Upload the PDF as-is; its fillable fields become form fields
+            below, and each submission produces the completed, signed PDF
+            on the student's record. */}
+        <section className="rounded-xl border border-black/10 bg-white p-5 space-y-3">
+          <div className="flex items-baseline justify-between gap-3 flex-wrap">
+            <div>
+              <h2 className="text-sm font-semibold text-slate-900">Official PDF template</h2>
+              <p className="text-[11px] text-slate-500 mt-0.5">
+                For forms that must stay on an official document (state emergency cards, agency
+                forms): upload the fillable PDF as-is. Parents fill this form in the portal, and
+                every submission generates the completed, signed PDF on the student&rsquo;s record.
+              </p>
+            </div>
+          </div>
+          {pdfTemplate ? (
+            <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-900">
+              <strong>{pdfTemplate.file_name}</strong> — {pdfTemplate.page_count ?? '?'} page(s),{' '}
+              {pdfTemplate.field_count} fillable fields, {mappedCount} mapped to form fields below.
+              Uploaded {new Date(pdfTemplate.updated_at).toLocaleDateString()}.
+            </div>
+          ) : (
+            <p className="text-xs text-slate-500 italic">No PDF template attached — this is a regular portal form.</p>
+          )}
+          <form
+            action={`/api/school/forms/${formId}/pdf-template`}
+            method="POST"
+            encType="multipart/form-data"
+            className="flex items-center gap-2 flex-wrap"
+          >
+            <input type="hidden" name="return_to" value={`/school/${locationId}/forms/${formId}`} />
+            <input type="file" name="file" accept="application/pdf,.pdf" required className="text-xs" />
+            <button
+              type="submit"
+              className="rounded-md bg-slate-800 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-900"
+            >
+              {pdfTemplate ? 'Replace PDF template' : 'Upload PDF template'}
+            </button>
+            <span className="text-[10px] text-slate-400">
+              Fillable PDFs only (max 10MB). First upload generates one form field per PDF field —
+              review the labels below, mark what&rsquo;s required, then publish.
+            </span>
+          </form>
+        </section>
 
         <FormEditor
           schoolId={school.id}
