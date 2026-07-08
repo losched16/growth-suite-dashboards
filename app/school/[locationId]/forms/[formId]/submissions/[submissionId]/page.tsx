@@ -291,6 +291,26 @@ function BlockView({
   const key = block.key;
   const raw = responses[key];
 
+  // Draw-capable signatures: typed legal name lives under the key, the
+  // drawn PNG under key_drawn — show BOTH (new submissions require both).
+  const drawnCompanion = type === 'signature_drawn' && typeof responses[`${key}_drawn`] === 'string'
+    && String(responses[`${key}_drawn`]).startsWith('data:image/')
+    ? String(responses[`${key}_drawn`]) : null;
+  if (drawnCompanion) {
+    return (
+      <div className="grid grid-cols-1 sm:grid-cols-[14rem_1fr] gap-1 sm:gap-3">
+        <dt className="text-xs font-semibold text-slate-700">{block.label}</dt>
+        <dd className="text-sm text-slate-900 space-y-1">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={drawnCompanion} alt="Parent signature" className="h-20 rounded border border-slate-300 bg-white" />
+          {typeof raw === 'string' && raw.trim() ? (
+            <div className="font-serif italic text-slate-800">{raw}</div>
+          ) : null}
+        </dd>
+      </div>
+    );
+  }
+
   return (
     <div className="grid grid-cols-1 sm:grid-cols-[14rem_1fr] gap-1 sm:gap-3">
       <dt className="text-xs font-semibold text-slate-700">{block.label}</dt>
