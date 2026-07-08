@@ -5,7 +5,7 @@
 
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ArrowLeft, Send, Ban, Zap, ZapOff } from 'lucide-react';
+import { ArrowLeft, Send, Ban, Zap, ZapOff, Banknote } from 'lucide-react';
 import { query } from '@/lib/db';
 import { loadSchoolByLocationId } from '@/lib/dashboards/loader';
 import { CopyButton } from '@/app/admin/[schoolId]/payments/invoices/[invoiceId]/CopyButton';
@@ -297,6 +297,49 @@ export default async function InvoiceDetailScoped({
                 <input type="hidden" name="return_to" value={returnTo} />
                 <button type="submit" className="rounded-md bg-emerald-700 px-3 py-1.5 text-sm font-semibold text-white hover:bg-emerald-800 whitespace-nowrap">
                   Apply credit
+                </button>
+              </form>
+            </div>
+          ) : null}
+
+          {/* Record an offline payment (check / cash / bank transfer). Works for
+              tuition AND one-off invoices — marks it paid; no card is charged. */}
+          {(inv.status === 'open' || inv.status === 'partially_paid') ? (
+            <div className="rounded-md border-2 border-emerald-200 bg-emerald-50/30 p-4">
+              <div className="flex items-start gap-2 mb-2">
+                <Banknote className="h-4 w-4 text-emerald-700 mt-0.5" />
+                <div className="text-sm">
+                  <strong className="block text-emerald-900">Record a check / offline payment</strong>
+                  <p className="text-xs text-emerald-800 mt-0.5">
+                    For a payment received outside the portal (check, cash, bank transfer). Marks the invoice paid — no card is charged.
+                  </p>
+                </div>
+              </div>
+              <form action={`/api/admin/schools/${schoolId}/payments/invoices/${invoiceId}/record-payment`} method="POST" className="flex flex-wrap items-end gap-2">
+                <input type="hidden" name="return_to" value={returnTo} />
+                <label className="block text-xs">
+                  <span className="block font-medium text-slate-700">Amount ($)</span>
+                  <input type="number" step="0.01" min="0" name="amount" defaultValue={((inv.total_cents - inv.amount_paid_cents) / 100).toFixed(2)} required className="mt-0.5 w-28 rounded border border-slate-300 px-2 py-1 text-sm" />
+                </label>
+                <label className="block text-xs">
+                  <span className="block font-medium text-slate-700">Method</span>
+                  <select name="method" defaultValue="check" className="mt-0.5 rounded border border-slate-300 px-2 py-1 text-sm">
+                    <option value="check">Check</option>
+                    <option value="cash">Cash</option>
+                    <option value="bank transfer">Bank transfer</option>
+                    <option value="other">Other</option>
+                  </select>
+                </label>
+                <label className="block text-xs">
+                  <span className="block font-medium text-slate-700">Check # / ref</span>
+                  <input type="text" name="reference" placeholder="e.g. 1234" className="mt-0.5 w-24 rounded border border-slate-300 px-2 py-1 text-sm" />
+                </label>
+                <label className="block text-xs">
+                  <span className="block font-medium text-slate-700">Date received</span>
+                  <input type="date" name="paid_date" defaultValue={new Date().toISOString().slice(0, 10)} className="mt-0.5 rounded border border-slate-300 px-2 py-1 text-sm" />
+                </label>
+                <button type="submit" className="inline-flex items-center gap-1 rounded-md bg-emerald-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-emerald-700">
+                  <Banknote className="h-3.5 w-3.5" /> Record payment
                 </button>
               </form>
             </div>
