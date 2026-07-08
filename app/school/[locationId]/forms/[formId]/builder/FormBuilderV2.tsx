@@ -149,7 +149,8 @@ const PALETTE: Array<{ group: string; type: PaletteType; label: string; icon: Re
   { group: 'Choices', type: 'select', label: 'Dropdown', icon: <ChevronDown className="h-4 w-4" /> },
   { group: 'Choices', type: 'radio', label: 'Multiple choice', icon: <CircleDot className="h-4 w-4" /> },
   { group: 'Choices', type: 'checkbox', label: 'Checkbox', icon: <CheckSquare className="h-4 w-4" /> },
-  { group: 'Sign', type: 'signature_typed', label: 'Signature', icon: <PenLine className="h-4 w-4" /> },
+  { group: 'Sign', type: 'signature_typed', label: 'Signature (typed)', icon: <PenLine className="h-4 w-4" /> },
+  { group: 'Sign', type: 'signature_drawn', label: 'Signature (draw or type)', icon: <PenLine className="h-4 w-4" /> },
 ];
 
 const TYPE_LABEL: Record<string, string> = Object.fromEntries(PALETTE.map((p) => [p.type, p.label]));
