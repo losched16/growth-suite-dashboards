@@ -16,7 +16,7 @@
 
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ArrowLeft, Pause, Play, Edit3, Scissors, Calendar, Plus, RotateCw, SlidersHorizontal } from 'lucide-react';
+import { ArrowLeft, Pause, Play, Edit3, Scissors, Calendar, Plus, RotateCw, SlidersHorizontal, Banknote } from 'lucide-react';
 import { query } from '@/lib/db';
 import { loadSchoolByLocationId } from '@/lib/dashboards/loader';
 import { HelpCallout } from '@/components/HelpCallout';
@@ -28,7 +28,7 @@ export const maxDuration = 30;
 type Params = Promise<{ locationId: string; enrollmentId: string }>;
 type SearchParams = Promise<{
   msg?: string; err?: string;
-  edit?: string; split?: string; reschedule?: string; changeplan?: string;
+  edit?: string; split?: string; reschedule?: string; changeplan?: string; record?: string;
 }>;
 
 interface EnrollmentRow {
@@ -577,6 +577,7 @@ export default async function PlanDetailPage({
               ) : invs.map((i) => {
                 const editing = sp.edit === i.id;
                 const splitting = sp.split === i.id;
+                const recording = sp.record === i.id;
                 const isEditable = i.status === 'open' || i.status === 'draft';
                 return (
                   <RowOrForm
@@ -585,6 +586,7 @@ export default async function PlanDetailPage({
                     lines={linesByInvoice.get(i.id) ?? []}
                     editing={editing}
                     splitting={splitting}
+                    recording={recording}
                     isEditable={isEditable}
                     schoolId={schoolId}
                     locationId={locationId}
@@ -603,12 +605,13 @@ export default async function PlanDetailPage({
 }
 
 function RowOrForm({
-  inv, lines, editing, splitting, isEditable, schoolId, locationId, enrollmentId, returnTo, selfHref,
+  inv, lines, editing, splitting, recording, isEditable, schoolId, locationId, enrollmentId, returnTo, selfHref,
 }: {
   inv: InvoiceRow;
   lines: FeeLine[];
   editing: boolean;
   splitting: boolean;
+  recording: boolean;
   isEditable: boolean;
   schoolId: string;
   locationId: string;
@@ -760,9 +763,62 @@ function RowOrForm({
     );
   }
 
+  if (recording) {
+    const balanceDollars = ((inv.total_cents - inv.amount_paid_cents) / 100).toFixed(2);
+    const todayIso = new Date().toISOString().slice(0, 10);
+    return (
+      <tr className="bg-emerald-50/40">
+        <td colSpan={7} className="px-4 py-3">
+          <form action={`/api/admin/schools/${schoolId}/tuition-plans/${enrollmentId}/action`} method="POST" className="space-y-2">
+            <input type="hidden" name="action" value="record_payment" />
+            <input type="hidden" name="invoice_id" value={inv.id} />
+            <input type="hidden" name="return_to" value={returnTo} />
+            <div className="text-xs text-slate-700">
+              Record an <strong>offline payment</strong> (check, cash, bank transfer) on{' '}
+              <span className="font-mono">{inv.invoice_number}</span>. Balance due: <strong>${balanceDollars}</strong>.
+              {' '}No card is charged; this just marks the invoice paid.
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <label className="block">
+                <span className="block text-[10px] font-medium uppercase tracking-wide text-slate-600">Amount ($)</span>
+                <input type="number" step="0.01" min="0" name="amount" defaultValue={balanceDollars} required className={inputCls} />
+              </label>
+              <label className="block">
+                <span className="block text-[10px] font-medium uppercase tracking-wide text-slate-600">Method</span>
+                <select name="method" defaultValue="check" className={inputCls}>
+                  <option value="check">Check</option>
+                  <option value="cash">Cash</option>
+                  <option value="bank transfer">Bank transfer</option>
+                  <option value="other">Other</option>
+                </select>
+              </label>
+              <label className="block">
+                <span className="block text-[10px] font-medium uppercase tracking-wide text-slate-600">Check # / ref</span>
+                <input type="text" name="reference" placeholder="e.g. 1234" className={inputCls} />
+              </label>
+              <label className="block">
+                <span className="block text-[10px] font-medium uppercase tracking-wide text-slate-600">Date received</span>
+                <input type="date" name="paid_date" defaultValue={todayIso} className={inputCls} />
+              </label>
+            </div>
+            <div className="flex gap-2 pt-1">
+              <button type="submit" className="rounded-md bg-emerald-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-emerald-700">
+                Record payment
+              </button>
+              <Link href={selfHref} className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50">
+                Cancel
+              </Link>
+            </div>
+          </form>
+        </td>
+      </tr>
+    );
+  }
+
   // Show the fee-breakdown toggle only when there's more than one fee to
   // break out, and not on voided rows (nothing to act on).
   const showBreakdown = lines.length > 1 && inv.status !== 'voided';
+  const canRecord = inv.status === 'open' || inv.status === 'partially_paid';
 
   return (
     <>
@@ -784,28 +840,41 @@ function RowOrForm({
           <InvStatusPill status={inv.status} />
         </td>
         <td className="px-4 py-2 text-right whitespace-nowrap">
-          {isEditable ? (
-            <div className="inline-flex items-center gap-1">
+          <div className="inline-flex items-center gap-1">
+            {isEditable ? (
+              <>
+                <Link
+                  href={`${selfHref}?edit=${inv.id}`}
+                  className="inline-flex items-center gap-1 rounded border border-slate-300 bg-white px-2 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-50"
+                >
+                  <Edit3 className="h-3 w-3" /> Edit
+                </Link>
+                <Link
+                  href={`${selfHref}?split=${inv.id}`}
+                  className="inline-flex items-center gap-1 rounded border border-violet-300 bg-white px-2 py-1 text-[11px] font-medium text-violet-700 hover:bg-violet-50"
+                >
+                  <Scissors className="h-3 w-3" /> Split
+                </Link>
+              </>
+            ) : null}
+            {canRecord ? (
               <Link
-                href={`${selfHref}?edit=${inv.id}`}
-                className="inline-flex items-center gap-1 rounded border border-slate-300 bg-white px-2 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-50"
+                href={`${selfHref}?record=${inv.id}`}
+                className="inline-flex items-center gap-1 rounded border border-emerald-300 bg-white px-2 py-1 text-[11px] font-medium text-emerald-700 hover:bg-emerald-50"
+                title="Record a check / cash / offline payment"
               >
-                <Edit3 className="h-3 w-3" /> Edit
+                <Banknote className="h-3 w-3" /> Record
               </Link>
-              <Link
-                href={`${selfHref}?split=${inv.id}`}
-                className="inline-flex items-center gap-1 rounded border border-violet-300 bg-white px-2 py-1 text-[11px] font-medium text-violet-700 hover:bg-violet-50"
-              >
-                <Scissors className="h-3 w-3" /> Split
+            ) : null}
+            {inv.status === 'voided' ? (
+              <span className="text-[10px] italic text-slate-400" title={inv.voided_reason ?? ''}>voided</span>
+            ) : null}
+            {(!isEditable && !canRecord && inv.status !== 'voided') ? (
+              <Link href={`/school/${locationId}/payments/invoices/${inv.id}`} className="text-[11px] text-slate-500 hover:text-slate-700 underline">
+                view
               </Link>
-            </div>
-          ) : inv.status === 'voided' ? (
-            <span className="text-[10px] italic text-slate-400" title={inv.voided_reason ?? ''}>voided</span>
-          ) : (
-            <Link href={`/school/${locationId}/payments/invoices/${inv.id}`} className="text-[11px] text-slate-500 hover:text-slate-700 underline">
-              view
-            </Link>
-          )}
+            ) : null}
+          </div>
         </td>
       </tr>
 

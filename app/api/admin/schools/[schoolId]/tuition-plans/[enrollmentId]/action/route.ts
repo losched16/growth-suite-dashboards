@@ -135,6 +135,64 @@ export async function POST(request: NextRequest, { params }: { params: Params })
 
   try {
     switch (action) {
+      // ── record_payment ───────────────────────────────────────────────
+      // Log an OFFLINE payment (check / cash / bank transfer) against an
+      // invoice. Mirrors a Stripe payment: adds to amount_paid_cents, flips
+      // status to paid / partially_paid, and (when fully paid) drops the
+      // invoice out of autopay. No card is charged.
+      case 'record_payment': {
+        const invoiceId = String(fd.get('invoice_id') ?? '').trim();
+        const amountCents = dollarsToCents(String(fd.get('amount') ?? ''));
+        const rawMethod = (String(fd.get('method') ?? 'check').trim().toLowerCase()) || 'check';
+        const reference = String(fd.get('reference') ?? '').trim();
+        const paidDateRaw = String(fd.get('paid_date') ?? '').trim();
+        const paidDate = /^\d{4}-\d{2}-\d{2}$/.test(paidDateRaw) ? paidDateRaw : null;
+        if (!invoiceId) return back(request, fallback, returnTo, { err: 'invoice_id missing.' });
+        if (amountCents <= 0) return back(request, fallback, returnTo, { err: 'Enter a payment amount greater than $0.' });
+
+        const { rows: iRows } = await query<{ family_id: string; total_cents: number; amount_paid_cents: number; status: string }>(
+          `SELECT family_id, total_cents, amount_paid_cents, status FROM invoices
+            WHERE id = $1 AND school_id = $2 AND source_ref->>'enrollment_id' = $3`,
+          [invoiceId, schoolId, enrollmentId],
+        );
+        const iv = iRows[0];
+        if (!iv) return back(request, fallback, returnTo, { err: 'Invoice not found for this plan.' });
+        if (iv.status !== 'open' && iv.status !== 'partially_paid') {
+          return back(request, fallback, returnTo, { err: `Can't record a payment on a ${iv.status} invoice.` });
+        }
+
+        const methodLabel = reference ? `${rawMethod} #${reference}` : rawMethod;
+        const noteLine = `\n[${new Date().toISOString().slice(0, 10)}] Offline payment: $${(amountCents / 100).toFixed(2)} via ${rawMethod}${reference ? ` (#${reference})` : ''}`;
+        const fullyPaid = iv.amount_paid_cents + amountCents >= iv.total_cents;
+
+        await withTransaction(async (q) => {
+          await q(
+            `INSERT INTO payments
+               (school_id, invoice_id, family_id, amount_cents, fee_cents, platform_fee_cents,
+                status, stripe_payment_method_type, created_at, updated_at)
+             VALUES ($1, $2, $3, $4, 0, 0, 'succeeded', $5, COALESCE($6::timestamptz, now()), now())`,
+            [schoolId, invoiceId, iv.family_id, amountCents, methodLabel, paidDate],
+          );
+          await q(
+            `UPDATE invoices
+                SET amount_paid_cents = amount_paid_cents + $1,
+                    status = CASE WHEN amount_paid_cents + $1 >= total_cents THEN 'paid'
+                                  WHEN amount_paid_cents + $1 > 0 THEN 'partially_paid'
+                                  ELSE status END,
+                    paid_at = CASE WHEN amount_paid_cents + $1 >= total_cents THEN COALESCE($3::timestamptz, now()) ELSE paid_at END,
+                    autopay_enabled = CASE WHEN amount_paid_cents + $1 >= total_cents THEN false ELSE autopay_enabled END,
+                    internal_note = COALESCE(internal_note, '') || $4,
+                    updated_at = now()
+              WHERE id = $2`,
+            [amountCents, invoiceId, paidDate, noteLine],
+          );
+        });
+
+        return back(request, fallback, returnTo, {
+          msg: `Recorded $${(amountCents / 100).toFixed(2)} ${rawMethod} payment. Invoice marked ${fullyPaid ? 'PAID (removed from autopay).' : 'partially paid.'}`,
+        });
+      }
+
       // ── pause ────────────────────────────────────────────────────────
       case 'pause': {
         await query(
