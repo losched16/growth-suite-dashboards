@@ -161,7 +161,8 @@ export async function POST(request: NextRequest) {
   );
   if (dup.length) return NextResponse.json({ ok: true, deduped: true });
 
-  const loginUrl = `${portalBase()}/login?email=${encodeURIComponent(parent.email)}`;
+  const { parentPortalBaseForSchool } = await import('@/lib/parent-portal-base');
+  const loginUrl = `${await parentPortalBaseForSchool(schoolId)}/login?email=${encodeURIComponent(parent.email)}`;
   const msg = welcomeEmail({ schoolName, firstName: parent.first_name, loginUrl, supportEmail });
 
   let status: 'applied' | 'failed' = 'applied';

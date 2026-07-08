@@ -19,6 +19,7 @@ import crypto from 'node:crypto';
 import { query } from '@/lib/db';
 import { sendBrandedEmail } from '@/lib/email';
 import { loadSchoolSettings } from '@/lib/school-settings';
+import { parentPortalBaseForSchool } from '@/lib/parent-portal-base';
 import { authorizeOperatorOrSchool } from '@/lib/auth/dual';
 
 export const runtime = 'nodejs';
@@ -176,6 +177,7 @@ export async function POST(request: NextRequest, { params }: { params: Params })
     `SELECT name FROM schools WHERE id = $1`, [schoolId],
   );
   const schoolName = schoolRows[0]?.name ?? 'Your school';
+  const portalBase = await parentPortalBaseForSchool(schoolId);
 
   // Student name for the email, when a single family + child was picked.
   let studentName: string | null = null;
@@ -221,7 +223,7 @@ export async function POST(request: NextRequest, { params }: { params: Params })
     }
 
     if (!sendEmail) continue;
-    const inviteUrl = `${PARENT_PORTAL_BASE}/forms-v2/${def.slug}?invite=${encodeURIComponent(token)}`;
+    const inviteUrl = `${portalBase}/forms-v2/${def.slug}?invite=${encodeURIComponent(token)}`;
     try {
       const { rows: parents } = await query<{ email: string; first_name: string | null }>(
         `SELECT email, first_name FROM parents

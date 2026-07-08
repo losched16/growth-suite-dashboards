@@ -9,6 +9,7 @@ import { notFound } from 'next/navigation';
 import { ArrowLeft, Send as SendIcon } from 'lucide-react';
 import { query } from '@/lib/db';
 import { loadSchoolByLocationId } from '@/lib/dashboards/loader';
+import { parentPortalBaseForSchool } from '@/lib/parent-portal-base';
 import { SendFormClient } from './SendFormClient';
 
 export const dynamic = 'force-dynamic';
@@ -97,7 +98,7 @@ export default async function SendFormPage({
       `SELECT token FROM enrollment_invites WHERE id = $1 AND school_id = $2`,
       [inviteId, school.id],
     );
-    if (rows[0]) inviteLink = `${PARENT_PORTAL_BASE}/forms-v2/${def.slug}?invite=${encodeURIComponent(rows[0].token)}`;
+    if (rows[0]) inviteLink = `${await parentPortalBaseForSchool(school.id)}/forms-v2/${def.slug}?invite=${encodeURIComponent(rows[0].token)}`;
   }
 
   const msg = typeof sp.msg === 'string' ? sp.msg : null;
