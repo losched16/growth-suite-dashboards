@@ -17,9 +17,10 @@ import {
 } from './config';
 import { fetcher, type StudentDocumentsBrowserData, type DocumentRow } from './fetcher';
 import { UploadForm } from './UploadForm';
+import { DeleteDocumentButton } from './DeleteDocumentButton';
 import { AutoSubmitForm } from '@/lib/widgets/components/_shared/AutoSubmitForm';
 import { PreserveEmbedParams, clearHref } from '@/lib/widgets/components/_shared/PreserveEmbedParams';
-import { Download, Trash2, FileText, FileImage, FileType } from 'lucide-react';
+import { Download, FileText, FileImage, FileType } from 'lucide-react';
 
 function fmtBytes(b: number): string {
   if (b < 1024) return `${b} B`;
@@ -210,34 +211,10 @@ function Row({ d }: { d: DocumentRow }) {
           >
             <Download className="h-3 w-3" /> Open
           </a>
-          <DeleteButton id={d.id} />
+          <DeleteDocumentButton id={d.id} />
         </div>
       </td>
     </tr>
-  );
-}
-
-// Tiny form-based delete (no JS state — full reload after submit).
-// Wrapped in a one-line form so the operator can confirm via the
-// browser's standard "are you sure" prompt added by onsubmit below.
-function DeleteButton({ id }: { id: string }) {
-  return (
-    <form
-      action={`/api/school/documents/${id}/delete`}
-      method="POST"
-      onSubmit={(e) => {
-        if (!confirm('Delete this document? This cannot be undone.')) {
-          e.preventDefault();
-        }
-      }}
-    >
-      <button type="submit"
-        className="inline-flex items-center gap-1 rounded border border-rose-300 bg-white px-2 py-1 text-[11px] font-medium text-rose-700 hover:bg-rose-50"
-        title="Delete this document"
-      >
-        <Trash2 className="h-3 w-3" />
-      </button>
-    </form>
   );
 }
 
