@@ -6,6 +6,7 @@ import { notFound } from 'next/navigation';
 import { query } from '@/lib/db';
 import { loadSchoolByLocationId } from '@/lib/dashboards/loader';
 import { loadGhlClient } from '@/lib/ghl/client';
+import { loadGhlLocationTags } from '@/lib/ghl/tags';
 import { FormBuilderV2, type FieldBlock, type GhlField, type FormAppliesTo } from './FormBuilderV2';
 
 // The location's contact custom fields, for the "connect to Growth Suite field"
@@ -65,7 +66,7 @@ export default async function FormBuilderPage({ params }: { params: Params }) {
   // "Who sees this form" checklists — distinct program / grade / tag values on
   // this school's roster (demo students excluded). Same source the classic
   // editor uses, so both editors offer identical targeting choices.
-  const [progRows, gradeRows, tagRows, metaKeyRows, ghlFields] = await Promise.all([
+  const [progRows, gradeRows, tagRows, metaKeyRows, ghlFields, ghlTags] = await Promise.all([
     query<{ v: string }>(
       `SELECT DISTINCT s.metadata->>'program' AS v FROM students s
         WHERE s.school_id = $1 AND btrim(coalesce(s.metadata->>'program','')) <> ''
@@ -94,6 +95,7 @@ export default async function FormBuilderPage({ params }: { params: Params }) {
       [school.id],
     ),
     loadGhlFields(school.id),
+    loadGhlLocationTags(school.id),
   ]);
 
   // Active students for "Specific students" targeting (applies_to.student_ids).
@@ -130,7 +132,7 @@ export default async function FormBuilderPage({ params }: { params: Params }) {
       metadataKeys={metaKeyRows.rows.map((r) => r.v)}
       programOptions={progRows.rows.map((r) => r.v)}
       gradeOptions={gradeRows.rows.map((r) => r.v)}
-      tagOptions={tagRows.rows.map((r) => r.v)}
+      tagOptions={Array.from(new Set([...tagRows.rows.map((r) => r.v), ...ghlTags])).sort((a, b) => a.localeCompare(b))}
       studentOptions={studentRows}
       previewHref={`/school/${locationId}/forms/${formId}/preview?chrome=none`}
       backHref={`/school/${locationId}/forms`}

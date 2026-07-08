@@ -9,6 +9,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ArrowLeft, ExternalLink } from 'lucide-react';
 import { query } from '@/lib/db';
+import { loadGhlLocationTags } from '@/lib/ghl/tags';
 import { FormEditor } from './FormEditor';
 
 export const dynamic = 'force-dynamic';
@@ -97,7 +98,10 @@ export default async function FormEditPage({
       ORDER BY 1`,
     [schoolId],
   );
-  const tagOptions = tagRows.map((r) => r.tag);
+  // Union the tags seen on synced contacts with EVERY tag defined in the GHL
+  // location, so the picker can target any tag in the system.
+  const ghlTags = await loadGhlLocationTags(schoolId);
+  const tagOptions = Array.from(new Set([...tagRows.map((r) => r.tag), ...ghlTags])).sort((a, b) => a.localeCompare(b));
 
   // Active students for the "Specific students" targeting picker.
   const { rows: studentRows } = await query<{ id: string; name: string; program: string | null }>(
