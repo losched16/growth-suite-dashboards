@@ -135,7 +135,7 @@ export interface FormSettings {
 type PaletteType =
   | 'section' | 'paragraph'
   | 'text' | 'textarea' | 'email' | 'tel' | 'number' | 'date'
-  | 'select' | 'radio' | 'checkbox' | 'signature_typed';
+  | 'select' | 'radio' | 'checkbox' | 'signature_typed' | 'signature_drawn';
 
 const PALETTE: Array<{ group: string; type: PaletteType; label: string; icon: React.ReactNode }> = [
   { group: 'Layout', type: 'section', label: 'Section', icon: <Heading className="h-4 w-4" /> },
