@@ -17,6 +17,7 @@ import crypto from 'node:crypto';
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { query } from '@/lib/db';
+import { mirrorP2Tags } from '@/lib/sync/mirror-p2-tags';
 import { runGhlSync, type SyncResult } from '@/lib/sync/run-ghl-sync';
 import { backfillStudentIds } from '@/lib/sync/student-id-backfill';
 import { syncGhlAttributes } from '@/lib/sync/ghl-attributes';
@@ -107,6 +108,20 @@ async function runForAll(): Promise<NextResponse> {
         attrSummary = ` Attributes FAILED: ${attrErr instanceof Error ? attrErr.message : String(attrErr)}`;
       }
 
+      // Parent-2 tag mirror — promoted co-parent contacts pick up Parent 1's
+      // tags (additive) so automations and segments reach both parents.
+      // Gated on schools.settings.promote_parent2; diffs come from the
+      // attribute snapshot refreshed just above.
+      let p2TagSummary = '';
+      try {
+        const m = await mirrorP2Tags(s.id);
+        if (m.ran && (m.tags_added > 0 || m.errors > 0)) {
+          p2TagSummary = ` P2-tags: +${m.tags_added} tag(s) → ${m.updated} contact(s)${m.errors ? `, ${m.errors} errors` : ''}.`;
+        }
+      } catch (mErr) {
+        p2TagSummary = ` P2-tags FAILED: ${mErr instanceof Error ? mErr.message : String(mErr)}`;
+      }
+
       // Enrollment trigger — for live, import-managed (attributes_only)
       // schools, create a loginable family for any contact whose opportunity
       // reached an "Enrolled" stage but isn't in the family graph yet.
@@ -141,7 +156,7 @@ async function runForAll(): Promise<NextResponse> {
       const dur = Date.now() - t0;
       const summary = (result
         ? `Synced ${result.families_created} families, ${result.students_created} students, ${result.enrollments_created} enrollments, ${result.classrooms_created} classrooms.`
-        : `Family-graph sync skipped (sync_mode=${s.sync_mode}).`) + attrSummary + enrollSummary + sidSummary;
+        : `Family-graph sync skipped (sync_mode=${s.sync_mode}).`) + attrSummary + p2TagSummary + enrollSummary + sidSummary;
       results.push({
         school_id: s.id,
         name: s.name,
