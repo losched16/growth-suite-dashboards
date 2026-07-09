@@ -1091,11 +1091,8 @@ function WhoSeesEditor({ settings, onPatch, programOptions, gradeOptions, tagOpt
               {showTag ? (
                 <div>
                   <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-500">By tag</div>
-                  {tagList.map((t) => (
-                    <label key={t} className="flex items-center gap-2 text-xs text-slate-700">
-                      <input type="checkbox" checked={tags.includes(t)} onChange={() => apply({ tags: toggleIn(tags, t) })} className={cb} />{t}
-                    </label>
-                  ))}
+                  <TagChecklist options={tagList} selected={tags}
+                    onToggle={(t) => apply({ tags: toggleIn(tags, t) })} checkboxClass={cb} />
                 </div>
               ) : null}
               {!settings.per_student && (programOptions.length > 0 || gradeOptions.length > 0) ? (
@@ -1112,22 +1109,57 @@ function WhoSeesEditor({ settings, onPatch, programOptions, gradeOptions, tagOpt
                 hide the enrollment agreement from already-enrolled families. Sending it directly to a
                 family still overrides this.
               </p>
-              {Array.from(new Set([...tagOptions, ...excl])).map((t) => (
-                <label key={t} className="flex items-center gap-2 text-xs text-slate-700">
-                  <input type="checkbox" checked={excl.includes(t)}
-                    onChange={() => {
-                      const next = toggleIn(excl, t);
-                      const base: FormAppliesTo = { ...(settings.applies_to ?? {}) };
-                      if (next.length) base.tag_exclude = next; else delete base.tag_exclude;
-                      onPatch({ applies_to: Object.keys(base).length === 0 ? null : base });
-                    }}
-                    className="h-3.5 w-3.5 rounded border-rose-300 text-rose-600" />{t}
-                </label>
-              ))}
+              <TagChecklist options={Array.from(new Set([...tagOptions, ...excl]))} selected={excl}
+                onToggle={(t) => {
+                  const next = toggleIn(excl, t);
+                  const base: FormAppliesTo = { ...(settings.applies_to ?? {}) };
+                  if (next.length) base.tag_exclude = next; else delete base.tag_exclude;
+                  onPatch({ applies_to: Object.keys(base).length === 0 ? null : base });
+                }}
+                checkboxClass="h-3.5 w-3.5 rounded border-rose-300 text-rose-600" />
             </div>
           ) : null}
         </>
       )}
+    </div>
+  );
+}
+
+// Tag checkbox list with a combined filter / add-new input. Every tag in the
+// GHL location is listed; typing narrows the list, and a tag GHL doesn't know
+// yet can still be added (GHL auto-creates a tag the first time it's applied,
+// so targeting can be configured before anyone is tagged). Selected values
+// always render even when the filter would hide them, so nothing checked can
+// become un-uncheckable.
+function TagChecklist({ options, selected, onToggle, checkboxClass }: {
+  options: string[]; selected: string[]; onToggle: (tag: string) => void; checkboxClass: string;
+}) {
+  const [filter, setFilter] = useState('');
+  const q = filter.trim().toLowerCase();
+  const all = Array.from(new Set([...options, ...selected]));
+  const shown = q ? all.filter((t) => t.toLowerCase().includes(q) || selected.includes(t)) : all;
+  const canAdd = q.length > 0 && !all.some((t) => t.toLowerCase() === q);
+  return (
+    <div className="space-y-1">
+      <div className="flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2 py-1">
+        <Search className="h-3 w-3 shrink-0 text-slate-400" />
+        <input value={filter} onChange={(e) => setFilter(e.target.value)}
+          placeholder="Filter tags, or type a new tag…"
+          className="w-full bg-transparent text-xs text-slate-700 placeholder:text-slate-400 focus:outline-none" />
+      </div>
+      <div className="max-h-44 space-y-0.5 overflow-y-auto">
+        {shown.map((t) => (
+          <label key={t} className="flex items-center gap-2 text-xs text-slate-700">
+            <input type="checkbox" checked={selected.includes(t)} onChange={() => onToggle(t)} className={checkboxClass} />{t}
+          </label>
+        ))}
+      </div>
+      {canAdd ? (
+        <button type="button" onClick={() => { onToggle(filter.trim()); setFilter(''); }}
+          className="text-[11px] font-medium text-emerald-700 hover:text-emerald-900">
+          + Add &ldquo;{filter.trim()}&rdquo;
+        </button>
+      ) : null}
     </div>
   );
 }

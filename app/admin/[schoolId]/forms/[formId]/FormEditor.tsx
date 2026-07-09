@@ -18,7 +18,7 @@ import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   GripVertical, Trash2, ChevronDown, ChevronRight, Plus,
-  AlertCircle, Save, CheckCircle2,
+  AlertCircle, Save, CheckCircle2, Search,
 } from 'lucide-react';
 
 type FieldType =
@@ -523,23 +523,16 @@ export function FormEditor({
                       Tag the parent&rsquo;s contact in GHL; this form then shows only to families carrying a selected tag.
                       Works for family-level forms too.
                     </p>
-                    {tagChecklist.map((tag) => (
-                      <label key={tag} className="flex items-center gap-2 text-sm">
-                        <input
-                          type="checkbox"
-                          checked={selectedTags.includes(tag)}
-                          onChange={(e) => {
-                            setSelectedTags(
-                              e.target.checked
-                                ? [...selectedTags, tag]
-                                : selectedTags.filter((x) => x !== tag),
-                            );
-                          }}
-                          className="h-4 w-4 rounded border-zinc-300"
-                        />
-                        <span className="text-zinc-800">{tag}</span>
-                      </label>
-                    ))}
+                    <TagChecklist
+                      options={tagChecklist}
+                      selected={selectedTags}
+                      onToggle={(tag) => setSelectedTags(
+                        selectedTags.includes(tag)
+                          ? selectedTags.filter((x) => x !== tag)
+                          : [...selectedTags, tag],
+                      )}
+                      checkboxClass="h-4 w-4 rounded border-zinc-300"
+                    />
                   </div>
                 ) : null}
 
@@ -575,25 +568,16 @@ export function FormEditor({
                 already-enrolled families while new families still get it. Sending the form directly
                 to a family (the Send button) still works and overrides this.
               </p>
-              {excludeChecklist.length === 0 ? (
-                <p className="text-[11px] italic text-zinc-500">No synced tags yet.</p>
-              ) : excludeChecklist.map((tag) => (
-                <label key={tag} className="flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={excludedTags.includes(tag)}
-                    onChange={(e) => {
-                      setExcludedTags(
-                        e.target.checked
-                          ? [...excludedTags, tag]
-                          : excludedTags.filter((x) => x !== tag),
-                      );
-                    }}
-                    className="h-4 w-4 rounded border-rose-300"
-                  />
-                  <span className="text-zinc-800">{tag}</span>
-                </label>
-              ))}
+              <TagChecklist
+                options={excludeChecklist}
+                selected={excludedTags}
+                onToggle={(tag) => setExcludedTags(
+                  excludedTags.includes(tag)
+                    ? excludedTags.filter((x) => x !== tag)
+                    : [...excludedTags, tag],
+                )}
+                checkboxClass="h-4 w-4 rounded border-rose-300"
+              />
               {excludedTags.length > 0 ? (
                 <p className="text-[11px] text-rose-700">
                   Hidden from families tagged: {excludedTags.join(', ')}.
@@ -1073,5 +1057,46 @@ function ToggleField({
         {hint ? <span className="block text-[10px] text-zinc-500">{hint}</span> : null}
       </span>
     </label>
+  );
+}
+
+// Tag checkbox list with a combined filter / add-new input. Every tag in the
+// GHL location is listed; typing narrows the list, and a tag GHL doesn't know
+// yet can still be added (GHL auto-creates a tag the first time it's applied,
+// so targeting can be configured before anyone is tagged). Selected values
+// always render even when the filter would hide them, so nothing checked can
+// become un-uncheckable.
+function TagChecklist({ options, selected, onToggle, checkboxClass }: {
+  options: string[]; selected: string[]; onToggle: (tag: string) => void; checkboxClass: string;
+}) {
+  const [filter, setFilter] = useState('');
+  const q = filter.trim().toLowerCase();
+  const all = Array.from(new Set([...options, ...selected]));
+  const shown = q ? all.filter((t) => t.toLowerCase().includes(q) || selected.includes(t)) : all;
+  const canAdd = q.length > 0 && !all.some((t) => t.toLowerCase() === q);
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center gap-1.5 rounded border border-zinc-300 bg-white px-2 py-1">
+        <Search className="h-3.5 w-3.5 shrink-0 text-zinc-400" />
+        <input value={filter} onChange={(e) => setFilter(e.target.value)}
+          placeholder="Filter tags, or type a new tag…"
+          className="w-full bg-transparent text-sm text-zinc-800 placeholder:text-zinc-400 focus:outline-none" />
+      </div>
+      <div className="max-h-48 space-y-1 overflow-y-auto">
+        {shown.map((tag) => (
+          <label key={tag} className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={selected.includes(tag)} onChange={() => onToggle(tag)}
+              className={checkboxClass} />
+            <span className="text-zinc-800">{tag}</span>
+          </label>
+        ))}
+      </div>
+      {canAdd ? (
+        <button type="button" onClick={() => { onToggle(filter.trim()); setFilter(''); }}
+          className="text-[11px] font-medium text-emerald-700 hover:text-emerald-900">
+          + Add &ldquo;{filter.trim()}&rdquo;
+        </button>
+      ) : null}
+    </div>
   );
 }
