@@ -17,6 +17,9 @@ export interface FormDef {
   category: string | null;
   per_student: boolean;
   position: number;
+  // True for office-recorded items (config.external_items) tracked from
+  // student metadata — no submission behind the chip, so no drill link.
+  external?: boolean;
 }
 
 export interface StudentChip {
@@ -181,6 +184,30 @@ export async function fetcher(
   );
   const scopedFamilyIds = [...new Set(students.map((s) => s.family_id))];
 
+  // 2b. Office-recorded items — per-student completion from
+  // students.metadata (the sync mirrors each GHL per-student custom field
+  // there, e.g. "Student 1 AZ Card" → metadata.az_card). One small query
+  // per configured item.
+  const externalItems = (Array.isArray(config.external_items) ? config.external_items : [])
+    .filter((i) => i && i.key && i.label && i.metadata_key);
+  const externalComplete = new Map<string, Set<string>>();
+  for (const item of externalItems) {
+    const done = new Set<string>();
+    if (students.length > 0) {
+      const okValues = (item.complete_values?.length ? item.complete_values : ['complete', 'yes', 'done'])
+        .map((v) => v.trim().toLowerCase());
+      const { rows: mrows } = await query<{ id: string; v: string | null }>(
+        `SELECT id, metadata->>$2 AS v FROM students
+          WHERE school_id = $1 AND id = ANY($3::uuid[])`,
+        [school.schoolId, item.metadata_key, students.map((s) => s.student_id)],
+      );
+      for (const r of mrows) {
+        if (r.v && okValues.includes(r.v.trim().toLowerCase())) done.add(r.id);
+      }
+    }
+    externalComplete.set(item.key, done);
+  }
+
   // 3. Family metadata + primary parent. The optional tag filter
   // (enrolled_tag / excluded_tag) checks every parent on the family —
   // include if ANY parent has the enrolled tag, exclude if ANY parent
@@ -313,6 +340,19 @@ export async function fetcher(
     per_student: f.per_student,
     position: f.position,
   }));
+  // Office-recorded items render as extra per-student columns after the
+  // real forms.
+  for (const item of externalItems) {
+    formsForBuild.push({
+      id: `external:${item.key}`,
+      slug: `external-${item.key}`,
+      display_name: item.label,
+      category: null,
+      per_student: true,
+      position: 1000,
+      external: true,
+    });
+  }
 
   for (const fam of famMeta) {
     const familyStudents = studentsByFamily.get(fam.family_id) ?? [];
@@ -326,6 +366,26 @@ export async function fetcher(
     let applicableCount = 0;
     let completeCount = 0;
     for (const form of formsForBuild) {
+      // Office-recorded item: chip complete when the student's mirrored
+      // metadata value says so. No submission to link to.
+      if (form.external) {
+        const done = externalComplete.get(form.id.slice('external:'.length)) ?? new Set<string>();
+        cells[form.id] = familyStudents.map((s, i) => {
+          const complete = done.has(s.student_id);
+          applicableCount++;
+          if (complete) completeCount++;
+          return {
+            student_id: s.student_id,
+            slot: i + 1,
+            display_name: studentLabel(s),
+            applies: true,
+            complete,
+            submission_id: null,
+            submitted_at: null,
+          };
+        });
+        continue;
+      }
       // Hidden from this family by tag rules → not applicable, blank cell.
       if (!formVisibleToFamily(forms.find((f) => f.id === form.id)!, fam.family_id)) {
         cells[form.id] = [];

@@ -6,6 +6,25 @@
 
 import type { ConfigSchema } from '@/lib/widgets/types';
 
+// Office-recorded item tracked from students.metadata instead of portal
+// submissions — for paperwork that comes back OUTSIDE the portal (e.g. a
+// paper AZ emergency card, or a GHL Documents & Contracts signature). The
+// office flips a per-student GHL custom field ("Student 1 AZ Card" →
+// mirrored by the sync to metadata.az_card) and the item renders as one
+// more per-student column in the grid, counted in every stat. Configured
+// via layout JSON; no schema UI yet.
+export interface ExternalTrackedItem {
+  // Stable column id (the synthetic form id is `external:<key>`).
+  key: string;
+  // Column header, e.g. 'AZ Emergency Card'.
+  label: string;
+  // students.metadata key the sync mirrors from the GHL per-student field.
+  metadata_key: string;
+  // Values (case-insensitive) that count as complete.
+  // Default: ['complete', 'yes', 'done'].
+  complete_values?: string[];
+}
+
 export interface PortalFormsTrackerConfig {
   // Optional default form filter; 'all' shows every column.
   default_form_filter?: string;
@@ -35,6 +54,8 @@ export interface PortalFormsTrackerConfig {
   // mix honest ("250 enrolled · 3 pending"). Turn off to pin the
   // tracker to currently-enrolled only (Student Roster scope).
   include_pending?: boolean;
+  // Extra columns tracked from student metadata (see ExternalTrackedItem).
+  external_items?: ExternalTrackedItem[];
 }
 
 export const portalFormsTrackerDefaults: PortalFormsTrackerConfig = {
