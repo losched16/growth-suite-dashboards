@@ -253,7 +253,9 @@ export async function fetcher(
                 NULL::text AS submitted_at WHERE false`
       : `SELECT s.form_definition_id, s.family_id, s.student_id,
                 s.id AS submission_id,
-                to_char(s.submitted_at, 'YYYY-MM-DD"T"HH24:MI:SSOF') AS submitted_at
+                -- UTC + explicit 'Z': to_char's OF emits '+00', which JS
+                -- Date() rejects → every chip tooltip said "Invalid Date".
+                to_char(s.submitted_at AT TIME ZONE 'utc', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS submitted_at
            FROM portal_form_submissions s
           WHERE s.school_id = $1
             AND COALESCE(s.is_test, false) = false

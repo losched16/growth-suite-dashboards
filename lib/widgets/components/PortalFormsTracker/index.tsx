@@ -447,9 +447,14 @@ function FormCellContent({
           slot={c.slot}
           title={!c.applies
             ? `${c.display_name} — not applicable`
-            : c.complete && c.submitted_at
-              ? `${c.display_name} — submitted ${new Date(c.submitted_at).toLocaleDateString()} (click to view)`
-              : `${c.display_name} — pending`}
+            : form.external
+              // Office-recorded item — no submission behind the chip.
+              ? (c.complete
+                ? `${c.display_name} — recorded complete by the office`
+                : `${c.display_name} — not recorded yet`)
+              : c.complete && c.submitted_at
+                ? `${c.display_name} — submitted ${new Date(c.submitted_at).toLocaleDateString()} (click to view)`
+                : `${c.display_name} — pending`}
           href={submissionHref(c)}
         />
       ))}
