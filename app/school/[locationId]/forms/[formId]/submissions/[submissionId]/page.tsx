@@ -12,7 +12,7 @@
 
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ArrowLeft, Printer, Image as ImageIcon } from 'lucide-react';
+import { ArrowLeft, Paperclip, Printer, Image as ImageIcon } from 'lucide-react';
 import { loadSchoolByLocationId } from '@/lib/dashboards/loader';
 import { query } from '@/lib/db';
 import { PrintSubmissionButton } from './PrintSubmissionButton';
@@ -63,6 +63,24 @@ interface Submission {
   voided_at: string | null;
   voided_by_admin_email: string | null;
   voided_reason: string | null;
+}
+
+// Files a parent attached via a "File upload" field. Stored as bytea in
+// portal_form_submission_files (NOT inside responses JSON), so they must
+// be fetched separately or the admin view is blind to them.
+interface SubmissionFile {
+  id: string;
+  field_key: string;
+  display_name: string;
+  original_filename: string;
+  mime_type: string;
+  size_bytes: number;
+}
+
+function fmtSize(bytes: number): string {
+  if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  if (bytes >= 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${bytes} B`;
 }
 
 function fmtDateTime(iso: string): string {
@@ -117,6 +135,14 @@ export default async function SubmissionDetail({
   );
   if (subRows.length === 0) notFound();
   const sub = subRows[0];
+
+  const { rows: files } = await query<SubmissionFile>(
+    `SELECT id, field_key, display_name, original_filename, mime_type, size_bytes
+       FROM portal_form_submission_files
+      WHERE submission_id = $1 AND school_id = $2
+      ORDER BY uploaded_at, original_filename`,
+    [submissionId, school.id],
+  );
 
   const studentLabel = sub.student_first
     ? `${(sub.student_preferred?.trim() || sub.student_first)} ${sub.student_last ?? ''}`.trim()
@@ -244,10 +270,24 @@ export default async function SubmissionDetail({
                 key={i}
                 block={block}
                 responses={sub.responses}
+                files={block.key ? files.filter((f) => f.field_key === block.key) : []}
               />
             ))}
           </div>
         </section>
+
+        {/* Attachments whose field no longer exists in the schema (field
+            deleted/renamed after submission) — still downloadable. */}
+        {files.some((f) => !blocks.some((b) => b.key === f.field_key)) ? (
+          <section className="mt-4 rounded-lg border border-slate-200 bg-white p-5 print:border-0 print:p-0 print:rounded-none">
+            <h2 className="text-sm font-semibold text-slate-700 uppercase tracking-wide mb-3">Other attachments</h2>
+            <ul className="space-y-1.5">
+              {files.filter((f) => !blocks.some((b) => b.key === f.field_key)).map((f) => (
+                <li key={f.id}><FileLink file={f} /></li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
 
         <footer className="mt-4 text-[11px] text-slate-400 print:text-slate-600 text-center">
           Generated from {school.name ?? 'Growth Suite'} parent portal — Submission ID {sub.id}
@@ -266,11 +306,30 @@ function Field({ label, value, mono }: { label: string; value: string; mono?: bo
   );
 }
 
+// Download link for a parent-attached file. Streams through the existing
+// school-scoped route (it serves any portal_form_submission_files row for
+// the session's school, despite the staff-requests path segment).
+function FileLink({ file }: { file: SubmissionFile }) {
+  return (
+    <a
+      href={`/api/school/staff-requests/files/${file.id}`}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="inline-flex items-center gap-1.5 text-sm text-blue-700 underline hover:text-blue-900 print:no-underline print:text-slate-900"
+    >
+      <Paperclip className="h-3.5 w-3.5 shrink-0" />
+      {file.original_filename}
+      <span className="text-[11px] text-slate-500 no-underline">({fmtSize(file.size_bytes)})</span>
+    </a>
+  );
+}
+
 function BlockView({
-  block, responses,
+  block, responses, files,
 }: {
   block: FormDef['field_schema'][number];
   responses: Record<string, unknown>;
+  files: SubmissionFile[];
 }) {
   const type = block.type;
   if (type === 'header') {
@@ -290,6 +349,25 @@ function BlockView({
   if (!block.key) return null;
   const key = block.key;
   const raw = responses[key];
+
+  // File uploads live in portal_form_submission_files, not responses —
+  // render download links from the fetched rows.
+  if (type === 'file_upload') {
+    return (
+      <div className="grid grid-cols-1 sm:grid-cols-[14rem_1fr] gap-1 sm:gap-3">
+        <dt className="text-xs font-semibold text-slate-700">{block.label}</dt>
+        <dd className="text-sm text-slate-900">
+          {files.length === 0 ? (
+            <em className="text-slate-400">no file uploaded</em>
+          ) : (
+            <ul className="space-y-1">
+              {files.map((f) => <li key={f.id}><FileLink file={f} /></li>)}
+            </ul>
+          )}
+        </dd>
+      </div>
+    );
+  }
 
   // Draw-capable signatures: typed legal name lives under the key, the
   // drawn PNG under key_drawn — show BOTH (new submissions require both).
