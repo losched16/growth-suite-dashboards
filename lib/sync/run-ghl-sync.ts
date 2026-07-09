@@ -1083,6 +1083,12 @@ export async function runGhlSync(schoolId: string): Promise<SyncResult> {
     let enrollmentsCreated = 0;
     let classroomsCreated = 0;
 
+    // Track ids already consumed in this rebuild so a preserved id is never
+    // inserted twice. The co-parent merge can route two parents (or students)
+    // to the same reuse key — e.g. co-parents sharing an email address — and
+    // reusing the id would violate the primary key.
+    const usedParentIds = new Set<string>();
+    const usedStudentIds = new Set<string>();
     for (const fam of familiesToInsert) {
       // P1 contact id from this family (used to look up carryover for the
       // family's P2, and to preserve ids across the rebuild). Phase-1 /
@@ -1114,8 +1120,10 @@ export async function runGhlSync(schoolId: string): Promise<SyncResult> {
           }
         }
         const pk = parentKey(p.is_primary, p.ghl_contact_id, p1ContactId, p.email);
-        const keepParentId = pk ? reuseParentId.get(pk) : undefined;
+        let keepParentId = pk ? reuseParentId.get(pk) : undefined;
+        if (keepParentId && usedParentIds.has(keepParentId)) keepParentId = undefined; // don't reuse an id twice
         if (keepParentId) {
+          usedParentIds.add(keepParentId);
           await q(
             `INSERT INTO parents
                (id, family_id, school_id, ghl_contact_id, first_name, last_name,
@@ -1140,7 +1148,9 @@ export async function runGhlSync(schoolId: string): Promise<SyncResult> {
       for (const s of fam.students) {
         const sContact = String((s.metadata as Record<string, unknown>)?.ghl_contact_id ?? '') || p1ContactId || '';
         const sSlot = String((s.metadata as Record<string, unknown>)?.ghl_slot ?? '');
-        const keepStudentId = (sContact && sSlot) ? reuseStudentId.get(`${sContact}|${sSlot}`) : undefined;
+        let keepStudentId = (sContact && sSlot) ? reuseStudentId.get(`${sContact}|${sSlot}`) : undefined;
+        if (keepStudentId && usedStudentIds.has(keepStudentId)) keepStudentId = undefined; // don't reuse an id twice
+        if (keepStudentId) usedStudentIds.add(keepStudentId);
         const { rows: stuRows } = keepStudentId
           ? await q<{ id: string }>(
               `INSERT INTO students
