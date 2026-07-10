@@ -332,6 +332,66 @@ export async function fetcher(
     }
   }
 
+  // ── GHL-side completion signal ───────────────────────────────────
+  // Old workflow: parents completed forms via Final Forms / GHL-native
+  // surveys, which write `form_<slug>_complete` (family-level) or
+  // `form_<slug>_s<N>` (per-student slot N) custom fields onto the
+  // primary parent's GHL contact. These predate the portal and never
+  // land in portal_form_submissions. Without honoring them, families
+  // that already finished paperwork show as 0/8 in the tracker and
+  // keep getting reminder emails. Sonia flagged Tracy Cosgriff /
+  // August as a repro — Tracy has form_emergency_medical_complete,
+  // form_media_permission_complete, form_ode_connectivity_complete
+  // set to 2026-07-06 in GHL but no matching portal submissions.
+  //
+  // We treat a form as complete if EITHER signal exists.
+  const ghlFormKeys = new Map<string, Set<string>>(); // familyId → set of form-* field keys with a non-empty value
+  const primaryContactIds = famMeta
+    .map((f) => f.primary_ghl_contact_id)
+    .filter((v): v is string => !!v);
+  if (primaryContactIds.length > 0) {
+    const { rows: ghlRows } = await query<{ ghl_contact_id: string; field_key: string }>(
+      `SELECT ghl_contact_id, field_key FROM ghl_contact_field_values
+        WHERE school_id = $1
+          AND ghl_contact_id = ANY($2::text[])
+          AND field_key ~ '^form_[a-z_]+(_complete(_s[1-6])?|_s[1-6])$'
+          AND value IS NOT NULL AND value <> ''`,
+      [school.schoolId, primaryContactIds],
+    );
+    const familyByContact = new Map<string, string>();
+    for (const f of famMeta) {
+      if (f.primary_ghl_contact_id) familyByContact.set(f.primary_ghl_contact_id, f.family_id);
+    }
+    for (const r of ghlRows) {
+      const familyId = familyByContact.get(r.ghl_contact_id);
+      if (!familyId) continue;
+      if (!ghlFormKeys.has(familyId)) ghlFormKeys.set(familyId, new Set());
+      ghlFormKeys.get(familyId)!.add(r.field_key);
+    }
+  }
+  function ghlComplete(familyId: string, formSlug: string, opts: { slot?: number; familyLevel: boolean }): boolean {
+    const set = ghlFormKeys.get(familyId);
+    if (!set) return false;
+    const slugKey = formSlug.replace(/-/g, '_');
+    if (opts.familyLevel) {
+      if (set.has(`form_${slugKey}_complete`)) return true;
+      // Emergency-medical also has per-student variants (_complete_s2,
+      // _complete_s3). Treat ANY populated variant as "family-level
+      // signal present" — matches how Sonia reads Family Hub.
+      for (let i = 1; i <= 6; i++) {
+        if (set.has(`form_${slugKey}_complete_s${i}`)) return true;
+        if (set.has(`form_${slugKey}_s${i}`)) return true;
+      }
+      return false;
+    }
+    const slot = opts.slot ?? 1;
+    return set.has(`form_${slugKey}_s${slot}`)
+        || set.has(`form_${slugKey}_complete_s${slot}`)
+        // Slot 1 also maps to the un-suffixed _complete field on
+        // some schools' setups.
+        || (slot === 1 && set.has(`form_${slugKey}_complete`));
+  }
+
   // ── Build family rows ───────────────────────────────────────────
   const rows: FamilyRow[] = [];
   const formsForBuild: FormDef[] = forms.map((f) => ({
@@ -396,9 +456,13 @@ export async function fetcher(
       if (form.per_student) {
         // One chip per student in the family. All of them are "applicable"
         // by default; per-school applicability rules would land here later.
+        // Completion is EITHER a portal submission or a GHL-side signal
+        // (`form_<slug>_s<N>` on the primary parent's contact) — see the
+        // ghlComplete helper above.
         const list: StudentChip[] = familyStudents.map((s, i) => {
           const sub = perStudent.get(`${form.id}|${s.student_id}`);
-          const complete = !!sub;
+          const complete = !!sub
+            || ghlComplete(fam.family_id, form.slug, { slot: i + 1, familyLevel: false });
           applicableCount++;
           if (complete) completeCount++;
           return {
@@ -415,8 +479,11 @@ export async function fetcher(
       } else {
         // Family-level form → one cell for the whole family. Render as a
         // single "slot 0" chip so the component treats it uniformly.
+        // Same dual-signal rule: portal submission OR any populated
+        // `form_<slug>_complete[_sN]` field.
         const sub = perFamily.get(`${form.id}|${fam.family_id}`);
-        const complete = !!sub;
+        const complete = !!sub
+          || ghlComplete(fam.family_id, form.slug, { familyLevel: true });
         applicableCount++;
         if (complete) completeCount++;
         cells[form.id] = [{
