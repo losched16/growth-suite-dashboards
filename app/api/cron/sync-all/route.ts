@@ -109,14 +109,15 @@ async function runForAll(): Promise<NextResponse> {
       }
 
       // Parent-2 tag mirror — promoted co-parent contacts pick up Parent 1's
-      // tags (additive) so automations and segments reach both parents.
-      // Gated on schools.settings.promote_parent2; diffs come from the
-      // attribute snapshot refreshed just above.
+      // tags (P1 = source of truth: adds AND removals of mirror-managed
+      // tags) so automations and segments reach both parents without
+      // double-counting. Gated on schools.settings.promote_parent2; diffs
+      // come from the attribute snapshot refreshed just above.
       let p2TagSummary = '';
       try {
         const m = await mirrorP2Tags(s.id);
-        if (m.ran && (m.tags_added > 0 || m.errors > 0)) {
-          p2TagSummary = ` P2-tags: +${m.tags_added} tag(s) → ${m.updated} contact(s)${m.errors ? `, ${m.errors} errors` : ''}.`;
+        if (m.ran && (m.tags_added > 0 || m.tags_removed > 0 || m.errors > 0)) {
+          p2TagSummary = ` P2-tags: +${m.tags_added}/-${m.tags_removed} tag(s) → ${m.updated} contact(s)${m.errors ? `, ${m.errors} errors` : ''}.`;
         }
       } catch (mErr) {
         p2TagSummary = ` P2-tags FAILED: ${mErr instanceof Error ? mErr.message : String(mErr)}`;
