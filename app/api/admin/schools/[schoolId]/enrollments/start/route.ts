@@ -141,7 +141,7 @@ export async function POST(request: NextRequest, { params }: { params: Params })
            AND EXISTS (
              SELECT 1 FROM parents p
                JOIN ghl_contact_tags t ON t.ghl_contact_id = p.ghl_contact_id AND t.school_id = $1
-              WHERE p.family_id = s.family_id AND p.status = 'active'
+              WHERE p.family_id = s.family_id AND p.status = 'active' AND p.is_primary = true
                 AND LOWER(t.tag) = LOWER($3)
            )`,
         [schoolId, settings.academic_year, groupValue],

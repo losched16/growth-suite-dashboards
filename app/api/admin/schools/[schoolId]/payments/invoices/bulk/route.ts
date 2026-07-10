@@ -15,8 +15,9 @@
 //   all              → every family with ≥1 active student
 //   program:<value>  → families with an active student in that
 //                      program OR homeroom (one dropdown serves both)
-//   tag:<value>      → families where any parent's GHL contact carries
-//                      that tag (synced ghl_contact_tags)
+//   tag:<value>      → families where the PRIMARY parent's GHL contact
+//                      carries that tag (P1 = source of truth; P2 mirrors
+//                      exist for communication and never select families)
 //   pick             → exactly the families checked in the picker
 //                      (family_ids checkboxes)
 //
@@ -140,14 +141,14 @@ export async function POST(request: NextRequest, { params }: { params: Params })
                 JOIN parents p ON p.ghl_contact_id = t.ghl_contact_id AND p.school_id = t.school_id
                 JOIN families f ON f.id = p.family_id
                WHERE t.school_id = $1 AND lower(t.tag) = lower($2)
-                 AND p.status = 'active' AND f.status = 'active')
+                 AND p.status = 'active' AND p.is_primary = true AND f.status = 'active')
             ORDER BY s.first_name`
         : `SELECT DISTINCT p.family_id, NULL::uuid AS student_id
              FROM ghl_contact_tags t
              JOIN parents p ON p.ghl_contact_id = t.ghl_contact_id AND p.school_id = t.school_id
              JOIN families f ON f.id = p.family_id
             WHERE t.school_id = $1 AND lower(t.tag) = lower($2)
-              AND p.status = 'active' AND f.status = 'active'`,
+              AND p.status = 'active' AND p.is_primary = true AND f.status = 'active'`,
       [schoolId, audienceValue],
     ));
   } else if (audienceType === 'pick') {

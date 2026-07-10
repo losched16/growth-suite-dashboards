@@ -209,10 +209,9 @@ export async function fetcher(
   }
 
   // 3. Family metadata + primary parent. The optional tag filter
-  // (enrolled_tag / excluded_tag) checks every parent on the family —
-  // include if ANY parent has the enrolled tag, exclude if ANY parent
-  // has the excluded tag. Joe's framing: a withdrawn-tagged contact
-  // anywhere on the family drops the whole family out of the tracker.
+  // (enrolled_tag / excluded_tag) checks the PRIMARY parent's contact
+  // only — P1 is the source of truth for family data; P2 contacts are
+  // communication mirrors and must never move dashboard numbers.
   const enrolledTag = (config.enrolled_tag ?? '').trim().toLowerCase();
   const excludedTag = (config.excluded_tag ?? '').trim().toLowerCase();
   const { rows: famMeta } = await query<DbFamilyMeta>(
@@ -231,13 +230,13 @@ export async function fetcher(
         AND ($2::text = '' OR EXISTS (
           SELECT 1 FROM parents p
             JOIN ghl_contact_tags t ON t.ghl_contact_id = p.ghl_contact_id AND t.school_id = $1
-           WHERE p.family_id = f.id AND p.status = 'active'
+           WHERE p.family_id = f.id AND p.status = 'active' AND p.is_primary = true
              AND lower(t.tag) = $2
         ))
         AND ($3::text = '' OR NOT EXISTS (
           SELECT 1 FROM parents p
             JOIN ghl_contact_tags t ON t.ghl_contact_id = p.ghl_contact_id AND t.school_id = $1
-           WHERE p.family_id = f.id AND p.status = 'active'
+           WHERE p.family_id = f.id AND p.status = 'active' AND p.is_primary = true
              AND lower(t.tag) = $3
         ))`,
     [school.schoolId, enrolledTag, excludedTag, scopedFamilyIds],
@@ -293,7 +292,8 @@ export async function fetcher(
       `SELECT DISTINCT p.family_id, LOWER(t.tag) AS tag
          FROM ghl_contact_tags t
          JOIN parents p ON p.ghl_contact_id = t.ghl_contact_id
-        WHERE t.school_id = $1 AND p.family_id = ANY($2::uuid[])`,
+        WHERE t.school_id = $1 AND p.family_id = ANY($2::uuid[])
+          AND p.is_primary = true`,
       [school.schoolId, familyIds],
     );
     for (const r of ftRows) {

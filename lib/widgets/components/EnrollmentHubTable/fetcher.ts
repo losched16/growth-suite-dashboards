@@ -142,7 +142,7 @@ export async function fetcher(
     ? `AND EXISTS (
          SELECT 1 FROM parents p
            JOIN ghl_contact_tags t ON t.ghl_contact_id = p.ghl_contact_id AND t.school_id = s.school_id
-          WHERE p.family_id = f.id AND p.status = 'active'
+          WHERE p.family_id = f.id AND p.status = 'active' AND p.is_primary = true
             AND lower(t.tag) = $${enrolledTagParamIdx}
        )`
     : '';
@@ -150,7 +150,7 @@ export async function fetcher(
     ? `AND NOT EXISTS (
          SELECT 1 FROM parents p
            JOIN ghl_contact_tags t ON t.ghl_contact_id = p.ghl_contact_id AND t.school_id = s.school_id
-          WHERE p.family_id = f.id AND p.status = 'active'
+          WHERE p.family_id = f.id AND p.status = 'active' AND p.is_primary = true
             AND lower(t.tag) = $${excludedTagParamIdx}
        )`
     : '';
