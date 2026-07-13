@@ -288,6 +288,119 @@ export async function POST(request: NextRequest, { params }: { params: Params })
         });
       }
 
+      // ── edit_line_items ──────────────────────────────────────────────
+      // Edit the ENROLLMENT's annual fee / credit lines (extended care,
+      // deposit, development fee, scholarship …) WITHOUT changing the grid
+      // or payment plan. Percentage discounts (prompt-pay, sibling, …)
+      // auto-recompute against the new basis; unpaid invoices regenerate at
+      // the new total, paid ones preserved. Because the tuition + DHS
+      // agreements prefill their LOCKED fee fields from this breakdown, a
+      // school can fix a fee here itself instead of asking us to edit it.
+      case 'edit_line_items': {
+        // Current enrollment config — keep the same grid + plan, only the
+        // fee amounts change.
+        const { rows: cur } = await query<{
+          tuition_grid_id: string; payment_plan_id: string;
+          addons: AddonSnap[] | null; first_due_date: string | null;
+        }>(
+          `SELECT tuition_grid_id, payment_plan_id, addons, first_due_date
+             FROM family_tuition_enrollments WHERE id = $1`,
+          [enrollmentId],
+        );
+        if (cur.length === 0) return back(request, fallback, returnTo, { err: 'Enrollment not found.' });
+        const currentAddons = Array.isArray(cur[0].addons) ? cur[0].addons : [];
+        const firstDue = cur[0].first_due_date
+          ? new Date(cur[0].first_due_date).toISOString().slice(0, 10)
+          : null;
+
+        const { rows: gRows } = await query<{ display_name: string; annual_tuition_cents: number }>(
+          `SELECT display_name, annual_tuition_cents FROM tuition_grids WHERE id = $1 AND school_id = $2`,
+          [cur[0].tuition_grid_id, schoolId],
+        );
+        if (gRows.length === 0) return back(request, fallback, returnTo, { err: 'Tuition grid not found.' });
+        const { rows: pRows } = await query<{ slug: string }>(
+          `SELECT slug FROM payment_plans WHERE id = $1 AND school_id = $2`,
+          [cur[0].payment_plan_id, schoolId],
+        );
+        if (pRows.length === 0) return back(request, fallback, returnTo, { err: 'Payment plan not found.' });
+        const { rows: cfgRows } = await query<{ discount_rules: DiscountRules | null }>(
+          `SELECT discount_rules FROM school_payment_config WHERE school_id = $1`,
+          [schoolId],
+        );
+        const rules = cfgRows[0]?.discount_rules ?? null;
+
+        // Editable manual fee lines = the school's carry-over (fixed-dollar)
+        // keys. Fall back to the enrollment's own non-discount addons when a
+        // school has no rules configured.
+        const carryKeys: string[] = rules?.carry_over_keys?.length
+          ? rules.carry_over_keys
+          : currentAddons.filter((a) => !/discount/.test(a.key)).map((a) => a.key);
+
+        const CREDIT_KEYS = new Set(['deposit', 'scholarship']);
+        const LABELS: Record<string, string> = {
+          extended_care: 'Extended care', deposit: 'Deposit (paid)',
+          development_fee: 'Development fee', scholarship: 'Scholarship',
+        };
+        const humanize = (k: string) => k.replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase());
+
+        // Rebuild the manual fee lines from the submitted amounts. Blank =
+        // drop that line; a number (incl. 0) = keep/set it. Deposit &
+        // scholarship are credits (stored negative); their input is a
+        // positive magnitude, and an existing line keeps its own sign.
+        const manualLines: AddonSnap[] = [];
+        for (const key of carryKeys) {
+          const raw = fd.get(`fee_${key}`);
+          if (raw == null || String(raw).trim() === '') continue;
+          const magnitude = Math.abs(dollarsToCentsSigned(String(raw)));
+          const existing = currentAddons.find((a) => a.key === key);
+          const defaultSign = CREDIT_KEYS.has(key) ? -1 : 1;
+          const sign = existing && existing.amount_cents !== 0 ? Math.sign(existing.amount_cents) : defaultSign;
+          manualLines.push({ key, label: existing?.label || LABELS[key] || humanize(key), amount_cents: sign * magnitude });
+        }
+
+        // Preserve the sibling-discount marker so the recompute keeps applying
+        // it (its amount is derived from the new basis, not carried).
+        const siblingKey = rules?.sibling?.key;
+        const keptSibling = siblingKey ? currentAddons.filter((a) => a.key === siblingKey) : [];
+
+        const recomputed = recomputePlanBreakdown({
+          currentAddons: [...manualLines, ...keptSibling],
+          newBaseCents: gRows[0].annual_tuition_cents,
+          newGridLabel: gRows[0].display_name,
+          newPlanSlug: pRows[0].slug,
+          rules,
+        });
+
+        // Same override-priced regen path as change_plan: deletes unpaid
+        // invoices, preserves paid, re-spreads the new total.
+        const result = await generateTuitionEnrollment({
+          schoolId,
+          familyId: enr.family_id,
+          studentId: enr.student_id,
+          academicYear: enr.academic_year,
+          tuitionGridId: cur[0].tuition_grid_id,
+          paymentPlanId: cur[0].payment_plan_id,
+          addonKeys: [],
+          overrideLines: recomputed.overrideLines,
+          tuitionOverrideCents: recomputed.totalAnnualCents,
+          firstDueDate: firstDue,
+          createdByEmail: auth.via === 'school' ? 'school@growthsuite.local' : 'operator@growthsuite.local',
+          initialStatus: 'open',
+        });
+
+        // Persist our recomputed breakdown so the contract / DHS forms render
+        // from it (the generator snapshots addons from the grid catalog).
+        await query(
+          `UPDATE family_tuition_enrollments SET addons = $2::jsonb, updated_at = now() WHERE id = $1`,
+          [result.enrollment_id, JSON.stringify(recomputed.addons)],
+        );
+
+        const flag = recomputed.notes.length ? ` Note: ${recomputed.notes.join(' ')}` : '';
+        return back(request, fallback, returnTo, {
+          msg: `Tuition fees updated — ${result.invoice_ids.length} installment${result.invoice_ids.length === 1 ? '' : 's'} totaling $${(recomputed.totalAnnualCents / 100).toLocaleString()}. Paid installments preserved; the agreement will show the new amounts.${flag}`,
+        });
+      }
+
       // ── edit_installment ─────────────────────────────────────────────
       // Two modes:
       //   • Per-fee mode (preferred): the form posts one `line_<lineId>`

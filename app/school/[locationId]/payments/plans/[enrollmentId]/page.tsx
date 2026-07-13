@@ -16,7 +16,7 @@
 
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ArrowLeft, Pause, Play, Edit3, Scissors, Calendar, Plus, RotateCw, SlidersHorizontal, Banknote } from 'lucide-react';
+import { ArrowLeft, Pause, Play, Edit3, Scissors, Calendar, Plus, RotateCw, SlidersHorizontal, Banknote, Coins } from 'lucide-react';
 import { query } from '@/lib/db';
 import { loadSchoolByLocationId } from '@/lib/dashboards/loader';
 import { HelpCallout } from '@/components/HelpCallout';
@@ -28,7 +28,7 @@ export const maxDuration = 30;
 type Params = Promise<{ locationId: string; enrollmentId: string }>;
 type SearchParams = Promise<{
   msg?: string; err?: string;
-  edit?: string; split?: string; reschedule?: string; changeplan?: string; record?: string;
+  edit?: string; split?: string; reschedule?: string; changeplan?: string; record?: string; editfees?: string;
 }>;
 
 interface EnrollmentRow {
@@ -43,6 +43,8 @@ interface EnrollmentRow {
   total_annual_cents: number;
   installment_count: number;
   internal_note: string | null;
+  addons: Array<{ key: string; label: string; amount_cents: number }> | null;
+  base_tuition_cents: number;
   family_label: string;
   student_label: string | null;
   grid_label: string;
@@ -102,6 +104,7 @@ export default async function PlanDetailPage({
     `SELECT e.id, e.school_id, e.family_id, e.student_id, e.academic_year, e.status,
             e.tuition_grid_id, e.payment_plan_id,
             e.total_annual_cents, e.installment_count, e.internal_note,
+            e.addons, g.annual_tuition_cents AS base_tuition_cents,
             e.tuition_override_cents, e.tuition_override_reason,
             e.tuition_override_set_by_email, e.tuition_override_set_at,
             COALESCE(NULLIF(f.display_name, ''),
@@ -146,6 +149,37 @@ export default async function PlanDetailPage({
     (acc[g.grade_level] ??= []).push(g);
     return acc;
   }, {});
+
+  // ── Editable fee/credit lines for the "Edit tuition fees" editor ──────
+  // The school edits fixed-dollar fees (extended care, deposit, dev fee,
+  // scholarship); percentage discounts recompute automatically on save.
+  // Editable keys = the school's carry-over keys (fall back to the
+  // enrollment's own non-discount addons if no rules are configured).
+  const { rows: dcfg } = await query<{ discount_rules: { carry_over_keys?: string[] } | null }>(
+    `SELECT discount_rules FROM school_payment_config WHERE school_id = $1`,
+    [schoolId],
+  );
+  const CREDIT_KEYS = new Set(['deposit', 'scholarship']);
+  const FEE_LABELS: Record<string, string> = {
+    extended_care: 'Extended care', deposit: 'Deposit (paid)',
+    development_fee: 'Development fee', scholarship: 'Scholarship',
+  };
+  const humanizeKey = (k: string) => k.replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase());
+  const addonList = Array.isArray(enr.addons) ? enr.addons : [];
+  const addonByKey = new Map(addonList.map((a) => [a.key, a]));
+  const feeKeys = dcfg[0]?.discount_rules?.carry_over_keys?.length
+    ? dcfg[0]!.discount_rules!.carry_over_keys!
+    : addonList.filter((a) => !/discount/.test(a.key)).map((a) => a.key);
+  const feeLines = feeKeys.map((key) => {
+    const a = addonByKey.get(key);
+    return {
+      key,
+      label: a?.label || FEE_LABELS[key] || humanizeKey(key),
+      magnitude: a ? Math.abs(a.amount_cents) : null,
+      isCredit: CREDIT_KEYS.has(key) || (!!a && a.amount_cents < 0),
+    };
+  });
+  const discountLines = addonList.filter((a) => /discount/.test(a.key));
 
   // Pull all invoices for this enrollment, paid + open + voided. Sort by
   // due_at so the timeline reads top-down. installment_number is in the
@@ -403,6 +437,15 @@ export default async function PlanDetailPage({
               <SlidersHorizontal className="h-3.5 w-3.5" /> Change plan
             </Link>
           ) : null}
+
+          {!sp.editfees ? (
+            <Link
+              href={`${selfHref}?editfees=1`}
+              className="inline-flex items-center gap-1.5 rounded-md border border-teal-300 bg-teal-50 px-3 py-1.5 text-sm font-medium text-teal-800 hover:bg-teal-100"
+            >
+              <Coins className="h-3.5 w-3.5" /> Edit tuition fees
+            </Link>
+          ) : null}
         </div>
 
         {/* CHANGE PLAN — swap grid (day-count) and/or payment plan. Discounts
@@ -463,6 +506,98 @@ export default async function PlanDetailPage({
             <div className="flex items-center gap-2">
               <button type="submit" className="inline-flex items-center gap-1.5 rounded-md bg-violet-600 px-3.5 py-1.5 text-sm font-semibold text-white hover:bg-violet-700">
                 Apply change
+              </button>
+              <Link href={selfHref} className="inline-flex items-center rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50">
+                Cancel
+              </Link>
+            </div>
+          </form>
+        ) : null}
+
+        {/* EDIT TUITION FEES — edit the annual fee/credit lines directly.
+            Discounts auto-recompute; unpaid invoices + the tuition/DHS
+            agreements update together. Keeps the same grid + plan. */}
+        {sp.editfees ? (
+          <form
+            action={`/api/admin/schools/${schoolId}/tuition-plans/${enrollmentId}/action`}
+            method="POST"
+            className="rounded-xl border-2 border-teal-300 bg-teal-50/30 p-5 space-y-4"
+          >
+            <input type="hidden" name="action" value="edit_line_items" />
+            <input type="hidden" name="return_to" value={returnTo} />
+            <div>
+              <h2 className="text-base font-semibold text-teal-900">Edit tuition fees</h2>
+              <p className="text-xs text-teal-800 mt-0.5">
+                Change the fees &amp; credits for this student — extended care, deposit, development
+                fee, scholarship. Percentage discounts (prompt-pay, sibling…) recalculate
+                automatically. Unpaid installments regenerate at the new total —{' '}
+                <strong>paid installments are preserved</strong> — and the tuition &amp; DHS
+                agreements update to match.
+              </p>
+            </div>
+
+            <div className="max-w-lg space-y-2">
+              <div className="flex items-center justify-between gap-3 text-sm">
+                <span className="text-slate-600">
+                  Base tuition <span className="text-slate-400">(set via &ldquo;Change plan&rdquo;)</span>
+                </span>
+                <span className="font-mono tabular-nums text-slate-500">
+                  ${(enr.base_tuition_cents / 100).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                </span>
+              </div>
+
+              {feeLines.map((f) => (
+                <label key={f.key} className="flex items-center justify-between gap-3">
+                  <span className="text-sm text-slate-700">
+                    {f.label}
+                    {f.isCredit ? (
+                      <span className="ml-1 rounded bg-emerald-50 px-1 text-[9px] font-semibold uppercase tracking-wide text-emerald-600">credit</span>
+                    ) : null}
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <span className="text-xs text-slate-400">{f.isCredit ? '−$' : '$'}</span>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      name={`fee_${f.key}`}
+                      defaultValue={f.magnitude != null ? (f.magnitude / 100).toFixed(2) : ''}
+                      placeholder="—"
+                      aria-label={`${f.label} amount`}
+                      className="w-32 rounded border border-slate-300 bg-white px-2 py-1 text-right font-mono text-sm tabular-nums focus:border-teal-500 focus:outline-none"
+                    />
+                  </span>
+                </label>
+              ))}
+
+              {discountLines.length ? (
+                <div className="border-t border-teal-200 pt-2 space-y-1">
+                  {discountLines.map((d) => (
+                    <div key={d.key} className="flex items-center justify-between gap-3 text-xs text-slate-500">
+                      <span>{d.label} <span className="text-slate-400">· auto</span></span>
+                      <span className="font-mono tabular-nums text-emerald-700">−${(Math.abs(d.amount_cents) / 100).toFixed(2)}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+
+              <div className="flex items-center justify-between gap-3 border-t border-teal-200 pt-2 text-sm font-semibold text-slate-900">
+                <span>Current annual total</span>
+                <span className="font-mono tabular-nums">
+                  ${(enr.total_annual_cents / 100).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                </span>
+              </div>
+            </div>
+
+            <p className="text-[11px] text-teal-700 max-w-lg">
+              Leave a fee <strong>blank</strong> to remove it, or enter <strong>0</strong> to show it as
+              $0.00 on the agreement. Credits (deposit, scholarship) are entered as a positive number and
+              subtract from the total. Discounts recalculate when you save.
+            </p>
+
+            <div className="flex items-center gap-2">
+              <button type="submit" className="inline-flex items-center gap-1.5 rounded-md bg-teal-600 px-3.5 py-1.5 text-sm font-semibold text-white hover:bg-teal-700">
+                Save fees
               </button>
               <Link href={selfHref} className="inline-flex items-center rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50">
                 Cancel
