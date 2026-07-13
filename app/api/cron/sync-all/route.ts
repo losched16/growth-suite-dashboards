@@ -22,6 +22,7 @@ import { runGhlSync, type SyncResult } from '@/lib/sync/run-ghl-sync';
 import { backfillStudentIds } from '@/lib/sync/student-id-backfill';
 import { syncGhlAttributes } from '@/lib/sync/ghl-attributes';
 import { createMissingEnrolledFamilies } from '@/lib/sync/create-family-from-contact';
+import { generateDepositsForAcceptedFamilies } from '@/lib/billing/enrollment-deposits';
 
 // Vercel cron may take longer than the default Hobby 10s; bump.
 export const maxDuration = 300; // 5 min
@@ -141,6 +142,22 @@ async function runForAll(): Promise<NextResponse> {
         }
       }
 
+      // Enrollment-deposit trigger — safety net for the "Offer Accepted"
+      // webhook. For deposit-enabled attributes_only schools, invoice the
+      // enrollment deposit for any family whose opportunity reached an
+      // "accepted" stage after the feature's effective_from. Idempotent.
+      let depositSummary = '';
+      if (s.sync_mode === 'attributes_only') {
+        try {
+          const dep = await generateDepositsForAcceptedFamilies(s.id);
+          if (dep.ran && (dep.created > 0 || dep.errors > 0)) {
+            depositSummary = ` Deposits: +${dep.created} invoice(s) across ${dep.families} famil(ies)${dep.errors ? `, ${dep.errors} errors` : ''}.`;
+          }
+        } catch (depErr) {
+          depositSummary = ` Deposit-trigger FAILED: ${depErr instanceof Error ? depErr.message : String(depErr)}`;
+        }
+      }
+
       // Auto-assign Student IDs to any new students missing one (opted-in
       // schools only). Generates a unique random 8-digit id, writes it to GHL
       // (source of truth) + mirrors to metadata. Best-effort.
@@ -157,7 +174,7 @@ async function runForAll(): Promise<NextResponse> {
       const dur = Date.now() - t0;
       const summary = (result
         ? `Synced ${result.families_created} families, ${result.students_created} students, ${result.enrollments_created} enrollments, ${result.classrooms_created} classrooms.`
-        : `Family-graph sync skipped (sync_mode=${s.sync_mode}).`) + attrSummary + p2TagSummary + enrollSummary + sidSummary;
+        : `Family-graph sync skipped (sync_mode=${s.sync_mode}).`) + attrSummary + p2TagSummary + enrollSummary + depositSummary + sidSummary;
       results.push({
         school_id: s.id,
         name: s.name,
