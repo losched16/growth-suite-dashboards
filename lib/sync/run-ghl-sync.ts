@@ -28,6 +28,7 @@ import { pipelineStageToFunnelStatus } from './pipeline-stage-map';
 import { loadSchoolFieldSchema, type SchoolFieldSchema } from './schema-loader';
 import { studentFieldKey, STUDENT_FIELDS as CANONICAL_STUDENT } from './desert-garden-config';
 import { parseStudentSlotKey, studentSlotKeyCandidates } from './slot-keys';
+import { derivedScheduleTimes } from './schedule-times';
 
 // ----- GHL field-schema helpers ---------------------------------------------
 
@@ -411,6 +412,9 @@ export function mapContactToFamily(
       academic_year: config.default_academic_year,
       enrolled_at: currentStart ?? initialStart,
       metadata: pruneEmptyMetadata({
+        // Derived arrival/departure from a combined "schedule times" field,
+        // spread FIRST (lowest precedence) so an explicit synced value wins.
+        ...derivedScheduleTimes(rawStudentFields, allContactFields),
         // Catch-all underneath: school-agnostic capture of every
         // populated custom field. Curated/templated keys above can
         // override since they come last in the spread.
@@ -661,6 +665,9 @@ function buildProspectiveStudents(args: {
       academic_year: config.default_academic_year,
       enrolled_at: currentStart ?? initialStart,
       metadata: pruneEmptyMetadata({
+        // Derived arrival/departure from a combined "schedule times" field,
+        // spread FIRST (lowest precedence) so an explicit synced value wins.
+        ...derivedScheduleTimes(rawStudentFields, allContactFields),
         // Catch-all underneath; curated/templated values above can
         // override since they come last in the spread.
         ...allContactFields,

@@ -29,6 +29,7 @@ import { query } from '@/lib/db';
 import { parseStudentSlotKey } from './slot-keys';
 import { loadSchoolFieldSchema } from './schema-loader';
 import { STUDENT_FIELDS as CANONICAL_STUDENT } from './desert-garden-config';
+import { deriveScheduleTimesIntoMap } from './schedule-times';
 
 const SKIP_BASES = new Set([
   'first_name', 'last_name', 'preferred_name', 'birth_date', 'gender', 'id',
@@ -130,6 +131,10 @@ export async function propagateContactFieldsToFamilyMetadata(
     if (!Number.isInteger(slot) || slot < 1 || slot > 4) continue;
     const bases = bySlot.get(slot);
     if (!bases) continue;
+
+    // Split a combined "Student Schedule Times" into arrival/departure so the
+    // agreement + DHS forms prefill fresh times when the contact's hours change.
+    deriveScheduleTimesIntoMap(bases);
 
     const ghlEnr = bases.get('enrollment_status');
     if (ghlEnr) {
@@ -270,6 +275,10 @@ export async function refreshStudentMetadataFromGhl(schoolId: string): Promise<M
     if (hasConflicts) result.students_with_conflicts++;
 
     if (merged.size === 0) continue;
+
+    // Split a combined "Student Schedule Times" into arrival/departure so the
+    // agreement + DHS forms prefill fresh times when the contact's hours change.
+    deriveScheduleTimesIntoMap(merged);
 
     // Reconcile the enrollment status enum (read by every dashboard)
     // with the GHL contact's value, so the badge matches the contact
