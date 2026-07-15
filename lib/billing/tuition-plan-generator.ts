@@ -18,6 +18,7 @@
 import { query, withTransaction } from '@/lib/db';
 import { evaluateDiscounts, recordDiscountApplications } from './discounts';
 import { loadEnrollmentShares, splitCents } from './billing-shares';
+import { applyFamilySetupFee } from './family-setup-fee';
 
 interface AddonSnap { key: string; label: string; amount_cents: number }
 
@@ -452,6 +453,18 @@ export async function generateTuitionEnrollment(opts: GenerateOpts): Promise<Gen
 
     return { enrollmentId, invoiceIds };
   });
+
+  // One-time platform family setup fee — stamps the family's earliest unpaid
+  // installment so it's collected on their FIRST tuition payment and routed to
+  // the platform account. Once per family, idempotent, and re-applied here
+  // because a regen (change plan / edit fees) rebuilds unpaid invoices and
+  // would otherwise drop it. No-op unless the school has it enabled, and never
+  // fatal — a fee hiccup must not break plan generation.
+  try {
+    await applyFamilySetupFee(opts.schoolId, opts.familyId);
+  } catch (e) {
+    console.warn('[tuition-plan-generator] family setup fee skipped:', e instanceof Error ? e.message : String(e));
+  }
 
   return {
     enrollment_id: result.enrollmentId,
