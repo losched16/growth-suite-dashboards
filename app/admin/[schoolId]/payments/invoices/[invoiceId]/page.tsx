@@ -222,8 +222,8 @@ export default async function InvoiceDetail({
                 {inv.platform_fee_cents > 0 ? (
                   <tr>
                     <td colSpan={3} className="px-3 py-2 text-right text-zinc-600">
-                      Family Portal Setup Fee
-                      <span className="ml-1 text-[10px] text-zinc-400">(one-time, Growth Suite)</span>
+                      One-Time Setup Fee
+                      <span className="ml-1 text-[10px] text-zinc-400">(one-time, payment processor)</span>
                     </td>
                     <td className="px-3 py-2 text-right font-mono">${(inv.platform_fee_cents / 100).toFixed(2)}</td>
                   </tr>

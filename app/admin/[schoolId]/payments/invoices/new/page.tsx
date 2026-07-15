@@ -144,11 +144,11 @@ export default async function NewInvoicePage({
               <input type="checkbox" name="includes_platform_setup_fee" value="1" defaultChecked={!setupFeePaid} disabled={setupFeePaid}
                 className="mt-0.5 h-4 w-4 rounded border-zinc-300" />
               <span>
-                <strong>Include $25 family setup fee.</strong>
+                <strong>Include $25 one-time setup fee.</strong>
                 <span className="ml-2 text-xs text-zinc-500">
                   {setupFeePaid
                     ? '(Already collected from this family — disabled.)'
-                    : 'Charged once per family at first plan setup. Goes to Growth Suite.'}
+                    : 'Payment-processor setup fee. Charged once per family, on their first tuition payment only.'}
                 </span>
               </span>
             </label>
