@@ -59,14 +59,15 @@ export async function importGhlDocuments(schoolId: string): Promise<ImportGhlDoc
 
   const client = await loadGhlClient(schoolId);
   const docs: GhlDocument[] = [];
-  // Paginate defensively; the list endpoint caps per-page results.
-  for (let skip = 0; skip < 500; skip += 100) {
+  // The endpoint HARD-CAPS limit at ~20 — anything higher silently returns
+  // an EMPTY list (limit=100 → zero docs, no error). Page at 20 via skip.
+  for (let skip = 0; skip < 1000; skip += 20) {
     const { data } = await client.axios.get<{ documents?: GhlDocument[]; total?: number }>(
-      `/proposals/document?locationId=${client.locationId}&limit=100&skip=${skip}`,
+      `/proposals/document?locationId=${client.locationId}&limit=20&skip=${skip}`,
     );
     const page = data.documents ?? [];
     docs.push(...page);
-    if (page.length < 100 || docs.length >= (data.total ?? docs.length)) break;
+    if (page.length < 20 || docs.length >= (data.total ?? docs.length)) break;
   }
 
   const completed = docs.filter((d) => d.status === 'completed' && !d.deleted);
