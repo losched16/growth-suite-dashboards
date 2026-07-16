@@ -11,6 +11,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
 import { query } from '@/lib/db';
+import { SubmitOnce } from '@/components/SubmitOnce';
 import { loadSchoolByLocationId } from '@/lib/dashboards/loader';
 import { LineItemsEditor } from '@/app/admin/[schoolId]/payments/invoices/new/LineItemsEditor';
 import { RecipientPicker } from '@/app/admin/[schoolId]/payments/invoices/new/RecipientPicker';
@@ -192,10 +193,11 @@ export default async function NewInvoiceScoped({
           </details>
 
           <div className="flex gap-2">
-            <button type="submit"
-              className="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">
+            <SubmitOnce
+              className="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+              pendingLabel="Creating…">
               Create invoice
-            </button>
+            </SubmitOnce>
             <Link href={backHref}
               className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm text-slate-700 hover:bg-slate-50">
               Cancel
