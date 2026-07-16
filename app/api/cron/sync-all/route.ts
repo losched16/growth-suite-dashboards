@@ -18,6 +18,7 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { query } from '@/lib/db';
 import { mirrorP2Tags } from '@/lib/sync/mirror-p2-tags';
+import { importGhlDocuments } from '@/lib/sync/import-ghl-documents';
 import { runGhlSync, type SyncResult } from '@/lib/sync/run-ghl-sync';
 import { backfillStudentIds } from '@/lib/sync/student-id-backfill';
 import { syncGhlAttributes } from '@/lib/sync/ghl-attributes';
@@ -122,6 +123,19 @@ async function runForAll(): Promise<NextResponse> {
         }
       } catch (mErr) {
         p2TagSummary = ` P2-tags FAILED: ${mErr instanceof Error ? mErr.message : String(mErr)}`;
+      }
+
+      // GHL Documents & Contracts completions — flips per-student tracking
+      // fields (e.g. AZ card) when a signed document lands. Gated on
+      // schools.settings.ghl_documents_sync.
+      let docSummary = '';
+      try {
+        const dm = await importGhlDocuments(s.id);
+        if (dm.ran && (dm.processed > 0 || dm.errors > 0)) {
+          docSummary = ` GHL-docs: ${dm.processed} completion(s), ${dm.fields_set} field(s) set${dm.errors ? `, ${dm.errors} errors` : ''}.`;
+        }
+      } catch (dErr) {
+        docSummary = ` GHL-docs FAILED: ${dErr instanceof Error ? dErr.message : String(dErr)}`;
       }
 
       // Enrollment trigger — for live, import-managed (attributes_only)

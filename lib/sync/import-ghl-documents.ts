@@ -128,11 +128,19 @@ export async function importGhlDocuments(schoolId: string): Promise<ImportGhlDoc
       let fieldSet = false;
       const rule = FIELD_RULES.find((r) => r.pattern.test(doc.name ?? ''));
       if (rule && slot && primaryContactId) {
-        const { updateContactCustomFields } = await import('@/lib/ghl/writes');
-        const res = await updateContactCustomFields(client, primaryContactId, {
-          [`student_${slot}_${rule.field_base}`]: rule.value,
-        });
-        fieldSet = res.updated > 0;
+        // Field id from the synced catalog (kept fresh by the sync itself).
+        const { rows: fld } = await query<{ ghl_field_id: string }>(
+          `SELECT ghl_field_id FROM school_field_catalog
+            WHERE school_id = $1 AND field_key = $2 LIMIT 1`,
+          [schoolId, `student_${slot}_${rule.field_base}`],
+        );
+        const fieldId = fld[0]?.ghl_field_id ?? null;
+        if (fieldId) {
+          await client.axios.put(`/contacts/${primaryContactId}`, {
+            customFields: [{ id: fieldId, field_value: rule.value }],
+          });
+          fieldSet = true;
+        }
         if (fieldSet && studentId) {
           await query(
             `UPDATE students SET metadata = jsonb_set(metadata, $2::text[], to_jsonb($3::text)), updated_at = now()
