@@ -35,6 +35,12 @@ export interface SchoolSettings {
   // school that uses one-contact-per-family is unaffected (no shared students
   // → no-op). Name-collisions with DIFFERENT DOBs are left separate.
   merge_coparent_students: boolean;
+  // Poll GHL Documents & Contracts for completed (signed) documents each
+  // sync cycle: flips the matching per-student tracking field (e.g. a
+  // signed "AZ Emergency ... Card - S2" sets Student 2 AZ Card=Complete on
+  // the primary contact) so the Portal Forms tracker greens automatically.
+  // Opt-in per school.
+  ghl_documents_sync: boolean;
 }
 
 // GHL sidebar items the Custom JS snippet can hide (docs/ghl-menu-snippet.js).
@@ -65,6 +71,7 @@ export const SCHOOL_SETTINGS_DEFAULTS: SchoolSettings = {
   roster_tag_filter: [],
   ghl_hidden_menu: [],
   merge_coparent_students: false,
+  ghl_documents_sync: false,
 };
 
 export function normalizeSchoolSettings(raw: unknown): SchoolSettings {
@@ -83,6 +90,7 @@ export function normalizeSchoolSettings(raw: unknown): SchoolSettings {
       ? r.ghl_hidden_menu.map((t) => String(t ?? '').trim().toLowerCase()).filter(Boolean)
       : [],
     merge_coparent_students: r.merge_coparent_students === true,
+    ghl_documents_sync: r.ghl_documents_sync === true,
   };
 }
 

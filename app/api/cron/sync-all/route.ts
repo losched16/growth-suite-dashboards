@@ -174,7 +174,7 @@ async function runForAll(): Promise<NextResponse> {
       const dur = Date.now() - t0;
       const summary = (result
         ? `Synced ${result.families_created} families, ${result.students_created} students, ${result.enrollments_created} enrollments, ${result.classrooms_created} classrooms.`
-        : `Family-graph sync skipped (sync_mode=${s.sync_mode}).`) + attrSummary + p2TagSummary + enrollSummary + depositSummary + sidSummary;
+        : `Family-graph sync skipped (sync_mode=${s.sync_mode}).`) + attrSummary + p2TagSummary + docSummary + enrollSummary + depositSummary + sidSummary;
       results.push({
         school_id: s.id,
         name: s.name,
