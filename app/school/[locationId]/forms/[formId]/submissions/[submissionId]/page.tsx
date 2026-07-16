@@ -160,6 +160,34 @@ export default async function SubmissionDetail({
   return (
     <main className="min-h-screen bg-slate-50 print:bg-white">
       <div className="max-w-3xl mx-auto px-4 sm:px-6 py-4 sm:py-6">
+        {/* Print stylesheet — compress a long submission (e.g. the 65-block
+            emergency form) onto ONE letter page for the state inspector binder.
+            Flows the fields into two columns as compact "Label: value" lines. */}
+        <style dangerouslySetInnerHTML={{ __html: `
+          @media print {
+            @page { size: letter portrait; margin: 0.35in; }
+            html, body { background:#fff !important; color:#000 !important; }
+            main { min-height: 0 !important; }
+            header h1 { font-size: 13pt !important; }
+            header p { font-size: 7pt !important; }
+            header dl { margin-top: 3pt !important; gap: 0 12pt !important; }
+            header dl dt { font-size: 6pt !important; }
+            header dl dd { font-size: 7.5pt !important; line-height: 1.2 !important; }
+            #submission-responses { column-count: 2 !important; column-gap: 18pt !important; margin-top: 4pt !important; }
+            #submission-responses > * { break-inside: avoid !important; page-break-inside: avoid !important; margin: 0 !important; }
+            #submission-responses > * + * { margin-top: 2.5pt !important; }
+            #submission-responses .grid { display: block !important; }
+            #submission-responses .grid > dt { display: inline !important; font-weight: 600 !important; font-size: 7pt !important; color:#000 !important; text-transform: none !important; letter-spacing: normal !important; }
+            #submission-responses .grid > dt::after { content: ': '; }
+            #submission-responses .grid > dd { display: inline !important; font-size: 7.5pt !important; color:#000 !important; }
+            #submission-responses h3 { font-size: 8pt !important; margin: 3pt 0 1pt !important; padding-bottom: 0.5pt !important; break-after: avoid !important; }
+            #submission-responses > div[class*="border-l-4"] { margin-top: 3pt !important; padding-left: 4pt !important; border-left-width: 2pt !important; }
+            #submission-responses p { font-size: 6.5pt !important; margin: 0.5pt 0 !important; line-height: 1.2 !important; font-style: normal !important; }
+            #submission-responses .text-2xl, #submission-responses .text-3xl { font-size: 13pt !important; line-height: 1 !important; }
+            #submission-responses img { max-height: 30pt !important; }
+            footer { display: none !important; }
+          }
+        ` }} />
         {/* Toolbar — hidden in print */}
         <div className="print:hidden flex items-center justify-between mb-3 gap-2 flex-wrap">
           <Link
@@ -256,7 +284,7 @@ export default async function SubmissionDetail({
         {/* Responses */}
         <section className="rounded-lg border border-slate-200 bg-white p-5 print:border-0 print:p-0 print:rounded-none">
           <h2 className="text-sm font-semibold text-slate-700 uppercase tracking-wide mb-3 print:hidden">Responses</h2>
-          <div className="space-y-4">
+          <div id="submission-responses" className="space-y-4">
             {blocks
               // Blocks hidden on the live form (e.g. the internal "add a second
               // parent/guardian" toggle when Parent 2 is already on file) stay
