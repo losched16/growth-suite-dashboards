@@ -22,9 +22,12 @@ export async function PaymentsHubInvoices({
     student_label: string | null;
     source: string;
     created_at: string;
+    has_pending_payment: boolean;
   }>(
     `SELECT i.id, i.invoice_number, i.title, i.status,
             i.total_cents, i.amount_paid_cents, i.due_at, i.source, i.created_at,
+            EXISTS (SELECT 1 FROM payments pmt WHERE pmt.invoice_id = i.id
+                      AND pmt.status IN ('pending', 'processing')) AS has_pending_payment,
             COALESCE(NULLIF(f.display_name, ''),
                      CONCAT_WS(' ', p.first_name, p.last_name),
                      i.recipient_name, i.recipient_email,
@@ -46,8 +49,13 @@ export async function PaymentsHubInvoices({
 
   // Search + status filter (incl. the synthetic 'overdue' status).
   const now = Date.now();
+  // An invoice with a payment already in flight (ACH sits 'pending' for a few
+  // business days) is NOT overdue — it's clearing. Only flag genuinely-unpaid,
+  // past-due invoices so the office isn't chasing a payment that's on its way.
   const isOverdue = (inv: typeof allInvoices[number]) =>
-    (inv.status === 'open' || inv.status === 'partially_paid') && new Date(inv.due_at).getTime() < now;
+    (inv.status === 'open' || inv.status === 'partially_paid')
+    && new Date(inv.due_at).getTime() < now
+    && !inv.has_pending_payment;
   const needle = q.trim().toLowerCase();
   const invoices = allInvoices.filter((inv) => {
     if (needle && !(`${inv.invoice_number} ${inv.family_label} ${inv.student_label ?? ''} ${inv.title}`.toLowerCase().includes(needle))) return false;
@@ -98,7 +106,7 @@ export async function PaymentsHubInvoices({
     if (inv.status === 'draft') { acc.draftN += 1; acc.draftTotal += inv.total_cents; }
     else if (inv.status === 'open' || inv.status === 'partially_paid') {
       acc.dueN += 1; acc.dueTotal += owed;
-      if (new Date(inv.due_at) < new Date()) { acc.overdueN += 1; acc.overdueTotal += owed; }
+      if (new Date(inv.due_at) < new Date() && !inv.has_pending_payment) { acc.overdueN += 1; acc.overdueTotal += owed; }
     } else if (inv.status === 'paid') {
       acc.paidN += 1; acc.paidTotal += inv.amount_paid_cents;
     }
@@ -226,7 +234,11 @@ export async function PaymentsHubInvoices({
                 </td>
                 <td className="px-4 py-2 text-xs text-slate-500 whitespace-nowrap">
                   {new Date(inv.due_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
-                  {isOverdue(inv) ? (
+                  {inv.has_pending_payment ? (
+                    <span className="ml-1.5 inline-block rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-800">
+                      processing
+                    </span>
+                  ) : isOverdue(inv) ? (
                     <span className="ml-1.5 inline-block rounded-full bg-rose-100 px-1.5 py-0.5 text-[10px] font-semibold text-rose-800">
                       {daysLate(inv)}d late
                     </span>

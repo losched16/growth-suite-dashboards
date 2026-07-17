@@ -25,7 +25,10 @@ export async function PaymentsHubOverview({
     ).then((r) => r.rows[0] ?? { n: '0', total: '0' }),
     query<{ n: string; total: string }>(
       `SELECT COUNT(*)::text AS n, COALESCE(SUM(total_cents - amount_paid_cents), 0)::text AS total
-         FROM invoices WHERE school_id = $1 AND status IN ('open', 'partially_paid') AND due_at < now()`,
+         FROM invoices i WHERE i.school_id = $1 AND i.status IN ('open', 'partially_paid') AND i.due_at < now()
+           -- exclude invoices with a payment already in flight (ACH clearing) —
+           -- they're on their way, not past due.
+           AND NOT EXISTS (SELECT 1 FROM payments p WHERE p.invoice_id = i.id AND p.status IN ('pending', 'processing'))`,
       [schoolId],
     ).then((r) => r.rows[0] ?? { n: '0', total: '0' }),
     query<{ enrolled: string; total: string }>(
