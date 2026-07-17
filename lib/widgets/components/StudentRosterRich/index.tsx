@@ -288,6 +288,8 @@ function renderCell(s: RosterStudent, col: ColumnKey, drilldownDashboard: string
     case 'homeroom': return <span className="text-gray-700">{s.homeroom ?? s.classroom_name ?? '—'}</span>;
     case 'lead_teacher': return <span className="text-gray-700">{s.lead_teacher_name ?? '—'}</span>;
     case 'schedule': return <span className="text-gray-700">{s.schedule ?? '—'}</span>;
+    case 'student_id':
+      return s.student_id_number ? <span className="text-gray-700 tabular-nums">{s.student_id_number}</span> : <span className="text-gray-400">—</span>;
     case 'initial_start_date': {
       if (!s.initial_start_date) return <span className="text-gray-400">—</span>;
       const d = new Date(s.initial_start_date.replace(' ', 'T'));

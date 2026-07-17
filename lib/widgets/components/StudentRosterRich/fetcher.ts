@@ -103,6 +103,9 @@ export interface RosterStudent {
   address: string | null;
   // First day at the school (metadata.initial_start_date), raw string.
   initial_start_date: string | null;
+  // The school-facing Student ID (metadata.student_id — GHL-synced or
+  // auto-assigned). NOT the row uuid (that's student_id above).
+  student_id_number: string | null;
   allergy: string | null;
   special_instructions: string | null;
   iep: string | null;
@@ -640,6 +643,8 @@ export async function fetcher(
       : (md.tuition_fee != null && md.tuition_fee !== '' ? String(md.tuition_fee) : null);
     const initialStart = typeof md.initial_start_date === 'string' && md.initial_start_date.trim()
       ? md.initial_start_date.trim() : null;
+    const studentIdNumber = md.student_id != null && String(md.student_id).trim()
+      ? String(md.student_id).trim() : null;
     const lunch = typeof md.organic_lunch === 'string' ? md.organic_lunch : null;
     const lunchLower = (lunch ?? '').toLowerCase();
     // "has lunch" = anything other than declined/blank. Declined values
@@ -694,6 +699,7 @@ export async function fetcher(
       tuition,
       address,
       initial_start_date: initialStart,
+      student_id_number: studentIdNumber,
       allergy,
       special_instructions,
       iep,
@@ -840,6 +846,7 @@ export async function fetcher(
       case 'status': return x.status || '';
       case 'tuition': return x.tuition || '';
       case 'initial_start_date': return x.initial_start_date || '';
+      case 'student_id': return x.student_id_number || '';
       default:
         // Dynamic (catalog) columns sort by their display value.
         if (x.dynamic[sortKey] !== undefined) return x.dynamic[sortKey];

@@ -140,7 +140,7 @@ interface FamilyDetail {
 }
 
 // Columns whose headers are clickable to sort (server-side via ?sort=&dir=).
-const SORTABLE = new Set<ColumnKey>(['last_name', 'first_name', 'program', 'homeroom', 'schedule', 'status', 'tuition', 'initial_start_date']);
+const SORTABLE = new Set<ColumnKey>(['last_name', 'first_name', 'program', 'homeroom', 'schedule', 'status', 'tuition', 'initial_start_date', 'student_id']);
 
 // "2021-08-09 00:00:00" / ISO → "Aug 9, 2021". Returns the raw value
 // when it isn't a parseable date.
@@ -368,6 +368,7 @@ function renderCell(
     case 'lead_teacher': return <span className="text-gray-700">{s.lead_teacher_name ?? '—'}</span>;
     case 'schedule': return <span className="text-gray-700">{s.schedule ?? '—'}</span>;
     case 'initial_start_date': return <span className="text-gray-700 tabular-nums whitespace-nowrap">{fmtStartDate(s.initial_start_date)}</span>;
+    case 'student_id': return s.student_id_number ? <span className="text-gray-700 tabular-nums">{s.student_id_number}</span> : <span className="text-gray-300">—</span>;
     case 'tuition': {
       if (!s.tuition) return <span className="text-gray-400">—</span>;
       const m = s.tuition.match(/\$[\d,]+(?:\.\d{2})?/);

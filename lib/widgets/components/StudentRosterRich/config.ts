@@ -39,6 +39,7 @@ export const AVAILABLE_COLUMNS = [
   { key: 'lead_teacher',         label: 'Lead teacher' },
   { key: 'schedule',             label: 'Schedule' },
   { key: 'initial_start_date',   label: 'Initial start date' },
+  { key: 'student_id',           label: 'Student ID' },
   { key: 'tuition',              label: 'Tuition' },
   { key: 'status',               label: 'Status' },
   { key: 'allergy',              label: 'Allergy' },
