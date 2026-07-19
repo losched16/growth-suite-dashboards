@@ -229,6 +229,7 @@ interface DbRow {
   // JSON array of { name, reason } for everyone on this student's
   // pickup_restrictions list (active rows only).
   pickup_restrictions_json: Array<{ name: string; reason: string | null }> | null;
+  unauthorized_pickup_text: string | null;
   // students.metadata.re_enrolled — true when the school's GHL contact
   // carries the "re-enrolled" tag. Set by the per-school tag sync;
   // null/false otherwise.
@@ -307,6 +308,7 @@ export async function fetcher(
        shp.medical_conditions AS hp_medical_conditions,
        an.notes               AS attendance_notes_today,
        pr.restrictions_json   AS pickup_restrictions_json,
+       s.metadata->>'unauthorized__do_not_pickup' AS unauthorized_pickup_text,
        (s.metadata->>'re_enrolled')::boolean AS re_enrolled_flag
      FROM students s
      JOIN families f ON f.id = s.family_id
@@ -715,7 +717,15 @@ export async function fetcher(
       curbside_today: !!r.attendance_curbside,
       curbside_slot: r.curbside_slot,
       attendance_notes: r.attendance_notes_today,
-      pickup_restrictions: Array.isArray(r.pickup_restrictions_json) ? r.pickup_restrictions_json : [],
+      // Structured restriction rows win; when the school only filled the GHL
+      // contact's free-text "Unauthorized / Do Not Pickup" field, surface
+      // that VERBATIM as one entry — custody language must never be lost
+      // to parsing. (DGM: 10 students carry entries only in the GHL field.)
+      pickup_restrictions: Array.isArray(r.pickup_restrictions_json) && r.pickup_restrictions_json.length > 0
+        ? r.pickup_restrictions_json
+        : (r.unauthorized_pickup_text ?? '').trim()
+          ? [{ name: (r.unauthorized_pickup_text ?? '').trim(), reason: null }]
+          : [],
       re_enrolled: r.re_enrolled_flag === true,
       search_haystack: haystack,
       ghl_contact_url: (typeof md.ghl_contact_id === 'string' && md.ghl_contact_id)
