@@ -106,6 +106,8 @@ export interface RosterStudent {
   // The school-facing Student ID (metadata.student_id — GHL-synced or
   // auto-assigned). NOT the row uuid (that's student_id above).
   student_id_number: string | null;
+  // Grade code from the contact record (metadata.grade_level: P2, U5, M7…).
+  grade_level: string | null;
   allergy: string | null;
   special_instructions: string | null;
   iep: string | null;
@@ -647,6 +649,8 @@ export async function fetcher(
       ? md.initial_start_date.trim() : null;
     const studentIdNumber = md.student_id != null && String(md.student_id).trim()
       ? String(md.student_id).trim() : null;
+    const gradeLevel = typeof md.grade_level === 'string' && md.grade_level.trim()
+      ? md.grade_level.trim() : null;
     const lunch = typeof md.organic_lunch === 'string' ? md.organic_lunch : null;
     const lunchLower = (lunch ?? '').toLowerCase();
     // "has lunch" = anything other than declined/blank. Declined values
@@ -702,6 +706,7 @@ export async function fetcher(
       address,
       initial_start_date: initialStart,
       student_id_number: studentIdNumber,
+      grade_level: gradeLevel,
       allergy,
       special_instructions,
       iep,
@@ -857,6 +862,7 @@ export async function fetcher(
       case 'tuition': return x.tuition || '';
       case 'initial_start_date': return x.initial_start_date || '';
       case 'student_id': return x.student_id_number || '';
+      case 'grade_level': return x.grade_level || '';
       default:
         // Dynamic (catalog) columns sort by their display value.
         if (x.dynamic[sortKey] !== undefined) return x.dynamic[sortKey];

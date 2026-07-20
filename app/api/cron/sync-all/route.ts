@@ -19,6 +19,7 @@ import type { NextRequest } from 'next/server';
 import { query } from '@/lib/db';
 import { mirrorP2Tags } from '@/lib/sync/mirror-p2-tags';
 import { importGhlDocuments } from '@/lib/sync/import-ghl-documents';
+import { backfillProgramFromGrade } from '@/lib/sync/program-from-grade';
 import { runGhlSync, type SyncResult } from '@/lib/sync/run-ghl-sync';
 import { backfillStudentIds } from '@/lib/sync/student-id-backfill';
 import { syncGhlAttributes } from '@/lib/sync/ghl-attributes';
@@ -138,6 +139,17 @@ async function runForAll(): Promise<NextResponse> {
         docSummary = ` GHL-docs FAILED: ${dErr instanceof Error ? dErr.message : String(dErr)}`;
       }
 
+      // Program-from-grade backfill (settings.derive_program_from_grade).
+      let pgSummary = '';
+      try {
+        const pg = await backfillProgramFromGrade(s.id);
+        if (pg.ran && (pg.filled > 0 || pg.errors > 0)) {
+          pgSummary = ` Program-from-grade: ${pg.filled} filled${pg.errors ? `, ${pg.errors} errors` : ''}.`;
+        }
+      } catch (pgErr) {
+        pgSummary = ` Program-from-grade FAILED: ${pgErr instanceof Error ? pgErr.message : String(pgErr)}`;
+      }
+
       // Enrollment trigger — for live, import-managed (attributes_only)
       // schools, create a loginable family for any contact whose opportunity
       // reached an "Enrolled" stage but isn't in the family graph yet.
@@ -188,7 +200,7 @@ async function runForAll(): Promise<NextResponse> {
       const dur = Date.now() - t0;
       const summary = (result
         ? `Synced ${result.families_created} families, ${result.students_created} students, ${result.enrollments_created} enrollments, ${result.classrooms_created} classrooms.`
-        : `Family-graph sync skipped (sync_mode=${s.sync_mode}).`) + attrSummary + p2TagSummary + docSummary + enrollSummary + depositSummary + sidSummary;
+        : `Family-graph sync skipped (sync_mode=${s.sync_mode}).`) + attrSummary + p2TagSummary + docSummary + pgSummary + enrollSummary + depositSummary + sidSummary;
       results.push({
         school_id: s.id,
         name: s.name,

@@ -1038,9 +1038,9 @@ export async function runGhlSync(schoolId: string): Promise<SyncResult> {
     // after the rebuild. ON COMMIT DROP keeps it scoped to this transaction.
     await q(
       `CREATE TEMP TABLE _pw_preserve ON COMMIT DROP AS
-         SELECT id, password_hash, password_set_at
+         SELECT id, password_hash, password_set_at, pin_hash, pin_lookup, pin_set_at
            FROM parents
-          WHERE school_id = $1 AND password_hash IS NOT NULL`,
+          WHERE school_id = $1 AND (password_hash IS NOT NULL OR pin_hash IS NOT NULL)`,
       [schoolId],
     );
 
@@ -1228,7 +1228,13 @@ export async function runGhlSync(schoolId: string): Promise<SyncResult> {
     await q(
       `UPDATE parents p
           SET password_hash = t.password_hash,
-              password_set_at = t.password_set_at
+              password_set_at = t.password_set_at,
+              -- Kiosk check-in PINs live on the parent row too — without
+              -- this every 15-min rebuild silently wiped every parent's
+              -- PIN ("I set a pin but it got wiped").
+              pin_hash = t.pin_hash,
+              pin_lookup = t.pin_lookup,
+              pin_set_at = t.pin_set_at
          FROM _pw_preserve t
         WHERE p.id = t.id`,
     );

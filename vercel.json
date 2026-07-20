@@ -2,7 +2,7 @@
   "crons": [
     {
       "path": "/api/cron/sync-all",
-      "schedule": "*/15 * * * *"
+      "schedule": "*/5 * * * *"
     },
     {
       "path": "/api/cron/promote-parent2",

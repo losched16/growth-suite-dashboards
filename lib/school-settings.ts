@@ -41,6 +41,9 @@ export interface SchoolSettings {
   // the primary contact) so the Portal Forms tracker greens automatically.
   // Opt-in per school.
   ghl_documents_sync: boolean;
+  // Auto-fill Student N Program Name from the grade code when blank
+  // (Leslie sets only Grade Level). Opt-in per school.
+  derive_program_from_grade: boolean;
 }
 
 // GHL sidebar items the Custom JS snippet can hide (docs/ghl-menu-snippet.js).
@@ -72,6 +75,7 @@ export const SCHOOL_SETTINGS_DEFAULTS: SchoolSettings = {
   ghl_hidden_menu: [],
   merge_coparent_students: false,
   ghl_documents_sync: false,
+  derive_program_from_grade: false,
 };
 
 export function normalizeSchoolSettings(raw: unknown): SchoolSettings {
@@ -91,6 +95,7 @@ export function normalizeSchoolSettings(raw: unknown): SchoolSettings {
       : [],
     merge_coparent_students: r.merge_coparent_students === true,
     ghl_documents_sync: r.ghl_documents_sync === true,
+    derive_program_from_grade: r.derive_program_from_grade === true,
   };
 }
 

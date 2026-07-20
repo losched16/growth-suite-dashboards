@@ -140,7 +140,7 @@ interface FamilyDetail {
 }
 
 // Columns whose headers are clickable to sort (server-side via ?sort=&dir=).
-const SORTABLE = new Set<ColumnKey>(['last_name', 'first_name', 'program', 'homeroom', 'schedule', 'status', 'tuition', 'initial_start_date', 'student_id']);
+const SORTABLE = new Set<ColumnKey>(['last_name', 'first_name', 'program', 'homeroom', 'schedule', 'status', 'tuition', 'initial_start_date', 'student_id', 'grade_level']);
 
 // "2021-08-09 00:00:00" / ISO → "Aug 9, 2021". Returns the raw value
 // when it isn't a parseable date.
@@ -177,7 +177,11 @@ export function StudentTableWithAccordion({
     if (sortKey === col && !sortDesc) p.set('dir', 'desc');
     return `?${p.toString()}`;
   }
-  const [expanded, setExpanded] = useState<string | null>(null);
+  // Expanded state is keyed by ROW (student), not family — a family with
+  // several kids on the roster would otherwise open its detail panel at
+  // EVERY one of their rows at once, visually swallowing unrelated rows
+  // in between (Sonia's "why are these students in a box" screenshot).
+  const [expanded, setExpanded] = useState<{ row: string; family: string } | null>(null);
   const [details, setDetails] = useState<Record<string, FamilyDetail | 'loading' | { err: string }>>({});
   // Tracks family ids we've started fetching for. Refs are synchronous
   // (unlike functional setState updaters which React 18 may defer to
@@ -190,7 +194,7 @@ export function StudentTableWithAccordion({
   // Fetch family detail on first expand of a given family.
   useEffect(() => {
     if (!expanded) return;
-    const targetId = expanded;
+    const targetId = expanded.family;
     if (fetchedRef.current.has(targetId)) return;
     fetchedRef.current.add(targetId);
 
@@ -255,7 +259,7 @@ export function StudentTableWithAccordion({
         </thead>
         <tbody className="divide-y divide-gray-100">
           {rows.map((s) => {
-            const isOpen = expanded === s.family_id;
+            const isOpen = expanded?.row === s.student_id;
             return (
               <RowGroup
                 key={s.student_id}
@@ -265,7 +269,7 @@ export function StudentTableWithAccordion({
                 documentsAudience={documentsAudience}
                 isOpen={isOpen}
                 detail={isOpen ? details[s.family_id] : undefined}
-                onToggle={() => setExpanded(isOpen ? null : s.family_id)}
+                onToggle={() => setExpanded(isOpen ? null : { row: s.student_id, family: s.family_id })}
                 detailSections={detailSections}
               />
             );
@@ -369,6 +373,7 @@ function renderCell(
     case 'schedule': return <span className="text-gray-700">{s.schedule ?? '—'}</span>;
     case 'initial_start_date': return <span className="text-gray-700 tabular-nums whitespace-nowrap">{fmtStartDate(s.initial_start_date)}</span>;
     case 'student_id': return s.student_id_number ? <span className="text-gray-700 tabular-nums">{s.student_id_number}</span> : <span className="text-gray-300">—</span>;
+    case 'grade_level': return s.grade_level ? <span className="text-gray-700">{s.grade_level}</span> : <span className="text-gray-300">—</span>;
     case 'tuition': {
       if (!s.tuition) return <span className="text-gray-400">—</span>;
       const m = s.tuition.match(/\$[\d,]+(?:\.\d{2})?/);
