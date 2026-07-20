@@ -7,6 +7,10 @@ export interface GhlContact {
   lastName?: string;
   email?: string | null;
   phone?: string | null;
+  address1?: string | null;
+  city?: string | null;
+  state?: string | null;
+  postalCode?: string | null;
   customFields?: Array<{ id: string; value: unknown }>;
   tags?: string[];
   dateAdded?: string;

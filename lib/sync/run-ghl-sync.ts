@@ -430,6 +430,13 @@ export function mapContactToFamily(
         household_id: householdId,
         allergy,
         form_completion: formCompletion,
+        // Address fallback: when the per-student Street fields are blank,
+        // use the contact card's standard address so the office only has
+        // to enter the address ONCE (feeds roster + enrollment prefill).
+        student_street: rawStudentFields.student_street ?? contact.address1 ?? undefined,
+        student_city: rawStudentFields.student_city ?? contact.city ?? undefined,
+        student_state: rawStudentFields.student_state ?? contact.state ?? undefined,
+        student_zip: rawStudentFields.student_zip ?? contact.postalCode ?? undefined,
       }),
     });
   }
