@@ -651,7 +651,14 @@ export async function fetcher(
       ? String(md.student_id).trim() : null;
     const gradeLevel = typeof md.grade_level === 'string' && md.grade_level.trim()
       ? md.grade_level.trim() : null;
-    const lunch = typeof md.organic_lunch === 'string' ? md.organic_lunch : null;
+    // The diet selection lives in organic_lunch_choice ("… - Vegetarian");
+    // organic_lunch itself is the FEE ("2100"/"0") since the enrollment
+    // form's write_amount writeback — numeric values are not a label.
+    const lunchChoice = typeof md.organic_lunch_choice === 'string' && md.organic_lunch_choice.trim()
+      ? md.organic_lunch_choice.trim() : null;
+    const lunchLegacy = typeof md.organic_lunch === 'string' && md.organic_lunch.trim() && !/^\d+(\.\d+)?$/.test(md.organic_lunch.trim())
+      ? md.organic_lunch.trim() : null;
+    const lunch = lunchChoice ?? lunchLegacy;
     const lunchLower = (lunch ?? '').toLowerCase();
     // "has lunch" = anything other than declined/blank. Declined values
     // start with "I decline" in DGM's GHL data, but we also tolerate a

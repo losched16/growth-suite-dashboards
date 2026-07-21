@@ -431,13 +431,13 @@ function renderCell(
       const declined = lower.includes('decline');
       const tone = declined ? 'bg-gray-100 text-gray-600'
         : lower.includes('vegan')      ? 'bg-emerald-100 text-emerald-800'
-        : lower.includes('vegetarian') ? 'bg-emerald-100 text-emerald-800'
         : lower.includes('nonveg')     ? 'bg-amber-100 text-amber-800'
+        : lower.includes('vegetarian') ? 'bg-emerald-100 text-emerald-800'
         :                                 'bg-orange-100 text-orange-800';
       const short = declined ? 'Declined'
         : lower.includes('vegan')      ? 'Vegan'
-        : lower.includes('vegetarian') ? 'Vegetarian'
         : lower.includes('nonveg')     ? 'Non-veg'
+        : lower.includes('vegetarian') ? 'Vegetarian'
         :                                 'Lunch';
       return (
         <span
