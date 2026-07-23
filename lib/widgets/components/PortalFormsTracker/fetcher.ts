@@ -448,34 +448,45 @@ export async function fetcher(
         });
         continue;
       }
-      // Hidden from this family by tag rules → not applicable, blank cell.
-      if (!formVisibleToFamily(forms.find((f) => f.id === form.id)!, fam.family_id)) {
-        cells[form.id] = [];
-        continue;
-      }
+      // Tag rules can hide a form from a family (e.g. the enrollment
+      // agreement runs tag_match: ["pending"]). An existing submission MUST
+      // stay visible regardless — the office removes the pending tag once a
+      // family enrolls, and the signed agreement can't vanish with it. So:
+      // hidden + nothing submitted → blank cell; hidden + submitted → show
+      // the completed chip(s), with un-submitted siblings not counted as
+      // missing.
+      const visible = formVisibleToFamily(forms.find((f) => f.id === form.id)!, fam.family_id);
       if (form.per_student) {
-        // One chip per student in the family. All of them are "applicable"
-        // by default; per-school applicability rules would land here later.
-        // Completion is EITHER a portal submission or a GHL-side signal
-        // (`form_<slug>_s<N>` on the primary parent's contact) — see the
-        // ghlComplete helper above.
+        // One chip per student in the family. Completion is EITHER a portal
+        // submission or a GHL-side signal (`form_<slug>_s<N>` on the primary
+        // parent's contact) — see the ghlComplete helper above.
+        //
+        // A family-linked submission with no student pointer happens when
+        // the sync relinks an orphaned submission by submitter email (the
+        // student id isn't recoverable that way). If the family has exactly
+        // one tracked student, it can only be theirs.
+        const famSub = perFamily.get(`${form.id}|${fam.family_id}`);
+        const soloSub = familyStudents.length === 1 ? famSub : undefined;
         const list: StudentChip[] = familyStudents.map((s, i) => {
-          const sub = perStudent.get(`${form.id}|${s.student_id}`);
+          const sub = perStudent.get(`${form.id}|${s.student_id}`) ?? soloSub;
           const complete = !!sub
             || ghlComplete(fam.family_id, form.slug, { slot: i + 1, familyLevel: false });
-          applicableCount++;
-          if (complete) completeCount++;
+          const applies = visible || complete;
+          if (applies) {
+            applicableCount++;
+            if (complete) completeCount++;
+          }
           return {
             student_id: s.student_id,
             slot: i + 1,
             display_name: studentLabel(s),
-            applies: true,
+            applies,
             complete,
             submission_id: sub?.submission_id ?? null,
             submitted_at: sub?.submitted_at ?? null,
           };
         });
-        cells[form.id] = list;
+        cells[form.id] = !visible && list.every((c) => !c.complete) ? [] : list;
       } else {
         // Family-level form → one cell for the whole family. Render as a
         // single "slot 0" chip so the component treats it uniformly.
@@ -484,17 +495,21 @@ export async function fetcher(
         const sub = perFamily.get(`${form.id}|${fam.family_id}`);
         const complete = !!sub
           || ghlComplete(fam.family_id, form.slug, { familyLevel: true });
-        applicableCount++;
-        if (complete) completeCount++;
-        cells[form.id] = [{
-          student_id: fam.family_id,
-          slot: 0,
-          display_name: fam.family_display_name ?? 'Family',
-          applies: true,
-          complete,
-          submission_id: sub?.submission_id ?? null,
-          submitted_at: sub?.submitted_at ?? null,
-        }];
+        if (!visible && !complete) {
+          cells[form.id] = [];
+        } else {
+          applicableCount++;
+          if (complete) completeCount++;
+          cells[form.id] = [{
+            student_id: fam.family_id,
+            slot: 0,
+            display_name: fam.family_display_name ?? 'Family',
+            applies: true,
+            complete,
+            submission_id: sub?.submission_id ?? null,
+            submitted_at: sub?.submitted_at ?? null,
+          }];
+        }
       }
     }
 

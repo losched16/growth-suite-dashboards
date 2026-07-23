@@ -125,9 +125,10 @@ export default async function SubmissionsInboxScoped({
             s.parent_submission_id,
             ps.submitted_at AS parent_submitted_at,
             COALESCE(NULLIF(f.display_name, ''),
-                     CONCAT_WS(' ', p.first_name, p.last_name),
+                     NULLIF(CONCAT_WS(' ', p.first_name, p.last_name), ''),
+                     s.submitter_email,
                      CASE WHEN s.is_test THEN '(test submission)' ELSE '(unnamed family)' END) AS family_label,
-            p.email AS parent_email,
+            COALESCE(p.email, s.submitter_email) AS parent_email,
             p.phone AS parent_phone,
             CASE WHEN st.id IS NOT NULL
                  THEN CONCAT_WS(' ', COALESCE(NULLIF(st.preferred_name, ''), st.first_name), st.last_name)

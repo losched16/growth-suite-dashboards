@@ -1291,6 +1291,28 @@ export async function runGhlSync(schoolId: string): Promise<SyncResult> {
       (await nullOrphans('parent_uploads', 'student_id', 'students'));
     if (cleared > 0) warnings.push(`Cleared ${cleared} dangling portal link(s) whose contact left GHL.`);
 
+    // Self-heal: relink submissions that lost their family/parent pointer in
+    // an earlier rebuild (family id changes when the P1 contact changes —
+    // e.g. a family restructure — and the guard above nulls the link, which
+    // made submitted enrollment agreements vanish from the office tracker).
+    // submitter_email is stamped before every rebuild exactly so identity
+    // survives; match it back to an active parent, preferring the primary.
+    const relinked = await q(
+      `UPDATE portal_form_submissions sub
+          SET parent_id = pick.id, family_id = pick.family_id
+         FROM (SELECT DISTINCT ON (lower(email)) id, family_id, lower(email) AS em
+                 FROM parents
+                WHERE school_id = $1 AND status = 'active' AND email IS NOT NULL
+                ORDER BY lower(email), is_primary DESC, created_at ASC) pick
+        WHERE sub.school_id = $1 AND sub.family_id IS NULL
+          AND sub.submitter_email IS NOT NULL
+          AND lower(sub.submitter_email) = pick.em`,
+      [schoolId],
+    );
+    if ((relinked.rowCount ?? 0) > 0) {
+      warnings.push(`Relinked ${relinked.rowCount} portal submission(s) to their family by submitter email.`);
+    }
+
     return {
       familiesCreated, parentsCreated, studentsCreated,
       enrollmentsCreated, classroomsCreated,
