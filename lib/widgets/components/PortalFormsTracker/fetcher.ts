@@ -37,6 +37,11 @@ export interface FamilyUpload {
   display_name: string;
   student_name: string | null;
   uploaded_at: string;
+  // 'upload' = the portal Documents section (parent_uploads);
+  // 'submission_file' = attached inside a form submission
+  // (portal_form_submission_files) — different download routes.
+  kind: 'upload' | 'submission_file';
+  form_name: string | null;
 }
 
 export interface FamilyRow {
@@ -284,24 +289,46 @@ export async function fetcher(
     formIds.length === 0 || familyIds.length === 0 ? [] : [school.schoolId, formIds, familyIds],
   );
 
-  // ── Parent uploads per family (portal Documents section) ─────────
+  // ── Parent-provided documents per family ─────────────────────────
+  // Two sources, merged: Documents-section uploads (parent_uploads) and
+  // files attached INSIDE form submissions (custody docs on the
+  // enrollment agreement, etc.) — the office thinks of both as "the
+  // parent uploaded a document" and expects both in the tracker.
   const uploadsByFamily = new Map<string, FamilyUpload[]>();
   if (familyIds.length > 0) {
     const { rows: upRows } = await query<FamilyUpload & { family_id: string }>(
       `SELECT u.id, u.family_id, u.display_name,
               NULLIF(CONCAT_WS(' ', COALESCE(NULLIF(st.preferred_name, ''), st.first_name), st.last_name), '') AS student_name,
-              to_char(u.uploaded_at AT TIME ZONE 'utc', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS uploaded_at
+              to_char(u.uploaded_at AT TIME ZONE 'utc', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS uploaded_at,
+              'upload' AS kind, NULL AS form_name
          FROM parent_uploads u
          LEFT JOIN students st ON st.id = u.student_id
         WHERE u.school_id = $1 AND u.family_id = ANY($2::uuid[])
-        ORDER BY u.uploaded_at DESC`,
+      UNION ALL
+       SELECT sf.id, COALESCE(s.family_id, st.family_id) AS family_id,
+              COALESCE(NULLIF(sf.display_name, ''), sf.original_filename) AS display_name,
+              NULLIF(CONCAT_WS(' ', COALESCE(NULLIF(st.preferred_name, ''), st.first_name), st.last_name), '') AS student_name,
+              to_char(sf.uploaded_at AT TIME ZONE 'utc', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS uploaded_at,
+              'submission_file' AS kind, d.display_name AS form_name
+         FROM portal_form_submission_files sf
+         JOIN portal_form_submissions s ON s.id = sf.submission_id
+         LEFT JOIN students st ON st.id = s.student_id
+         LEFT JOIN portal_form_definitions d ON d.id = s.form_definition_id
+        WHERE s.school_id = $1
+          AND COALESCE(s.status, 'submitted') <> 'voided'
+          AND COALESCE(s.is_test, false) = false
+          AND (s.family_id = ANY($2::uuid[])
+               OR s.student_id IN (SELECT id FROM students WHERE family_id = ANY($2::uuid[])))
+        ORDER BY uploaded_at DESC`,
       [school.schoolId, familyIds],
     );
     for (const r of upRows) {
+      if (!r.family_id) continue;
       if (!uploadsByFamily.has(r.family_id)) uploadsByFamily.set(r.family_id, []);
       uploadsByFamily.get(r.family_id)!.push({
         id: r.id, display_name: r.display_name,
         student_name: r.student_name, uploaded_at: r.uploaded_at,
+        kind: r.kind, form_name: r.form_name,
       });
     }
   }

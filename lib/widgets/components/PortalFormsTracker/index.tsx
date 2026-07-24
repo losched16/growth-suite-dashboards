@@ -414,9 +414,11 @@ function Component({
   );
 }
 
-// Parent-uploaded documents — one 📎 chip per file, direct download.
-// More than 3 collapses into a "+N" link to the family's forms drilldown
-// where the full list (with notes + acknowledge) lives.
+// Parent-provided documents — one 📎 chip per file, direct download.
+// Covers both the Documents-section uploads and files attached inside a
+// form submission (each has its own download route). More than 3
+// collapses into a "+N" link to the family's forms drilldown where the
+// full list (with notes + acknowledge) lives.
 function UploadsCell({ uploads, href }: { uploads: FamilyRow['uploads']; href: string }) {
   if (uploads.length === 0) {
     return <span className="block text-center text-[10px] text-gray-300">—</span>;
@@ -428,9 +430,11 @@ function UploadsCell({ uploads, href }: { uploads: FamilyRow['uploads']; href: s
       {shown.map((u) => (
         <a
           key={u.id}
-          href={`/api/school/uploads/${u.id}/download`}
+          href={u.kind === 'upload'
+            ? `/api/school/uploads/${u.id}/download`
+            : `/api/school/staff-requests/files/${u.id}`}
           className="inline-flex h-5 items-center gap-0.5 rounded-full bg-sky-100 px-1.5 text-[10px] font-medium text-sky-800 hover:bg-sky-200"
-          title={`${u.display_name}${u.student_name ? ` · ${u.student_name}` : ''} · uploaded ${new Date(u.uploaded_at).toLocaleDateString()} · click to download`}
+          title={`${u.display_name}${u.student_name ? ` · ${u.student_name}` : ''}${u.form_name ? ` · attached to "${u.form_name}"` : ''} · uploaded ${new Date(u.uploaded_at).toLocaleDateString()} · click to download`}
         >
           📎
         </a>
