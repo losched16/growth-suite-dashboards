@@ -329,9 +329,7 @@ async function trackSyncHealth(results: PerSchoolResult[]): Promise<void> {
       subject: `Growth Suite sync FAILING — ${failing.map((f) => f.name).join(', ')}`,
       text: `The data sync is failing repeatedly for:
 
-${lines.join('
-
-')}
+${lines.join('\n\n')}
 
 Dashboards and portals for these schools are serving stale data until this is fixed. This alert repeats every ${REALERT_HOURS}h while the failure continues.`,
       html: `<p>The data sync is failing repeatedly for:</p><ul>${failing.map((f) =>
