@@ -60,9 +60,24 @@ function FilterRow({
   };
   const isFiltered = ['q', 'program', 'homeroom', 'schedule', 'lead_teacher', 'gender',
                       'allergies_only', 'iep_504_only', 'lunch', 'attendance_status',
-                      'lunch_only', 'curbside_only']
+                      'lunch_only', 'curbside_only', 'only']
     .some((k) => current[k] && current[k].length > 0)
     || dynamicFilters.some((d) => (current[`f_${d.attr_key}`] ?? '').length > 0);
+
+  // Allergies / IEP-504 / Hot-lunch are mutually exclusive scopes — you
+  // only ever narrow the roster by ONE of them — so they render as a
+  // single "Show" radio group instead of three independent checkboxes.
+  // One `only` URL param; the fetcher still honors legacy *_only=1 links.
+  const EXCLUSIVE: Record<string, { value: string; label: string }> = {
+    allergies_only: { value: 'allergies', label: 'Allergies' },
+    iep_504_only: { value: 'iep_504', label: 'IEP/504' },
+    lunch_only: { value: 'lunch', label: 'Hot lunch' },
+  };
+  const exclusiveShown = filterKeys.filter((k) => k in EXCLUSIVE);
+  const onlySelected = (current.only ?? '').trim()
+    || (current.allergies_only === '1' || current.allergies_only === 'true' ? 'allergies'
+      : current.iep_504_only === '1' || current.iep_504_only === 'true' ? 'iep_504'
+        : current.lunch_only === '1' || current.lunch_only === 'true' ? 'lunch' : '');
 
   return (
     <AutoSubmitForm className="flex flex-wrap items-center gap-2 rounded-lg border border-gray-200 bg-white p-3">
@@ -76,6 +91,31 @@ function FilterRow({
       {filterKeys.map((k) => {
         const meta = AVAILABLE_FILTERS.find((f) => f.key === k);
         if (!meta) return null;
+        if (k in EXCLUSIVE) {
+          // Render the whole radio group at the FIRST exclusive key's
+          // position; the rest collapse into it.
+          if (k !== exclusiveShown[0]) return null;
+          return (
+            <span key="only-group" className="flex items-center gap-2 rounded-md border border-gray-200 bg-gray-50 px-2 py-1 text-xs text-gray-600">
+              <span className="text-gray-500">Show:</span>
+              <label className="flex items-center gap-1">
+                <input type="radio" name="only" value="" defaultChecked={onlySelected === ''} />
+                All
+              </label>
+              {exclusiveShown.map((ek) => (
+                <label key={ek} className="flex items-center gap-1">
+                  <input
+                    type="radio"
+                    name="only"
+                    value={EXCLUSIVE[ek].value}
+                    defaultChecked={onlySelected === EXCLUSIVE[ek].value}
+                  />
+                  {EXCLUSIVE[ek].label}
+                </label>
+              ))}
+            </span>
+          );
+        }
         if (meta.type === 'checkbox') {
           return (
             <label key={k} className="text-xs text-gray-600 flex items-center gap-1">

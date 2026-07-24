@@ -777,10 +777,13 @@ export async function fetcher(
   const fSched = (sp.schedule ?? '').trim();
   const fTeacher = (sp.lead_teacher ?? '').trim();
   const fGender = (sp.gender ?? '').trim();
-  const allergiesOnly = sp.allergies_only === '1' || sp.allergies_only === 'true';
-  const iepOnly = sp.iep_504_only === '1' || sp.iep_504_only === 'true';
+  // `only` is the radio-group form of the three mutually exclusive scope
+  // filters; the individual *_only=1 params are legacy links, still honored.
+  const only = (sp.only ?? '').trim();
+  const allergiesOnly = only === 'allergies' || sp.allergies_only === '1' || sp.allergies_only === 'true';
+  const iepOnly = only === 'iep_504' || sp.iep_504_only === '1' || sp.iep_504_only === 'true';
   const fLunch = (sp.lunch ?? '').trim();
-  const lunchOnly = sp.lunch_only === '1' || sp.lunch_only === 'true';
+  const lunchOnly = only === 'lunch' || sp.lunch_only === '1' || sp.lunch_only === 'true';
   const fAttendance = (sp.attendance_status ?? '').trim();
   const curbsideOnly = sp.curbside_only === '1' || sp.curbside_only === 'true';
   const reEnrolledOnly = sp.re_enrolled_only === '1' || sp.re_enrolled_only === 'true';
