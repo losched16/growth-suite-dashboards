@@ -61,6 +61,18 @@ interface UploadRow {
   ghl_media_url: string | null;
 }
 
+// A file the parent attached INSIDE a form submission (custody docs on
+// the enrollment agreement, etc.) — the other way families send files.
+interface SubFileRow {
+  id: string;
+  display_name: string;
+  original_filename: string;
+  size_bytes: number;
+  uploaded_at: string;
+  form_name: string | null;
+  student_display: string | null;
+}
+
 function fmtBytes(n: number): string {
   if (!n) return '';
   if (n < 1024) return `${n} B`;
@@ -168,6 +180,33 @@ export default async function FamilyFormsPage({
        LEFT JOIN portal_form_definitions d ON d.id = u.form_id
       WHERE u.school_id = $1 AND u.family_id = $2
       ORDER BY u.uploaded_at DESC`,
+    [school.id, familyId],
+  );
+
+  // Files attached inside this family's submissions — shown in the same
+  // "Uploaded documents" section so staff see every parent-provided file
+  // in one place (before this, only parent_uploads counted and a family
+  // whose files all arrived inside forms read "no documents uploaded").
+  const { rows: subFiles } = await query<SubFileRow>(
+    `SELECT sf.id,
+            COALESCE(NULLIF(sf.display_name, ''), sf.original_filename) AS display_name,
+            sf.original_filename, sf.size_bytes,
+            to_char(sf.uploaded_at, 'YYYY-MM-DD"T"HH24:MI:SSOF') AS uploaded_at,
+            d.display_name AS form_name,
+            CASE WHEN s.student_id IS NOT NULL THEN
+              (SELECT COALESCE(NULLIF(st.preferred_name,''), st.first_name) || ' ' || st.last_name
+                 FROM students st WHERE st.id = s.student_id)
+              ELSE NULL END AS student_display
+       FROM portal_form_submission_files sf
+       JOIN portal_form_submissions s ON s.id = sf.submission_id
+       LEFT JOIN portal_form_definitions d ON d.id = s.form_definition_id
+      WHERE s.school_id = $1
+        AND COALESCE(s.status, 'submitted') <> 'voided'
+        AND (
+          s.family_id = $2
+          OR s.student_id IN (SELECT id FROM students WHERE family_id = $2 AND school_id = $1)
+        )
+      ORDER BY sf.uploaded_at DESC`,
     [school.id, familyId],
   );
 
@@ -376,18 +415,42 @@ export default async function FamilyFormsPage({
           )}
         </section>
 
-        {/* Uploaded documents — the family's parent_uploads (files), separate
-            from the form answers above. Download streams the raw file. */}
+        {/* Uploaded documents — BOTH parent-provided file streams: the
+            portal Documents-section uploads (parent_uploads) and files
+            attached inside form submissions. Download streams the raw file. */}
         <section className="space-y-2">
           <h2 className="text-sm font-semibold text-slate-700 flex items-center gap-1.5">
-            <Paperclip className="h-4 w-4 text-slate-500" /> Uploaded documents ({uploads.length})
+            <Paperclip className="h-4 w-4 text-slate-500" /> Uploaded documents ({uploads.length + subFiles.length})
           </h2>
-          {uploads.length === 0 ? (
+          {uploads.length + subFiles.length === 0 ? (
             <div className="rounded-lg border border-dashed border-slate-300 bg-white p-4 text-center text-xs text-slate-500 italic">
               No documents uploaded by this family yet. Files parents upload in the portal show here.
             </div>
           ) : (
             <ul className="divide-y divide-slate-100 rounded-lg border border-slate-200 bg-white overflow-hidden">
+              {subFiles.map((f) => (
+                <li key={f.id} className="px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <FileText className="h-4 w-4 text-slate-400 shrink-0" />
+                      <span className="text-sm font-medium text-slate-900 truncate">{f.display_name}</span>
+                      <span className="rounded-full bg-sky-100 px-1.5 py-0 text-[10px] font-medium text-sky-800">in form</span>
+                    </div>
+                    <div className="mt-0.5 text-[11px] text-slate-500">
+                      {f.student_display ? `${f.student_display} · ` : ''}
+                      {f.form_name ? `attached to “${f.form_name}” · ` : ''}
+                      uploaded {fmtDateTime(f.uploaded_at)}
+                      {f.size_bytes ? ` · ${fmtBytes(f.size_bytes)}` : ''}
+                    </div>
+                  </div>
+                  <a
+                    href={`/api/school/staff-requests/files/${f.id}`}
+                    className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                  >
+                    <Download className="h-3.5 w-3.5" /> Download
+                  </a>
+                </li>
+              ))}
               {uploads.map((u) => (
                 <li key={u.id} className="px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
                   <div className="min-w-0 flex-1">
