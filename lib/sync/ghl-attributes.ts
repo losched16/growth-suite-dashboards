@@ -168,7 +168,39 @@ export async function syncGhlAttributes(schoolId: string): Promise<AttributeSync
   }
 
   // 6. Persist — full refresh of the derived tables in one transaction.
+  //
+  // Before wiping the tag snapshot, diff it against the incoming one and
+  // record every add/removal in ghl_tag_changes. The snapshot alone can't
+  // answer "when did this contact lose the pending tag?" — this can.
+  // Skipped when the old snapshot is empty (first sync would log every
+  // tag as "added" — noise, not history).
+  const { rows: oldTagRows } = await query<{ ghl_contact_id: string; tag: string }>(
+    `SELECT ghl_contact_id, tag FROM ghl_contact_tags WHERE school_id = $1`,
+    [schoolId],
+  );
+  const tagKey = (id: string, tag: string) => id + '|' + tag.toLowerCase();
+  const oldTagSet = new Set(oldTagRows.map((r) => tagKey(r.ghl_contact_id, r.tag)));
+  const newTagSet = new Set(tagRows.map(([id, t]) => tagKey(id, t)));
+  const tagChanges: Array<[string, string, string]> = [];  // [contact, tag, change]
+  if (oldTagSet.size > 0) {
+    for (const [id, t] of tagRows) {
+      if (!oldTagSet.has(tagKey(id, t))) tagChanges.push([id, t, 'added']);
+    }
+    const seenNew = newTagSet;
+    for (const r of oldTagRows) {
+      if (!seenNew.has(tagKey(r.ghl_contact_id, r.tag))) tagChanges.push([r.ghl_contact_id, r.tag, 'removed']);
+    }
+  }
+
   await withTransaction(async (q) => {
+    for (let i = 0; i < tagChanges.length; i += 300) {
+      const chunk = tagChanges.slice(i, i + 300);
+      const placeholders = chunk.map((_, j) => `($1, $${j * 3 + 2}, $${j * 3 + 3}, $${j * 3 + 4})`).join(',');
+      await q(
+        `INSERT INTO ghl_tag_changes (school_id, ghl_contact_id, tag, change) VALUES ${placeholders}`,
+        [schoolId, ...chunk.flat()],
+      );
+    }
     await q(`DELETE FROM ghl_contact_tags WHERE school_id = $1`, [schoolId]);
     await q(`DELETE FROM ghl_contact_field_values WHERE school_id = $1`, [schoolId]);
     await q(`DELETE FROM ghl_opportunities WHERE school_id = $1`, [schoolId]);

@@ -1266,6 +1266,31 @@ export async function runGhlSync(schoolId: string): Promise<SyncResult> {
     }
     if (immRestored > 0) warnings.push(`Preserved ${immRestored} immunization record(s) across the sync.`);
 
+    // Classroom lead teacher by MAJORITY VOTE of its students' own teacher
+    // fields. The insert loop above stamps whichever student creates the
+    // classroom row first — one stale contact (Annabelle Losch's test
+    // record said "Ms. Brittany Wall") mislabeled Classroom 1's teacher
+    // for all 23 families in the portal. The per-student field on the
+    // contact is the source of truth; the classroom row should reflect
+    // what most of its students say.
+    await q(
+      `UPDATE classrooms c
+          SET lead_teacher_name = pick.teacher
+         FROM (
+           SELECT s.metadata->>'homeroom' AS name,
+                  mode() WITHIN GROUP (ORDER BY s.metadata->>'lead_teacher') AS teacher
+             FROM students s
+            WHERE s.school_id = $1 AND s.status = 'active'
+              AND COALESCE(s.metadata->>'homeroom', '') <> ''
+              AND COALESCE(s.metadata->>'lead_teacher', '') <> ''
+            GROUP BY 1
+         ) pick
+        WHERE c.school_id = $1 AND c.name = pick.name
+          AND pick.teacher IS NOT NULL
+          AND c.lead_teacher_name IS DISTINCT FROM pick.teacher`,
+      [schoolId],
+    );
+
     // Robustness guard: a portal submission points at student / parent / family
     // rows by id. When one of those is removed from GHL (contact deleted, or a
     // slot's name fields cleared) the rebuild won't recreate that id — and the
