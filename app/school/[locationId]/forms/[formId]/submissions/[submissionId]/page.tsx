@@ -168,26 +168,26 @@ export default async function SubmissionDetail({
             @page { size: letter portrait; margin: 0.35in; }
             html, body { background:#fff !important; color:#000 !important; }
             main { min-height: 0 !important; }
-            header h1 { font-size: 13pt !important; }
-            header p { font-size: 7pt !important; }
-            header dl { margin-top: 3pt !important; gap: 0 12pt !important; }
-            header dl dt { font-size: 6pt !important; }
-            header dl dd { font-size: 7.5pt !important; line-height: 1.2 !important; }
+            header h1 { font-size: 11.5pt !important; }
+            header p { font-size: 6pt !important; }
+            header dl { margin-top: 2.5pt !important; gap: 0 12pt !important; }
+            header dl dt { font-size: 5.5pt !important; }
+            header dl dd { font-size: 6.5pt !important; line-height: 1.15 !important; }
             /* Vendor prefixes are REQUIRED — Safari / older print engines
                ignore bare column-count and fall back to a single column,
                which pushes this 65-field form onto 2–3 pages. */
-            #submission-responses { -webkit-column-count: 2 !important; -moz-column-count: 2 !important; column-count: 2 !important; -webkit-column-gap: 14pt !important; column-gap: 14pt !important; margin-top: 4pt !important; }
+            #submission-responses { -webkit-column-count: 2 !important; -moz-column-count: 2 !important; column-count: 2 !important; -webkit-column-gap: 14pt !important; column-gap: 14pt !important; margin-top: 3pt !important; }
             #submission-responses > * { -webkit-column-break-inside: avoid !important; break-inside: avoid !important; page-break-inside: avoid !important; margin: 0 !important; }
-            #submission-responses > * + * { margin-top: 2pt !important; }
+            #submission-responses > * + * { margin-top: 1.5pt !important; }
             #submission-responses .grid { display: block !important; }
-            #submission-responses .grid > dt { display: inline !important; font-weight: 600 !important; font-size: 6.5pt !important; color:#000 !important; text-transform: none !important; letter-spacing: normal !important; }
+            #submission-responses .grid > dt { display: inline !important; font-weight: 600 !important; font-size: 5.5pt !important; color:#000 !important; text-transform: none !important; letter-spacing: normal !important; }
             #submission-responses .grid > dt::after { content: ': '; }
-            #submission-responses .grid > dd { display: inline !important; font-size: 7pt !important; color:#000 !important; }
-            #submission-responses h3 { font-size: 7.5pt !important; margin: 2.5pt 0 1pt !important; padding-bottom: 0.5pt !important; break-after: avoid !important; }
-            #submission-responses > div[class*="border-l-4"] { margin-top: 2.5pt !important; padding-left: 4pt !important; border-left-width: 2pt !important; }
-            #submission-responses p { font-size: 6pt !important; margin: 0.5pt 0 !important; line-height: 1.15 !important; font-style: normal !important; }
-            #submission-responses .text-2xl, #submission-responses .text-3xl { font-size: 13pt !important; line-height: 1 !important; }
-            #submission-responses img { max-height: 30pt !important; }
+            #submission-responses .grid > dd { display: inline !important; font-size: 6pt !important; color:#000 !important; }
+            #submission-responses h3 { font-size: 6.5pt !important; margin: 2pt 0 1pt !important; padding-bottom: 0.5pt !important; break-after: avoid !important; }
+            #submission-responses > div[class*="border-l-4"] { margin-top: 2pt !important; padding-left: 4pt !important; border-left-width: 2pt !important; }
+            #submission-responses p { font-size: 5.5pt !important; margin: 0.5pt 0 !important; line-height: 1.15 !important; font-style: normal !important; }
+            #submission-responses .text-2xl, #submission-responses .text-3xl { font-size: 11pt !important; line-height: 1 !important; }
+            #submission-responses img { max-height: 26pt !important; }
             footer { display: none !important; }
           }
         ` }} />
