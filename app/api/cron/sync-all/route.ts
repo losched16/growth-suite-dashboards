@@ -237,6 +237,16 @@ async function runForAll(): Promise<NextResponse> {
     }
   }
 
+  // Sync health + operator alerting. A school that fails 3 runs in a row
+  // (>= 15 min stale at the 5-min cadence) emails the platform operator;
+  // re-alerts at most every 6 hours; sends a recovery note when a school
+  // that alerted comes back. Best-effort — alerting can never fail the cron.
+  try {
+    await trackSyncHealth(results);
+  } catch (e) {
+    console.warn('[cron/sync-all] health tracking failed:', e instanceof Error ? e.message : String(e));
+  }
+
   // Persist a high-level audit row in widget_fetch_log so operators can
   // see when the cron last ran (and whether anything failed).
   try {
@@ -260,4 +270,87 @@ async function runForAll(): Promise<NextResponse> {
     failures: failCount,
     results,
   }, { status: failCount === 0 ? 200 : 207 /* multi-status */ });
+}
+
+const ALERT_THRESHOLD = 3;               // consecutive failures before emailing
+const REALERT_HOURS = 6;                 // don't spam while it stays broken
+
+async function trackSyncHealth(results: PerSchoolResult[]): Promise<void> {
+  const alertTo = process.env.SYNC_ALERT_EMAIL || 'clint@getaims.co';
+  const failing: Array<{ name: string; error: string; consecutive: number; since: string | null }> = [];
+  const recovered: string[] = [];
+
+  for (const r of results) {
+    if (r.ok) {
+      const { rows } = await query<{ consecutive_failures: number; last_alerted_at: string | null }>(
+        `SELECT consecutive_failures, last_alerted_at FROM sync_health WHERE school_id = $1`,
+        [r.school_id],
+      );
+      const prev = rows[0];
+      if (prev && prev.consecutive_failures >= ALERT_THRESHOLD && prev.last_alerted_at) {
+        recovered.push(r.name);
+      }
+      await query(
+        `INSERT INTO sync_health (school_id, consecutive_failures, last_ok_at, last_error, last_alerted_at)
+         VALUES ($1, 0, now(), NULL, NULL)
+         ON CONFLICT (school_id) DO UPDATE
+           SET consecutive_failures = 0, last_ok_at = now(), last_error = NULL, last_alerted_at = NULL`,
+        [r.school_id],
+      );
+    } else {
+      const { rows } = await query<{ consecutive_failures: number; last_alerted_at: string | null; last_ok_at: string | null }>(
+        `INSERT INTO sync_health (school_id, consecutive_failures, last_error, last_failure_at)
+         VALUES ($1, 1, $2, now())
+         ON CONFLICT (school_id) DO UPDATE
+           SET consecutive_failures = sync_health.consecutive_failures + 1,
+               last_error = EXCLUDED.last_error, last_failure_at = now()
+         RETURNING consecutive_failures, last_alerted_at, last_ok_at`,
+        [r.school_id, r.error ?? 'unknown error'],
+      );
+      const h = rows[0];
+      const staleForAlert = !h.last_alerted_at
+        || (Date.now() - new Date(h.last_alerted_at).getTime()) > REALERT_HOURS * 3600_000;
+      if (h.consecutive_failures >= ALERT_THRESHOLD && staleForAlert) {
+        failing.push({ name: r.name, error: r.error ?? 'unknown', consecutive: h.consecutive_failures, since: h.last_ok_at });
+      }
+    }
+  }
+
+  if (failing.length === 0 && recovered.length === 0) return;
+  const { sendBrandedEmail } = await import('@/lib/email');
+
+  if (failing.length > 0) {
+    const lines = failing.map((f) =>
+      `${f.name}: ${f.consecutive} consecutive failures${f.since ? ` (last good sync ${f.since})` : ''}
+  ${f.error}`);
+    await sendBrandedEmail({
+      to: alertTo,
+      schoolId: null,
+      subject: `Growth Suite sync FAILING — ${failing.map((f) => f.name).join(', ')}`,
+      text: `The data sync is failing repeatedly for:
+
+${lines.join('
+
+')}
+
+Dashboards and portals for these schools are serving stale data until this is fixed. This alert repeats every ${REALERT_HOURS}h while the failure continues.`,
+      html: `<p>The data sync is failing repeatedly for:</p><ul>${failing.map((f) =>
+        `<li><strong>${f.name}</strong> — ${f.consecutive} consecutive failures${f.since ? ` (last good sync ${f.since})` : ''}<br><code>${f.error.replace(/</g, '&lt;')}</code></li>`).join('')}</ul><p>Dashboards and portals for these schools are serving stale data until this is fixed. This alert repeats every ${REALERT_HOURS}h while the failure continues.</p>`,
+    });
+    for (const r of results) {
+      if (!r.ok && failing.some((f) => f.name === r.name)) {
+        await query(`UPDATE sync_health SET last_alerted_at = now() WHERE school_id = $1`, [r.school_id]);
+      }
+    }
+  }
+
+  if (recovered.length > 0) {
+    await sendBrandedEmail({
+      to: alertTo,
+      schoolId: null,
+      subject: `Growth Suite sync recovered — ${recovered.join(', ')}`,
+      text: `Sync is healthy again for: ${recovered.join(', ')}. Data is current as of this run.`,
+      html: `<p>Sync is healthy again for: <strong>${recovered.join(', ')}</strong>. Data is current as of this run.</p>`,
+    });
+  }
 }
