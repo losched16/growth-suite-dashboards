@@ -1071,6 +1071,9 @@ export async function runGhlSync(schoolId: string): Promise<SyncResult> {
     // them when families rebuild — so they're stashed + restored too.
     await q(`CREATE TEMP TABLE _att_preserve    ON COMMIT DROP AS SELECT * FROM attendance_events WHERE school_id = $1`, [schoolId]);
     await q(`CREATE TEMP TABLE _pickup_preserve ON COMMIT DROP AS SELECT * FROM pickup_persons    WHERE school_id = $1`, [schoolId]);
+    // Transaction-local bypass for the append-only guard (migration 085) —
+    // evaporates at commit, so the guard stays enforced everywhere else.
+    await q(`SET LOCAL app.attendance_rebuild = 'on'`);
     await q('DELETE FROM attendance_events WHERE school_id = $1', [schoolId]);
 
     // Before the rebuild, stamp submitter_email onto any submission missing it,
