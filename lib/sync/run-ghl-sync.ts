@@ -1352,6 +1352,9 @@ export async function runGhlSync(schoolId: string): Promise<SyncResult> {
   try {
     const { refreshFieldCatalog } = await import('./field-catalog');
     const cat = await refreshFieldCatalog(schoolId);
+    for (const r of cat.renamedOptions) {
+      warnings.push(`Option rename healed on ${r.field_key}: "${r.from}" -> "${r.to}" (${r.contacts_updated} contact(s) updated).`);
+    }
     if (cat.newFields.length || cat.newTags.length || cat.missingFields.length || cat.newOptions.length) {
       warnings.push(
         `catalog: +${cat.newFields.length} field(s), +${cat.newTags.length} tag(s)` +

@@ -52,6 +52,9 @@ export interface CatalogDiff {
   newTags: string[];
   totalFields: number;
   totalTags: number;
+  // Detected picklist option renames that were auto-healed: contacts still
+  // holding the removed option were rewritten to the added one.
+  renamedOptions: Array<{ field_key: string; from: string; to: string; contacts_updated: number }>;
 }
 
 // Discover + persist. Best-effort by design — the caller (sync) wraps it so a
@@ -59,6 +62,7 @@ export interface CatalogDiff {
 export async function refreshFieldCatalog(schoolId: string): Promise<CatalogDiff> {
   const diff: CatalogDiff = {
     newFields: [], newOptions: [], missingFields: [], newTags: [], totalFields: 0, totalTags: 0,
+    renamedOptions: [],
   };
 
   // ── Fields ────────────────────────────────────────────────────────────
@@ -89,8 +93,50 @@ export async function refreshFieldCatalog(schoolId: string): Promise<CatalogDiff
     } else {
       // Absorb any new picklist options (GHL-authoritative vocabulary).
       const prevOpts = new Set(prev.options ?? []);
+      const optSet = new Set(opts);
       const added = opts.filter((o) => !prevOpts.has(o));
+      const removed = (prev.options ?? []).filter((o) => !optSet.has(o));
       if (added.length > 0) diff.newOptions.push({ field_key: key, options: added });
+
+      // Option RENAME: exactly one option removed and one added in the same
+      // cycle. GHL does NOT rewrite stored contact values when an option is
+      // renamed (a teacher's name change left 19 contacts on the old
+      // spelling), so the portal kept showing the old name. Auto-heal:
+      // rewrite every contact still holding the removed value to the new
+      // one — in GHL first (source of truth), then our mirror. Ambiguous
+      // multi-option edits (2+ renamed at once) are skipped; those need a
+      // human mapping.
+      if (added.length === 1 && removed.length === 1 && f.id) {
+        const [from] = removed;
+        const [to] = added;
+        const { rows: holders } = await query<{ ghl_contact_id: string }>(
+          `SELECT ghl_contact_id FROM ghl_contact_field_values
+            WHERE school_id = $1 AND field_key = $2 AND value = $3
+            LIMIT 300`,
+          [schoolId, key, from],
+        );
+        let updated = 0;
+        for (const h of holders) {
+          try {
+            await client.axios.put(`/contacts/${h.ghl_contact_id}`, {
+              customFields: [{ id: f.id, field_value: to }],
+            });
+            await query(
+              `UPDATE ghl_contact_field_values SET value = $4
+                WHERE school_id = $1 AND ghl_contact_id = $2 AND field_key = $3`,
+              [schoolId, h.ghl_contact_id, key, to],
+            );
+            updated++;
+            await new Promise((r) => setTimeout(r, 250)); // pace GHL writes
+          } catch (e) {
+            console.warn('[field-catalog] rename rewrite failed for', h.ghl_contact_id, ':', e instanceof Error ? e.message : String(e));
+          }
+        }
+        if (holders.length > 0) {
+          diff.renamedOptions.push({ field_key: key, from, to, contacts_updated: updated });
+          console.warn(`[field-catalog] option rename healed on ${key}: "${from}" -> "${to}" (${updated} contact(s) rewritten)`);
+        }
+      }
     }
 
     await query(
