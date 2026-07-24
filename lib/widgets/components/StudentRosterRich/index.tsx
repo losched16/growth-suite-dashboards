@@ -177,24 +177,34 @@ function FilterRow({
   );
 }
 
-function ViewToggle({ view, current }: { view: string; current: WidgetSearchParams }) {
+// Renders only the views the widget config enables — the buttons must
+// follow config.enable_views, not just the direct-navigation clamp,
+// otherwise "removing" a view from a dashboard leaves its button behind.
+function ViewToggle({ view, enabled, current }: { view: string; enabled: string[]; current: WidgetSearchParams }) {
   function urlFor(v: string): string {
     const p = new URLSearchParams();
     for (const [k, val] of Object.entries(current)) if (val && k !== 'view') p.set(k, val);
     p.set('view', v);
     return `?${p.toString()}`;
   }
+  const BUTTONS: Array<{ key: string; label: string; Icon: typeof ListIcon }> = [
+    { key: 'list', label: 'List', Icon: ListIcon },
+    { key: 'grid', label: 'Grid', Icon: LayoutGrid },
+    { key: 'allergies', label: 'Allergies', Icon: AlertTriangle },
+  ];
+  const shown = BUTTONS.filter((b) => enabled.includes(b.key));
+  if (shown.length < 2) return null;
   return (
     <div className="inline-flex rounded-md border border-gray-300 bg-white text-xs">
-      <a href={urlFor('list')} className={`px-2 py-1 ${view === 'list' ? 'bg-gray-900 text-white' : 'hover:bg-gray-50'}`}>
-        <ListIcon className="inline h-3 w-3 mr-1" />List
-      </a>
-      <a href={urlFor('grid')} className={`px-2 py-1 border-l border-gray-300 ${view === 'grid' ? 'bg-gray-900 text-white' : 'hover:bg-gray-50'}`}>
-        <LayoutGrid className="inline h-3 w-3 mr-1" />Grid
-      </a>
-      <a href={urlFor('allergies')} className={`px-2 py-1 border-l border-gray-300 ${view === 'allergies' ? 'bg-gray-900 text-white' : 'hover:bg-gray-50'}`}>
-        <AlertTriangle className="inline h-3 w-3 mr-1" />Allergies
-      </a>
+      {shown.map(({ key, label, Icon }, i) => (
+        <a
+          key={key}
+          href={urlFor(key)}
+          className={`px-2 py-1 ${i > 0 ? 'border-l border-gray-300 ' : ''}${view === key ? 'bg-gray-900 text-white' : 'hover:bg-gray-50'}`}
+        >
+          <Icon className="inline h-3 w-3 mr-1" />{label}
+        </a>
+      ))}
     </div>
   );
 }
@@ -507,7 +517,7 @@ function Component({
           {config.show_customize === false ? null : <SyncGhlButton locationId={school.locationId} />}
           {/* Scope is pinned to enrolled on classroom dashboards — no toggle. */}
           {config.enrolled_only ? null : <StatusToggle value={data.roster_status} current={sp} />}
-          <ViewToggle view={view} current={sp} />
+          <ViewToggle view={view} enabled={enabledViews} current={sp} />
           <PrintButton
             label={view === 'allergies' ? 'Print allergies' : view === 'grid' ? 'Print grid' : 'Print roster'}
             title="Print the current view (list / grid / allergies)"
