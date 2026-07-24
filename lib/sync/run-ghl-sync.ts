@@ -1062,6 +1062,17 @@ export async function runGhlSync(schoolId: string): Promise<SyncResult> {
     await q(`CREATE TEMP TABLE _imm_profile_preserve ON COMMIT DROP AS SELECT * FROM student_immunization_profile WHERE school_id = $1`, [schoolId]);
     await q(`CREATE TEMP TABLE _imm_flags_preserve   ON COMMIT DROP AS SELECT * FROM student_vaccine_flags        WHERE school_id = $1`, [schoolId]);
 
+    // Attendance events FK students with ON DELETE RESTRICT — the moment a
+    // school starts using the kiosk, the rebuild's students DELETE violates
+    // the constraint and the ENTIRE school stops syncing (DGM went 24h
+    // stale the day curbside launched). Same preserve pattern: stash,
+    // delete, restore for students that still exist. Pickup persons have
+    // the inverse problem — family_id ON DELETE CASCADE silently wipes
+    // them when families rebuild — so they're stashed + restored too.
+    await q(`CREATE TEMP TABLE _att_preserve    ON COMMIT DROP AS SELECT * FROM attendance_events WHERE school_id = $1`, [schoolId]);
+    await q(`CREATE TEMP TABLE _pickup_preserve ON COMMIT DROP AS SELECT * FROM pickup_persons    WHERE school_id = $1`, [schoolId]);
+    await q('DELETE FROM attendance_events WHERE school_id = $1', [schoolId]);
+
     // Before the rebuild, stamp submitter_email onto any submission missing it,
     // from its current parent. If that parent (or the whole family) is later
     // removed from GHL, we null the dangling parent_id/family_id below — and the
@@ -1265,6 +1276,42 @@ export async function runGhlSync(schoolId: string): Promise<SyncResult> {
       immRestored += res.rowCount ?? 0;
     }
     if (immRestored > 0) warnings.push(`Preserved ${immRestored} immunization record(s) across the sync.`);
+
+    // Restore pickup persons first (attendance events reference them),
+    // then attendance events. Family/parent/student ids are preserved
+    // across the rebuild, so rows almost always reattach; references to
+    // rows that genuinely left GHL are nulled (or the row skipped when
+    // its student is gone — there is nothing to attach it to).
+    const pickupsRestored = await q(
+      `INSERT INTO pickup_persons
+       SELECT * FROM _pickup_preserve p
+        WHERE EXISTS (SELECT 1 FROM families f WHERE f.id = p.family_id)
+          AND (p.added_by_parent_id IS NULL
+               OR EXISTS (SELECT 1 FROM parents x WHERE x.id = p.added_by_parent_id))
+       ON CONFLICT DO NOTHING`,
+    );
+    const attRestored = await q(
+      `INSERT INTO attendance_events
+         (id, school_id, student_id, event_type, performed_by_parent_id, performed_by_admin_email,
+          picked_up_by_parent_id, picked_up_by_pickup_person_id, picked_up_by_name_snapshot,
+          performed_at, signature_png, curbside, notes, ip_address, user_agent, created_at,
+          curbside_slot, pickup_time, source, performed_by_pickup_person_id, performed_by_name_snapshot)
+       SELECT p.id, p.school_id, p.student_id, p.event_type,
+              CASE WHEN EXISTS (SELECT 1 FROM parents x WHERE x.id = p.performed_by_parent_id) THEN p.performed_by_parent_id END,
+              p.performed_by_admin_email,
+              CASE WHEN EXISTS (SELECT 1 FROM parents x WHERE x.id = p.picked_up_by_parent_id) THEN p.picked_up_by_parent_id END,
+              CASE WHEN EXISTS (SELECT 1 FROM pickup_persons x WHERE x.id = p.picked_up_by_pickup_person_id) THEN p.picked_up_by_pickup_person_id END,
+              p.picked_up_by_name_snapshot,
+              p.performed_at, p.signature_png, p.curbside, p.notes, p.ip_address, p.user_agent, p.created_at,
+              p.curbside_slot, p.pickup_time, p.source,
+              CASE WHEN EXISTS (SELECT 1 FROM pickup_persons x WHERE x.id = p.performed_by_pickup_person_id) THEN p.performed_by_pickup_person_id END,
+              p.performed_by_name_snapshot
+         FROM _att_preserve p
+        WHERE EXISTS (SELECT 1 FROM students s WHERE s.id = p.student_id)
+       ON CONFLICT DO NOTHING`,
+    );
+    const attKept = (attRestored.rowCount ?? 0) + (pickupsRestored.rowCount ?? 0);
+    if (attKept > 0) warnings.push(`Preserved ${attRestored.rowCount ?? 0} attendance event(s) + ${pickupsRestored.rowCount ?? 0} pickup person(s) across the sync.`);
 
     // Classroom lead teacher by MAJORITY VOTE of its students' own teacher
     // fields. The insert loop above stamps whichever student creates the
