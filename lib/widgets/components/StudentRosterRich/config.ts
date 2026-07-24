@@ -31,6 +31,7 @@ export const AVAILABLE_COLUMNS = [
   { key: 'last_name',            label: 'Last name' },
   { key: 'first_name',           label: 'First name' },
   { key: 'gender_age',           label: 'Gender / Age' },
+  { key: 'birth_date',           label: 'DOB' },
   { key: 'age_aug1',             label: 'Age @ Aug 1' },
   { key: 'age_jan1',             label: 'Age @ Jan 1' },
   { key: 'age_today',            label: 'Age @ Today' },

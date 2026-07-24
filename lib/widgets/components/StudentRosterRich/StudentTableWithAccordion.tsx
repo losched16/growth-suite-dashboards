@@ -140,7 +140,7 @@ interface FamilyDetail {
 }
 
 // Columns whose headers are clickable to sort (server-side via ?sort=&dir=).
-const SORTABLE = new Set<ColumnKey>(['last_name', 'first_name', 'program', 'homeroom', 'schedule', 'status', 'tuition', 'initial_start_date', 'student_id', 'grade_level']);
+const SORTABLE = new Set<ColumnKey>(['last_name', 'first_name', 'program', 'homeroom', 'schedule', 'status', 'tuition', 'initial_start_date', 'student_id', 'grade_level', 'birth_date']);
 
 // "2021-08-09 00:00:00" / ISO → "Aug 9, 2021". Returns the raw value
 // when it isn't a parseable date.
@@ -364,6 +364,9 @@ function renderCell(
         </span>
       );
     case 'gender_age': return <span className="text-gray-700">{(s.gender ?? '—')} · {ageFrom(s.date_of_birth)}</span>;
+    case 'birth_date': return s.date_of_birth
+      ? <span className="text-gray-700 tabular-nums whitespace-nowrap">{new Date(s.date_of_birth).toLocaleDateString('en-US', { timeZone: 'UTC' })}</span>
+      : <span className="text-gray-300">—</span>;
     case 'age_aug1': return <span className="text-gray-700 tabular-nums">{s.age_as_of_aug1 || '—'}</span>;
     case 'age_jan1': return <span className="text-gray-700 tabular-nums">{s.age_as_of_jan1 || '—'}</span>;
     case 'age_today': return <span className="text-gray-700 tabular-nums">{s.age_as_of_today || '—'}</span>;

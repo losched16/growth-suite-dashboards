@@ -873,6 +873,7 @@ export async function fetcher(
       case 'initial_start_date': return x.initial_start_date || '';
       case 'student_id': return x.student_id_number || '';
       case 'grade_level': return x.grade_level || '';
+      case 'birth_date': return x.date_of_birth || '';
       default:
         // Dynamic (catalog) columns sort by their display value.
         if (x.dynamic[sortKey] !== undefined) return x.dynamic[sortKey];

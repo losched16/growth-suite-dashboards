@@ -331,6 +331,9 @@ function renderCell(s: RosterStudent, col: ColumnKey, drilldownDashboard: string
         </span>
       );
     case 'gender_age': return <span className="text-gray-700">{(s.gender ?? '—')} · {ageFrom(s.date_of_birth)}</span>;
+    case 'birth_date': return s.date_of_birth
+      ? <span className="text-gray-700 tabular-nums">{new Date(s.date_of_birth).toLocaleDateString('en-US', { timeZone: 'UTC' })}</span>
+      : <span className="text-gray-400">—</span>;
     case 'age_aug1': return <span className="text-gray-700 tabular-nums">{s.age_as_of_aug1 || '—'}</span>;
     case 'age_jan1': return <span className="text-gray-700 tabular-nums">{s.age_as_of_jan1 || '—'}</span>;
     case 'age_today': return <span className="text-gray-700 tabular-nums">{s.age_as_of_today || '—'}</span>;
