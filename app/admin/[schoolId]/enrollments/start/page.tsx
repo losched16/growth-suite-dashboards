@@ -8,6 +8,7 @@ import { notFound } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
 import { query } from '@/lib/db';
 import { loadSchoolSettings } from '@/lib/school-settings';
+import { loadAddonCatalog } from '@/lib/billing/addon-catalog';
 import {
   EnrollmentSetupForm,
   type FamilyOpt, type StudentOpt, type GridOpt, type PlanOpt,
@@ -80,6 +81,8 @@ export default async function StartEnrollmentAdmin({
       ),
     ]);
 
+  const addonCatalog = await loadAddonCatalog(schoolId);
+
   const studentsByFamily: Record<string, StudentOpt[]> = {};
   for (const s of students) (studentsByFamily[s.family_id] ??= []).push(s);
 
@@ -113,6 +116,7 @@ export default async function StartEnrollmentAdmin({
           studentsByFamily={studentsByFamily}
           grids={grids}
           plans={plans}
+          addonCatalog={addonCatalog}
         />
       </div>
     </main>

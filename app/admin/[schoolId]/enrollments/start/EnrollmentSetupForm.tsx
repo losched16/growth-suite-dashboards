@@ -14,7 +14,8 @@
 // Posts to /api/admin/schools/{schoolId}/payments/enrollments (op=create).
 
 import { useMemo, useState } from 'react';
-import { GraduationCap, CalendarClock, Info } from 'lucide-react';
+import { GraduationCap, CalendarClock, Info, PlusCircle } from 'lucide-react';
+import type { AddonCatalog, AddonOption } from '@/lib/billing/addon-catalog';
 
 export interface FamilyOpt { id: string; label: string }
 export interface StudentOpt { id: string; family_id: string; name: string; program_name: string | null }
@@ -38,7 +39,7 @@ function fmt(cents: number): string {
 
 export function EnrollmentSetupForm({
   schoolId, academicYear, returnTo, billingActive,
-  families, studentsByFamily, grids, plans, defaultFamilyId,
+  families, studentsByFamily, grids, plans, addonCatalog, defaultFamilyId,
 }: {
   schoolId: string;
   academicYear: string;
@@ -48,6 +49,9 @@ export function EnrollmentSetupForm({
   studentsByFamily: Record<string, StudentOpt[]>;
   grids: GridOpt[];
   plans: PlanOpt[];
+  // Reusable "rate card" of extended-care tiers + deposit + dev-fee options
+  // the operator can add to this enrollment. Empty categories are hidden.
+  addonCatalog: AddonCatalog;
   // Preselect this family (e.g. arriving from the "Set up plan" button on
   // the Tuition Plans tab's "awaiting plan setup" list).
   defaultFamilyId?: string;
@@ -57,6 +61,10 @@ export function EnrollmentSetupForm({
   const [gridId, setGridId] = useState('');
   const [planId, setPlanId] = useState(''); // '' = let the parent choose
   const [addonKeys, setAddonKeys] = useState<Set<string>>(new Set());
+  // Catalog selections (rate-card add-ons). '' = none.
+  const [extendedCareId, setExtendedCareId] = useState('');
+  const [depositId, setDepositId] = useState('');
+  const [devFeeId, setDevFeeId] = useState('');
   // First tuition payment drafts on this date (school's choice) — anchors
   // the whole installment schedule. Default July 1 of the academic year.
   const defaultFirstDue = `${academicYear.split('-')[0]}-07-01`;
@@ -79,10 +87,21 @@ export function EnrollmentSetupForm({
   const grid = grids.find((g) => g.id === gridId) ?? null;
   const plan = plans.find((p) => p.id === planId) ?? null;
 
+  // Rate-card add-ons the operator picked (extended care / deposit / dev
+  // fee). Amount is re-resolved server-side from the same catalog, so the
+  // preview here is display-only.
+  const catalogPicks = [
+    addonCatalog.extended_care.find((o) => o.id === extendedCareId),
+    addonCatalog.deposit.find((o) => o.id === depositId),
+    addonCatalog.development_fee.find((o) => o.id === devFeeId),
+  ].filter((o): o is AddonOption => !!o);
+  const catalogAddonCents = catalogPicks.reduce((s, o) => s + o.amount_cents, 0);
+
   // Live preview math — mirrors the server (grid − plan discount + addons).
-  const addonTotal = grid
+  const gridAddonTotal = grid
     ? grid.addons.filter((a) => addonKeys.has(a.key) || a.required).reduce((s, a) => s + a.amount_cents, 0)
     : 0;
+  const addonTotal = gridAddonTotal + catalogAddonCents;
   const baseTuition = grid?.annual_tuition_cents ?? 0;
   const discount = plan ? Math.round(baseTuition * plan.discount_basis_points / 10000) : 0;
   const annualTotal = baseTuition - discount + addonTotal;
@@ -193,6 +212,61 @@ export function EnrollmentSetupForm({
         ) : null}
       </div>
 
+      {/* Rate-card add-ons: extended care / deposit / development fee.
+          Sourced from the school's addon_catalog so operators SELECT a tier
+          instead of typing amounts. Hidden entirely if the catalog is empty. */}
+      {(addonCatalog.extended_care.length > 0
+        || addonCatalog.deposit.length > 0
+        || addonCatalog.development_fee.length > 0) ? (
+        <div className="border-t border-slate-100 pt-4">
+          <div className="flex items-center gap-1.5 mb-1.5">
+            <PlusCircle className="h-4 w-4 text-slate-500" />
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-600">Add-ons</h3>
+          </div>
+          <p className="text-[11px] text-slate-500 mb-2">
+            From your rate card. Extended care &amp; the development fee add to tuition; the deposit is credited against it.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {addonCatalog.extended_care.length > 0 ? (
+              <label className="block">
+                <span className={labelCls}>Extended care</span>
+                <select name="extended_care_id" value={extendedCareId}
+                  onChange={(e) => setExtendedCareId(e.target.value)} className={inputCls}>
+                  <option value="">— none —</option>
+                  {addonCatalog.extended_care.map((o) => (
+                    <option key={o.id} value={o.id}>{o.label} (+{fmt(o.amount_cents)})</option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
+            {addonCatalog.deposit.length > 0 ? (
+              <label className="block">
+                <span className={labelCls}>Deposit (paid)</span>
+                <select name="deposit_id" value={depositId}
+                  onChange={(e) => setDepositId(e.target.value)} className={inputCls}>
+                  <option value="">— none —</option>
+                  {addonCatalog.deposit.map((o) => (
+                    <option key={o.id} value={o.id}>{o.label} (−{fmt(Math.abs(o.amount_cents))})</option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
+            {addonCatalog.development_fee.length > 0 ? (
+              <label className="block">
+                <span className={labelCls}>Development fee</span>
+                <select name="development_fee_id" value={devFeeId}
+                  onChange={(e) => setDevFeeId(e.target.value)} className={inputCls}>
+                  <option value="">— none —</option>
+                  {addonCatalog.development_fee.map((o) => (
+                    <option key={o.id} value={o.id}>{o.label} (+{fmt(o.amount_cents)})</option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+
       {/* Payment frequency (optional) */}
       <div className="border-t border-slate-100 pt-4">
         <div className="flex items-center gap-1.5 mb-1.5">
@@ -248,7 +322,13 @@ export function EnrollmentSetupForm({
           </div>
           <div className="mt-1 space-y-0.5 text-xs text-emerald-800">
             <div className="flex justify-between"><span>Base ({grid.display_name})</span><span className="tabular-nums">{fmt(baseTuition)}</span></div>
-            {addonTotal > 0 ? <div className="flex justify-between"><span>Add-ons</span><span className="tabular-nums">+{fmt(addonTotal)}</span></div> : null}
+            {gridAddonTotal > 0 ? <div className="flex justify-between"><span>Grid add-ons</span><span className="tabular-nums">+{fmt(gridAddonTotal)}</span></div> : null}
+            {catalogPicks.map((o) => (
+              <div key={o.id} className="flex justify-between">
+                <span>{o.label}</span>
+                <span className="tabular-nums">{o.amount_cents < 0 ? '−' : '+'}{fmt(Math.abs(o.amount_cents))}</span>
+              </div>
+            ))}
             {discount > 0 ? <div className="flex justify-between"><span>{plan?.display_name} discount</span><span className="tabular-nums">−{fmt(discount)}</span></div> : null}
             {plan ? (
               <div className="flex justify-between border-t border-emerald-200 pt-0.5 font-semibold">

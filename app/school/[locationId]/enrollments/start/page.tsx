@@ -15,6 +15,7 @@ import { ArrowLeft } from 'lucide-react';
 import { query } from '@/lib/db';
 import { loadSchoolSettings } from '@/lib/school-settings';
 import { loadSchoolByLocationId } from '@/lib/dashboards/loader';
+import { loadAddonCatalog } from '@/lib/billing/addon-catalog';
 import { HelpCallout } from '@/components/HelpCallout';
 import {
   EnrollmentSetupForm,
@@ -86,6 +87,8 @@ export default async function StartEnrollmentScoped({
       ),
     ]);
 
+  const addonCatalog = await loadAddonCatalog(schoolId);
+
   const studentsByFamily: Record<string, StudentOpt[]> = {};
   for (const s of students) (studentsByFamily[s.family_id] ??= []).push(s);
 
@@ -133,6 +136,7 @@ export default async function StartEnrollmentScoped({
           studentsByFamily={studentsByFamily}
           grids={grids}
           plans={plans}
+          addonCatalog={addonCatalog}
           defaultFamilyId={typeof sp.family === 'string' ? sp.family : undefined}
         />
       </div>

@@ -25,6 +25,7 @@ import { PaymentsHubOverview } from './tabs/Overview';
 import { PaymentsHubInvoices } from './tabs/Invoices';
 import { PaymentsHubPlans } from './tabs/Plans';
 import { PaymentsHubGrids } from './tabs/Grids';
+import { PaymentsHubAddons } from './tabs/Addons';
 import { PaymentsHubDiscounts } from './tabs/Discounts';
 import { PaymentsHubSettings } from './tabs/Settings';
 import { PaymentsHubCatalog } from './tabs/Catalog';
@@ -42,6 +43,7 @@ const TABS = [
   { value: 'invoices',  label: 'Invoices' },
   { value: 'plans',     label: 'Tuition Plans' },
   { value: 'grids',     label: 'Grids' },
+  { value: 'addons',    label: 'Add-ons' },
   { value: 'catalog',   label: 'Catalog' },
   { value: 'discounts', label: 'Discounts' },
   { value: 'financial-aid', label: 'Financial Aid' },
@@ -158,6 +160,7 @@ export default async function PaymentsHubPage({
         {tab === 'invoices'  ? <PaymentsHubInvoices  schoolId={school.id} locationId={locationId} q={sp.q ?? ''} statusFilter={sp.status ?? ''} /> : null}
         {tab === 'plans'     ? <PaymentsHubPlans     schoolId={school.id} locationId={locationId} editTemplateId={sp.edit_template ?? null} familySearch={sp.q ?? ''} /> : null}
         {tab === 'grids'     ? <PaymentsHubGrids     schoolId={school.id} locationId={locationId} /> : null}
+        {tab === 'addons'    ? <PaymentsHubAddons    schoolId={school.id} locationId={locationId} /> : null}
         {tab === 'catalog'   ? <PaymentsHubCatalog   schoolId={school.id} locationId={locationId} /> : null}
         {tab === 'discounts' ? <PaymentsHubDiscounts schoolId={school.id} locationId={locationId} /> : null}
         {tab === 'financial-aid' ? <PaymentsHubFinancialAid schoolId={school.id} locationId={locationId} schoolName={school.name} /> : null}

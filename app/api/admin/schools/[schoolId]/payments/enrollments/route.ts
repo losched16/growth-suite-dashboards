@@ -19,6 +19,7 @@ import type { NextRequest } from 'next/server';
 import { query } from '@/lib/db';
 import { authorizeOperatorOrSchool } from '@/lib/auth/dual';
 import { generateTuitionEnrollment } from '@/lib/billing/tuition-plan-generator';
+import { loadAddonCatalog, resolveAddon, type ResolvedAddon } from '@/lib/billing/addon-catalog';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -84,6 +85,15 @@ export async function POST(request: NextRequest, { params }: { params: Params })
     const tuitionGridId = String(fd.get('tuition_grid_id') ?? '').trim();
     const paymentPlanId = String(fd.get('payment_plan_id') ?? '').trim();
     const addonKeys = fd.getAll('addon_keys').map(String).filter(Boolean);
+    // Rate-card add-ons selected in the builder (extended care / deposit /
+    // dev fee). Amounts are re-resolved from the school's catalog server-side
+    // so a tampered POST can't set an arbitrary price; unknown ids drop out.
+    const catalog = await loadAddonCatalog(schoolId);
+    const extraAddons: ResolvedAddon[] = [
+      resolveAddon(catalog, 'extended_care', String(fd.get('extended_care_id') ?? '').trim()),
+      resolveAddon(catalog, 'deposit', String(fd.get('deposit_id') ?? '').trim()),
+      resolveAddon(catalog, 'development_fee', String(fd.get('development_fee_id') ?? '').trim()),
+    ].filter((a): a is ResolvedAddon => a !== null);
     const internalNote = String(fd.get('internal_note') ?? '').trim() || undefined;
     const initialStatus = fd.get('initial_status') === 'draft' ? 'draft' : 'open';
     // School-chosen date the first tuition installment drafts (anchors
@@ -115,9 +125,14 @@ export async function POST(request: NextRequest, { params }: { params: Params })
       const available = Array.isArray(grid.addons) ? grid.addons : [];
       const keySet = new Set(addonKeys);
       for (const a of available) if (a.required) keySet.add(a.key);
-      const selectedAddons = available
-        .filter((a) => keySet.has(a.key))
-        .map((a) => ({ key: a.key, label: a.label, amount_cents: a.amount_cents }));
+      const selectedAddons = [
+        ...available
+          .filter((a) => keySet.has(a.key))
+          .map((a) => ({ key: a.key, label: a.label, amount_cents: a.amount_cents })),
+        // Catalog-selected add-ons (extended care / deposit / dev fee) so the
+        // contracted total is right even before the parent picks a frequency.
+        ...extraAddons,
+      ];
       const addonTotal = selectedAddons.reduce((s, a) => s + a.amount_cents, 0);
       const total = grid.annual_tuition_cents + addonTotal;
 
@@ -164,6 +179,7 @@ export async function POST(request: NextRequest, { params }: { params: Params })
       tuitionGridId,
       paymentPlanId,
       addonKeys,
+      extraAddons,
       internalNote,
       createdByEmail: 'operator@growthsuite.local',
       initialStatus,

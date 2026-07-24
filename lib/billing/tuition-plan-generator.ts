@@ -55,6 +55,13 @@ interface GenerateOpts {
   // installment, and the discount engine is skipped (the amounts are
   // already final). So the parent sees the real breakdown on each invoice.
   overrideLines?: Array<{ description: string; amount_cents: number; category: string }>;
+  // Add-ons NOT defined on the grid — selected from the school's add-on
+  // catalog (extended care / deposit / development fee). Merged with the
+  // grid-resolved addons so they count toward the total, materialize as
+  // per-installment line items, and persist on family_tuition_enrollments
+  // (so the edit-fees editor + a later regen see them). Negative amounts
+  // (e.g. a paid deposit) are credits.
+  extraAddons?: AddonSnap[];
 }
 
 interface GenerateResult {
@@ -116,9 +123,13 @@ export async function generateTuitionEnrollment(opts: GenerateOpts): Promise<Gen
   for (const a of availableAddons) {
     if (a.required) addonKeySet.add(a.key);
   }
-  const selectedAddons: AddonSnap[] = availableAddons
+  const gridAddons: AddonSnap[] = availableAddons
     .filter((a) => addonKeySet.has(a.key))
     .map((a) => ({ key: a.key, label: a.label, amount_cents: a.amount_cents }));
+  // Catalog-selected add-ons (extended care / deposit / dev fee) are not on
+  // the grid — merge them in so they flow through the total, the installment
+  // lines, and the persisted enrollment addons exactly like grid addons.
+  const selectedAddons: AddonSnap[] = [...gridAddons, ...(opts.extraAddons ?? [])];
 
   // ── 3. Compute amounts ───────────────────────────────────────────────
   const discountedTuition = grid.annual_tuition_cents
