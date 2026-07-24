@@ -32,6 +32,13 @@ export interface StudentChip {
   submitted_at: string | null;
 }
 
+export interface FamilyUpload {
+  id: string;
+  display_name: string;
+  student_name: string | null;
+  uploaded_at: string;
+}
+
 export interface FamilyRow {
   family_id: string;
   family_display_name: string;
@@ -53,6 +60,9 @@ export interface FamilyRow {
   // Nonzero → the row gets a "pending" badge so the office can tell who's
   // still in process vs. currently enrolled.
   pending_student_count: number;
+  // Documents the family uploaded via the portal's Documents section.
+  // Surfaced as their own column so uploads are as visible as submissions.
+  uploads: FamilyUpload[];
 }
 
 export interface PortalFormsTrackerData {
@@ -273,6 +283,28 @@ export async function fetcher(
           ORDER BY s.submitted_at DESC`,
     formIds.length === 0 || familyIds.length === 0 ? [] : [school.schoolId, formIds, familyIds],
   );
+
+  // ── Parent uploads per family (portal Documents section) ─────────
+  const uploadsByFamily = new Map<string, FamilyUpload[]>();
+  if (familyIds.length > 0) {
+    const { rows: upRows } = await query<FamilyUpload & { family_id: string }>(
+      `SELECT u.id, u.family_id, u.display_name,
+              NULLIF(CONCAT_WS(' ', COALESCE(NULLIF(st.preferred_name, ''), st.first_name), st.last_name), '') AS student_name,
+              to_char(u.uploaded_at AT TIME ZONE 'utc', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS uploaded_at
+         FROM parent_uploads u
+         LEFT JOIN students st ON st.id = u.student_id
+        WHERE u.school_id = $1 AND u.family_id = ANY($2::uuid[])
+        ORDER BY u.uploaded_at DESC`,
+      [school.schoolId, familyIds],
+    );
+    for (const r of upRows) {
+      if (!uploadsByFamily.has(r.family_id)) uploadsByFamily.set(r.family_id, []);
+      uploadsByFamily.get(r.family_id)!.push({
+        id: r.id, display_name: r.display_name,
+        student_name: r.student_name, uploaded_at: r.uploaded_at,
+      });
+    }
+  }
 
   // ── Bucket students by family ────────────────────────────────────
   const studentsByFamily = new Map<string, DbStudent[]>();
@@ -533,6 +565,7 @@ export async function fetcher(
       pct,
       status,
       pending_student_count: familyStudents.filter((s) => s.enrollment_status === 'pending').length,
+      uploads: uploadsByFamily.get(fam.family_id) ?? [],
     });
   }
 

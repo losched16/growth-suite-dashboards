@@ -330,13 +330,17 @@ function Component({
                   ) : null}
                 </th>
               ))}
+              <th className="px-3 py-3 font-semibold whitespace-nowrap text-center align-bottom">
+                <div className="text-[11px] leading-tight">Uploaded Docs</div>
+                <div className="text-[9px] uppercase tracking-wide text-gray-400 mt-0.5">from parents</div>
+              </th>
               <th className="px-3 py-3 font-semibold whitespace-nowrap">Students</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
             {visible.length === 0 ? (
               <tr>
-                <td colSpan={3 + shownForms.length} className="px-4 py-8 text-center text-sm text-gray-500">
+                <td colSpan={4 + shownForms.length} className="px-4 py-8 text-center text-sm text-gray-500">
                   No families match the current filters.
                 </td>
               </tr>
@@ -388,6 +392,9 @@ function Component({
                     );
                   })}
                   <td className="px-3 py-3 align-top">
+                    <UploadsCell uploads={r.uploads} href={familyHref(r.family_id)} />
+                  </td>
+                  <td className="px-3 py-3 align-top">
                     <ol className="text-xs text-gray-700 space-y-0.5">
                       {r.enrolled_students.map((s, i) => (
                         <li key={s.student_id}>
@@ -403,6 +410,40 @@ function Component({
           </tbody>
         </table>
       </div>
+    </div>
+  );
+}
+
+// Parent-uploaded documents — one 📎 chip per file, direct download.
+// More than 3 collapses into a "+N" link to the family's forms drilldown
+// where the full list (with notes + acknowledge) lives.
+function UploadsCell({ uploads, href }: { uploads: FamilyRow['uploads']; href: string }) {
+  if (uploads.length === 0) {
+    return <span className="block text-center text-[10px] text-gray-300">—</span>;
+  }
+  const shown = uploads.slice(0, 3);
+  const extra = uploads.length - shown.length;
+  return (
+    <div className="flex flex-wrap justify-center gap-1">
+      {shown.map((u) => (
+        <a
+          key={u.id}
+          href={`/api/school/uploads/${u.id}/download`}
+          className="inline-flex h-5 items-center gap-0.5 rounded-full bg-sky-100 px-1.5 text-[10px] font-medium text-sky-800 hover:bg-sky-200"
+          title={`${u.display_name}${u.student_name ? ` · ${u.student_name}` : ''} · uploaded ${new Date(u.uploaded_at).toLocaleDateString()} · click to download`}
+        >
+          📎
+        </a>
+      ))}
+      {extra > 0 ? (
+        <Link
+          href={href}
+          className="inline-flex h-5 items-center rounded-full bg-sky-50 px-1.5 text-[10px] font-medium text-sky-700 hover:bg-sky-100"
+          title={`${extra} more upload(s) — open the family's forms page`}
+        >
+          +{extra}
+        </Link>
+      ) : null}
     </div>
   );
 }
