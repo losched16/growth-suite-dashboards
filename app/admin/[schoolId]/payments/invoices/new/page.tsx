@@ -8,7 +8,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
 import { query } from '@/lib/db';
-import { LineItemsEditor } from './LineItemsEditor';
+import { LineItemsEditor, type DiscountPolicyOpt } from './LineItemsEditor';
 import { RecipientPicker } from './RecipientPicker';
 import { SubmitOnce } from '@/components/SubmitOnce';
 import { loadInvoiceCatalog } from '@/lib/billing/invoice-catalog';
@@ -82,6 +82,14 @@ export default async function NewInvoicePage({
 
   const catalogItems = await loadInvoiceCatalog(schoolId);
 
+  const { rows: discountPolicies } = await query<DiscountPolicyOpt>(
+    `SELECT id, display_name, kind, percentage_basis_points, amount_cents, max_discount_cents
+       FROM discount_policies
+      WHERE school_id = $1 AND is_active = true
+      ORDER BY kind, display_name`,
+    [schoolId],
+  );
+
   const dueDefault = (() => {
     const d = new Date();
     d.setDate(d.getDate() + 14);
@@ -137,7 +145,7 @@ export default async function NewInvoicePage({
 
           <div>
             <h3 className="text-xs font-semibold uppercase tracking-wide text-zinc-600 mb-1">Line items</h3>
-            <LineItemsEditor catalogItems={catalogItems} />
+            <LineItemsEditor catalogItems={catalogItems} discountPolicies={discountPolicies} />
           </div>
 
           <div className="rounded-md bg-zinc-50 border border-zinc-200 p-3 space-y-2">

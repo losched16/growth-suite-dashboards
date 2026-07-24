@@ -13,7 +13,7 @@ import { ArrowLeft } from 'lucide-react';
 import { query } from '@/lib/db';
 import { SubmitOnce } from '@/components/SubmitOnce';
 import { loadSchoolByLocationId } from '@/lib/dashboards/loader';
-import { LineItemsEditor } from '@/app/admin/[schoolId]/payments/invoices/new/LineItemsEditor';
+import { LineItemsEditor, type DiscountPolicyOpt } from '@/app/admin/[schoolId]/payments/invoices/new/LineItemsEditor';
 import { RecipientPicker } from '@/app/admin/[schoolId]/payments/invoices/new/RecipientPicker';
 import { loadInvoiceCatalog } from '@/lib/billing/invoice-catalog';
 
@@ -82,6 +82,16 @@ export default async function NewInvoiceScoped({
 
   const catalogItems = await loadInvoiceCatalog(schoolId);
 
+  // Discounts the school defined in the Discounts section — offered in the
+  // line-item editor so the operator can drop one onto this invoice.
+  const { rows: discountPolicies } = await query<DiscountPolicyOpt>(
+    `SELECT id, display_name, kind, percentage_basis_points, amount_cents, max_discount_cents
+       FROM discount_policies
+      WHERE school_id = $1 AND is_active = true
+      ORDER BY kind, display_name`,
+    [schoolId],
+  );
+
   const dueDefault = (() => {
     const d = new Date();
     d.setDate(d.getDate() + 14);
@@ -147,7 +157,7 @@ export default async function NewInvoiceScoped({
 
           <div>
             <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-600 mb-1">Line items</h3>
-            <LineItemsEditor catalogItems={catalogItems} />
+            <LineItemsEditor catalogItems={catalogItems} discountPolicies={discountPolicies} />
           </div>
 
           <div className="rounded-md bg-slate-50 border border-slate-200 p-3 space-y-2">

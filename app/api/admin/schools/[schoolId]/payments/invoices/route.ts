@@ -136,6 +136,56 @@ export async function POST(request: NextRequest, { params }: { params: Params })
   const subtotalCents = lines.reduce((acc, l) => acc + l.amount_cents, 0);
   const platformFeeCents = includesSetupFee ? PLATFORM_FEE_CENTS : 0;
 
+  // ── MANUAL DISCOUNTS (operator-added line items) ─────────────────────
+  // Discounts the operator dropped onto the invoice via the editor —
+  // either picked from the school's Discounts section (policy id) or a
+  // one-off custom credit. Policy amounts are RE-RESOLVED here
+  // (server-authoritative: percentage against the positive subtotal,
+  // capped; fixed = the policy's amount) so a stale/tampered client value
+  // can't set the price. Stack on top of auto-apply policies.
+  const manualDiscounts: Array<{ description: string; amount_cents: number; category: string }> = [];
+  {
+    const raw: Array<{ policyId: string; description: string; amountCents: number }> = [];
+    for (let i = 0; i < 20; i++) {
+      const pid = String(fd.get(`discount_policy_id_${i}`) ?? '').trim();
+      const desc = String(fd.get(`discount_description_${i}`) ?? '').trim();
+      const amt = dollarsToCents(String(fd.get(`discount_amount_${i}`) ?? '0'));
+      if (!pid && !desc && amt <= 0) continue;
+      raw.push({ policyId: pid, description: desc, amountCents: amt });
+    }
+    if (raw.length > 0) {
+      const ids = [...new Set(raw.map((r) => r.policyId).filter(Boolean))];
+      const policyById = new Map<string, { display_name: string; percentage_basis_points: number; amount_cents: number; max_discount_cents: number | null }>();
+      if (ids.length > 0) {
+        const { rows: pr } = await query<{ id: string; display_name: string; percentage_basis_points: number; amount_cents: number; max_discount_cents: number | null }>(
+          `SELECT id, display_name, percentage_basis_points, amount_cents, max_discount_cents
+             FROM discount_policies WHERE school_id = $1 AND id = ANY($2::uuid[]) AND is_active = true`,
+          [schoolId, ids],
+        );
+        for (const p of pr) policyById.set(p.id, p);
+      }
+      for (const r of raw) {
+        let cents = 0;
+        let label = r.description;
+        if (r.policyId) {
+          const p = policyById.get(r.policyId);
+          if (!p) continue; // unknown / inactive policy → ignore
+          cents = p.percentage_basis_points > 0
+            ? Math.round((subtotalCents * p.percentage_basis_points) / 10000)
+            : p.amount_cents;
+          if (p.max_discount_cents && p.max_discount_cents > 0) cents = Math.min(cents, p.max_discount_cents);
+          if (!label) label = p.display_name;
+        } else {
+          cents = r.amountCents;
+        }
+        cents = Math.min(Math.max(0, cents), subtotalCents);
+        if (cents <= 0 || !label) continue;
+        manualDiscounts.push({ description: label, amount_cents: -cents, category: 'discount' });
+      }
+    }
+  }
+  const manualDiscountTotal = manualDiscounts.reduce((s, d) => s - d.amount_cents, 0); // sum of magnitudes
+
   // ── DISCOUNTS ────────────────────────────────────────────────────────
   // Evaluate auto-apply policies (sibling, early-bird, FA) and any code
   // the operator typed. Mirror of the parent-portal form-submission flow
@@ -197,7 +247,7 @@ export async function POST(request: NextRequest, { params }: { params: Params })
 
   // Note: processing fee is computed at parent-pay time (depends on rail).
   // The invoice's processing_fee_cents starts at 0 and gets set when paid.
-  const totalCents = Math.max(0, subtotalCents - discountTotal) + platformFeeCents;
+  const totalCents = Math.max(0, subtotalCents - discountTotal - manualDiscountTotal) + platformFeeCents;
 
   // Get the school's invoice prefix + next number, atomically increment.
   const { rows: configRows } = await query<{ prefix: string; next: number }>(
@@ -233,7 +283,7 @@ export async function POST(request: NextRequest, { params }: { params: Params })
         [
           schoolId, familyId, studentId, invoiceNumber, title, description,
           sendNow ? 'open' : 'draft',
-          subtotalCents, platformFeeCents, discountTotal, totalCents,
+          subtotalCents, platformFeeCents, discountTotal + manualDiscountTotal, totalCents,
           new Date(dueDate + 'T23:59:59Z').toISOString(),
           sendNow ? new Date().toISOString() : null,
           includesSetupFee,
@@ -255,8 +305,18 @@ export async function POST(request: NextRequest, { params }: { params: Params })
           [invoiceId, pos++, l.description, l.quantity, l.unit_amount_cents, l.amount_cents, l.category, studentId],
         );
       }
-      // Discount lines (negative amount_cents).
+      // Discount lines (negative amount_cents) — auto-apply policies first,
+      // then the operator's manually-added discounts.
       for (const d of discountResult.lines) {
+        await q(
+          `INSERT INTO invoice_line_items
+             (invoice_id, position, description, quantity, unit_amount_cents,
+              amount_cents, category, student_id)
+           VALUES ($1, $2, $3, 1, $4, $4, $5, $6)`,
+          [invoiceId, pos++, d.description, d.amount_cents, d.category, studentId],
+        );
+      }
+      for (const d of manualDiscounts) {
         await q(
           `INSERT INTO invoice_line_items
              (invoice_id, position, description, quantity, unit_amount_cents,
