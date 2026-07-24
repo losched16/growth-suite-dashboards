@@ -140,7 +140,7 @@ interface FamilyDetail {
 }
 
 // Columns whose headers are clickable to sort (server-side via ?sort=&dir=).
-const SORTABLE = new Set<ColumnKey>(['last_name', 'first_name', 'program', 'homeroom', 'schedule', 'status', 'tuition', 'initial_start_date', 'student_id', 'grade_level', 'birth_date']);
+const SORTABLE = new Set<ColumnKey>(['student', 'last_name', 'first_name', 'program', 'homeroom', 'schedule', 'status', 'tuition', 'initial_start_date', 'student_id', 'grade_level', 'birth_date', 'lunch']);
 
 // "2021-08-09 00:00:00" / ISO → "Aug 9, 2021". Returns the raw value
 // when it isn't a parseable date.

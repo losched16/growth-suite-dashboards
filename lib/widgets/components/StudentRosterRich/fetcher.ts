@@ -864,6 +864,10 @@ export async function fetcher(
   const sortText = (x: RosterStudent): string => {
     switch (sortKey) {
       case 'first_name': return (x.preferred_name || x.first_name || '');
+      // The combined Student column sorts by last name, then first —
+      // matches the roster's default ordering convention.
+      case 'student': return ((x.last_name || '') + ' ' + (x.preferred_name || x.first_name || '')).trim();
+      case 'lunch': return x.lunch || '';
       case 'last_name': return x.last_name || '';
       case 'program': return x.program || x.classroom_name || '';
       case 'homeroom': return x.homeroom || x.classroom_name || '';
