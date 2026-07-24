@@ -85,7 +85,7 @@ function FilterRow({
         type="search"
         name="q"
         defaultValue={current.q ?? ''}
-        placeholder="Search student or parent name…"
+        placeholder="Search student or parent name — press Enter"
         className="min-w-0 flex-1 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm placeholder:text-gray-400 focus:border-emerald-600 focus:outline-none focus:ring-1 focus:ring-emerald-200"
       />
       {filterKeys.map((k) => {

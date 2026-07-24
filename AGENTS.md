@@ -13,13 +13,17 @@ when building or extending any dashboard widget — don't wait to be asked.
 
 Rich widgets are URL-state-driven (server-rendered) but operators expect a
 client-feeling filter experience: change a dropdown → results update; type
-in a search box → results update after a short debounce.
+in a search box → press Enter → results update.
 
 **Use `<AutoSubmitForm>`** (`lib/widgets/components/_shared/AutoSubmitForm.tsx`)
 in place of `<form method="GET">` for every filter row.
 
 - Selects / checkboxes / radios → submit on change
-- Text / search inputs → submit after a 350ms debounce
+- Text / search inputs → submit on ENTER only. Never on a debounce: the
+  server-rendered reload yanks focus mid-word (Clint, 2026-07-24). Hint
+  it in the placeholder, e.g. "… — press Enter".
+- AutoSubmitForm preserves the operator's scroll position across every
+  filter reload (sessionStorage) — don't reimplement that per widget.
 - The visible "Apply" button should be wrapped in `<noscript>` as a
   fallback only — operators never click it when JS is on.
 

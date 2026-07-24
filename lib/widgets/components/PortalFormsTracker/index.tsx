@@ -98,7 +98,7 @@ function FilterBar({
         type="search"
         name="q"
         defaultValue={current.q ?? ''}
-        placeholder="Search families, emails, students…"
+        placeholder="Search families, emails, students — press Enter"
         className="md:col-span-6 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm placeholder:text-gray-400 focus:border-emerald-600 focus:outline-none focus:ring-1 focus:ring-emerald-200"
       />
       <select
