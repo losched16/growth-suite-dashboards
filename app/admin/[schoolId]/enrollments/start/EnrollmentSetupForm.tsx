@@ -14,8 +14,8 @@
 // Posts to /api/admin/schools/{schoolId}/payments/enrollments (op=create).
 
 import { useMemo, useState } from 'react';
-import { GraduationCap, CalendarClock, Info, PlusCircle } from 'lucide-react';
-import type { AddonCatalog, AddonOption } from '@/lib/billing/addon-catalog';
+import { GraduationCap, CalendarClock, Info, PlusCircle, Trash2 } from 'lucide-react';
+import type { AddonCatalog } from '@/lib/billing/addon-catalog';
 
 export interface FamilyOpt { id: string; label: string }
 export interface StudentOpt { id: string; family_id: string; name: string; program_name: string | null }
@@ -32,6 +32,18 @@ export interface PlanOpt {
   installment_count: number;
   discount_basis_points: number;
 }
+
+// One add-on row on the enrollment: a rate-card pick (category + optionId)
+// OR a custom one-off (category='' with a typed label + signed amount).
+// Multiple rows of any kind are allowed.
+interface AddonRow {
+  uid: number;
+  category: '' | 'extended_care' | 'deposit' | 'development_fee';
+  optionId: string;
+  label: string;   // editable for custom rows; catalog label (display) otherwise
+  amount: string;  // editable dollars for custom rows (signed: negative = credit)
+}
+let _addonUid = 1;
 
 function fmt(cents: number): string {
   return `$${(cents / 100).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
@@ -61,10 +73,10 @@ export function EnrollmentSetupForm({
   const [gridId, setGridId] = useState('');
   const [planId, setPlanId] = useState(''); // '' = let the parent choose
   const [addonKeys, setAddonKeys] = useState<Set<string>>(new Set());
-  // Catalog selections (rate-card add-ons). '' = none.
-  const [extendedCareId, setExtendedCareId] = useState('');
-  const [depositId, setDepositId] = useState('');
-  const [devFeeId, setDevFeeId] = useState('');
+  // Add-ons on this enrollment — any mix of rate-card options + custom
+  // one-offs, multiple allowed. Amounts are re-resolved server-side.
+  const [addonRows, setAddonRows] = useState<AddonRow[]>([]);
+  const [addonPick, setAddonPick] = useState('');
   // First tuition payment drafts on this date (school's choice) — anchors
   // the whole installment schedule. Default July 1 of the academic year.
   const defaultFirstDue = `${academicYear.split('-')[0]}-07-01`;
@@ -87,15 +99,51 @@ export function EnrollmentSetupForm({
   const grid = grids.find((g) => g.id === gridId) ?? null;
   const plan = plans.find((p) => p.id === planId) ?? null;
 
-  // Rate-card add-ons the operator picked (extended care / deposit / dev
-  // fee). Amount is re-resolved server-side from the same catalog, so the
-  // preview here is display-only.
-  const catalogPicks = [
-    addonCatalog.extended_care.find((o) => o.id === extendedCareId),
-    addonCatalog.deposit.find((o) => o.id === depositId),
-    addonCatalog.development_fee.find((o) => o.id === devFeeId),
-  ].filter((o): o is AddonOption => !!o);
-  const catalogAddonCents = catalogPicks.reduce((s, o) => s + o.amount_cents, 0);
+  // Effective {label, cents} for an add-on row: catalog rows resolve from the
+  // rate card; custom rows use the typed label + signed dollars. null = drop.
+  // The server re-resolves the same way (authoritative for catalog picks).
+  function rowEffective(r: AddonRow): { label: string; amount_cents: number } | null {
+    if (r.category && r.optionId) {
+      const opt = addonCatalog[r.category]?.find((o) => o.id === r.optionId);
+      return opt ? { label: opt.label, amount_cents: opt.amount_cents } : null;
+    }
+    const label = r.label.trim();
+    const dollars = parseFloat(r.amount);
+    if (!label || !Number.isFinite(dollars) || dollars === 0) return null;
+    return { label, amount_cents: Math.round(dollars * 100) };
+  }
+  const addonEffs = addonRows
+    .map((r) => {
+      const e = rowEffective(r);
+      return e ? { uid: r.uid, label: e.label, amount_cents: e.amount_cents } : null;
+    })
+    .filter((x): x is { uid: number; label: string; amount_cents: number } => x !== null);
+  const catalogAddonCents = addonEffs.reduce((s, o) => s + o.amount_cents, 0);
+
+  const hasCatalog = addonCatalog.extended_care.length > 0
+    || addonCatalog.deposit.length > 0
+    || addonCatalog.development_fee.length > 0;
+
+  function addAddon(value: string) {
+    setAddonPick('');
+    if (!value) return;
+    if (value === '__custom__') {
+      setAddonRows((prev) => [...prev, { uid: _addonUid++, category: '', optionId: '', label: '', amount: '' }]);
+      return;
+    }
+    const sep = value.indexOf(':');
+    const cat = value.slice(0, sep) as AddonRow['category'];
+    const id = value.slice(sep + 1);
+    const opt = cat ? addonCatalog[cat]?.find((o) => o.id === id) : null;
+    if (!opt) return;
+    setAddonRows((prev) => [...prev, {
+      uid: _addonUid++, category: cat, optionId: id, label: opt.label, amount: (opt.amount_cents / 100).toFixed(2),
+    }]);
+  }
+  function removeAddon(uid: number) { setAddonRows((prev) => prev.filter((r) => r.uid !== uid)); }
+  function patchAddon(uid: number, p: Partial<AddonRow>) {
+    setAddonRows((prev) => prev.map((r) => (r.uid === uid ? { ...r, ...p } : r)));
+  }
 
   // Live preview math — mirrors the server (grid − plan discount + addons).
   const gridAddonTotal = grid
@@ -212,60 +260,86 @@ export function EnrollmentSetupForm({
         ) : null}
       </div>
 
-      {/* Rate-card add-ons: extended care / deposit / development fee.
-          Sourced from the school's addon_catalog so operators SELECT a tier
-          instead of typing amounts. Hidden entirely if the catalog is empty. */}
-      {(addonCatalog.extended_care.length > 0
-        || addonCatalog.deposit.length > 0
-        || addonCatalog.development_fee.length > 0) ? (
-        <div className="border-t border-slate-100 pt-4">
-          <div className="flex items-center gap-1.5 mb-1.5">
-            <PlusCircle className="h-4 w-4 text-slate-500" />
-            <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-600">Add-ons</h3>
-          </div>
-          <p className="text-[11px] text-slate-500 mb-2">
-            From your rate card. Extended care &amp; the development fee add to tuition; the deposit is credited against it.
-          </p>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            {addonCatalog.extended_care.length > 0 ? (
-              <label className="block">
-                <span className={labelCls}>Extended care</span>
-                <select name="extended_care_id" value={extendedCareId}
-                  onChange={(e) => setExtendedCareId(e.target.value)} className={inputCls}>
-                  <option value="">— none —</option>
-                  {addonCatalog.extended_care.map((o) => (
-                    <option key={o.id} value={o.id}>{o.label} (+{fmt(o.amount_cents)})</option>
-                  ))}
-                </select>
-              </label>
-            ) : null}
-            {addonCatalog.deposit.length > 0 ? (
-              <label className="block">
-                <span className={labelCls}>Deposit (paid)</span>
-                <select name="deposit_id" value={depositId}
-                  onChange={(e) => setDepositId(e.target.value)} className={inputCls}>
-                  <option value="">— none —</option>
-                  {addonCatalog.deposit.map((o) => (
-                    <option key={o.id} value={o.id}>{o.label} (−{fmt(Math.abs(o.amount_cents))})</option>
-                  ))}
-                </select>
-              </label>
-            ) : null}
-            {addonCatalog.development_fee.length > 0 ? (
-              <label className="block">
-                <span className={labelCls}>Development fee</span>
-                <select name="development_fee_id" value={devFeeId}
-                  onChange={(e) => setDevFeeId(e.target.value)} className={inputCls}>
-                  <option value="">— none —</option>
-                  {addonCatalog.development_fee.map((o) => (
-                    <option key={o.id} value={o.id}>{o.label} (+{fmt(o.amount_cents)})</option>
-                  ))}
-                </select>
-              </label>
-            ) : null}
-          </div>
+      {/* Add-ons — any mix of rate-card options + custom one-offs, multiple
+          allowed. Rate-card picks are read-only (server-authoritative);
+          custom rows are editable (signed: negative = a credit). */}
+      <div className="border-t border-slate-100 pt-4">
+        <div className="flex items-center gap-1.5 mb-1.5">
+          <PlusCircle className="h-4 w-4 text-slate-500" />
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-600">Add-ons</h3>
         </div>
-      ) : null}
+        <p className="text-[11px] text-slate-500 mb-2">
+          {hasCatalog ? 'Pick from your rate card or add a custom one-off — ' : 'Add a custom one-off — '}
+          as many as you need. Positive adds to tuition; a negative amount is a credit.
+        </p>
+        <select value={addonPick} onChange={(e) => addAddon(e.target.value)} className={inputCls}>
+          <option value="">＋ Add an add-on…</option>
+          {addonCatalog.extended_care.length > 0 ? (
+            <optgroup label="Extended care">
+              {addonCatalog.extended_care.map((o) => (
+                <option key={o.id} value={`extended_care:${o.id}`}>{o.label} (+{fmt(o.amount_cents)})</option>
+              ))}
+            </optgroup>
+          ) : null}
+          {addonCatalog.deposit.length > 0 ? (
+            <optgroup label="Deposit">
+              {addonCatalog.deposit.map((o) => (
+                <option key={o.id} value={`deposit:${o.id}`}>{o.label} (−{fmt(Math.abs(o.amount_cents))})</option>
+              ))}
+            </optgroup>
+          ) : null}
+          {addonCatalog.development_fee.length > 0 ? (
+            <optgroup label="Development fee">
+              {addonCatalog.development_fee.map((o) => (
+                <option key={o.id} value={`development_fee:${o.id}`}>{o.label} (+{fmt(o.amount_cents)})</option>
+              ))}
+            </optgroup>
+          ) : null}
+          <optgroup label="One-off">
+            <option value="__custom__">Custom add-on…</option>
+          </optgroup>
+        </select>
+
+        {addonRows.length > 0 ? (
+          <div className="mt-2 space-y-1.5">
+            {addonRows.map((r, i) => {
+              const eff = rowEffective(r);
+              const isCustom = !r.category;
+              return (
+                <div key={r.uid} className="flex items-center gap-2">
+                  {isCustom ? (
+                    <input type="text" value={r.label} placeholder="Add-on label (e.g. Materials fee)"
+                      onChange={(e) => patchAddon(r.uid, { label: e.target.value })}
+                      className="flex-1 rounded border border-slate-300 px-2 py-1 text-sm" />
+                  ) : (
+                    <span className="flex-1 text-sm text-slate-800">{r.label}</span>
+                  )}
+                  {isCustom ? (
+                    <div className="flex items-center gap-1">
+                      <span className="text-slate-500 text-sm">$</span>
+                      <input type="number" step="0.01" value={r.amount} placeholder="0.00"
+                        onChange={(e) => patchAddon(r.uid, { amount: e.target.value })}
+                        className="w-24 rounded border border-slate-300 px-1 py-1 text-sm text-right" />
+                    </div>
+                  ) : (
+                    <span className="w-24 text-right font-mono text-sm text-slate-700">
+                      {(eff?.amount_cents ?? 0) < 0 ? '−' : '+'}{fmt(Math.abs(eff?.amount_cents ?? 0))}
+                    </span>
+                  )}
+                  {/* Submit: catalog ref OR custom label+amount (server re-resolves catalog). */}
+                  <input type="hidden" name={`addon_ref_${i}`} value={r.category ? `${r.category}:${r.optionId}` : ''} />
+                  <input type="hidden" name={`addon_label_${i}`} value={isCustom ? r.label : ''} />
+                  <input type="hidden" name={`addon_amount_${i}`} value={isCustom ? r.amount : ''} />
+                  <button type="button" onClick={() => removeAddon(r.uid)}
+                    className="rounded p-1 text-slate-400 hover:bg-rose-50 hover:text-rose-600" title="Remove add-on">
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        ) : null}
+      </div>
 
       {/* Payment frequency (optional) */}
       <div className="border-t border-slate-100 pt-4">
@@ -323,8 +397,8 @@ export function EnrollmentSetupForm({
           <div className="mt-1 space-y-0.5 text-xs text-emerald-800">
             <div className="flex justify-between"><span>Base ({grid.display_name})</span><span className="tabular-nums">{fmt(baseTuition)}</span></div>
             {gridAddonTotal > 0 ? <div className="flex justify-between"><span>Grid add-ons</span><span className="tabular-nums">+{fmt(gridAddonTotal)}</span></div> : null}
-            {catalogPicks.map((o) => (
-              <div key={o.id} className="flex justify-between">
+            {addonEffs.map((o) => (
+              <div key={o.uid} className="flex justify-between">
                 <span>{o.label}</span>
                 <span className="tabular-nums">{o.amount_cents < 0 ? '−' : '+'}{fmt(Math.abs(o.amount_cents))}</span>
               </div>

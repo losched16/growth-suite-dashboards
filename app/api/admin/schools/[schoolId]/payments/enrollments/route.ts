@@ -85,15 +85,33 @@ export async function POST(request: NextRequest, { params }: { params: Params })
     const tuitionGridId = String(fd.get('tuition_grid_id') ?? '').trim();
     const paymentPlanId = String(fd.get('payment_plan_id') ?? '').trim();
     const addonKeys = fd.getAll('addon_keys').map(String).filter(Boolean);
-    // Rate-card add-ons selected in the builder (extended care / deposit /
-    // dev fee). Amounts are re-resolved from the school's catalog server-side
-    // so a tampered POST can't set an arbitrary price; unknown ids drop out.
+    // Add-ons selected in the builder — any mix of rate-card options and
+    // custom one-offs, multiple allowed. Each row posts addon_ref_<i>
+    // ("category:optionId" for a catalog pick) OR addon_label_<i> +
+    // addon_amount_<i> (a custom one-off). Catalog amounts are RE-RESOLVED
+    // from the school's catalog server-side so a tampered POST can't set an
+    // arbitrary price; custom rows use the typed signed dollars.
     const catalog = await loadAddonCatalog(schoolId);
-    const extraAddons: ResolvedAddon[] = [
-      resolveAddon(catalog, 'extended_care', String(fd.get('extended_care_id') ?? '').trim()),
-      resolveAddon(catalog, 'deposit', String(fd.get('deposit_id') ?? '').trim()),
-      resolveAddon(catalog, 'development_fee', String(fd.get('development_fee_id') ?? '').trim()),
-    ].filter((a): a is ResolvedAddon => a !== null);
+    const extraAddons: ResolvedAddon[] = [];
+    for (let i = 0; i < 30; i++) {
+      const ref = String(fd.get(`addon_ref_${i}`) ?? '').trim();
+      if (ref) {
+        const sep = ref.indexOf(':');
+        const cat = ref.slice(0, sep);
+        const id = ref.slice(sep + 1);
+        if (cat === 'extended_care' || cat === 'deposit' || cat === 'development_fee') {
+          const resolved = resolveAddon(catalog, cat, id);
+          if (resolved) extraAddons.push(resolved);
+        }
+        continue;
+      }
+      const clabel = String(fd.get(`addon_label_${i}`) ?? '').trim();
+      const dollars = Number(String(fd.get(`addon_amount_${i}`) ?? '').trim());
+      if (clabel && Number.isFinite(dollars) && dollars !== 0) {
+        const slug = clabel.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '') || 'addon';
+        extraAddons.push({ key: `custom_${slug}`, label: clabel, amount_cents: Math.round(dollars * 100) });
+      }
+    }
     const internalNote = String(fd.get('internal_note') ?? '').trim() || undefined;
     const initialStatus = fd.get('initial_status') === 'draft' ? 'draft' : 'open';
     // School-chosen date the first tuition installment drafts (anchors
