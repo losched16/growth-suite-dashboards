@@ -569,6 +569,12 @@ function Component({
             href={(() => {
               const qs = new URLSearchParams();
               for (const [k, v] of Object.entries(sp)) if (v && k !== 'view') qs.set(k, String(v));
+              // Classroom hubs pin their homeroom via CONFIG, not the URL —
+              // without carrying it here the export dumped the whole school
+              // instead of the classroom being viewed.
+              if (config.lock_homeroom && config.default_homeroom_filter && !qs.get('homeroom')) {
+                qs.set('homeroom', config.default_homeroom_filter);
+              }
               const s = qs.toString();
               return `/api/export/student-roster/${school.locationId}${s ? `?${s}` : ''}`;
             })()}
