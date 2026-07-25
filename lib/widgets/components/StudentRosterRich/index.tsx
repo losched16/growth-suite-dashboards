@@ -594,15 +594,24 @@ function Component({
       </div>
 
       {view === 'list' ? (
-        <StudentTableWithAccordion
-          rows={data.page_rows}
-          columns={columns}
-          locationId={school.locationId}
-          documentsAudience={config.documents_audience ?? 'all'}
-          current={sp}
-          dynamicLabels={data.dynamic_labels}
-          detailSections={config.detail_sections}
-        />
+        <>
+          {/* Screen table hides at print time; a dedicated compact sheet
+              prints instead — the full interactive table never fit a
+              page. Teachers asked for exactly: name, allergy, lunch,
+              do-not-pickup, for EVERY filtered student (not one page). */}
+          <div className="print:hidden">
+            <StudentTableWithAccordion
+              rows={data.page_rows}
+              columns={columns}
+              locationId={school.locationId}
+              documentsAudience={config.documents_audience ?? 'all'}
+              current={sp}
+              dynamicLabels={data.dynamic_labels}
+              detailSections={config.detail_sections}
+            />
+          </div>
+          <PrintRoster students={data.filtered} schoolName={school.schoolName} />
+        </>
       ) : view === 'grid' ? (
         <GridView rows={data.page_rows} locationId={school.locationId} drilldownDashboard={drilldown} />
       ) : (
@@ -610,11 +619,53 @@ function Component({
       )}
 
       {view !== 'allergies' && data.page_count > 1 ? (
-        <div className="flex items-center justify-between text-xs text-gray-500">
+        <div className="flex items-center justify-between text-xs text-gray-500 print:hidden">
           <span>Showing {(data.page - 1) * data.per_page + 1}-{Math.min(data.page * data.per_page, data.filtered.length)} of {data.filtered.length}</span>
           <PageNav page={data.page} pageCount={data.page_count} current={sp} />
         </div>
       ) : null}
+    </div>
+  );
+}
+
+// Print-only roster sheet: the four columns the front desk actually
+// needs on paper. Renders every FILTERED student (all pages), rows
+// kept intact across page breaks.
+function PrintRoster({ students, schoolName }: { students: RosterStudent[]; schoolName: string }) {
+  return (
+    <div className="hidden print:block">
+      <div className="mb-2 flex items-baseline justify-between">
+        <h2 className="text-base font-bold">{schoolName} — Roster</h2>
+        <span className="text-[10px] text-gray-600">{students.length} students · printed {new Date().toLocaleDateString()}</span>
+      </div>
+      <table className="w-full border-collapse text-[11px] leading-tight">
+        <thead>
+          <tr className="border-b-2 border-black text-left">
+            <th className="py-1 pr-3">Student</th>
+            <th className="py-1 pr-3">Allergy</th>
+            <th className="py-1 pr-3">Lunch</th>
+            <th className="py-1">Do NOT pick up</th>
+          </tr>
+        </thead>
+        <tbody>
+          {students.map((s) => (
+            <tr key={s.student_id} className="border-b border-gray-300 align-top" style={{ breakInside: 'avoid' }}>
+              <td className="py-1 pr-3 font-semibold whitespace-nowrap">
+                {(s.preferred_name?.trim() || s.first_name)} {s.last_name}
+              </td>
+              <td className="py-1 pr-3 font-semibold">
+                {s.allergy || (s.has_allergy ? 'flagged — ask office' : '—')}
+              </td>
+              <td className="py-1 pr-3">{s.lunch || '—'}</td>
+              <td className="py-1 font-semibold">
+                {s.pickup_restrictions.length > 0
+                  ? s.pickup_restrictions.map((p) => p.name).join(', ')
+                  : '—'}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
