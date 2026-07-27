@@ -316,6 +316,15 @@ function RowGroup({
 //   - Has real prose ("Eggs, milk and Almonds") — show in red
 //   - Legacy "Yes" flag with no detail — show in amber "flagged · no detail"
 //   - No allergy or "No"/"None" — show em-dash
+// '14:30' (stored curbside time) -> '2:30 pm' for the chip.
+function fmtCurbTime(v: string): string {
+  const [hh, mm] = v.split(':').map((s) => parseInt(s, 10));
+  if (!Number.isFinite(hh) || !Number.isFinite(mm)) return v;
+  const period = hh >= 12 ? 'pm' : 'am';
+  const h12 = hh % 12 === 0 ? 12 : hh % 12;
+  return `${h12}:${String(mm).padStart(2, '0')} ${period}`;
+}
+
 function renderAllergyCell(s: RosterStudent): React.ReactNode {
   if (s.allergy) {
     return <span className="text-rose-700 text-xs whitespace-pre-wrap">{s.allergy}</span>;
@@ -516,10 +525,10 @@ function renderCell(
             {s.curbside_today ? (
               <span
                 className="inline-flex items-center gap-0.5 rounded-full bg-violet-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-violet-800"
-                title={s.curbside_slot ? `Curbside slot ${s.curbside_slot}` : 'Curbside pickup today'}
+                title={s.curbside_slot ? `Curbside pickup at ${fmtCurbTime(s.curbside_slot)}` : 'Curbside pickup today'}
               >
                 <Car className="h-3 w-3" />
-                {s.curbside_slot ? `#${s.curbside_slot}` : 'Curb'}
+                {s.curbside_slot ? `Curb ${fmtCurbTime(s.curbside_slot)}` : 'Curb'}
               </span>
             ) : null}
           </div>
