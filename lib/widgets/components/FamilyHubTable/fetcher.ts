@@ -7,6 +7,7 @@ import { query } from '@/lib/db';
 import type { SchoolContext, WidgetSearchParams } from '@/lib/widgets/types';
 import type { FamilyHubConfig, SortKey } from './config';
 import { deriveEmbedToken } from '@/lib/auth/embed';
+import { resolveFamilyGhlAttrs, type ResolvedAttr } from '@/lib/widgets/ghl-attr-resolver';
 
 // Per-family parent record exposed to the UI so the accordion can show
 // both parents inline without an extra fetch.
@@ -75,6 +76,12 @@ export interface FamilyRow {
   // ordered: parents by is_primary DESC then created_at; students by slot.
   parents: ParentRecord[];
   students: StudentRecord[];
+  // Self-serve extras resolved per family (Customize → Details / Columns).
+  //   extra_attrs — catalog attrs shown as extra rows in the accordion
+  //   dynamic     — added column values keyed by attr_key
+  // Only populated for on-screen (page) rows; undefined otherwise.
+  extra_attrs?: ResolvedAttr[];
+  dynamic?: Record<string, string>;
 }
 
 export interface FamilyHubData {
@@ -98,6 +105,10 @@ export interface FamilyHubData {
     pending: number;
     accepted: number;
   };
+  // Header labels for any self-serve extra columns, keyed by attr_key.
+  // Pulled from school_filter_catalog so a column with no value on the
+  // current page still gets its header.
+  dynamic_labels: Record<string, string>;
 }
 
 interface DbRow {
@@ -460,6 +471,36 @@ export async function fetcher(
   const start = (safePage - 1) * perPage;
   const pageRows = filtered.slice(start, start + perPage);
 
+  // ── Self-serve extras (Customize → Details / Columns) ──────────────
+  // Resolve the union of the detail + column attr_keys per on-screen
+  // family. page_rows only: the accordion detail + added columns render
+  // only for visible rows, so there's no need to resolve the whole set.
+  const detailAttrs = config.detail_attrs ?? [];
+  const extraCols = config.extra_columns ?? [];
+  const union = [...new Set([...detailAttrs, ...extraCols])];
+  let dynamicLabels: Record<string, string> = {};
+  if (union.length > 0) {
+    await Promise.all(
+      pageRows.map(async (f) => {
+        const resolved = await resolveFamilyGhlAttrs(school.schoolId, f.family_id, union);
+        f.extra_attrs = resolved.filter((a) => detailAttrs.includes(a.attr_key));
+        f.dynamic = Object.fromEntries(
+          resolved.filter((a) => extraCols.includes(a.attr_key)).map((a) => [a.attr_key, a.value]),
+        );
+      }),
+    );
+    // Column headers come from the catalog (a column can be empty on the
+    // current page yet still needs its header).
+    if (extraCols.length > 0) {
+      const { rows: labelRows } = await query<{ attr_key: string; label: string }>(
+        `SELECT attr_key, label FROM school_filter_catalog
+          WHERE school_id = $1 AND attr_key = ANY($2::text[])`,
+        [school.schoolId, extraCols],
+      );
+      dynamicLabels = Object.fromEntries(labelRows.map((r) => [r.attr_key, r.label]));
+    }
+  }
+
   return {
     total_families: allFamilies.length,
     filtered,
@@ -469,6 +510,7 @@ export async function fetcher(
     page_count: pageCount,
     options,
     stats,
+    dynamic_labels: dynamicLabels,
   };
 }
 

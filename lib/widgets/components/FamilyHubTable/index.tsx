@@ -10,6 +10,7 @@ import {
   AVAILABLE_FILTERS,
   familyHubDefaults,
   familyHubSchema,
+  orderColumns,
   type FamilyHubConfig,
   type FilterKey,
 } from './config';
@@ -177,7 +178,13 @@ function Component({
 }) {
   const showStats = config.show_stat_cards !== false;
   const filters = config.shown_filters ?? familyHubDefaults.shown_filters;
-  const columns = config.shown_columns ?? familyHubDefaults.shown_columns;
+  // Built-in columns + any catalog attrs the school added as columns,
+  // reordered by the school's saved column_order.
+  const shownColumns = config.shown_columns ?? familyHubDefaults.shown_columns;
+  const columns: string[] = orderColumns(config.column_order, [
+    ...shownColumns,
+    ...(config.extra_columns ?? []),
+  ]);
   // drilldown_dashboard_slug is preserved in config for backwards compat,
   // but the accordion replaces drilldown navigation — clicking a row now
   // expands inline rather than navigating to a per-family page.
@@ -204,6 +211,15 @@ function Component({
         <div className="flex items-center gap-2 print:hidden">
           <SyncGhlButton locationId={school.locationId} />
           <DownloadCsvButton href={exportHref} label={isFiltered ? 'Download filtered CSV' : 'Download CSV'} />
+          {config.show_customize === false ? null : (
+            <a
+              href={`/school/${school.locationId}/family-hub-settings`}
+              className="rounded-md border border-gray-300 bg-white px-2 py-1 text-xs text-gray-700 hover:bg-gray-50"
+              title="Add columns & detail rows from your tags, contact fields, and opportunity stages"
+            >
+              ⚙ Customize
+            </a>
+          )}
         </div>
       </div>
 
@@ -229,6 +245,7 @@ function Component({
         locationId={school.locationId}
         current={sp}
         crmAppBase={crmAppBase()}
+        dynamicLabels={data.dynamic_labels}
       />
       <Pagination
         page={data.page}

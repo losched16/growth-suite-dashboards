@@ -11,6 +11,7 @@
 import { useState } from 'react';
 import { AlertTriangle, ChevronRight, ChevronDown, ArrowUpDown, ChevronUp } from 'lucide-react';
 import type { ColumnKey, SortKey } from './config';
+import { AVAILABLE_COLUMNS } from './config';
 import type { FamilyRow, ParentRecord, StudentRecord } from './fetcher';
 import type { WidgetSearchParams } from '@/lib/widgets/types';
 
@@ -27,16 +28,20 @@ const SORT_BY_COL: Partial<Record<ColumnKey, SortKey>> = {
 
 interface Props {
   rows: FamilyRow[];
-  columns: ColumnKey[];
+  // Built-in ColumnKeys plus any catalog attr_keys ('tag', 'cf:…') the
+  // school added as columns via the self-serve builder.
+  columns: string[];
   locationId: string;
   current: WidgetSearchParams;
   // CRM base URL used to build "Open Full Contact Record" deep-links to
   // GHL. Resolved server-side from CRM_APP_BASE env and passed down here
   // because client components can't read non-public env vars.
   crmAppBase: string;
+  // Header labels for the added catalog columns, keyed by attr_key.
+  dynamicLabels?: Record<string, string>;
 }
 
-export function AccordionTable({ rows, columns, locationId, current, crmAppBase }: Props) {
+export function AccordionTable({ rows, columns, locationId, current, crmAppBase, dynamicLabels = {} }: Props) {
   const [expanded, setExpanded] = useState<string | null>(null);
 
   if (rows.length === 0) {
@@ -55,13 +60,15 @@ export function AccordionTable({ rows, columns, locationId, current, crmAppBase 
             <th className="w-6 px-2 py-2" />{/* chevron */}
             {columns.map((col) => {
               const align = col === 'total_tuition' ? 'text-right' : col === 'active' ? 'text-center' : '';
-              const sortKey = SORT_BY_COL[col];
+              const sortKey = SORT_BY_COL[col as ColumnKey];
+              // Built-in label wins, then the added column's catalog label.
+              const label = AVAILABLE_COLUMNS.find((c) => c.key === col)?.label ?? dynamicLabels[col] ?? col;
               return (
                 <th key={col} className={`px-3 py-2 font-medium ${align}`}>
                   {sortKey ? (
-                    <SortHeader label={COLUMN_LABEL[col] ?? col} sortKey={sortKey} current={current} align={align} />
+                    <SortHeader label={label} sortKey={sortKey} current={current} align={align} />
                   ) : (
-                    COLUMN_LABEL[col] ?? col
+                    label
                   )}
                 </th>
               );
@@ -89,18 +96,6 @@ export function AccordionTable({ rows, columns, locationId, current, crmAppBase 
   );
 }
 
-const COLUMN_LABEL: Record<string, string> = {
-  family: 'Family',
-  phone: 'Phone',
-  email: 'Email',
-  students: 'Students',
-  enrollment: 'Enrollment',
-  programs: 'Programs',
-  payment_plan: 'Payment Plan',
-  total_tuition: 'Total Tuition',
-  active: 'Active',
-};
-
 function FamilyAccordionRow({
   family: f,
   columns,
@@ -110,7 +105,7 @@ function FamilyAccordionRow({
   crmAppBase,
 }: {
   family: FamilyRow;
-  columns: ColumnKey[];
+  columns: string[];
   expanded: boolean;
   onToggle: () => void;
   locationId: string;
@@ -166,7 +161,11 @@ function pickSubtitle(f: FamilyRow): string {
   return studentLabel ? `student: ${studentLabel}` : '(no contact name)';
 }
 
-function renderCell(f: FamilyRow, col: ColumnKey, title: string, subtitle: string): React.ReactNode {
+function renderCell(f: FamilyRow, col: string, title: string, subtitle: string): React.ReactNode {
+  // Added catalog column: render the resolved display value.
+  if (f.dynamic && f.dynamic[col] !== undefined) {
+    return <span className="whitespace-pre-wrap">{f.dynamic[col]}</span>;
+  }
   switch (col) {
     case 'family':
       return (
@@ -204,6 +203,9 @@ function renderCell(f: FamilyRow, col: ColumnKey, title: string, subtitle: strin
         </span>
       );
   }
+  // Added column with no value for this family (or unknown key) — keep
+  // the cell aligned with an em-dash.
+  return <span className="text-gray-400">{EMDASH}</span>;
 }
 
 // ----- Expanded family detail panel -----------------------------------------
@@ -279,6 +281,23 @@ function FamilyDetailPanel({
           <div className="text-xs text-gray-400 italic self-end">No second parent on record.</div>
         )}
       </div>
+
+      {/* Self-serve extra fields — GHL data the school added via
+          Customize → Details. Family-level (resolved across the family's
+          linked contacts). This is the 40+ field report surface. */}
+      {family.extra_attrs && family.extra_attrs.length > 0 ? (
+        <div>
+          <SectionLabel>Additional fields</SectionLabel>
+          <dl className="mt-2 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-1.5">
+            {family.extra_attrs.map((a) => (
+              <div key={a.attr_key} className="rounded border border-blue-100 bg-blue-50/30 px-2 py-1.5">
+                <dt className="text-[10px] uppercase tracking-wide text-gray-500">{a.label}</dt>
+                <dd className="text-sm text-gray-900 whitespace-pre-wrap break-words">{a.value}</dd>
+              </div>
+            ))}
+          </dl>
+        </div>
+      ) : null}
 
       {/* Per-student detail cards */}
       {family.students.length > 0 ? (

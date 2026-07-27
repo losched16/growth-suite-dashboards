@@ -52,6 +52,20 @@ export interface FamilyHubConfig {
   // "all" option submits the sentinel value `all` (not empty) so the choice
   // survives pagination/sort links.
   default_enrollment_status?: string;
+  // Self-serve extras (mirror of the Student Roster's mechanism). All
+  // resolved from school_filter_catalog + the GHL attribute tables via
+  // resolveFamilyGhlAttrs — GHL stays the source of truth.
+  //   extra_columns — catalog attr_keys shown as ADDED table columns
+  //   detail_attrs  — catalog attr_keys shown as extra rows in the
+  //                   expanded family accordion (the 40+ field report)
+  //   column_order  — saved display order of the enabled columns
+  //                   (built-in shown_columns + extra_columns interleaved)
+  extra_columns?: string[];
+  detail_attrs?: string[];
+  column_order?: string[];
+  // Hide the ⚙ Customize link (e.g. teacher dashboards). Default true
+  // (office family hubs unchanged).
+  show_customize?: boolean;
 }
 
 export const familyHubDefaults: FamilyHubConfig = {
@@ -61,6 +75,20 @@ export const familyHubDefaults: FamilyHubConfig = {
   page_size: 50,
   drilldown_dashboard_slug: 'family-hub',
 };
+
+// Order the set of ENABLED columns by the saved column_order: ordered
+// keys first (those still enabled), then any enabled key not in the
+// saved order, appended in their natural order. Shared by the hub render
+// so added columns land where the school arranged them. (Copied verbatim
+// from StudentRosterRich/config.ts.)
+export function orderColumns(order: string[] | undefined, enabled: string[]): string[] {
+  if (!order || order.length === 0) return enabled;
+  const enabledSet = new Set(enabled);
+  const orderSet = new Set(order);
+  const front = order.filter((k) => enabledSet.has(k));
+  const rest = enabled.filter((k) => !orderSet.has(k));
+  return [...front, ...rest];
+}
 
 export const familyHubSchema: ConfigSchema = {
   fields: [
