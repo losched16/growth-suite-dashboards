@@ -21,7 +21,20 @@ type Params = Promise<{ schoolId: string }>;
 
 export async function POST(request: NextRequest, { params }: { params: Params }) {
   const { schoolId } = await params;
-  const _auth = await authorizeOperatorOrSchool(schoolId);
+
+  // Parse the form body BEFORE auth: this button opens in a new tab
+  // (Stripe won't render in iframes), where the Partitioned school-
+  // session cookie doesn't attach — the iframe passes its embed token
+  // through a hidden input instead.
+  let embedToken: string | null = null;
+  try {
+    const fd = await request.formData();
+    embedToken = String(fd.get('embed_token') ?? '').trim() || null;
+  } catch {
+    // No form data — operator-side POSTs may be bare.
+  }
+
+  const _auth = await authorizeOperatorOrSchool(schoolId, { embedToken });
   if (!_auth.ok) return _auth.response;
 
   // Pull the school's location id so we can route any error redirect

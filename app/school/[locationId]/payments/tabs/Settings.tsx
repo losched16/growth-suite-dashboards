@@ -6,6 +6,7 @@
 import Link from 'next/link';
 import { CreditCard, ExternalLink, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { query } from '@/lib/db';
+import { deriveEmbedToken } from '@/lib/auth/embed';
 
 interface Account {
   stripe_account_id: string;
@@ -59,6 +60,10 @@ export async function PaymentsHubSettings({
   };
 
   const settingsReturnTo = `/school/${locationId}/payments?tab=settings`;
+  // The Stripe buttons open in a NEW TAB (Stripe refuses iframes). The
+  // school-session cookie is Partitioned, so it never attaches there —
+  // each connect form carries this school-scoped token instead.
+  const embedToken = deriveEmbedToken(locationId);
 
   return (
     <div className="space-y-4">
@@ -77,13 +82,13 @@ export async function PaymentsHubSettings({
         </div>
 
         {!account ? (
-          <ConnectPrompt schoolId={schoolId} locationId={locationId} />
+          <ConnectPrompt schoolId={schoolId} locationId={locationId} embedToken={embedToken} />
         ) : account.charges_enabled && account.payouts_enabled ? (
           <LivePanel account={account} />
         ) : account.details_submitted ? (
-          <NeedsInfoPanel schoolId={schoolId} account={account} />
+          <NeedsInfoPanel schoolId={schoolId} account={account} embedToken={embedToken} />
         ) : (
-          <InProgressPanel schoolId={schoolId} locationId={locationId} account={account} />
+          <InProgressPanel schoolId={schoolId} locationId={locationId} account={account} embedToken={embedToken} />
         )}
         {account && !(account.charges_enabled && account.payouts_enabled) ? (
           <div className="mt-3 border-t border-slate-100 pt-3">
@@ -275,7 +280,7 @@ function RefreshStatusButton({ schoolId, returnTo }: { schoolId: string; returnT
   );
 }
 
-function ConnectPrompt({ schoolId, locationId }: { schoolId: string; locationId?: string }) {
+function ConnectPrompt({ schoolId, locationId, embedToken }: { schoolId: string; locationId?: string; embedToken?: string }) {
   return (
     <div className="space-y-4">
       <p className="text-sm text-slate-700">
@@ -293,6 +298,7 @@ function ConnectPrompt({ schoolId, locationId }: { schoolId: string; locationId?
         {/* target="_blank" — Stripe refuses to load in iframes. New-tab pattern preserves the GHL session. */}
         <form action={`/api/admin/schools/${schoolId}/payments/connect`} method="POST" target="_blank" rel="noopener noreferrer">
           {locationId ? <input type="hidden" name="return_to" value={`/school/${locationId}/payments`} /> : null}
+          {embedToken ? <input type="hidden" name="embed_token" value={embedToken} /> : null}
           <button type="submit" className="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-blue-700">
             Create a new Stripe account
           </button>
@@ -308,6 +314,7 @@ function ConnectPrompt({ schoolId, locationId }: { schoolId: string; locationId?
           For schools that already accept payments through Stripe. Sign in with your existing Stripe credentials and authorize this platform to issue invoices on your account. Bank account + payment methods + tax settings stay exactly as they are. ~30 seconds.
         </p>
         <form action={`/api/admin/schools/${schoolId}/payments/connect-oauth/start`} method="POST" target="_blank" rel="noopener noreferrer">
+          {embedToken ? <input type="hidden" name="embed_token" value={embedToken} /> : null}
           <button type="submit" className="inline-flex items-center gap-1.5 rounded-md border-2 border-blue-600 bg-white px-3 py-1.5 text-sm font-semibold text-blue-700 hover:bg-blue-50">
             Connect existing Stripe account
           </button>
@@ -351,8 +358,8 @@ function LivePanel({ account }: { account: Account }) {
 }
 
 function NeedsInfoPanel({
-  schoolId, account,
-}: { schoolId: string; account: Account }) {
+  schoolId, account, embedToken,
+}: { schoolId: string; account: Account; embedToken?: string }) {
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-2 text-amber-700">
@@ -377,14 +384,14 @@ function NeedsInfoPanel({
           Resolve in Stripe <ExternalLink className="h-3 w-3" />
         </a>
       </div>
-      <SwitchToExistingPrompt schoolId={schoolId} currentAccountId={account.stripe_account_id} />
+      <SwitchToExistingPrompt schoolId={schoolId} currentAccountId={account.stripe_account_id} embedToken={embedToken} />
     </div>
   );
 }
 
 function InProgressPanel({
-  schoolId, locationId, account,
-}: { schoolId: string; locationId?: string; account: Account }) {
+  schoolId, locationId, account, embedToken,
+}: { schoolId: string; locationId?: string; account: Account; embedToken?: string }) {
   return (
     <div className="space-y-3">
       <p className="text-sm text-slate-700">
@@ -393,12 +400,13 @@ function InProgressPanel({
       {/* target="_blank" — Stripe Connect refuses to load inside the iframe; see ConnectPrompt above. */}
       <form action={`/api/admin/schools/${schoolId}/payments/connect`} method="POST" target="_blank" rel="noopener noreferrer">
         {locationId ? <input type="hidden" name="return_to" value={`/school/${locationId}/payments`} /> : null}
+        {embedToken ? <input type="hidden" name="embed_token" value={embedToken} /> : null}
         <button type="submit" className="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-blue-700">
           Continue Stripe onboarding
         </button>
       </form>
       <p className="text-[11px] text-slate-500">Opens Stripe in a new tab.</p>
-      <SwitchToExistingPrompt schoolId={schoolId} currentAccountId={account.stripe_account_id} />
+      <SwitchToExistingPrompt schoolId={schoolId} currentAccountId={account.stripe_account_id} embedToken={embedToken} />
     </div>
   );
 }
@@ -413,8 +421,8 @@ function InProgressPanel({
 // half-completed row. No funds / invoices live on the abandoned
 // in-progress account, so there's nothing to migrate.
 function SwitchToExistingPrompt({
-  schoolId, currentAccountId,
-}: { schoolId: string; currentAccountId: string }) {
+  schoolId, currentAccountId, embedToken,
+}: { schoolId: string; currentAccountId: string; embedToken?: string }) {
   return (
     <details className="rounded-md border border-slate-200 bg-slate-50/60 p-3 group">
       <summary className="cursor-pointer text-xs font-semibold text-slate-700 list-none flex items-center gap-1">
@@ -433,6 +441,7 @@ function SwitchToExistingPrompt({
           which has no live invoices yet. Takes about 30 seconds.
         </p>
         <form action={`/api/admin/schools/${schoolId}/payments/connect-oauth/start`} method="POST" target="_blank" rel="noopener noreferrer">
+          {embedToken ? <input type="hidden" name="embed_token" value={embedToken} /> : null}
           <button type="submit" className="inline-flex items-center gap-1.5 rounded-md border-2 border-blue-600 bg-white px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-50">
             Connect existing Stripe account
           </button>
