@@ -456,6 +456,14 @@ export function mapContactToFamily(
   }
 
   const displayName = (() => {
+    // Per-family override: the "Family Display Name" custom field on the
+    // primary contact wins when set. Exists for compound-surname
+    // households where neither parent's last name is the family's name —
+    // e.g. dad Lastra Rodriguez + mom Sicardi Sanchez → the family goes
+    // by the child's surname "Lastra Sicardi". Office sets it once in
+    // the CRM; every rebuild honors it.
+    const override = getField(contact, 'family_display_name', schema);
+    if (override) return /family/i.test(override) ? override : `${override} Family`;
     const lastName = parent1LastName || students[0]?.last_name;
     return lastName ? `${lastName} Family` : `${parent1FirstName} ${parent1LastName}`.trim() || 'Unnamed';
   })();
