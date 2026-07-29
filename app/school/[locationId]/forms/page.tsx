@@ -6,6 +6,7 @@
 import { notFound } from 'next/navigation';
 import { loadSchoolByLocationId } from '@/lib/dashboards/loader';
 import { PaymentsHubForms } from '../payments/tabs/Forms';
+import { SharedDocsSection } from '../documents/SharedDocsSection';
 
 export const dynamic = 'force-dynamic';
 
@@ -26,6 +27,11 @@ export default async function SchoolFormsPage({ params, searchParams }: { params
           <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">{msg}</div>
         ) : null}
         <PaymentsHubForms schoolId={school.id} locationId={locationId} />
+        {/* Important documents live WITH the portal forms — one office
+            spot for everything that reaches the parent portal. */}
+        <div className="mt-10 border-t border-slate-200 pt-8">
+          <SharedDocsSection schoolId={school.id} />
+        </div>
       </div>
     </main>
   );
