@@ -59,6 +59,11 @@ export interface VaccineStatus {
   recorded: number;            // doses with a real date
   exemption: 'none' | 'medical' | 'religious';
   immunity: boolean;
+  // Child exceeded the max age for this vaccine (not required to receive it):
+  // either the admin marked it (student_vaccine_flags.not_required) or the
+  // NC auto-rule fired (Hib/PCV drop after the 5th birthday). Counts as
+  // compliant, but rendered as "Aged out" so it's not read as up-to-date-by-doses.
+  agedOut: boolean;
   category: ReportCategory;    // this vaccine's status for the student
   doses: DoseStatus[];         // per-dose glyphs, length = VACCINES[v].maxDoses
 }
@@ -130,6 +135,12 @@ export function computeVaccine(
   const immunity = !!flag?.immunity_documented && def.immunityAllowed;
   const required = isVaccineRequired(v, ctx, ageMonths, req) && !flag?.not_required ? (req[v]?.min ?? 0) : 0;
   const recorded = countRecorded(s.doses, v);
+  // "Aged out" = admin marked not-required OR the NC auto-drop (Hib/PCV
+  // after the 5th birthday). Distinct from "not part of this grade's list"
+  // — only counts for vaccines this grade's schedule otherwise requires.
+  const agedOut = !!flag?.not_required
+    || (def.dropsAfterAge5 && ageMonths != null && ageMonths >= 60
+        && (REQUIRED_BY_CONTEXT[ctx][v]?.min ?? 0) > 0);
 
   // Per-dose glyphs (TC mirror).
   const doses: DoseStatus[] = [];
@@ -174,7 +185,7 @@ export function computeVaccine(
   else if (s.profile?.in_process) category = 'in_process';
   else category = 'incomplete_record';
 
-  return { vaccine: v, required, recorded, exemption, immunity, category, doses };
+  return { vaccine: v, required, recorded, exemption, immunity, agedOut, category, doses };
 }
 
 // Which vaccines apply to a context (the columns to render).

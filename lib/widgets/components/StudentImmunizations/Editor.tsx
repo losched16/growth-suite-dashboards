@@ -144,9 +144,9 @@ export function ImmunizationEditor({
                       <span className="text-slate-600">Immunity</span>
                     </label>
                   ) : null}
-                  <label className="flex items-center gap-1" title="Not required for this child">
+                  <label className="flex items-center gap-1" title="Aged out — the child exceeded the max age for this vaccine and is not required to receive it. Counts as compliant.">
                     <input type="checkbox" checked={f.not_required} onChange={(e) => setFlag(v, { not_required: e.target.checked })} className="h-3.5 w-3.5" />
-                    <span className="text-slate-600">N/A</span>
+                    <span className={f.not_required ? 'text-amber-700 font-medium' : 'text-slate-600'}>Aged out</span>
                   </label>
                 </div>
               </div>

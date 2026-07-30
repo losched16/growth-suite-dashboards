@@ -273,6 +273,7 @@ function GridView({ data, sp, room }: { data: Data; sp: WidgetSearchParams; room
                   {CANON_ORDER.map((v) => {
                     const vs = byV.get(v);
                     if (!vs) return <td key={v} className="px-1.5 py-1.5 text-center text-slate-300">–</td>;
+                    if (vs.agedOut) return <td key={v} className="px-1.5 py-1.5 text-center text-amber-600 text-[10px] font-semibold" title={`${VACCINES[v].label}: aged out — exceeded max age, not required`}>AO</td>;
                     const cls = vs.category === 'up_to_date' ? 'text-emerald-700'
                       : vs.exemption !== 'none' ? 'text-violet-600'
                       : vs.required === 0 ? 'text-slate-300'
@@ -306,6 +307,7 @@ function Legend() {
       <span><span className="text-amber-600 font-bold">!</span> Near due</span>
       <span><span className="text-rose-600 font-bold">✗</span> Overdue</span>
       <span><span className="text-violet-600">e</span> Exempt</span>
+      <span><span className="text-amber-600 font-semibold">AO</span> Aged out (exceeded max age)</span>
       <span><span className="text-slate-400">–</span> Not applicable</span>
     </div>
   );
@@ -465,7 +467,7 @@ function StudentDetail({ data, studentId, backHref }: { data: Data; studentId: s
             <div key={vs.vaccine} className="rounded-lg border border-slate-200 overflow-hidden">
               <div className="bg-slate-800 text-white px-3 py-1.5 flex items-baseline justify-between">
                 <span className="text-sm font-medium">{def.label} <span className="text-[10px] text-slate-300">({def.aliases})</span></span>
-                <span className="text-[10px] text-slate-300">{vs.exemption !== 'none' ? `${vs.exemption} exemption` : `${vs.recorded}${vs.required ? ` / ${vs.required}` : ''} doses`}</span>
+                <span className="text-[10px] text-slate-300">{vs.agedOut ? <span className="text-amber-300">aged out — not required</span> : vs.exemption !== 'none' ? `${vs.exemption} exemption` : `${vs.recorded}${vs.required ? ` / ${vs.required}` : ''} doses`}</span>
               </div>
               <table className="w-full text-xs">
                 <tbody className="divide-y divide-slate-100">
