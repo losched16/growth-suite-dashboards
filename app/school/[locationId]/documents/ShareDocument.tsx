@@ -15,6 +15,7 @@ export function ShareDocument({ schoolId, options }: { schoolId: string; options
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState('');
+  const [customCategory, setCustomCategory] = useState('');
 
   const [match, setMatch] = useState<'all' | 'any'>('all');
   const [conditions, setConditions] = useState<Condition[]>([{ field: 'all', values: [] }]);
@@ -57,14 +58,15 @@ export function ShareDocument({ schoolId, options }: { schoolId: string; options
       fd.set('file', file);
       fd.set('title', title);
       if (description.trim()) fd.set('description', description.trim());
-      if (category) fd.set('category', category);
+      const effectiveCategory = category === 'custom' ? customCategory.trim() : category;
+      if (effectiveCategory) fd.set('category', effectiveCategory);
       fd.set('include', JSON.stringify(include));
       if (useExclude) fd.set('exclude', JSON.stringify({ match: exMatch, conditions: exConditions }));
       const r = await fetch(`/api/admin/schools/${schoolId}/shared-documents`, { method: 'POST', body: fd });
       const j = await r.json();
       if (!r.ok) throw new Error(j.detail || j.error || `HTTP ${r.status}`);
       setResult({ ok: true, msg: `Shared "${title}" — visible to ${j.audience_label}.` });
-      setFile(null); setTitle(''); setDescription(''); setCategory('');
+      setFile(null); setTitle(''); setDescription(''); setCategory(''); setCustomCategory('');
       setConditions([{ field: 'all', values: [] }]); setMatch('all');
       setUseExclude(false); setExConditions([{ field: 'tag', values: [] }]); setExMatch('any');
       router.refresh();
@@ -95,14 +97,21 @@ export function ShareDocument({ schoolId, options }: { schoolId: string; options
               placeholder="e.g. 2026-27 Family Handbook" className={inputCls} />
           </Field>
           <Field label="Category (optional)">
-            <select value={category} onChange={(e) => setCategory(e.target.value)} className={inputCls}>
-              <option value="">—</option>
-              <option value="handbook">Handbook</option>
-              <option value="calendar">Calendar</option>
-              <option value="forms">Forms & paperwork</option>
-              <option value="menus">Menus</option>
-              <option value="other">Other</option>
-            </select>
+            <div className="space-y-1">
+              <select value={category} onChange={(e) => setCategory(e.target.value)} className={inputCls}>
+                <option value="">—</option>
+                <option value="handbook">Handbook</option>
+                <option value="calendar">Calendar</option>
+                <option value="forms">Forms & paperwork</option>
+                <option value="permission slip">Permission slip</option>
+                <option value="menus">Menus</option>
+                <option value="custom">Custom label…</option>
+              </select>
+              {category === 'custom' ? (
+                <input value={customCategory} onChange={(e) => setCustomCategory(e.target.value)} maxLength={40}
+                  placeholder="Type your own label, e.g. Field Trip" className={inputCls} autoFocus />
+              ) : null}
+            </div>
           </Field>
         </div>
         <Field label="Description (optional, shown under the title)">
@@ -112,7 +121,13 @@ export function ShareDocument({ schoolId, options }: { schoolId: string; options
       </div>
 
       <div className="space-y-2 border-t border-zinc-100 pt-4">
-        <h3 className="text-xs font-semibold uppercase tracking-wide text-zinc-600">Who sees it</h3>
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-zinc-600">Who gets this document</h3>
+        <p className="text-[11px] text-zinc-500">
+          Defaults to everyone. Change the dropdown below to <strong>Program, Classroom, Grade, Tag,
+          or Specific family</strong> to narrow it (a permission slip for one classroom, a packet for
+          one program) — the picker chips appear once you choose. Stack filters with
+          &ldquo;Add another filter&rdquo;.
+        </p>
         <AudienceBuilder options={options} match={match} conditions={conditions}
           onMatch={setMatch} onConditions={setConditions} />
         <div className="flex items-center gap-2 rounded-md bg-zinc-50 border border-zinc-200 px-3 py-2 text-sm">
