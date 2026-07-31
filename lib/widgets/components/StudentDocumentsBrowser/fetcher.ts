@@ -47,11 +47,18 @@ export interface StudentDocumentsBrowserData {
   total_size_bytes: number;  // sum across visible/filtered rows
 }
 
-// Legacy hardcoded categories — only used for schools that haven't
-// seeded school_document_categories yet. Drop "other" from the
-// default offering (schools that want a specific list shouldn't get
-// a meaningless catch-all bucket).
-const LEGACY_CATEGORIES = ['health', 'enrollment', 'iep', 'transcript'];
+// STANDARD categories — always present for every school, ahead of any
+// school-created customs. Fixed keys mean the teacher-facing filters
+// ("show me the IEP/504 docs") can rely on the label never drifting:
+// a custom list must never HIDE these, or IEP uploads end up scattered
+// across hand-typed variants the filter can't match.
+export const PRESET_CATEGORIES: ReadonlyArray<{ key: string; label: string }> = [
+  { key: 'iep_504', label: 'IEP/504' },
+  { key: 'health', label: 'Health' },
+  { key: 'immunization', label: 'Immunization' },
+  { key: 'enrollment', label: 'Enrollment' },
+  { key: 'transcript', label: 'Transcript' },
+];
 
 export async function fetcher(
   school: SchoolContext,
@@ -104,21 +111,18 @@ export async function fetcher(
     [school.schoolId],
   );
 
-  // Per-school category list. When the table has rows for this school
-  // we use it; otherwise we serve the legacy hardcoded list so older
-  // tenants don't see an empty dropdown until they migrate.
+  // Category list = the STANDARD presets (always, in fixed order) plus
+  // any school-created customs after them. Presets win on key collisions
+  // so a school can't accidentally relabel the canonical buckets.
   const { rows: schoolCats } = await query<{ key: string; label: string }>(
     `SELECT key, label FROM school_document_categories WHERE school_id = $1 ORDER BY sort_order, label`,
     [school.schoolId],
   );
-  const resolvedCategories: Array<{ key: string; label: string }> = schoolCats.length > 0
-    ? schoolCats
-    : LEGACY_CATEGORIES.map((k) => ({
-        key: k,
-        // Title-case the legacy key for display: 'iep' → 'IEP', others
-        // get their first letter uppercased.
-        label: k === 'iep' ? 'IEP' : k.charAt(0).toUpperCase() + k.slice(1),
-      }));
+  const presetKeys = new Set(PRESET_CATEGORIES.map((c) => c.key));
+  const resolvedCategories: Array<{ key: string; label: string }> = [
+    ...PRESET_CATEGORIES,
+    ...schoolCats.filter((c) => !presetKeys.has(c.key)),
+  ];
 
   const allRows: DocumentRow[] = rawDocs.map((r) => {
     const displayFirst = (r.student_preferred?.trim() || r.student_first || '').trim();

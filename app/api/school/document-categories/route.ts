@@ -23,6 +23,8 @@ export const dynamic = 'force-dynamic';
 
 interface CategoryRow { id: string; key: string; label: string; sort_order: number }
 
+import { PRESET_CATEGORIES } from '@/lib/widgets/components/StudentDocumentsBrowser/fetcher';
+
 function slugifyKey(s: string): string {
   return s.toLowerCase().trim().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 60);
 }
@@ -39,7 +41,14 @@ export async function GET() {
       ORDER BY sort_order, label`,
     [session.school_id],
   );
-  return NextResponse.json({ categories: rows });
+  // Standard presets first (fixed keys the filters rely on — IEP/504
+  // etc.), then the school's customs. Presets win key collisions.
+  const presetKeys = new Set(PRESET_CATEGORIES.map((c) => c.key));
+  const categories = [
+    ...PRESET_CATEGORIES.map((c) => ({ id: null, key: c.key, label: c.label, sort_order: -1 })),
+    ...rows.filter((r) => !presetKeys.has(r.key)),
+  ];
+  return NextResponse.json({ categories });
 }
 
 export async function POST(request: NextRequest) {
