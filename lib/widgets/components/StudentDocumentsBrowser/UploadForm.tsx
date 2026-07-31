@@ -219,7 +219,7 @@ export function UploadForm({
           <input
             type="file" name="file" required
             accept=".pdf,.png,.jpg,.jpeg,.gif,.webp,.heic,.doc,.docx,.txt"
-            className="mt-0.5 w-full text-sm"
+            className="mt-1 w-full text-sm text-slate-600 file:mr-3 file:cursor-pointer file:rounded-md file:border-0 file:bg-blue-600 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:bg-blue-700"
           />
         </label>
       </div>
