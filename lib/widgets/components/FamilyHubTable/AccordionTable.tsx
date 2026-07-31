@@ -328,6 +328,33 @@ function ParentBlock({
   const contactUrl = parent.ghl_contact_id
     ? `${crmAppBase}/v2/location/${locationId}/contacts/detail/${parent.ghl_contact_id}`
     : null;
+
+  // Portal password reset — sets a fresh temp password and reveals it once
+  // so the office can read it to a locked-out parent (no email needed).
+  const [resetBusy, setResetBusy] = useState(false);
+  const [resetPw, setResetPw] = useState<string | null>(null);
+  const [resetErr, setResetErr] = useState<string | null>(null);
+
+  async function resetPassword() {
+    if (resetBusy) return;
+    if (!window.confirm(
+      `Reset the portal password for ${fullName}?\n\nThis replaces any existing password with a new temporary one and shows it to you to share with the parent.`,
+    )) return;
+    setResetBusy(true);
+    setResetErr(null);
+    setResetPw(null);
+    try {
+      const res = await fetch(`/api/school/parent/${parent.id}/reset-password`, { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok || !data.ok) throw new Error(data.error || 'reset_failed');
+      setResetPw(data.password as string);
+    } catch {
+      setResetErr('Could not reset the password. Try again.');
+    } finally {
+      setResetBusy(false);
+    }
+  }
+
   return (
     <div className="space-y-0.5">
       <SectionLabel>{label}</SectionLabel>
@@ -356,7 +383,28 @@ function ParentBlock({
             Open contact record →
           </a>
         ) : null}
+        {parent.email ? (
+          <button
+            type="button"
+            onClick={resetPassword}
+            disabled={resetBusy}
+            className="inline-flex items-center gap-1 text-[11px] text-amber-700 hover:text-amber-900 hover:underline disabled:opacity-50"
+            title="Set a new temporary portal password for this parent and reveal it so you can share it"
+          >
+            🔑 {resetBusy ? 'Resetting…' : 'Reset password'}
+          </button>
+        ) : null}
       </div>
+      {resetPw ? (
+        <div className="mt-1 rounded border border-amber-300 bg-amber-50 px-2 py-1 text-[11px] text-amber-900">
+          New temporary password:{' '}
+          <span className="font-mono font-semibold select-all">{resetPw}</span>
+          <div className="text-amber-700">
+            Share this with the parent. They sign in at the portal with their email + this password.
+          </div>
+        </div>
+      ) : null}
+      {resetErr ? <div className="mt-1 text-[11px] text-red-600">{resetErr}</div> : null}
     </div>
   );
 }
