@@ -17,7 +17,7 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 30;
 
-const MAX_BYTES = 10 * 1024 * 1024; // matches upload route
+const MAX_BYTES = 50 * 1024 * 1024; // matches upload route
 
 type Params = Promise<{ id: string }>;
 

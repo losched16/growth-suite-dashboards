@@ -4,7 +4,7 @@
 // School-session-authed; school_id read from the cookie (operator can't
 // upload to another school's student record).
 //
-// Stored as bytea in student_documents.file_bytes. 10MB cap is enforced
+// Stored as bytea in student_documents.file_bytes. 50MB cap is enforced
 // both client-side (HTML accept) and server-side (size_bytes CHECK in
 // the table) — we reject early here if the upload is over.
 //
@@ -21,17 +21,15 @@ import type { NextRequest } from 'next/server';
 import { cookies } from 'next/headers';
 import { SCHOOL_SESSION_COOKIE, verifySchoolSession } from '@/lib/auth/school';
 import { query } from '@/lib/db';
+import { PRESET_CATEGORIES } from '@/lib/widgets/components/StudentDocumentsBrowser/fetcher';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 30;
 
-const MAX_BYTES = 10 * 1024 * 1024;        // 10MB — matches table CHECK
-// Legacy hardcoded categories — used as a fallback when a school has
-// no custom category list yet. Once school_document_categories has
-// rows for this school, we validate against that list instead.
-// "other" intentionally dropped — schools that want a specific list
-// won't get a meaningless catch-all bucket.
+const MAX_BYTES = 50 * 1024 * 1024;        // 50MB — matches table CHECK (migration 089)
+// Old hardcoded keys kept accepted for back-compat with anything still
+// sending them ("iep" predates the "iep_504" preset).
 const LEGACY_CATEGORIES = ['health', 'enrollment', 'iep', 'transcript'];
 
 export async function POST(request: NextRequest) {
@@ -70,22 +68,24 @@ export async function POST(request: NextRequest) {
       error: expectedTotal > MAX_BYTES ? `file too large (max ${MAX_BYTES} bytes)` : 'expected_total_bytes must exceed the first chunk',
     }, { status: expectedTotal > MAX_BYTES ? 413 : 400 });
   }
-  // Resolve allowed categories for this school. School-specific list
-  // (managed via /api/school/document-categories) wins; legacy
-  // hardcoded list is the fallback for schools that haven't seeded
-  // their own list yet.
+  // Allowed categories = the STANDARD presets (always — the dropdown
+  // always offers them) plus this school's custom list plus legacy
+  // keys. Validating against customs alone rejected preset picks the
+  // moment a school created its first custom category.
   const { rows: schoolCats } = await query<{ key: string }>(
     `SELECT key FROM school_document_categories WHERE school_id = $1`,
     [session.school_id],
   );
-  const allowedKeys = schoolCats.length > 0
-    ? schoolCats.map((c) => c.key)
-    : LEGACY_CATEGORIES;
-  if (!allowedKeys.includes(categoryRaw)) {
+  const allowedKeys = new Set<string>([
+    ...PRESET_CATEGORIES.map((c) => c.key),
+    ...schoolCats.map((c) => c.key),
+    ...LEGACY_CATEGORIES,
+  ]);
+  if (!allowedKeys.has(categoryRaw)) {
     return NextResponse.json({
       ok: false,
       error: 'invalid_category',
-      detail: `"${categoryRaw}" is not a recognized category for this school. Available: ${allowedKeys.join(', ')}.`,
+      detail: `"${categoryRaw}" is not a recognized category for this school. Available: ${[...allowedKeys].join(', ')}.`,
     }, { status: 400 });
   }
   const category = categoryRaw;

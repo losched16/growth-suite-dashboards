@@ -215,7 +215,7 @@ export function UploadForm({
         </label>
 
         <label className="block text-sm">
-          <span className="block text-[11px] font-medium uppercase tracking-wide text-slate-700">File * (max 10MB)</span>
+          <span className="block text-[11px] font-medium uppercase tracking-wide text-slate-700">File * (max 50MB)</span>
           <input
             type="file" name="file" required
             accept=".pdf,.png,.jpg,.jpeg,.gif,.webp,.heic,.doc,.docx,.txt"
