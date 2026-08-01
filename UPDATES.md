@@ -9,6 +9,17 @@ human digest.
 
 ## August 1, 2026
 
+### O'Callaghan family (Gabrielle + Ross) — consolidated
+They existed as two separate one-child records: Ross had Gemma on his
+contact, Gabrielle had Colette on hers, and both contacts carried both
+Parent 1 and Parent 2 tags. Now: Gabrielle is Parent 1 with BOTH girls
+(Colette + Gemma, all enrollment/financial data) on her contact; Ross
+is Parent 2 (communication-only, per policy). Tags corrected on both.
+One family in the dashboard/portal; both portal logins and Gemma's
+records kept. NOTE: the other O'Callaghan couple (Megan + John, kids
+John Jr & Milo) has the SAME split pattern — say the word and I'll
+consolidate them the same way (who should be Parent 1?).
+
 ### Student document upload — two errors fixed
 Both reported this morning (Aayah Khan uploads):
 - "invalid_category": picking any of the five standard categories
