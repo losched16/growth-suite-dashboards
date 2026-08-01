@@ -9,6 +9,17 @@ human digest.
 
 ## August 1, 2026
 
+### Student document upload — two errors fixed
+Both reported this morning (Aayah Khan uploads):
+- "invalid_category": picking any of the five standard categories
+  (IEP/504, Health, Immunization, Enrollment, Transcript) failed once
+  the school had created a custom category (DGM's "Incident Report").
+  The validator now accepts the standard categories AND your custom
+  ones — exactly what the dropdown shows.
+- "file too large": the cap was 10MB, too small for scanned student
+  records. It's now 50MB everywhere (form label, upload pipeline, and
+  database). Nothing to change on your end — retry the same files.
+
 ### Admin check-in / check-out from the Student Roster
 The office can now check a student in or out when the parent can't.
 On the Student Roster (and every classroom hub) the Attendance column
