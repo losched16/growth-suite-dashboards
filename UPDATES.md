@@ -7,6 +7,55 @@ human digest.
 
 ---
 
+## August 1, 2026
+
+### Admin check-in / check-out from the Student Roster
+The office can now check a student in or out when the parent can't.
+On the Student Roster (and every classroom hub) the Attendance column
+has small "✓ In" / "→ Out" buttons next to the status chip. One tap
+records the event, stamped with the admin's email in the audit trail —
+parent kiosk events are untouched. To test: open the Student Roster,
+find any student not checked in, tap "✓ In"; the page refreshes and
+the status flips to Present with the time.
+
+### Parent check-in PINs — now viewable by the office
+Open a family from the Student Roster (tap the row) and each parent
+now shows a violet "PIN: ####" badge, so the front desk can read a
+forgotten PIN back to a parent. Notes:
+- PINs set from now on are viewable. PINs set BEFORE this upgrade show
+  "PIN set (not viewable — parent must re-set)": those parents just
+  re-save a PIN on their portal Attendance page and it becomes visible.
+- Split families: PINs are guaranteed different for every parent. The
+  system enforces school-wide uniqueness — if a second parent tries to
+  pick a PIN already in use, it's rejected and they must choose another.
+  So two parents (same family or split family) can never share a PIN.
+- PINs survive the 15-minute CRM sync like passwords do.
+
+### Kiosk — checkout confirmed + signatures now required
+- Checkout was already there: when a checked-in student's family enters
+  their PIN, that student's tile shows "Check out" instead of "Check in".
+- NEW: a finger-drawn signature box now sits above the Confirm button
+  and is REQUIRED for every kiosk check-in AND check-out. The kiosk
+  won't submit without it, the server rejects unsigned requests, and
+  the signature image is stored on each attendance event for licensing/
+  audit purposes — same as the in-portal check-in flow.
+
+### Emergency card (AZ Emergency Info & Immunization Record) — who's missing
+Fresh pull of every card sent from the CRM, cross-checked against all
+300 enrolled students (test families excluded):
+- 98 students have a COMPLETED card
+- 202 students are MISSING one:
+  - 146 sent but never opened
+  - 32 viewed but not submitted
+  - 24 never sent a card at all
+Full list with family, parent, email, phone, student, status and dates:
+[reports/2026-08-01-emergency-card-not-submitted.csv](reports/2026-08-01-emergency-card-not-submitted.csv)
+(also sent in chat). The "CRM az_card field" column shows what the
+contact record claims, for reconciliation — the live document status is
+the source of truth.
+
+---
+
 ## July 30, 2026
 
 ### Portal form confirmations — FACTS messaging scoped to enrollment only
