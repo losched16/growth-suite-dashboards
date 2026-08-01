@@ -14,6 +14,7 @@ import { cookies } from 'next/headers';
 import { SCHOOL_SESSION_COOKIE, verifySchoolSession } from '@/lib/auth/school';
 import { SESSION_COOKIE, verifySessionToken } from '@/lib/auth/operator';
 import { query } from '@/lib/db';
+import { decrypt } from '@/lib/crypto';
 import { resolveFamilyGhlAttrs, type ResolvedAttr } from '@/lib/widgets/ghl-attr-resolver';
 
 export const runtime = 'nodejs';
@@ -60,6 +61,8 @@ export async function GET(_request: NextRequest, { params }: { params: Params })
     id: string;
     first_name: string; last_name: string;
     email: string | null; phone: string | null;
+    pin_encrypted: Buffer | null; pin_iv: Buffer | null; pin_tag: Buffer | null;
+    pin_set: boolean;
     is_primary: boolean; role: string;
     ghl_contact_id: string | null;
     is_private_from_co_parents: boolean;
@@ -69,6 +72,7 @@ export async function GET(_request: NextRequest, { params }: { params: Params })
     // Empty array → applies to every student in the family (the
     // historical default); non-empty → explicitly scoped subset.
     `SELECT p.id, p.first_name, p.last_name, p.email, p.phone,
+            p.pin_encrypted, p.pin_iv, p.pin_tag, p.pin_hash IS NOT NULL AS pin_set,
             p.is_primary, p.role, p.ghl_contact_id,
             COALESCE(p.is_private_from_co_parents, false) AS is_private_from_co_parents,
             COALESCE(
@@ -330,7 +334,17 @@ export async function GET(_request: NextRequest, { params }: { params: Params })
   return NextResponse.json({
     ok: true,
     family,
-    parents,
+    // PIN: decrypt the office-viewable copy; strip the raw crypto fields
+    // from the payload. pin_state: 'none' | 'set_hidden' (pre-upgrade
+    // hash-only PIN — parent must re-set to make it viewable) | the PIN.
+    parents: parents.map((p) => {
+      const { pin_encrypted, pin_iv, pin_tag, pin_set, ...rest } = p;
+      let pin: string | null = null;
+      if (pin_encrypted && pin_iv && pin_tag) {
+        try { pin = decrypt(pin_encrypted, pin_iv, pin_tag); } catch { pin = null; }
+      }
+      return { ...rest, pin, pin_state: pin ? 'visible' : pin_set ? 'set_hidden' : 'none' };
+    }),
     students,
     address,
     authorized_pickups,

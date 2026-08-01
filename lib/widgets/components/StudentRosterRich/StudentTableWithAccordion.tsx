@@ -21,6 +21,9 @@ interface ParentInfo {
   first_name: string; last_name: string;
   email: string | null; phone: string | null;
   is_primary: boolean;
+  // Kiosk check-in PIN — office-viewable copy decrypted server-side.
+  pin?: string | null;
+  pin_state?: 'visible' | 'set_hidden' | 'none';
   // Inter-parent privacy. School staff (this dashboard) always sees
   // the full record; the flag is shown as a badge so staff know that
   // this parent's info is hidden from the OTHER parents in the same
@@ -325,6 +328,77 @@ function fmtCurbTime(v: string): string {
   return `${h12}:${String(mm).padStart(2, '0')} ${period}`;
 }
 
+// Attendance cell + admin quick actions. The buttons write an
+// admin-attributed attendance event via the existing manual-override
+// API — for when a parent can't do kiosk check-in/out themselves.
+function AttendanceCell({ s }: { s: RosterStudent }) {
+  const [busy, setBusy] = useState(false);
+  async function act(eventType: 'check_in' | 'check_out') {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const fd = new FormData();
+      fd.set('student_id', s.student_id);
+      fd.set('event_type', eventType);
+      fd.set('notes', eventType === 'check_in' ? 'Admin check-in from roster' : 'Admin check-out from roster');
+      const r = await fetch('/api/school/attendance/manual-override', { method: 'POST', body: fd });
+      if (!r.ok) throw new Error(await r.text());
+      window.location.reload();
+    } catch {
+      setBusy(false);
+    }
+  }
+  const status = s.attendance_status;
+  const tone = status === 'present'      ? 'bg-emerald-100 text-emerald-800'
+             : status === 'partial'      ? 'bg-amber-100 text-amber-800'
+             : status === 'checked_out'  ? 'bg-blue-100 text-blue-800'
+             : status === 'absent'       ? 'bg-rose-100 text-rose-800'
+             :                              'bg-gray-100 text-gray-600';
+  const label = status === 'not_yet' ? 'Not yet' : status.replace(/_/g, ' ');
+  const inAt = s.attendance_check_in_at;
+  const outAt = s.attendance_check_out_at;
+  return (
+    <div>
+      <div className="flex items-center gap-1 flex-wrap">
+        <span className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide ${tone}`}>
+          {label}
+        </span>
+        {s.curbside_today ? (
+          <span
+            className="inline-flex items-center gap-0.5 rounded-full bg-violet-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-violet-800"
+            title={s.curbside_slot ? `Curbside pickup at ${fmtCurbTime(s.curbside_slot)}` : 'Curbside pickup today'}
+          >
+            <Car className="h-3 w-3" />
+            {s.curbside_slot ? `Curb ${fmtCurbTime(s.curbside_slot)}` : 'Curb'}
+          </span>
+        ) : null}
+      </div>
+      {inAt ? (
+        <div className="mt-0.5 text-[10px] text-gray-500">
+          in {new Date(inAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+          {outAt ? ` · out ${new Date(outAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}` : ''}
+        </div>
+      ) : null}
+      <div className="mt-1 flex gap-1">
+        {status === 'not_yet' || status === 'checked_out' || status === 'absent' ? (
+          <button type="button" disabled={busy} onClick={() => act('check_in')}
+            title="Admin check-in (writes an audit event with your email)"
+            className="rounded border border-emerald-300 bg-white px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 hover:bg-emerald-50 disabled:opacity-50">
+            ✓ In
+          </button>
+        ) : null}
+        {status === 'present' || status === 'partial' ? (
+          <button type="button" disabled={busy} onClick={() => act('check_out')}
+            title="Admin check-out (writes an audit event with your email)"
+            className="rounded border border-blue-300 bg-white px-1.5 py-0.5 text-[10px] font-medium text-blue-700 hover:bg-blue-50 disabled:opacity-50">
+            → Out
+          </button>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 function renderAllergyCell(s: RosterStudent): React.ReactNode {
   if (s.allergy) {
     return <span className="text-rose-700 text-xs whitespace-pre-wrap">{s.allergy}</span>;
@@ -502,45 +576,7 @@ function renderCell(
         </div>
       );
     }
-    case 'attendance': {
-      // Today's attendance status with color coding. Time shown
-      // underneath when checked in / out. Curbside flag rendered as a
-      // small chip next to the status — teachers scanning the roster
-      // can see at a glance who's going home via the curbside line.
-      const status = s.attendance_status;
-      const tone = status === 'present'      ? 'bg-emerald-100 text-emerald-800'
-                 : status === 'partial'      ? 'bg-amber-100 text-amber-800'
-                 : status === 'checked_out'  ? 'bg-blue-100 text-blue-800'
-                 : status === 'absent'       ? 'bg-rose-100 text-rose-800'
-                 :                              'bg-gray-100 text-gray-600';
-      const label = status === 'not_yet' ? 'Not yet' : status.replace(/_/g, ' ');
-      const inAt = s.attendance_check_in_at;
-      const outAt = s.attendance_check_out_at;
-      return (
-        <div>
-          <div className="flex items-center gap-1 flex-wrap">
-            <span className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide ${tone}`}>
-              {label}
-            </span>
-            {s.curbside_today ? (
-              <span
-                className="inline-flex items-center gap-0.5 rounded-full bg-violet-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-violet-800"
-                title={s.curbside_slot ? `Curbside pickup at ${fmtCurbTime(s.curbside_slot)}` : 'Curbside pickup today'}
-              >
-                <Car className="h-3 w-3" />
-                {s.curbside_slot ? `Curb ${fmtCurbTime(s.curbside_slot)}` : 'Curb'}
-              </span>
-            ) : null}
-          </div>
-          {inAt ? (
-            <div className="mt-0.5 text-[10px] text-gray-500">
-              in {new Date(inAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
-              {outAt ? ` · out ${new Date(outAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}` : ''}
-            </div>
-          ) : null}
-        </div>
-      );
-    }
+    case 'attendance': return <AttendanceCell s={s} />;
   }
   // Dynamic column with no value for this student, or unknown key —
   // render an em-dash so the table stays aligned.
@@ -621,6 +657,17 @@ function FamilyDetailPanel({
                           <Phone className="h-3 w-3" />{p.phone}
                         </a>
                       ) : null}
+                      {p.pin_state === 'visible' ? (
+                        <span className="inline-flex items-center gap-0.5 rounded bg-violet-50 border border-violet-200 px-1.5 py-0.5 text-[11px] font-semibold text-violet-800" title="Kiosk check-in PIN — read it back to the parent if they forget.">
+                          PIN: <span className="font-mono">{p.pin}</span>
+                        </span>
+                      ) : p.pin_state === 'set_hidden' ? (
+                        <span className="text-[11px] text-slate-400 italic" title="Set before PINs became office-viewable. Still works at the kiosk; the parent can re-set it on their Attendance page to make it viewable here.">
+                          PIN set (not viewable — parent must re-set)
+                        </span>
+                      ) : (
+                        <span className="text-[11px] text-slate-400 italic">no check-in PIN set</span>
+                      )}
                       {!p.email && !p.phone ? (
                         <span className="text-slate-400 italic">no contact info on file</span>
                       ) : null}
