@@ -11,14 +11,26 @@ import type { StudentOption } from './fetcher';
 export function UploadForm({
   students,
   categories: initialCategories,
+  preselectStudentId = null,
+  autoOpen = false,
 }: {
   students: StudentOption[];
   categories: Array<{ key: string; label: string }>;
+  // ?student= from the roster's "Upload / manage" deep link — the office
+  // clicked upload on a SPECIFIC kid, so the form starts on them.
+  preselectStudentId?: string | null;
+  // ?upload=1 — the roster deep link opens the form immediately.
+  autoOpen?: boolean;
 }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(autoOpen);
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  // Type-to-search across the student list (300+ kids make a bare
+  // <select> painful). The select shows only matches; the current
+  // selection always stays in the list so it can't be silently lost.
+  const [studentId, setStudentId] = useState(preselectStudentId ?? '');
+  const [studentQuery, setStudentQuery] = useState('');
   // Categories the user sees in the dropdown. We mutate this when they
   // create a new one inline so the next upload they do in the same
   // session picks it up without a page reload.
@@ -103,9 +115,13 @@ export function UploadForm({
           return;
         }
       }
-      // Reload to refresh the list. Could be smarter (optimistic insert)
-      // later, but reload is simple and correct.
-      window.location.reload();
+      // Reload with ?uploaded=<title> so the page shows an unmissable
+      // green confirmation banner (a silent reload looked like nothing
+      // happened). Drop upload=1 so the form doesn't force back open.
+      const dest = new URL(window.location.href);
+      dest.searchParams.set('uploaded', String(fd.get('title') ?? 'Document'));
+      dest.searchParams.delete('upload');
+      window.location.assign(dest.toString());
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e));
     } finally {
@@ -141,13 +157,34 @@ export function UploadForm({
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <label className="block text-sm">
           <span className="block text-[11px] font-medium uppercase tracking-wide text-slate-700">Student *</span>
-          <select name="student_id" required className={inputCls}>
+          <input
+            type="search"
+            value={studentQuery}
+            onChange={(e) => setStudentQuery(e.target.value)}
+            placeholder="Type to search students…"
+            className={inputCls}
+          />
+          <select
+            name="student_id"
+            required
+            value={studentId}
+            onChange={(e) => setStudentId(e.target.value)}
+            className={`${inputCls} mt-1`}
+            size={studentQuery.trim() ? Math.min(6, Math.max(2, students.length)) : undefined}
+          >
             <option value="">— select a student —</option>
-            {students.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.display}{s.classroom_name ? ` · ${s.classroom_name}` : ''}
-              </option>
-            ))}
+            {students
+              .filter((s) => {
+                if (s.id === studentId) return true; // never hide the selection
+                const q = studentQuery.trim().toLowerCase();
+                if (!q) return true;
+                return `${s.display} ${s.classroom_name ?? ''}`.toLowerCase().includes(q);
+              })
+              .map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.display}{s.classroom_name ? ` · ${s.classroom_name}` : ''}
+                </option>
+              ))}
           </select>
         </label>
 

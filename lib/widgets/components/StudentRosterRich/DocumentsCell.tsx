@@ -159,7 +159,7 @@ export function DocumentsCell({
                         </div>
                       </div>
                       <a
-                        href={`/api/school/documents/${d.id}/download`}
+                        href={downloadHref(d.id)}
                         target="_blank" rel="noopener"
                         className="inline-flex items-center gap-1 rounded border border-slate-300 bg-white px-2 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-50 shrink-0"
                         title={`Download ${d.file_name}`}
@@ -202,10 +202,11 @@ function currentLocationId(): string {
 // Deep-link to the Documents dashboard, CARRYING the embed auth state.
 // Inside the GHL iframe the roster URL has ?embed_token=…&chrome=none;
 // dropping them sent operators to an unauthorized page ("upload from
-// the roster doesn't work"). Only rendered client-side (popover), so
-// window is always available.
+// the roster doesn't work"). upload=1 + student=<id> make the upload
+// form open immediately, preselected on THIS kid. Only rendered
+// client-side (popover), so window is always available.
 function docsHref(studentId: string): string {
-  const q = new URLSearchParams({ student: studentId });
+  const q = new URLSearchParams({ student: studentId, upload: '1' });
   if (typeof window !== 'undefined') {
     const cur = new URLSearchParams(window.location.search);
     for (const k of ['embed_token', 'chrome']) {
@@ -214,4 +215,16 @@ function docsHref(studentId: string): string {
     }
   }
   return `/school/${currentLocationId()}/documents?${q.toString()}`;
+}
+
+// Downloads open in a NEW TAB where the iframe's session cookie doesn't
+// follow — carry the embed token so the download route authenticates.
+function downloadHref(docId: string): string {
+  const q = new URLSearchParams();
+  if (typeof window !== 'undefined') {
+    const et = new URLSearchParams(window.location.search).get('embed_token');
+    if (et) q.set('embed_token', et);
+  }
+  const qs = q.toString();
+  return `/api/school/documents/${docId}/download${qs ? `?${qs}` : ''}`;
 }

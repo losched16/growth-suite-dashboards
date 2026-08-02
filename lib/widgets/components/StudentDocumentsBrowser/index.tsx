@@ -20,7 +20,8 @@ import { UploadForm } from './UploadForm';
 import { DeleteDocumentButton } from './DeleteDocumentButton';
 import { AutoSubmitForm } from '@/lib/widgets/components/_shared/AutoSubmitForm';
 import { PreserveEmbedParams, clearHref } from '@/lib/widgets/components/_shared/PreserveEmbedParams';
-import { Download, FileText, FileImage, FileType } from 'lucide-react';
+import { deriveEmbedToken } from '@/lib/auth/embed';
+import { Download, FileText, FileImage, FileType, CheckCircle2 } from 'lucide-react';
 
 function fmtBytes(b: number): string {
   if (b < 1024) return `${b} B`;
@@ -51,6 +52,7 @@ function categoryColor(c: string | null) {
 }
 
 function Component({
+  school,
   data,
   searchParams,
 }: {
@@ -60,6 +62,9 @@ function Component({
   searchParams?: WidgetSearchParams;
 }) {
   const sp = searchParams ?? {};
+  // Download links open in a new tab where the iframe's session cookie
+  // doesn't follow — carry the embed token so they authenticate.
+  const dlToken = deriveEmbedToken(school.locationId);
 
   return (
     <div className="space-y-4">
@@ -71,8 +76,21 @@ function Component({
             {fmtBytes(data.total_size_bytes)} total{data.filtered !== data.total ? ` (${data.filtered} shown by filter)` : ''}
           </p>
         </div>
-        <UploadForm students={data.students} categories={data.categories} />
+        <UploadForm
+          students={data.students}
+          categories={data.categories}
+          preselectStudentId={sp.student ?? null}
+          autoOpen={sp.upload === '1'}
+        />
       </div>
+
+      {/* Upload confirmation — set by the upload form's post-save redirect */}
+      {sp.uploaded ? (
+        <div className="flex items-center gap-2 rounded-lg border-2 border-emerald-300 bg-emerald-50 px-4 py-2.5 text-sm text-emerald-900">
+          <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0" />
+          <span><strong>&ldquo;{sp.uploaded}&rdquo;</strong> uploaded and attached — it&rsquo;s in the list below and on the student&rsquo;s roster row.</span>
+        </div>
+      ) : null}
 
       {/* Filter bar */}
       <AutoSubmitForm method="GET" className="flex flex-wrap gap-2 items-end rounded-lg border border-slate-200 bg-white p-3">
@@ -132,7 +150,7 @@ function Component({
               <tr><td colSpan={9} className="p-10 text-center text-sm text-slate-500 italic">
                 No documents match the filters. Click <strong>Upload document</strong> to add one.
               </td></tr>
-            ) : data.rows.map((d) => <Row key={d.id} d={d} />)}
+            ) : data.rows.map((d) => <Row key={d.id} d={d} dlToken={dlToken} />)}
           </tbody>
         </table>
       </div>
@@ -166,7 +184,7 @@ function pageHref(current: WidgetSearchParams, n: number): string {
   return `?${p.toString()}`;
 }
 
-function Row({ d }: { d: DocumentRow }) {
+function Row({ d, dlToken }: { d: DocumentRow; dlToken: string }) {
   return (
     <tr className="hover:bg-slate-50">
       <td className="px-3 py-2 align-top">{iconFor(d.mime_type)}</td>
@@ -204,7 +222,7 @@ function Row({ d }: { d: DocumentRow }) {
       <td className="px-3 py-2 align-top text-right whitespace-nowrap">
         <div className="inline-flex items-center gap-1">
           <a
-            href={`/api/school/documents/${d.id}/download`}
+            href={`/api/school/documents/${d.id}/download?embed_token=${encodeURIComponent(dlToken)}`}
             target="_blank" rel="noopener"
             className="inline-flex items-center gap-1 rounded border border-slate-300 bg-white px-2 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-50"
             title={`Download ${d.file_name}`}

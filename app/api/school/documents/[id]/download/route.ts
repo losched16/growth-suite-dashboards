@@ -2,13 +2,16 @@
 //
 // Streams a student document's bytea back to the browser with proper
 // content-disposition so the file downloads with its original name.
-// School-session-authed; school_id is enforced via JOIN so an operator
-// can't download docs from another school by guessing IDs.
+// Auth: school session for the doc's school OR a valid embed token —
+// downloads open in a NEW TAB from inside the GHL iframe, where the
+// (partitioned) session cookie doesn't follow, so session-only auth
+// made every "Open" click say unauthorized.
 
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { cookies } from 'next/headers';
 import { SCHOOL_SESSION_COOKIE, verifySchoolSession } from '@/lib/auth/school';
+import { checkEmbedToken } from '@/lib/auth/embed';
 import { query } from '@/lib/db';
 
 export const runtime = 'nodejs';
@@ -16,26 +19,35 @@ export const dynamic = 'force-dynamic';
 
 type Params = Promise<{ id: string }>;
 
-export async function GET(_request: NextRequest, { params }: { params: Params }) {
+export async function GET(request: NextRequest, { params }: { params: Params }) {
   const { id } = await params;
-  const ck = await cookies();
-  const session = await verifySchoolSession(ck.get(SCHOOL_SESSION_COOKIE)?.value);
-  if (!session) return new NextResponse('unauthorized', { status: 401 });
 
   const { rows } = await query<{
+    school_id: string;
+    ghl_location_id: string | null;
     file_name: string;
     mime_type: string;
     file_bytes: Buffer;
     size_bytes: number;
   }>(
-    `SELECT file_name, mime_type, file_bytes, size_bytes
-       FROM student_documents
-      WHERE id = $1 AND school_id = $2 AND is_complete = true`,
-    [id, session.school_id],
+    `SELECT d.school_id, s.ghl_location_id,
+            d.file_name, d.mime_type, d.file_bytes, d.size_bytes
+       FROM student_documents d
+       JOIN schools s ON s.id = d.school_id
+      WHERE d.id = $1 AND d.is_complete = true`,
+    [id],
   );
   if (rows.length === 0 || !rows[0].file_bytes) {
     return new NextResponse('not found', { status: 404 });
   }
+
+  const ck = await cookies();
+  const session = await verifySchoolSession(ck.get(SCHOOL_SESSION_COOKIE)?.value);
+  const sessionOk = !!session && session.school_id === rows[0].school_id;
+  const embedToken = request.nextUrl.searchParams.get('embed_token');
+  const embedOk = !!embedToken && !!rows[0].ghl_location_id
+    && checkEmbedToken(rows[0].ghl_location_id, embedToken);
+  if (!sessionOk && !embedOk) return new NextResponse('unauthorized', { status: 401 });
 
   // Encode the filename so non-ASCII characters survive. Use the
   // RFC-5987 form for filename* — works in every modern browser.
