@@ -7,6 +7,18 @@ human digest.
 
 ---
 
+## August 1, 2026 — parents can see their own PIN
+
+### Your PIN, visible to you
+Parents now see their own kiosk PIN in the portal — on the Attendance
+page (masked, with a Show/Hide button) and under Settings → Pickup
+People. Newly saved PINs appear immediately. PINs created before this
+upgrade show "set — change it to see it here" until re-saved.
+Verified live end to end: set a PIN through the real parent flow on a
+test account and confirmed both pages display it back.
+
+---
+
 ## August 1, 2026 — kiosk + pickup-people batch
 
 ### Kiosk: select who you're moving (nothing pre-selected)
