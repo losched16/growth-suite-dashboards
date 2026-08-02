@@ -129,6 +129,22 @@ export async function GET(_request: NextRequest, { params }: { params: Params })
     return true;
   });
 
+  // Kiosk pickup-person management view — ALL of the family's pickup
+  // people (incl. deactivated) with PIN state, for the office manager
+  // section. DGM policy: parents email admissions to add someone; the
+  // office lands those requests here.
+  const { rows: pickup_people_manage } = await query<{
+    id: string; name: string; relationship: string | null; phone: string | null;
+    active: boolean; pin_set: boolean; is_temporary: boolean;
+  }>(
+    `SELECT pp.id, pp.name, pp.relationship, pp.phone, pp.active,
+            (pp.pin_hash IS NOT NULL) AS pin_set, pp.is_temporary
+       FROM pickup_persons pp
+      WHERE pp.family_id = $1 AND pp.school_id = $2
+      ORDER BY pp.active DESC, pp.name`,
+    [familyId, schoolId],
+  );
+
   // Unauthorized pickup restrictions. Per-student — show which student
   // each restriction applies to so the teacher can match face → kid.
   const { rows: pickup_restrictions } = await query<{
@@ -348,6 +364,7 @@ export async function GET(_request: NextRequest, { params }: { params: Params })
     students,
     address,
     authorized_pickups,
+    pickup_people_manage,
     pickup_restrictions,
     health_profiles,
     enrollment_meta,

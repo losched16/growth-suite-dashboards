@@ -126,6 +126,16 @@ interface MedicalForm {
   expires_on: string | null;
 }
 
+interface PickupPersonManage {
+  id: string;
+  name: string;
+  relationship: string | null;
+  phone: string | null;
+  active: boolean;
+  pin_set: boolean;
+  is_temporary: boolean;
+}
+
 interface FamilyDetail {
   family: { id: string; display_name: string | null; notes: string | null };
   parents: ParentInfo[];
@@ -133,6 +143,8 @@ interface FamilyDetail {
   // Family home address (GHL-synced), e.g. "1024 E Frye Road, Phoenix, AZ, 85048".
   address?: string | null;
   authorized_pickups: AuthorizedPickup[];
+  // Kiosk pickup-person management rows (incl. deactivated + PIN state).
+  pickup_people_manage: PickupPersonManage[];
   pickup_restrictions: PickupRestriction[];
   health_profiles: HealthProfile[];
   enrollment_meta: EnrollmentMeta[];
@@ -170,7 +182,7 @@ export function StudentTableWithAccordion({
 }) {
   // Build a header href that toggles asc/desc on the clicked column and
   // preserves all existing URL params (filters, year, view, embed).
-  const sortKey = current.sort ?? 'last_name';
+  const sortKey = current.sort ?? 'student'; // matches the fetcher's default
   const sortDesc = current.dir === 'desc';
   function sortHref(col: string): string {
     const p = new URLSearchParams();
@@ -221,6 +233,7 @@ export function StudentTableWithAccordion({
             students: data.students,
             address: data.address ?? null,
             authorized_pickups: data.authorized_pickups ?? [],
+            pickup_people_manage: data.pickup_people_manage ?? [],
             pickup_restrictions: data.pickup_restrictions ?? [],
             health_profiles: data.health_profiles ?? [],
             enrollment_meta: data.enrollment_meta ?? [],
@@ -326,6 +339,165 @@ function fmtCurbTime(v: string): string {
   const period = hh >= 12 ? 'pm' : 'am';
   const h12 = hh % 12 === 0 ? 12 : hh % 12;
   return `${h12}:${String(mm).padStart(2, '0')} ${period}`;
+}
+
+// Office kiosk-pickup-person manager. Parents can't self-add pickup
+// people (they email admissions); this is where the office lands those
+// requests: add the person, hand the generated PIN back to the family.
+// PINs are shown ONCE — after that only "PIN active" is visible.
+function PickupPeopleManager({
+  familyId, people: initialPeople, students,
+}: {
+  familyId: string;
+  people: PickupPersonManage[];
+  students: Array<{ id: string; label: string }>;
+}) {
+  const [people, setPeople] = useState(initialPeople);
+  const [adding, setAdding] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [newPin, setNewPin] = useState<{ name: string; pin: string } | null>(null);
+
+  async function post(fd: FormData): Promise<Record<string, unknown> | null> {
+    setBusy(true); setErr(null);
+    try {
+      const r = await fetch(`/api/school/family/${encodeURIComponent(familyId)}/pickup-persons`, { method: 'POST', body: fd });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || !j.ok) { setErr(j.error || `HTTP ${r.status}`); return null; }
+      return j;
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+      return null;
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onCreate(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const form = e.currentTarget;
+    const fd = new FormData(form);
+    fd.set('action', 'create');
+    const j = await post(fd);
+    if (!j) return;
+    const name = String(fd.get('name') ?? '');
+    setPeople((ps) => [...ps, {
+      id: String(j.id), name, relationship: String(fd.get('relationship') ?? ''),
+      phone: String(fd.get('phone') ?? '') || null, active: true, pin_set: true, is_temporary: false,
+    }]);
+    setNewPin({ name, pin: String(j.pin) });
+    setAdding(false);
+    form.reset();
+  }
+
+  async function onRowAction(p: PickupPersonManage, action: 'set_pin' | 'deactivate' | 'reactivate') {
+    const fd = new FormData();
+    fd.set('action', action);
+    fd.set('id', p.id);
+    const j = await post(fd);
+    if (!j) return;
+    if (action === 'set_pin') setNewPin({ name: p.name, pin: String(j.pin) });
+    setPeople((ps) => ps.map((x) => x.id === p.id
+      ? { ...x, active: action === 'deactivate' ? false : action === 'reactivate' ? true : x.active, pin_set: action === 'set_pin' ? true : x.pin_set }
+      : x));
+  }
+
+  return (
+    <div className="mt-2 rounded border border-violet-200 bg-violet-50/30 p-2">
+      <div className="text-[10px] uppercase tracking-wide text-violet-800 font-semibold mb-1">
+        Kiosk PINs — office managed
+      </div>
+
+      {newPin ? (
+        <div className="mb-2 rounded border-2 border-amber-300 bg-amber-50 px-2 py-1.5 text-xs text-amber-900">
+          PIN for <strong>{newPin.name}</strong>:{' '}
+          <code className="rounded bg-white px-1.5 py-0.5 font-mono text-base font-bold">{newPin.pin}</code>{' '}
+          — share it with the family now; it won&rsquo;t be shown again.
+        </div>
+      ) : null}
+      {err ? <div className="mb-2 rounded border border-rose-300 bg-rose-50 px-2 py-1 text-[11px] text-rose-800">{err}</div> : null}
+
+      {people.length === 0 && !adding ? (
+        <div className="text-[11px] italic text-slate-500">No kiosk pickup people yet.</div>
+      ) : (
+        <ul className="space-y-1">
+          {people.map((p) => (
+            <li key={p.id} className={`flex flex-wrap items-center justify-between gap-1.5 rounded border bg-white px-2 py-1 text-xs ${p.active ? 'border-slate-200' : 'border-slate-200 opacity-50'}`}>
+              <span className="min-w-0">
+                <span className={`font-medium ${p.active ? 'text-slate-900' : 'line-through text-slate-500'}`}>{p.name}</span>
+                {p.relationship ? <span className="text-slate-500"> · {p.relationship}</span> : null}
+                {p.pin_set ? (
+                  <span className="ml-1.5 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[9px] font-semibold text-emerald-800">PIN active</span>
+                ) : (
+                  <span className="ml-1.5 rounded-full bg-gray-100 px-1.5 py-0.5 text-[9px] font-semibold text-gray-600">no PIN</span>
+                )}
+              </span>
+              <span className="flex items-center gap-1">
+                {p.active ? (
+                  <>
+                    <button type="button" disabled={busy} onClick={() => onRowAction(p, 'set_pin')}
+                      title="Generate a new PIN (invalidates the old one)"
+                      className="rounded border border-violet-300 bg-white px-1.5 py-0.5 text-[10px] font-medium text-violet-700 hover:bg-violet-50 disabled:opacity-50">
+                      New PIN
+                    </button>
+                    <button type="button" disabled={busy} onClick={() => onRowAction(p, 'deactivate')}
+                      className="rounded border border-slate-300 bg-white px-1.5 py-0.5 text-[10px] text-slate-600 hover:bg-rose-50 hover:border-rose-300 hover:text-rose-700 disabled:opacity-50">
+                      Deactivate
+                    </button>
+                  </>
+                ) : (
+                  <button type="button" disabled={busy} onClick={() => onRowAction(p, 'reactivate')}
+                    className="rounded border border-emerald-300 bg-white px-1.5 py-0.5 text-[10px] text-emerald-700 hover:bg-emerald-50 disabled:opacity-50">
+                    Reactivate
+                  </button>
+                )}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {adding ? (
+        <form onSubmit={onCreate} className="mt-2 space-y-1.5 rounded border border-violet-200 bg-white p-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+            <input type="text" name="name" required maxLength={120} placeholder="Full name *"
+              className="rounded border border-slate-300 px-2 py-1 text-xs" />
+            <input type="text" name="relationship" required maxLength={80} placeholder="Relationship * (e.g. Grandmother)"
+              className="rounded border border-slate-300 px-2 py-1 text-xs" />
+            <input type="tel" name="phone" maxLength={40} placeholder="Phone (optional)"
+              className="rounded border border-slate-300 px-2 py-1 text-xs" />
+            <input type="text" name="notes" maxLength={200} placeholder="Notes (optional)"
+              className="rounded border border-slate-300 px-2 py-1 text-xs" />
+          </div>
+          {students.length > 1 ? (
+            <div className="text-[10px] text-slate-600">
+              Authorized for (none checked = all children):
+              <span className="ml-1 inline-flex flex-wrap gap-2">
+                {students.map((st) => (
+                  <label key={st.id} className="inline-flex items-center gap-1">
+                    <input type="checkbox" name="authorized_student_ids" value={st.id} className="h-3 w-3 rounded border-slate-300" />
+                    {st.label}
+                  </label>
+                ))}
+              </span>
+            </div>
+          ) : null}
+          <div className="flex items-center gap-2">
+            <button type="submit" disabled={busy}
+              className="rounded bg-violet-700 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-violet-800 disabled:opacity-50">
+              {busy ? 'Adding…' : 'Add + generate PIN'}
+            </button>
+            <button type="button" onClick={() => setAdding(false)} className="text-[11px] text-slate-500 underline">cancel</button>
+          </div>
+        </form>
+      ) : (
+        <button type="button" onClick={() => setAdding(true)}
+          className="mt-1.5 rounded border border-violet-300 bg-white px-2 py-1 text-[11px] font-medium text-violet-700 hover:bg-violet-50">
+          + Add pickup person
+        </button>
+      )}
+    </div>
+  );
 }
 
 // Attendance cell + admin quick actions. The buttons write an
@@ -770,6 +942,11 @@ function FamilyDetailPanel({
                 ))}
               </ul>
             )}
+            <PickupPeopleManager
+              familyId={detail.family.id}
+              people={detail.pickup_people_manage}
+              students={detail.students.map((st) => ({ id: st.id, label: `${st.preferred_name?.trim() || st.first_name} ${st.last_name}`.trim() }))}
+            />
           </div> : null}
 
           {/* Unauthorized pickup — who CANNOT collect this family's kids.
