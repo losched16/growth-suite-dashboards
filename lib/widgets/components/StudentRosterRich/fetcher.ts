@@ -858,15 +858,17 @@ export async function fetcher(
   });
 
   // Sort (server-side so it orders the WHOLE filtered set, not just the
-  // visible page). Default: last name A–Z. Clickable headers set ?sort=&dir=.
-  const sortKey = (sp.sort ?? 'last_name').trim();
+  // visible page). Default: first name A–Z — names display first-name-
+  // first, so this is the order that LOOKS alphabetized (office request,
+  // Aug 2026). Clickable headers set ?sort=&dir=; last_name still works.
+  const sortKey = (sp.sort ?? 'student').trim();
   const sortDesc = sp.dir === 'desc';
   const sortText = (x: RosterStudent): string => {
     switch (sortKey) {
       case 'first_name': return (x.preferred_name || x.first_name || '');
-      // The combined Student column sorts by last name, then first —
-      // matches the roster's default ordering convention.
-      case 'student': return ((x.last_name || '') + ' ' + (x.preferred_name || x.first_name || '')).trim();
+      // The combined Student column sorts by first name, then last —
+      // matching the displayed "First Last" format.
+      case 'student': return ((x.preferred_name || x.first_name || '') + ' ' + (x.last_name || '')).trim();
       case 'lunch': return x.lunch || '';
       case 'last_name': return x.last_name || '';
       case 'program': return x.program || x.classroom_name || '';

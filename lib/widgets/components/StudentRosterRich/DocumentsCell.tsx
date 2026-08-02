@@ -178,7 +178,7 @@ export function DocumentsCell({
               {docs ? `${docs.length} document${docs.length === 1 ? '' : 's'}` : `${count} document${count === 1 ? '' : 's'}`}
             </span>
             <a
-              href={`/school/${currentLocationId()}/documents?student=${encodeURIComponent(studentId)}`}
+              href={docsHref(studentId)}
               className="inline-flex items-center gap-1 text-blue-700 hover:underline"
             >
               <Upload className="h-3 w-3" /> Upload / manage in Documents tab
@@ -197,4 +197,21 @@ function currentLocationId(): string {
   if (typeof window === 'undefined') return '';
   const m = window.location.pathname.match(/^\/school\/([^/]+)/);
   return m ? m[1] : '';
+}
+
+// Deep-link to the Documents dashboard, CARRYING the embed auth state.
+// Inside the GHL iframe the roster URL has ?embed_token=…&chrome=none;
+// dropping them sent operators to an unauthorized page ("upload from
+// the roster doesn't work"). Only rendered client-side (popover), so
+// window is always available.
+function docsHref(studentId: string): string {
+  const q = new URLSearchParams({ student: studentId });
+  if (typeof window !== 'undefined') {
+    const cur = new URLSearchParams(window.location.search);
+    for (const k of ['embed_token', 'chrome']) {
+      const v = cur.get(k);
+      if (v) q.set(k, v);
+    }
+  }
+  return `/school/${currentLocationId()}/documents?${q.toString()}`;
 }

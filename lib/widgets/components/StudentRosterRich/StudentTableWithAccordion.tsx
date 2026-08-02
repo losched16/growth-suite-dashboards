@@ -394,9 +394,29 @@ function AttendanceCell({ s }: { s: RosterStudent }) {
             → Out
           </button>
         ) : null}
+        <button
+          type="button"
+          onClick={() => window.open(attendanceHistoryHref(s.student_id), '_blank', 'noopener')}
+          title="Full check-in/out history for this student, with signatures"
+          className="rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[10px] font-medium text-slate-500 hover:bg-slate-50">
+          history
+        </button>
       </div>
     </div>
   );
+}
+
+// Deep-link to the per-student attendance history page, carrying the
+// embed auth params so it works from inside the GHL iframe. Called from
+// a click handler, so window is always available (an SSR-rendered href
+// would bake in an empty location before hydration).
+function attendanceHistoryHref(studentId: string): string {
+  const q = new URLSearchParams({ student: studentId });
+  const m = window.location.pathname.match(/^\/school\/([^/]+)/);
+  const cur = new URLSearchParams(window.location.search);
+  const et = cur.get('embed_token');
+  if (et) q.set('embed_token', et);
+  return `/school/${m ? m[1] : ''}/attendance-history?${q.toString()}`;
 }
 
 function renderAllergyCell(s: RosterStudent): React.ReactNode {
