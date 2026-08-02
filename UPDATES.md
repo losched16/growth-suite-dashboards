@@ -9,6 +9,18 @@ human digest.
 
 ## August 2, 2026
 
+### Portal Forms tracker — accurate targeting, grade filter, exports
+- The tracker now honors each form's audience per STUDENT: a 6th
+  grader is no longer counted as "missing" the MYHS 7-12 tech
+  agreement — kids a form doesn't target show as grey non-applicable
+  chips and don't drag completion numbers down.
+- New Grade filter in the filter bar — scope the whole grid to one
+  grade level.
+- Two new export buttons: "Export non-submitters" (the chase list)
+  and "Export all statuses". Columns: form, family, parent, email,
+  phone, student, grade, status, submitted date — pre-sorted by grade
+  and honoring the on-screen form + grade filters. Verified live.
+
 ### Families are now told when a form is published to them
 Publishing a form (Draft → Published in the builder) automatically
 sends an in-portal notification — bell + inbox — to exactly the
