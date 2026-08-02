@@ -36,3 +36,12 @@ export function pinLookup(schoolId: string, pin: string): string {
     .update(`${schoolId}:${pin}`)
     .digest('hex');
 }
+
+// Chosen-PIN rules — keep identical to the portal's validateChosenPin.
+const BANNED_PINS = new Set(['0000', '1234', '1111', '2222', '4321', '0123', '00000', '12345', '123456', '000000', '111111']);
+export function validateChosenPin(pin: string): string | null {
+  if (!/^\d{4,8}$/.test(pin)) return 'PIN must be 4-8 digits.';
+  if (BANNED_PINS.has(pin)) return 'That PIN is too easy to guess — pick something less common.';
+  if (/^(\d)\1+$/.test(pin)) return 'All-same-digit PINs are not allowed.';
+  return null;
+}

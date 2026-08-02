@@ -341,6 +341,80 @@ function fmtCurbTime(v: string): string {
   return `${h12}:${String(mm).padStart(2, '0')} ${period}`;
 }
 
+// Parent kiosk-PIN cell: shows the PIN (decrypted server-side) and
+// lets the office SET or CHANGE it when a parent asks — e.g. over the
+// phone: "make my PIN 4482". Writes the same hash + lookup + encrypted
+// copy the portal writes, so it works at the kiosk immediately and is
+// viewable both here and in the parent's own portal.
+function ParentPinCell({ familyId, parent: p }: { familyId: string; parent: ParentInfo }) {
+  const [state, setState] = useState<{ pinState: string; pin: string | null }>({
+    pinState: p.pin_state ?? 'none', pin: p.pin ?? null,
+  });
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  async function save() {
+    setBusy(true); setErr(null);
+    try {
+      const fd = new FormData();
+      fd.set('parent_id', p.id);
+      fd.set('pin', value);
+      const r = await fetch(`/api/school/family/${encodeURIComponent(familyId)}/parent-pin`, { method: 'POST', body: fd });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || !j.ok) { setErr(j.detail || j.error || `HTTP ${r.status}`); return; }
+      setState({ pinState: 'visible', pin: String(j.pin) });
+      setEditing(false); setValue('');
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <span className="inline-flex items-center gap-1 flex-wrap">
+      {state.pinState === 'visible' && state.pin ? (
+        <span className="inline-flex items-center gap-0.5 rounded bg-violet-50 border border-violet-200 px-1.5 py-0.5 text-[11px] font-semibold text-violet-800" title="Kiosk check-in PIN — read it back to the parent if they forget.">
+          PIN: <span className="font-mono">{state.pin}</span>
+        </span>
+      ) : state.pinState === 'set_hidden' ? (
+        <span className="text-[11px] text-slate-400 italic" title="Set before PINs became office-viewable. Still works at the kiosk; setting a new one here (or the parent re-saving theirs) makes it viewable.">
+          PIN set (not viewable)
+        </span>
+      ) : (
+        <span className="text-[11px] text-slate-400 italic">no check-in PIN set</span>
+      )}
+      {editing ? (
+        <>
+          <input
+            type="text" inputMode="numeric" autoFocus
+            value={value}
+            onChange={(e) => setValue(e.target.value.replace(/\D/g, '').slice(0, 8))}
+            placeholder="4-8 digits"
+            className="w-20 rounded border border-violet-300 px-1.5 py-0.5 text-[11px] tracking-widest"
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); if (value.length >= 4) save(); } if (e.key === 'Escape') { setEditing(false); setValue(''); setErr(null); } }}
+          />
+          <button type="button" disabled={busy || value.length < 4} onClick={save}
+            className="rounded bg-violet-700 px-1.5 py-0.5 text-[10px] font-semibold text-white hover:bg-violet-800 disabled:opacity-50">
+            {busy ? 'Saving…' : 'Save'}
+          </button>
+          <button type="button" onClick={() => { setEditing(false); setValue(''); setErr(null); }}
+            className="text-[10px] text-slate-500 underline">cancel</button>
+        </>
+      ) : (
+        <button type="button" onClick={() => setEditing(true)}
+          title="Set or change this parent's kiosk PIN on their behalf"
+          className="rounded border border-violet-300 bg-white px-1.5 py-0.5 text-[10px] font-medium text-violet-700 hover:bg-violet-50">
+          {state.pinState === 'none' ? 'Set PIN' : 'Change'}
+        </button>
+      )}
+      {err ? <span className="text-[10px] text-rose-700">{err}</span> : null}
+    </span>
+  );
+}
+
 // Office kiosk-pickup-person manager. Parents can't self-add pickup
 // people (they email admissions); this is where the office lands those
 // requests: add the person, hand the generated PIN back to the family.
@@ -849,17 +923,7 @@ function FamilyDetailPanel({
                           <Phone className="h-3 w-3" />{p.phone}
                         </a>
                       ) : null}
-                      {p.pin_state === 'visible' ? (
-                        <span className="inline-flex items-center gap-0.5 rounded bg-violet-50 border border-violet-200 px-1.5 py-0.5 text-[11px] font-semibold text-violet-800" title="Kiosk check-in PIN — read it back to the parent if they forget.">
-                          PIN: <span className="font-mono">{p.pin}</span>
-                        </span>
-                      ) : p.pin_state === 'set_hidden' ? (
-                        <span className="text-[11px] text-slate-400 italic" title="Set before PINs became office-viewable. Still works at the kiosk; the parent can re-set it on their Attendance page to make it viewable here.">
-                          PIN set (not viewable — parent must re-set)
-                        </span>
-                      ) : (
-                        <span className="text-[11px] text-slate-400 italic">no check-in PIN set</span>
-                      )}
+                      <ParentPinCell familyId={detail.family.id} parent={p} />
                       {!p.email && !p.phone ? (
                         <span className="text-slate-400 italic">no contact info on file</span>
                       ) : null}
