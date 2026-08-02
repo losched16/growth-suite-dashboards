@@ -7,6 +7,28 @@ human digest.
 
 ---
 
+## August 2, 2026
+
+### Families are now told when a form is published to them
+Publishing a form (Draft → Published in the builder) automatically
+sends an in-portal notification — bell + inbox — to exactly the
+families the form targets (program/grade/tag rules carry over; an
+untargeted form notifies everyone), with a link straight to the form.
+Re-publishing within 14 days does NOT re-notify, so an accidental
+toggle can't blast families twice. New forms now start as DRAFTS —
+publishing is always a deliberate click.
+
+### Flag Football form mystery — answered + hardened
+The "DGM Flag Football Registration Form" (a 1.0 import sitting in
+drafts since July 2) WAS live for ~3.5 hours on Friday evening
+(5:30-8:56 PM): 8 parents from 7 families opened it (Bray, Faber,
+Pelton, Pollard, Sinks, Modi, Jimenez), nobody submitted, and it was
+switched back to draft at 8:56 PM. It was not any automation — and
+as of today the form-save endpoint requires a login (it previously
+did not), and publish toggles notify families deliberately.
+
+---
+
 ## August 1, 2026 — parents can see their own PIN
 
 ### Your PIN, visible to you
