@@ -9,6 +9,15 @@ human digest.
 
 ## August 2, 2026
 
+### Student document upload — three fixes from the office list
+- Uploading from a student's roster row now opens the form ALREADY on
+  that student, and the student picker has a type-to-search box.
+- Successful uploads show a green "uploaded and attached" banner —
+  no more silent reload that looked like nothing happened.
+- "Open" on an uploaded document no longer says unauthorized (the
+  download opens in a new tab, which lost the login inside the CRM —
+  links now carry their own credentials).
+
 ### Portal Forms tracker — accurate targeting, grade filter, exports
 - The tracker now honors each form's audience per STUDENT: a 6th
   grader is no longer counted as "missing" the MYHS 7-12 tech
