@@ -11,9 +11,10 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { cookies } from 'next/headers';
-import { query } from '@/lib/db';
+import { query, withTransaction } from '@/lib/db';
 import { SESSION_COOKIE, verifySessionToken } from '@/lib/auth/operator';
 import { SCHOOL_SESSION_COOKIE, verifySchoolSession } from '@/lib/auth/school';
+import { resolveRecipients, sanitizeAudience, summarizeAudience } from '@/lib/notifications/audience';
 
 // Authorize a DELETE for `schoolId`. Accepts EITHER:
 //   - operator session (back-office /admin pages), or
@@ -161,21 +162,44 @@ function validateFieldSchema(raw: unknown): { ok: true; schema: unknown[] } | { 
   return { ok: true, schema: raw };
 }
 
+// Map a form's applies_to rule to a notification audience. The three
+// rule types the builder's "Who sees this form" UI produces (program,
+// grade_level, tag) translate 1:1; OR semantics on both sides. Rules
+// this can't express (student_ids, tuition_grid, other metadata keys)
+// return null → no auto-notification, publish still succeeds.
+function audienceForAppliesTo(appliesTo: unknown): unknown | null {
+  if (!appliesTo || typeof appliesTo !== 'object' || Array.isArray(appliesTo)) {
+    return { match: 'any', conditions: [{ field: 'all' }] };
+  }
+  const r = appliesTo as Record<string, unknown>;
+  const conds: Array<{ field: string; values?: string[] }> = [];
+  const arr = (v: unknown): string[] => (Array.isArray(v) ? v.map(String).filter(Boolean) : []);
+  if (arr(r.program_match).length) conds.push({ field: 'program', values: arr(r.program_match) });
+  const mm = (r.metadata_match ?? {}) as Record<string, unknown>;
+  if (arr(mm.grade_level).length) conds.push({ field: 'grade_level', values: arr(mm.grade_level) });
+  if (arr(r.tag_match).length) conds.push({ field: 'tag', values: arr(r.tag_match) });
+  return conds.length ? { match: 'any', conditions: conds } : null;
+}
+
 export async function PATCH(request: NextRequest, { params }: { params: Params }) {
   const { schoolId, formId } = await params;
+  const auth = await authorizeFormMutation(schoolId);
+  if (!auth.ok) return NextResponse.json({ error: 'unauthorized' }, { status: auth.status });
 
   let body: Body = {};
   try { body = await request.json(); }
   catch { return NextResponse.json({ error: 'invalid_json' }, { status: 400 }); }
 
-  // Confirm the form exists and belongs to this school
-  const { rows: existing } = await query<{ id: string }>(
-    `SELECT id FROM portal_form_definitions WHERE id = $1 AND school_id = $2`,
+  // Confirm the form exists and belongs to this school; remember the
+  // pre-save publish state so we can detect the draft → published flip.
+  const { rows: existing } = await query<{ id: string; is_active: boolean }>(
+    `SELECT id, is_active FROM portal_form_definitions WHERE id = $1 AND school_id = $2`,
     [formId, schoolId],
   );
   if (existing.length === 0) {
     return NextResponse.json({ error: 'not_found' }, { status: 404 });
   }
+  const wasActive = existing[0].is_active;
 
   // Validate field_schema
   if (body.field_schema !== undefined) {
@@ -269,7 +293,65 @@ export async function PATCH(request: NextRequest, { params }: { params: Params }
     args,
   );
 
-  return NextResponse.json({ ok: true });
+  // Draft → published: tell exactly the families the form targets that
+  // something new is waiting in their portal (bell + inbox). Best-effort
+  // — a notification hiccup must never fail the publish itself.
+  let notified = 0;
+  if (asBool(body.meta?.is_active, false) === true && !wasActive) {
+    try {
+      const { rows: defRows } = await query<{ display_name: string; slug: string; applies_to: unknown }>(
+        `SELECT display_name, slug, applies_to FROM portal_form_definitions WHERE id = $1`,
+        [formId],
+      );
+      const def = defRows[0];
+      const title = `New form: ${def.display_name}`;
+
+      // Dedupe: a re-publish within 14 days (accidental toggle, quick
+      // edit cycle) must not re-blast every family.
+      const { rows: dup } = await query<{ n: string }>(
+        `SELECT COUNT(*)::text AS n FROM portal_notifications
+          WHERE school_id = $1 AND title = $2 AND created_at > now() - interval '14 days'`,
+        [schoolId, title],
+      );
+      if (Number(dup[0].n) === 0) {
+        const audience = sanitizeAudience(audienceForAppliesTo(def.applies_to));
+        if (audience) {
+          const recipients = await resolveRecipients(schoolId, audience);
+          if (recipients.length > 0) {
+            const { rows: hostRows } = await query<{ custom_host: string | null }>(
+              `SELECT custom_host FROM school_branding WHERE school_id = $1`,
+              [schoolId],
+            );
+            const host = hostRows[0]?.custom_host?.trim();
+            const linkUrl = host ? `https://${host}/forms-v2/${def.slug}` : null;
+            await withTransaction(async (q) => {
+              const { rows } = await q<{ id: string }>(
+                `INSERT INTO portal_notifications
+                   (school_id, title, body, link_url, link_label, pinned, audience, audience_label, recipient_count, created_by_email)
+                 VALUES ($1, $2, $3, $4, $5, false, $6::jsonb, $7, $8, $9)
+                 RETURNING id`,
+                [schoolId, title,
+                 `"${def.display_name}" has been published to your parent portal. Please open it and complete it when you have a moment.`,
+                 linkUrl, linkUrl ? 'Open the form' : null,
+                 JSON.stringify(audience), summarizeAudience(audience), recipients.length, 'auto: form published'],
+              );
+              await q(
+                `INSERT INTO portal_notification_recipients (notification_id, school_id, parent_id, family_id)
+                 SELECT $1, $2, pid, fid FROM unnest($3::uuid[], $4::uuid[]) AS t(pid, fid)
+                 ON CONFLICT (notification_id, parent_id) DO NOTHING`,
+                [rows[0].id, schoolId, recipients.map((r) => r.parent_id), recipients.map((r) => r.family_id)],
+              );
+            });
+            notified = recipients.length;
+          }
+        }
+      }
+    } catch (e) {
+      console.error('publish notification failed (form still published):', e);
+    }
+  }
+
+  return NextResponse.json({ ok: true, notified });
 }
 
 // DELETE /api/admin/schools/{schoolId}/forms/{formId}[?confirm_count=N]

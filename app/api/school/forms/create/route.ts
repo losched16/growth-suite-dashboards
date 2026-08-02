@@ -104,8 +104,12 @@ export async function POST(request: NextRequest) {
       `INSERT INTO portal_form_definitions
          (school_id, slug, display_name, description, category, per_student,
           field_schema, is_active, needs_review, audience)
-       VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, true, true, 'parents')
+       VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, false, true, 'parents')
        RETURNING id`,
+      // is_active=false: new forms start as DRAFTS. Publishing is the
+      // explicit toggle in the builder — which is also what fires the
+      // "new form in your portal" notification to the targeted
+      // families. Creating straight-to-live let half-built forms leak.
       [
         session.school_id, slug,
         body.display_name.trim(),
