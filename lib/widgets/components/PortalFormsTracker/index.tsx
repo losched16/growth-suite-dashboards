@@ -56,6 +56,17 @@ function viewAsParentHref(familyId: string, locationId: string): string {
   return `/api/school/family/${familyId}/view-as-parent?embed_token=${encodeURIComponent(token)}`;
 }
 
+// CSV export of per-student form status, honoring the on-screen form +
+// grade filters. Same embed-token trick as viewAsParentHref — download
+// links open outside the iframe where cookies don't follow.
+function exportHref(locationId: string, sp: WidgetSearchParams, status: 'missing' | 'all'): string {
+  const q = new URLSearchParams({ status });
+  if (sp.form && sp.form !== 'all') q.set('form', sp.form);
+  if (sp.grade) q.set('grade', sp.grade);
+  q.set('embed_token', deriveEmbedToken(locationId));
+  return `/api/export/portal-forms/${encodeURIComponent(locationId)}?${q.toString()}`;
+}
+
 function applyFiltersSort(
   rows: FamilyRow[],
   sp: WidgetSearchParams,
@@ -88,9 +99,11 @@ function applyFiltersSort(
 function FilterBar({
   current,
   forms,
+  grades,
 }: {
   current: WidgetSearchParams;
   forms: FormDef[];
+  grades: string[];
 }) {
   return (
     <AutoSubmitForm className="grid grid-cols-1 md:grid-cols-12 gap-2">
@@ -99,7 +112,7 @@ function FilterBar({
         name="q"
         defaultValue={current.q ?? ''}
         placeholder="Search families, emails, students — press Enter"
-        className="md:col-span-6 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm placeholder:text-gray-400 focus:border-emerald-600 focus:outline-none focus:ring-1 focus:ring-emerald-200"
+        className="md:col-span-4 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm placeholder:text-gray-400 focus:border-emerald-600 focus:outline-none focus:ring-1 focus:ring-emerald-200"
       />
       <select
         name="status"
@@ -121,9 +134,19 @@ function FilterBar({
         ))}
       </select>
       <select
+        name="grade"
+        defaultValue={current.grade ?? ''}
+        className="md:col-span-2 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm"
+      >
+        <option value="">All grades</option>
+        {grades.map((g) => (
+          <option key={g} value={g}>Grade: {g}</option>
+        ))}
+      </select>
+      <select
         name="sort"
         defaultValue={current.sort ?? 'name'}
-        className="md:col-span-1 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm"
+        className="md:col-span-2 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm"
       >
         {SORTS.map((s) => (
           <option key={s.key} value={s.key}>Sort: {s.label}</option>
@@ -289,11 +312,30 @@ function Component({
         />
       </div>
 
-      {/* Filter bar */}
-      <FilterBar current={sp} forms={data.forms} />
+      {/* Filter bar + export */}
+      <FilterBar current={sp} forms={data.forms} grades={data.grade_levels} />
+      <div className="flex flex-wrap items-center gap-2 -mt-2">
+        <a
+          href={exportHref(school.locationId, sp, 'missing')}
+          className="inline-flex items-center gap-1.5 rounded-md border border-rose-300 bg-white px-3 py-1.5 text-xs font-medium text-rose-700 hover:bg-rose-50"
+          title="CSV of every applicable student who has NOT submitted (honors the form + grade filters)"
+        >
+          ⬇ Export non-submitters
+        </a>
+        <a
+          href={exportHref(school.locationId, sp, 'all')}
+          className="inline-flex items-center gap-1.5 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+          title="CSV of every applicable student with their submission status (honors the form + grade filters)"
+        >
+          ⬇ Export all statuses
+        </a>
+        <span className="text-[10px] text-gray-400">
+          Columns: form, family, parent, email, phone, student, grade, status, submitted date
+        </span>
+      </div>
 
       {/* Active filters pill row */}
-      {(sp.status && sp.status !== 'all') || (sp.form && sp.form !== 'all') || sp.q ? (
+      {(sp.status && sp.status !== 'all') || (sp.form && sp.form !== 'all') || sp.q || sp.grade ? (
         <div className="flex flex-wrap items-center gap-1 text-[11px] text-gray-600">
           {sp.status && sp.status !== 'all' ? (
             <span className="rounded-full bg-gray-100 px-2 py-0.5">
@@ -304,6 +346,9 @@ function Component({
             <span className="rounded-full bg-gray-100 px-2 py-0.5">
               Form: {data.forms.find((f) => f.id === sp.form)?.display_name}
             </span>
+          ) : null}
+          {sp.grade ? (
+            <span className="rounded-full bg-gray-100 px-2 py-0.5">Grade: {sp.grade}</span>
           ) : null}
           {sp.q ? (
             <span className="rounded-full bg-gray-100 px-2 py-0.5">Search: &ldquo;{sp.q}&rdquo;</span>

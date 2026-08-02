@@ -55,7 +55,9 @@ export interface FamilyRow {
     student_id: string;
     slot: number;
     display_name: string;
+    grade_level: string | null;
   }>;
+  primary_parent_phone: string | null;
   cells: Record<string, StudentChip[]>;
   applicable_count: number;
   complete_count: number;
@@ -73,6 +75,11 @@ export interface FamilyRow {
 export interface PortalFormsTrackerData {
   forms: FormDef[];
   rows: FamilyRow[];
+  // Distinct grade levels across the (unfiltered) scoped students —
+  // options for the grade filter dropdown.
+  grade_levels: string[];
+  // The grade filter currently applied (echo of ?grade=).
+  grade_filter: string | null;
   stats: {
     // Family-level counts kept for context / sub-labels.
     enrolled_families: number;
@@ -102,10 +109,17 @@ interface DbForm {
   category: string | null;
   per_student: boolean;
   position: number;
-  // Tag-based visibility rules (subset of applies_to the tracker can
-  // evaluate at the family level). A form hidden from a family must not
-  // count as "missing" for them.
-  applies_to: { tag_match?: string[]; tag_exclude?: string[] } | null;
+  // Full visibility rule (portal_form_definitions.applies_to) — the
+  // tracker evaluates the SAME criteria the portal does, so a student
+  // the form doesn't target (e.g. a 6th grader on the MYHS 7-12 tech
+  // agreement) never counts as "missing".
+  applies_to: {
+    tag_match?: string[];
+    tag_exclude?: string[];
+    program_match?: string[];
+    metadata_match?: Record<string, string[]>;
+    student_ids?: string[];
+  } | null;
 }
 
 interface DbStudent {
@@ -115,6 +129,8 @@ interface DbStudent {
   last_name: string;
   preferred_name: string | null;
   enrollment_status: string | null;
+  grade_level: string | null;
+  metadata: Record<string, unknown>;
 }
 
 interface DbFamilyMeta {
@@ -123,6 +139,7 @@ interface DbFamilyMeta {
   primary_first: string | null;
   primary_last: string | null;
   primary_email: string | null;
+  primary_phone: string | null;
   primary_ghl_contact_id: string | null;
 }
 
@@ -142,9 +159,9 @@ function studentLabel(s: DbStudent): string {
 export async function fetcher(
   school: SchoolContext,
   config: PortalFormsTrackerConfig,
-  _sp?: WidgetSearchParams,
+  sp?: WidgetSearchParams,
 ): Promise<PortalFormsTrackerData> {
-  void _sp;
+  const gradeFilter = (sp?.grade ?? '').trim() || null;
   const categories = Array.isArray(config.categories) ? config.categories : [];
 
   // 1. Active parent-portal forms
@@ -180,10 +197,12 @@ export async function fetcher(
   // so widgets saved before this option existed get the intended behavior.
   const includePending = config.include_pending !== false;
   const enrollmentScope = includePending ? ['enrolled', 'pending'] : ['enrolled'];
-  const { rows: students } = await query<DbStudent>(
+  const { rows: allStudents } = await query<DbStudent>(
     `SELECT s.id AS student_id, s.family_id,
             s.first_name, s.last_name, s.preferred_name,
-            e.status AS enrollment_status
+            e.status AS enrollment_status,
+            s.metadata->>'grade_level' AS grade_level,
+            s.metadata
        FROM students s
        LEFT JOIN LATERAL (
          -- Prefer the selected academic year's enrollment; fall back to
@@ -197,6 +216,12 @@ export async function fetcher(
       ORDER BY s.family_id, s.first_name`,
     [school.schoolId, settings.academic_year, enrollmentScope],
   );
+  // Grade-filter options come from the UNfiltered set, so the dropdown
+  // never loses entries after a selection.
+  const gradeLevels = [...new Set(allStudents.map((s) => (s.grade_level ?? '').trim()).filter(Boolean))].sort();
+  const students = gradeFilter
+    ? allStudents.filter((s) => (s.grade_level ?? '').trim() === gradeFilter)
+    : allStudents;
   const scopedFamilyIds = [...new Set(students.map((s) => s.family_id))];
 
   // 2b. Office-recorded items — per-student completion from
@@ -235,6 +260,7 @@ export async function fetcher(
             (SELECT first_name FROM parents p WHERE p.family_id = f.id AND p.is_primary = true LIMIT 1) AS primary_first,
             (SELECT last_name FROM parents p WHERE p.family_id = f.id AND p.is_primary = true LIMIT 1) AS primary_last,
             (SELECT email FROM parents p WHERE p.family_id = f.id AND p.is_primary = true LIMIT 1) AS primary_email,
+            (SELECT phone FROM parents p WHERE p.family_id = f.id AND p.is_primary = true LIMIT 1) AS primary_phone,
             (SELECT ghl_contact_id FROM parents p WHERE p.family_id = f.id AND p.is_primary = true LIMIT 1) AS primary_ghl_contact_id
        FROM families f
       WHERE f.school_id = $1
@@ -360,17 +386,56 @@ export async function fetcher(
       tagsByFamily.get(r.family_id)!.add(r.tag);
     }
   }
+  // Mirrors the portal's studentMatchesAppliesTo (lib/forms/applies-to.ts):
+  // tag_exclude vetoes at the family level; then ANY inclusion criterion
+  // (OR semantics) admits the student — student_ids, program substring,
+  // family tag, or a metadata value match (grade_level etc.). A rule
+  // with no evaluable inclusion criteria means "everyone".
+  function ruleExcludesFamily(form: DbForm, familyId: string): boolean {
+    const rule = form.applies_to;
+    if (!rule?.tag_exclude?.length) return false;
+    const have = tagsByFamily.get(familyId) ?? new Set<string>();
+    return rule.tag_exclude.some((t) => have.has(t.toLowerCase()));
+  }
+  function ruleIsEmpty(rule: NonNullable<DbForm['applies_to']>): boolean {
+    return !(
+      (rule.student_ids && rule.student_ids.length > 0) ||
+      (rule.program_match && rule.program_match.length > 0) ||
+      (rule.tag_match && rule.tag_match.length > 0) ||
+      (rule.metadata_match && Object.keys(rule.metadata_match).length > 0)
+    );
+  }
+  function studentMatchesForm(form: DbForm, student: DbStudent): boolean {
+    const rule = form.applies_to;
+    if (!rule) return true;
+    if (ruleExcludesFamily(form, student.family_id)) return false;
+    if (ruleIsEmpty(rule)) return true;
+    if (rule.student_ids?.includes(student.student_id)) return true;
+    if (rule.program_match?.length) {
+      const prog = String(student.metadata?.program ?? student.metadata?.program_name ?? '').toLowerCase();
+      if (prog && rule.program_match.some((s) => prog.includes(s.toLowerCase()))) return true;
+    }
+    if (rule.tag_match?.length) {
+      const have = tagsByFamily.get(student.family_id) ?? new Set<string>();
+      if (rule.tag_match.some((t) => have.has(t.toLowerCase()))) return true;
+    }
+    if (rule.metadata_match) {
+      for (const [k, vals] of Object.entries(rule.metadata_match)) {
+        const v = String(student.metadata?.[k] ?? '').toLowerCase();
+        if (v && vals.some((vv) => vv.toLowerCase() === v)) return true;
+      }
+    }
+    return false;
+  }
+  // Family-level form: applies when not excluded AND (rule is empty, a
+  // family tag matches, or ANY of the family's students matches).
   function formVisibleToFamily(form: DbForm, familyId: string): boolean {
     const rule = form.applies_to;
     if (!rule) return true;
-    const have = tagsByFamily.get(familyId) ?? new Set<string>();
-    if (rule.tag_exclude?.length && rule.tag_exclude.some((t) => have.has(t.toLowerCase()))) {
-      return false;
-    }
-    if (rule.tag_match?.length && !rule.tag_match.some((t) => have.has(t.toLowerCase()))) {
-      return false;
-    }
-    return true;
+    if (ruleExcludesFamily(form, familyId)) return false;
+    if (ruleIsEmpty(rule)) return true;
+    const famStudents = studentsByFamily.get(familyId) ?? [];
+    return famStudents.some((s) => studentMatchesForm(form, s));
   }
 
   // ── Submission lookup tables ────────────────────────────────────
@@ -481,6 +546,7 @@ export async function fetcher(
       student_id: s.student_id,
       slot: i + 1,
       display_name: studentLabel(s),
+      grade_level: s.grade_level,
     }));
 
     const cells: Record<string, StudentChip[]> = {};
@@ -514,7 +580,8 @@ export async function fetcher(
       // hidden + nothing submitted → blank cell; hidden + submitted → show
       // the completed chip(s), with un-submitted siblings not counted as
       // missing.
-      const visible = formVisibleToFamily(forms.find((f) => f.id === form.id)!, fam.family_id);
+      const fullForm = forms.find((f) => f.id === form.id)!;
+      const visible = formVisibleToFamily(fullForm, fam.family_id);
       if (form.per_student) {
         // One chip per student in the family. Completion is EITHER a portal
         // submission or a GHL-side signal (`form_<slug>_s<N>` on the primary
@@ -530,7 +597,10 @@ export async function fetcher(
           const sub = perStudent.get(`${form.id}|${s.student_id}`) ?? soloSub;
           const complete = !!sub
             || ghlComplete(fam.family_id, form.slug, { slot: i + 1, familyLevel: false });
-          const applies = visible || complete;
+          // Per-STUDENT targeting: a kid the rule doesn't cover (wrong
+          // grade/program) is never "missing" — but a completed
+          // submission always shows, whatever the current rule says.
+          const applies = studentMatchesForm(fullForm, s) || complete;
           if (applies) {
             applicableCount++;
             if (complete) completeCount++;
@@ -545,7 +615,11 @@ export async function fetcher(
             submitted_at: sub?.submitted_at ?? null,
           };
         });
-        cells[form.id] = !visible && list.every((c) => !c.complete) ? [] : list;
+        // Blank the whole cell only when NO student applies and nothing
+        // was ever submitted — otherwise show the mix of applicable /
+        // greyed chips.
+        cells[form.id] = list.every((c) => !c.applies) ? [] : list;
+        void visible;
       } else {
         // Family-level form → one cell for the whole family. Render as a
         // single "slot 0" chip so the component treats it uniformly.
@@ -583,6 +657,7 @@ export async function fetcher(
       family_display_name: fam.family_display_name || `${fam.primary_last ?? 'Family'} Family`,
       primary_parent_name: [fam.primary_first, fam.primary_last].filter(Boolean).join(' ') || '(no primary parent)',
       primary_parent_email: fam.primary_email,
+      primary_parent_phone: fam.primary_phone,
       primary_parent_ghl_contact_id: fam.primary_ghl_contact_id,
       enrolled_student_count: familyStudents.length,
       enrolled_students: enrolledStudents,
@@ -658,6 +733,8 @@ export async function fetcher(
   return {
     forms: formsForBuild,
     rows,
+    grade_levels: gradeLevels,
+    grade_filter: gradeFilter,
     stats,
     last_loaded_at: new Date().toISOString(),
   };
