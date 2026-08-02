@@ -7,6 +7,35 @@ human digest.
 
 ---
 
+## August 1, 2026 — kiosk + pickup-people batch
+
+### Kiosk: select who you're moving (nothing pre-selected)
+The student screen now starts with NO kids selected — the parent taps
+the ones they're dropping off or picking up, instead of un-tapping the
+ones they aren't. Confirm stays disabled until at least one is tapped.
+
+### Kiosk: a note box per child, on check-in AND check-out
+The single "note for the front desk" that applied to every selected
+check-in is gone. Each selected child now has their own note box —
+including at pickup — and each note lands on that child's attendance
+event (visible on rosters + the new attendance history).
+
+### Pickup people are office-managed, end to end
+- Kiosk landing no longer tells grandparents/sitters to "ask the
+  parent for a PIN" — it now says pickup people must be authorized in
+  advance through the school office.
+- Parents already CAN'T self-add pickup people (the portal's add form
+  is replaced by a "contact the school office" notice pointing at
+  admissions@, and the API rejects direct attempts).
+- NEW: the office side. Open a family on the Student Roster → the
+  "Authorized for pickup" section now has "Kiosk PINs — office
+  managed": add a pickup person (optionally limited to specific
+  kids), and the system generates their 6-digit kiosk PIN on the
+  spot — shown ONCE, so read it to the parent or email it to them.
+  You can also regenerate a PIN or deactivate someone there.
+
+---
+
 ## August 1, 2026 — Sonia's list
 
 ### Attendance history per student (with signature log)
