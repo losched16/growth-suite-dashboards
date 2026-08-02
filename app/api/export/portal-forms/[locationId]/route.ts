@@ -68,6 +68,18 @@ export async function GET(request: NextRequest, { params }: { params: Params }) 
     grade ? { grade } : {},
   );
 
+  // ?debug=counts — authed JSON introspection when the CSV looks off.
+  if (sp.get('debug') === 'counts') {
+    return new Response(JSON.stringify({
+      forms: data.forms.length,
+      form_names: data.forms.map((f) => f.display_name),
+      rows: data.rows.length,
+      grade_levels: data.grade_levels,
+      stats: data.stats,
+      sample_cells: data.rows[0] ? Object.fromEntries(Object.entries(data.rows[0].cells).slice(0, 2)) : null,
+    }, null, 1), { headers: { 'Content-Type': 'application/json' } });
+  }
+
   const forms = formFilter ? data.forms.filter((f) => f.id === formFilter) : data.forms;
   const out: Row[] = [];
   for (const form of forms) {
