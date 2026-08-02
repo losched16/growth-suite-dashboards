@@ -7,7 +7,45 @@ human digest.
 
 ---
 
-## August 1, 2026
+## August 1, 2026 — Sonia's list
+
+### Attendance history per student (with signature log)
+Every student's Attendance cell on the roster now has a "history"
+button → full check-in/out record for any range (2 weeks, month,
+3 months, year, or custom dates): time, who performed it, kiosk vs
+portal vs office, curbside + notes, and a "view" link showing the
+SIGNATURE captured on each event. Plus a Download CSV button.
+
+### MYHS Technology Agreement (7-10) was visible to every family — fixed
+Its audience rule included the "parent 1" tag, which every family
+carries, plus the MYHS program (which includes 11-12 graders). Now
+targeted purely by grade (M7/M8/M9/M0). Verified: a D1 family (Nunez)
+sees ONLY the 11-12 agreement; a Primary/Toddler family sees neither.
+Note for testers: the Jain TEST family has a D1 student, so seeing
+the 11-12 agreement there is correct. Also: both agreements now
+notify finance@ + admissions@ (was finance@ + Dana).
+
+### Student roster — alphabetized by first name
+Default order (and the Student column sort) is now first name A-Z,
+matching how names display. Click any column header to sort another
+way.
+
+### Roster document upload — embed link fixed
+"Upload / manage in Documents tab" from a roster row now carries the
+embed credentials — from inside the CRM it used to land on a blank
+unauthorized page. Combined with this morning's category + 50MB
+fixes, roster uploads work end to end.
+
+### Drop-off: dismissal time is now a statement, not a question
+When a student's classroom maps to exactly one dismissal wave, check-in
+just SHOWS the time ("If today's plan is different, let the front desk
+know") instead of a one-option radio + Confirm. Kids with multiple
+possible waves still get the picker. Each sibling checks in on their
+own page with their own classroom's time. Curbside stays a separate
+optional dropdown — choosing a time IS the curbside opt-in.
+
+### PIN copy consistency
+All portal copy now says 4-8 digits (the banner used to say 4).
 
 ### O'Callaghan family (Gabrielle + Ross) — consolidated
 They existed as two separate one-child records: Ross had Gemma on his
