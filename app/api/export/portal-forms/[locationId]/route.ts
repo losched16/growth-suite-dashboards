@@ -15,7 +15,7 @@ import {
   type CsvColumn,
 } from '@/lib/exports/csv';
 import { fetcher } from '@/lib/widgets/components/PortalFormsTracker/fetcher';
-import { portalFormsTrackerDefaults, type PortalFormsTrackerConfig } from '@/lib/widgets/components/PortalFormsTracker/config';
+import type { PortalFormsTrackerConfig } from '@/lib/widgets/components/PortalFormsTracker/config';
 
 type Params = Promise<{ locationId: string }>;
 
@@ -59,8 +59,12 @@ export async function GET(request: NextRequest, { params }: { params: Params }) 
     `SELECT layout FROM school_dashboards WHERE school_id = $1 AND dashboard_slug = 'portal-forms'`,
     [school.id],
   );
+  // Use the saved config AS-IS — the page's WidgetRenderer passes
+  // instance.config raw (no defaults merge), and the fetcher guards
+  // every missing key. Merging portalFormsTrackerDefaults here silently
+  // applied its enrolled_tag filter and emptied the export.
   const saved = dashRows[0]?.layout?.find((w) => w.widget_id === 'portal_forms_tracker')?.config ?? {};
-  const config: PortalFormsTrackerConfig = { ...portalFormsTrackerDefaults, ...saved };
+  const config = saved as PortalFormsTrackerConfig;
 
   const data = await fetcher(
     { schoolId: school.id, schoolName: school.name, locationId: school.ghl_location_id },

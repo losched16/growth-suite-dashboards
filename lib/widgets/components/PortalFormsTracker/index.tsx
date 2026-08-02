@@ -562,5 +562,7 @@ export const PortalFormsTracker: WidgetDefinition<PortalFormsTrackerConfig, Port
   default_size: { w: 12, h: 12 },
   Component,
   dataFetcher: fetcher,
-  searchParamsAffectFetch: false,
+  // The fetcher consumes ?grade= (server-side grade filter), so the
+  // cache key must include search params or the filter never applies.
+  searchParamsAffectFetch: true,
 };
