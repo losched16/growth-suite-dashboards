@@ -829,6 +829,80 @@ export function mergeCoparentFamilies(
 
 // ----- Orchestrator ---------------------------------------------------------
 
+// Tables preserved verbatim across the snapshot rebuild (see the
+// preserve/restore blocks inside runGhlSync). `nullFks` are nullable
+// references nulled when their target genuinely left GHL; `requireFks`
+// are NOT NULL anchors — rows whose anchor vanished are dropped (same
+// outcome the cascade used to produce, but ONLY for real departures).
+// Array order = restore order (parents before children).
+const DATA_PRESERVE: Array<{
+  table: string;
+  temp: string;
+  snapshot?: string; // default: SELECT * FROM <table> WHERE school_id = $1
+  nullFks?: Array<{ col: string; ref: string }>;
+  requireFks: Array<{ col: string; ref: string }>;
+}> = [
+  { table: 'student_documents', temp: '_docs_preserve',
+    requireFks: [{ col: 'student_id', ref: 'students' }] },
+  { table: 'student_pickup_restrictions', temp: '_restr_preserve',
+    requireFks: [{ col: 'student_id', ref: 'students' }] },
+  { table: 'student_health_profiles', temp: '_health_preserve',
+    nullFks: [{ col: 'reviewed_by_parent_id', ref: 'parents' }],
+    requireFks: [{ col: 'student_id', ref: 'students' }] },
+  { table: 'parent_uploads', temp: '_puploads_preserve',
+    nullFks: [{ col: 'parent_id', ref: 'parents' }, { col: 'student_id', ref: 'students' }],
+    requireFks: [{ col: 'family_id', ref: 'families' }] },
+  { table: 'enrollment_invites', temp: '_einv_preserve',
+    nullFks: [{ col: 'student_id', ref: 'students' }],
+    requireFks: [{ col: 'family_id', ref: 'families' }] },
+  // payment_methods BEFORE invoices — invoices.autopay_payment_method_id
+  // references it.
+  { table: 'payment_methods', temp: '_paym_preserve',
+    nullFks: [{ col: 'added_by_parent_id', ref: 'parents' }],
+    requireFks: [{ col: 'family_id', ref: 'families' }] },
+  { table: 'invoices', temp: '_inv_preserve',
+    nullFks: [
+      { col: 'student_id', ref: 'students' },
+      { col: 'responsible_parent_id', ref: 'parents' },
+      { col: 'autopay_payment_method_id', ref: 'payment_methods' },
+    ],
+    requireFks: [{ col: 'family_id', ref: 'families' }] },
+  { table: 'invoice_line_items', temp: '_invli_preserve',
+    snapshot: `SELECT li.* FROM invoice_line_items li JOIN invoices i ON i.id = li.invoice_id WHERE i.school_id = $1`,
+    nullFks: [{ col: 'student_id', ref: 'students' }],
+    requireFks: [{ col: 'invoice_id', ref: 'invoices' }] },
+  { table: 'payments', temp: '_pay_preserve',
+    nullFks: [{ col: 'invoice_id', ref: 'invoices' }, { col: 'paid_by_parent_id', ref: 'parents' }],
+    requireFks: [{ col: 'family_id', ref: 'families' }] },
+  { table: 'family_credits', temp: '_fcred_preserve',
+    nullFks: [{ col: 'student_id', ref: 'students' }],
+    requireFks: [{ col: 'family_id', ref: 'families' }] },
+  { table: 'discount_applications', temp: '_disc_preserve',
+    requireFks: [{ col: 'family_id', ref: 'families' }, { col: 'invoice_id', ref: 'invoices' }] },
+  { table: 'family_tuition_enrollments', temp: '_fte_preserve',
+    nullFks: [{ col: 'student_id', ref: 'students' }],
+    requireFks: [{ col: 'family_id', ref: 'families' }] },
+  { table: 'portal_migration_flags', temp: '_mflags_preserve',
+    nullFks: [{ col: 'student_id', ref: 'students' }, { col: 'resolved_by_parent_id', ref: 'parents' }],
+    requireFks: [{ col: 'family_id', ref: 'families' }] },
+  { table: 'parent_magic_link_tokens', temp: '_mlt_preserve',
+    nullFks: [{ col: 'parent_id', ref: 'parents' }],
+    requireFks: [] },
+  { table: 'parent_password_reset_tokens', temp: '_prt_preserve',
+    requireFks: [{ col: 'parent_id', ref: 'parents' }] },
+  { table: 'parent_sessions', temp: '_psess_preserve',
+    requireFks: [{ col: 'parent_id', ref: 'parents' }] },
+  { table: 'pickup_person_students', temp: '_pps_preserve',
+    snapshot: `SELECT pps.* FROM pickup_person_students pps JOIN pickup_persons pp ON pp.id = pps.pickup_person_id WHERE pp.school_id = $1`,
+    requireFks: [{ col: 'pickup_person_id', ref: 'pickup_persons' }, { col: 'student_id', ref: 'students' }] },
+  { table: 'fa_applications', temp: '_faapp_preserve',
+    nullFks: [{ col: 'student_id', ref: 'students' }],
+    requireFks: [{ col: 'family_id', ref: 'families' }] },
+  { table: 'fa_application_students', temp: '_faas_preserve',
+    snapshot: `SELECT fas.* FROM fa_application_students fas JOIN fa_applications fa ON fa.id = fas.application_id WHERE fa.school_id = $1`,
+    requireFks: [{ col: 'application_id', ref: 'fa_applications' }, { col: 'student_id', ref: 'students' }] },
+];
+
 export interface SyncResult {
   ghl_contacts_scanned: number;
   ghl_contacts_with_household_id: number;
@@ -1079,6 +1153,22 @@ export async function runGhlSync(schoolId: string): Promise<SyncResult> {
     // them when families rebuild — so they're stashed + restored too.
     await q(`CREATE TEMP TABLE _att_preserve    ON COMMIT DROP AS SELECT * FROM attendance_events WHERE school_id = $1`, [schoolId]);
     await q(`CREATE TEMP TABLE _pickup_preserve ON COMMIT DROP AS SELECT * FROM pickup_persons    WHERE school_id = $1`, [schoolId]);
+
+    // ── Generic preserve: EVERY office/parent-created table that hangs
+    // off families/parents/students via ON DELETE CASCADE and is NOT
+    // rebuilt from GHL. Without this, the snapshot rebuild silently
+    // destroyed all of it — student documents, invoices, pickup
+    // restrictions, enrollment invites, login links — on every sync
+    // (found Aug 3 2026 when Aarna Patel's uploaded document vanished).
+    // Snapshot now, before the deletes; restored after the rebuild with
+    // FK guards (see the restore loop below). Order matters on restore:
+    // parents before their children (invoices → line items, etc.).
+    for (const p of DATA_PRESERVE) {
+      await q(
+        `CREATE TEMP TABLE ${p.temp} ON COMMIT DROP AS ${p.snapshot ?? `SELECT * FROM ${p.table} WHERE school_id = $1`}`,
+        [schoolId],
+      );
+    }
     // Transaction-local bypass for the append-only guard (migration 085) —
     // evaporates at commit, so the guard stays enforced everywhere else.
     await q(`SET LOCAL app.attendance_rebuild = 'on'`);
@@ -1326,6 +1416,33 @@ export async function runGhlSync(schoolId: string): Promise<SyncResult> {
     );
     const attKept = (attRestored.rowCount ?? 0) + (pickupsRestored.rowCount ?? 0);
     if (attKept > 0) warnings.push(`Preserved ${attRestored.rowCount ?? 0} attendance event(s) + ${pickupsRestored.rowCount ?? 0} pickup person(s) across the sync.`);
+
+    // ── Generic restore of the preserved data tables (see DATA_PRESERVE).
+    // For each: null out optional references whose target genuinely left
+    // GHL, then re-insert rows whose required anchors still exist. The
+    // NULL-tolerant require guard keeps rows whose optional anchor
+    // column is simply empty.
+    let dataKept = 0;
+    for (const p of DATA_PRESERVE) {
+      for (const nf of p.nullFks ?? []) {
+        await q(
+          `UPDATE ${p.temp} SET ${nf.col} = NULL
+            WHERE ${nf.col} IS NOT NULL
+              AND NOT EXISTS (SELECT 1 FROM ${nf.ref} r WHERE r.id = ${p.temp}.${nf.col})`,
+        );
+      }
+      const conds = p.requireFks.map(
+        (rf) => `(t.${rf.col} IS NULL OR EXISTS (SELECT 1 FROM ${rf.ref} r WHERE r.id = t.${rf.col}))`,
+      );
+      const res = await q(
+        `INSERT INTO ${p.table}
+         SELECT t.* FROM ${p.temp} t
+         ${conds.length ? `WHERE ${conds.join(' AND ')}` : ''}
+         ON CONFLICT DO NOTHING`,
+      );
+      dataKept += res.rowCount ?? 0;
+    }
+    if (dataKept > 0) warnings.push(`Preserved ${dataKept} data row(s) (documents, invoices, uploads, tokens, …) across the sync.`);
 
     // Classroom lead teacher by MAJORITY VOTE of its students' own teacher
     // fields. The insert loop above stamps whichever student creates the
