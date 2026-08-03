@@ -7,6 +7,39 @@ human digest.
 
 ---
 
+## August 3, 2026
+
+### Attendance: leave and come back, any number of times
+A student can now check in, check out mid-day (appointment, early
+pickup, anything), and check BACK in — on every surface:
+- Kiosk: a checked-out kid's tile says "Checked out at 2:15 — back
+  again?" and offers Check in; their morning dismissal time is
+  pre-filled on the return trip. (Previously a mid-day checkout also
+  wrongly blocked the day's second check-out.)
+- Parent portal: "Checked out" is no longer the end of the day — a
+  "Check back in" button sits right next to it, and the day card
+  shows the whole journey: checked in · checked out · back in.
+- Student Roster: the attendance cell shows "in 8:01 · out 11:30 ·
+  back 1:15", and the admin In/Out buttons already handled cycles.
+- Under the hood, the day's status now follows the LATEST event; the
+  old logic froze a day at "checked out" after any departure. All
+  history got recomputed with the fix.
+
+### Student Roster: attendance filter
+New "Attendance" dropdown (present / not yet / checked out / absent)
+plus a "Curbside today" checkbox in the roster filter bar. Combines
+with every other filter and flows into the CSV export.
+
+### Day-one kiosk report + duplicate-tap fix
+First day of school: 219 students checked in — 113 kiosk check-ins
+(every one signed), 22 portal check-ins, the rest via the office. One
+issue found and fixed same-day: the roster's admin In/Out button
+reloaded to a cached view, so staff re-tapped (one student collected
+13 duplicate check-ins). The button now updates in place, the server
+refuses same-day duplicates, and the 104 duplicate rows were removed.
+
+---
+
 ## August 2, 2026
 
 ### Publishing a form now EMAILS the targeted families too
