@@ -9,6 +9,19 @@ human digest.
 
 ## August 2, 2026
 
+### Missing finance emails for two MYHS tech agreements — found + fixed
+Finance didn't get the submission notices for Kennedi Patrick (Jul 31)
+and Leo Champagne (Aug 1) — 17 of 19 tech-agreement notices arrived.
+Root cause: notification emails were sent "in the background" after
+the parent's submission completed, and the server occasionally shuts
+that background work down mid-send. Random, rare, and silent.
+Fixed: every form notification (office notices, receipts, admin-change
+alerts, webhooks) now completes BEFORE the submission response, and
+any per-recipient failure is logged. The two missed notices were
+re-sent today — finance@ and admissions@ both received Kennedi's and
+Leo's now (delivery confirmed). A replay tool exists for any future
+"we never got the email" report.
+
 ### Enrollment agreement no longer re-asks already-enrolled siblings
 Why the Friend family got agreements for Lola + Tristan: enrolling NEW
 sibling Maelynn put the family in Pending, and the pending rule showed
