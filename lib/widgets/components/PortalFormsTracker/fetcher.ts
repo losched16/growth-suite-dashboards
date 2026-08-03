@@ -118,6 +118,7 @@ interface DbForm {
     tag_exclude?: string[];
     program_match?: string[];
     metadata_match?: Record<string, string[]>;
+    metadata_exclude?: Record<string, string[]>;
     student_ids?: string[];
   } | null;
 }
@@ -409,6 +410,14 @@ export async function fetcher(
     const rule = form.applies_to;
     if (!rule) return true;
     if (ruleExcludesFamily(form, student.family_id)) return false;
+    // Per-student metadata exclusion (e.g. enrollment_status: Enrolled)
+    // wins over every inclusion — mirrors the portal evaluator.
+    if (rule.metadata_exclude) {
+      for (const [k, vals] of Object.entries(rule.metadata_exclude)) {
+        const v = String(student.metadata?.[k] ?? '').toLowerCase();
+        if (v && vals.some((vv) => vv.toLowerCase() === v)) return false;
+      }
+    }
     if (ruleIsEmpty(rule)) return true;
     if (rule.student_ids?.includes(student.student_id)) return true;
     if (rule.program_match?.length) {

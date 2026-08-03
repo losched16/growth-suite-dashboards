@@ -82,6 +82,10 @@ function sanitizeAppliesTo(raw: unknown): { ok: true; value: Record<string, unkn
   if (pm.length) out.program_match = pm;
   const tm = strArray(r.tag_match);
   if (tm.length) out.tag_match = tm;
+  // tag_exclude was silently DROPPED here before — a builder save of a
+  // form using it would collapse the rule and show the form to everyone.
+  const tx = strArray(r.tag_exclude);
+  if (tx.length) out.tag_exclude = tx;
   const tg = strArray(r.tuition_grid_match);
   if (tg.length) out.tuition_grid_match = tg;
   const ak = strArray(r.addon_keys);
@@ -95,6 +99,15 @@ function sanitizeAppliesTo(raw: unknown): { ok: true; value: Record<string, unkn
       if (vals.length) mm[k] = vals;
     }
     if (Object.keys(mm).length) out.metadata_match = mm;
+  }
+  // Per-student metadata EXCLUSION (same shape as metadata_match).
+  if (r.metadata_exclude && typeof r.metadata_exclude === 'object' && !Array.isArray(r.metadata_exclude)) {
+    const mx: Record<string, string[]> = {};
+    for (const [k, v] of Object.entries(r.metadata_exclude as Record<string, unknown>)) {
+      const vals = strArray(v);
+      if (vals.length) mx[k] = vals;
+    }
+    if (Object.keys(mx).length) out.metadata_exclude = mx;
   }
 
   // No usable criteria → treat as "all students" (NULL).
