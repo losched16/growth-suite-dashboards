@@ -758,9 +758,23 @@ function renderCell(
       const tags = [];
       if (s.iep && s.iep.toLowerCase() !== 'no') tags.push('IEP');
       if (s.five04_plan && s.five04_plan.toLowerCase() !== 'no') tags.push('504');
-      return tags.length > 0
-        ? <span className="inline-block rounded bg-violet-100 px-1.5 py-0.5 text-[10px] font-medium uppercase text-violet-800">{tags.join('/')}</span>
-        : <span className="text-gray-400">—</span>;
+      const hasDoc = s.iep_documents_count > 0;
+      if (tags.length === 0 && !hasDoc) return <span className="text-gray-400">—</span>;
+      return (
+        <span className="inline-flex items-center gap-1">
+          {tags.length > 0 ? (
+            <span className="inline-block rounded bg-violet-100 px-1.5 py-0.5 text-[10px] font-medium uppercase text-violet-800">{tags.join('/')}</span>
+          ) : null}
+          {hasDoc ? (
+            <span
+              className="inline-block rounded bg-violet-50 border border-violet-300 px-1.5 py-0.5 text-[10px] font-medium uppercase text-violet-800"
+              title={`${s.iep_documents_count} IEP/504 document(s) uploaded — open the Documents column to view`}
+            >
+              📄 doc
+            </span>
+          ) : null}
+        </span>
+      );
     }
     case 'address':
       return s.address

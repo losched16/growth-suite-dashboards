@@ -118,6 +118,9 @@ export interface RosterStudent {
   // actual list is fetched lazily via /api/school/documents/list when
   // the operator clicks the cell.
   documents_count: number;
+  // Completed uploads in the IEP/504 category — trips has_iep_or_504
+  // and shows the "doc on file" chip even when the CRM fields are empty.
+  iep_documents_count: number;
   // Lunch selection (from student.metadata.organic_lunch). Free-text
   // because schools name their tiers differently.
   lunch: string | null;
@@ -216,6 +219,7 @@ interface DbRow {
   schedule: string | null;
   metadata: Record<string, unknown>;
   documents_count: number;
+  iep_documents_count: number;
   attendance_status: string | null;
   attendance_first_check_in_at: string | null;
   attendance_last_check_in_at: string | null;
@@ -305,6 +309,7 @@ export async function fetcher(
        e.schedule,
        s.metadata,
        COALESCE(dc.n, 0) AS documents_count,
+       COALESCE(dc.iep_docs, 0) AS iep_documents_count,
        da.status              AS attendance_status,
        da.first_check_in_at   AS attendance_first_check_in_at,
        da.last_check_in_at    AS attendance_last_check_in_at,
@@ -328,7 +333,12 @@ export async function fetcher(
      ) e ON true
      LEFT JOIN classrooms c ON c.id = e.classroom_id
      LEFT JOIN LATERAL (
-       SELECT COUNT(*)::int AS n FROM student_documents sd WHERE sd.student_id = s.id AND sd.is_complete = true
+       SELECT COUNT(*)::int AS n,
+              -- An uploaded IEP/504 document flags the student for the
+              -- IEP/504 filter even when the CRM fields say nothing —
+              -- the upload IS the record (office request, Aug 2026).
+              COUNT(*) FILTER (WHERE sd.category IN ('iep_504', 'iep'))::int AS iep_docs
+         FROM student_documents sd WHERE sd.student_id = s.id AND sd.is_complete = true
      ) dc ON true
      LEFT JOIN daily_attendance da
        ON da.student_id = s.id
@@ -685,7 +695,11 @@ export async function fetcher(
     // light up the badge, even if the rendered text is "(no detail
     // on file)". Teachers need the flag even when prose isn't there.
     const has_allergy = isMeaningfulFlag(metadataAllergy) || isMeaningfulFlag(r.hp_allergies);
-    const has_iep_or_504 = (!!iep && iep.toLowerCase() !== 'no') || (!!five04 && five04.toLowerCase() !== 'no');
+    // Flag from the CRM fields OR an uploaded IEP/504-category document
+    // — the upload alone must trip the filter.
+    const has_iep_or_504 = (!!iep && iep.toLowerCase() !== 'no')
+      || (!!five04 && five04.toLowerCase() !== 'no')
+      || r.iep_documents_count > 0;
     const haystack = [r.first_name, r.last_name, r.preferred_name ?? '', primary, r.family_display_name ?? '']
       .join(' ').toLowerCase();
     // daily_attendance.status is the canonical source. If no row exists
@@ -726,6 +740,7 @@ export async function fetcher(
       has_allergy,
       has_iep_or_504,
       documents_count: Number(r.documents_count ?? 0),
+      iep_documents_count: Number(r.iep_documents_count ?? 0),
       lunch,
       has_lunch,
       attendance_status,
