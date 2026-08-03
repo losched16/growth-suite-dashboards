@@ -10,11 +10,13 @@
 
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { after } from 'next/server';
 import { cookies } from 'next/headers';
 import { query, withTransaction } from '@/lib/db';
 import { SESSION_COOKIE, verifySessionToken } from '@/lib/auth/operator';
 import { SCHOOL_SESSION_COOKIE, verifySchoolSession } from '@/lib/auth/school';
 import { resolveRecipients, sanitizeAudience, summarizeAudience } from '@/lib/notifications/audience';
+import { loadGhlClient } from '@/lib/ghl/client';
 
 // Authorize a DELETE for `schoolId`. Accepts EITHER:
 //   - operator session (back-office /admin pages), or
@@ -34,6 +36,9 @@ async function authorizeFormMutation(schoolId: string): Promise<{ ok: true } | {
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+// Publish-notification email fan-out (via after()) can take ~2 minutes
+// for a school-wide form — keep the function alive long enough.
+export const maxDuration = 300;
 
 type Params = Promise<{ schoolId: string; formId: string }>;
 
@@ -356,6 +361,53 @@ export async function PATCH(request: NextRequest, { params }: { params: Params }
               );
             });
             notified = recipients.length;
+
+            // EMAIL each recipient too — parents need a heads-up to even
+            // open the portal (Clint, Aug 3). Sent through the school's
+            // CRM so every email lands in the contact's conversation
+            // history. Runs via after() so the builder's publish click
+            // returns immediately while the fan-out completes (after()
+            // keeps the function alive — a naked detached promise would
+            // not survive the response).
+            const emailBody = `<p>Hi {first},</p>
+<p>A new form — <strong>${def.display_name.replace(/&/g, '&amp;').replace(/</g, '&lt;')}</strong> — has been published to your parent portal and needs your attention.</p>
+${linkUrl ? `<p><a href="${linkUrl}">Open the form</a> — or log in to your parent portal and find it under your forms.</p>` : '<p>Please log in to your parent portal and find it under your forms.</p>'}
+<p>Thank you!</p>`;
+            const parentIds = [...new Set(recipients.map((r) => r.parent_id))];
+            after(async () => {
+              try {
+                const { rows: pRows } = await query<{ id: string; first_name: string | null; ghl_contact_id: string | null }>(
+                  `SELECT id, first_name, ghl_contact_id FROM parents
+                    WHERE id = ANY($1::uuid[]) AND ghl_contact_id IS NOT NULL`,
+                  [parentIds],
+                );
+                const seen = new Set<string>();
+                const ghl = await loadGhlClient(schoolId);
+                let sent = 0, failed = 0;
+                for (const p of pRows) {
+                  if (!p.ghl_contact_id || seen.has(p.ghl_contact_id)) continue;
+                  seen.add(p.ghl_contact_id);
+                  try {
+                    await ghl.axios.post('/conversations/messages', {
+                      type: 'Email',
+                      contactId: p.ghl_contact_id,
+                      subject: `New form to complete: ${def.display_name}`,
+                      html: emailBody.replace('{first}', (p.first_name ?? 'there')
+                        .replace(/&/g, '&amp;').replace(/</g, '&lt;')),
+                    }, { headers: { Version: '2021-04-15' } });
+                    sent++;
+                  } catch (e) {
+                    failed++;
+                    console.error(`[publish-notify] email to contact ${p.ghl_contact_id} failed:`,
+                      e instanceof Error ? e.message : String(e));
+                  }
+                  await new Promise((r) => setTimeout(r, 350));
+                }
+                console.log(`[publish-notify] "${def.display_name}": emailed ${sent}, failed ${failed}`);
+              } catch (e) {
+                console.error('[publish-notify] email fan-out failed:', e);
+              }
+            });
           }
         }
       }
