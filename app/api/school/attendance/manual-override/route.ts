@@ -36,6 +36,23 @@ export async function POST(request: NextRequest) {
   if (rows.length === 0) return new NextResponse('student not found', { status: 404 });
   if (rows[0].school_id !== session.school_id) return new NextResponse('forbidden', { status: 403 });
 
+  // Idempotence: if the student's LATEST event today is already this
+  // same type, don't write another row. Guards against double-taps and
+  // the stale-cache re-tap loop (one student collected 13 duplicate
+  // admin check-ins on day one). A repeat call still returns ok so the
+  // UI flow is unchanged.
+  const { rows: lastRows } = await query<{ event_type: string }>(
+    `SELECT event_type FROM attendance_events
+      WHERE student_id = $1 AND school_id = $2
+        AND (performed_at AT TIME ZONE 'America/Phoenix')::date
+            = (now() AT TIME ZONE 'America/Phoenix')::date
+      ORDER BY performed_at DESC LIMIT 1`,
+    [studentId, session.school_id],
+  );
+  if (lastRows[0]?.event_type === eventType) {
+    return NextResponse.json({ ok: true, deduped: true });
+  }
+
   // Write the override event (admin actor, no signature, no parent)
   await query(
     `INSERT INTO attendance_events (

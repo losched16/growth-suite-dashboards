@@ -579,6 +579,12 @@ function PickupPeopleManager({
 // API — for when a parent can't do kiosk check-in/out themselves.
 function AttendanceCell({ s }: { s: RosterStudent }) {
   const [busy, setBusy] = useState(false);
+  // Local status override after an admin action. The old
+  // window.location.reload() served the CACHED roster, so the chip
+  // looked unchanged and the office kept tapping — one kid collected
+  // 13 duplicate check-ins on day one. Updating in place shows the
+  // result instantly and removes the reason to re-tap.
+  const [localStatus, setLocalStatus] = useState<string | null>(null);
   async function act(eventType: 'check_in' | 'check_out') {
     if (busy) return;
     setBusy(true);
@@ -589,12 +595,14 @@ function AttendanceCell({ s }: { s: RosterStudent }) {
       fd.set('notes', eventType === 'check_in' ? 'Admin check-in from roster' : 'Admin check-out from roster');
       const r = await fetch('/api/school/attendance/manual-override', { method: 'POST', body: fd });
       if (!r.ok) throw new Error(await r.text());
-      window.location.reload();
+      setLocalStatus(eventType === 'check_in' ? 'present' : 'checked_out');
     } catch {
+      // leave status as-is; button re-enables for retry
+    } finally {
       setBusy(false);
     }
   }
-  const status = s.attendance_status;
+  const status = localStatus ?? s.attendance_status;
   const tone = status === 'present'      ? 'bg-emerald-100 text-emerald-800'
              : status === 'partial'      ? 'bg-amber-100 text-amber-800'
              : status === 'checked_out'  ? 'bg-blue-100 text-blue-800'
