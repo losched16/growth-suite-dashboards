@@ -9,6 +9,13 @@ human digest.
 
 ## August 2, 2026
 
+### Publishing a form now EMAILS the targeted families too
+The in-portal bell alone doesn't reach parents who aren't already in
+the portal. Publishing a form now also sends each targeted parent an
+email through the CRM (visible on their contact's conversation) with
+a link straight to the form. Same accidental-republish protection:
+within 14 days of a previous notice, no re-blast.
+
 ### Emergency card reminders — sent (Clint-approved)
 Reminder emails went to 129 of 130 families with an outstanding AZ
 Emergency Card (one email per family, listing their student(s), sent
