@@ -9,6 +9,18 @@ human digest.
 
 ## August 2, 2026
 
+### Enrollment agreement no longer re-asks already-enrolled siblings
+Why the Friend family got agreements for Lola + Tristan: enrolling NEW
+sibling Maelynn put the family in Pending, and the pending rule showed
+the agreement for every child in the family. Fixed structurally: forms
+can now exclude students by enrollment status, and the agreement now
+skips any student already marked Enrolled — automatically, using the
+CRM-synced status. Verified: the agreement's missing list is now only
+genuinely pending students. NOTE for re-enrollment season: remove that
+exclusion when you WANT enrolled families re-signing. Still to do for
+the office: Maelynn's agreement is unsigned (dad signed the other two
+instead); it's waiting in his portal.
+
 ### Student document upload — three fixes from the office list
 - Uploading from a student's roster row now opens the form ALREADY on
   that student, and the student picker has a type-to-search box.
