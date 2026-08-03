@@ -127,6 +127,9 @@ export interface RosterStudent {
   // today yet (default state at the start of each day).
   attendance_status: 'present' | 'partial' | 'checked_out' | 'absent' | 'not_yet';
   attendance_check_in_at: string | null;
+  // Latest check-in of the day — differs from attendance_check_in_at
+  // (the FIRST) when the student left and came back.
+  attendance_back_in_at: string | null;
   attendance_check_out_at: string | null;
   // Curbside pickup info — daily_attendance.curbside_pickup is the
   // canonical "did/will they curbside today" flag; slot comes from the
@@ -215,6 +218,7 @@ interface DbRow {
   documents_count: number;
   attendance_status: string | null;
   attendance_first_check_in_at: string | null;
+  attendance_last_check_in_at: string | null;
   attendance_last_check_out_at: string | null;
   attendance_curbside: boolean | null;
   curbside_slot: string | null;
@@ -303,6 +307,7 @@ export async function fetcher(
        COALESCE(dc.n, 0) AS documents_count,
        da.status              AS attendance_status,
        da.first_check_in_at   AS attendance_first_check_in_at,
+       da.last_check_in_at    AS attendance_last_check_in_at,
        da.last_check_out_at   AS attendance_last_check_out_at,
        da.curbside_pickup     AS attendance_curbside,
        cs.curbside_slot       AS curbside_slot,
@@ -725,6 +730,7 @@ export async function fetcher(
       has_lunch,
       attendance_status,
       attendance_check_in_at: r.attendance_first_check_in_at,
+      attendance_back_in_at: r.attendance_last_check_in_at,
       attendance_check_out_at: r.attendance_last_check_out_at,
       curbside_today: !!r.attendance_curbside,
       curbside_slot: r.curbside_slot,

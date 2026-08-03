@@ -631,6 +631,10 @@ function AttendanceCell({ s }: { s: RosterStudent }) {
         <div className="mt-0.5 text-[10px] text-gray-500">
           in {new Date(inAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
           {outAt ? ` · out ${new Date(outAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}` : ''}
+          {/* Left and came back (any reason) — show the return leg. */}
+          {s.attendance_back_in_at && outAt && new Date(s.attendance_back_in_at) > new Date(outAt)
+            ? ` · back ${new Date(s.attendance_back_in_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`
+            : ''}
         </div>
       ) : null}
       <div className="mt-1 flex gap-1">
