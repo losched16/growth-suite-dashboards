@@ -9,6 +9,17 @@ human digest.
 
 ## August 2, 2026
 
+### Emergency card reminders — sent (Clint-approved)
+Reminder emails went to 129 of 130 families with an outstanding AZ
+Emergency Card (one email per family, listing their student(s), sent
+through the CRM so each shows in the contact's conversation thread).
+Copy: go back to the July 24 card email, it will NOT appear in the
+parent portal, check junk/spam, email admissions@ for a fresh one.
+ONE failure: Gonzalez Family — the CRM rejected the address
+roasalee.gonzalez@gmail.com as invalid (looks like a typo of
+"Rosalee"). Office: please confirm her correct email with the family
+and fix it on the contact, then the reminder can be resent.
+
 ### Missing finance emails for two MYHS tech agreements — found + fixed
 Finance didn't get the submission notices for Kennedi Patrick (Jul 31)
 and Leo Champagne (Aug 1) — 17 of 19 tech-agreement notices arrived.
