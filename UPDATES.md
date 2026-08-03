@@ -9,6 +9,25 @@ human digest.
 
 ## August 3, 2026
 
+### CRITICAL FIX: uploaded documents (and more) were being wiped by the sync
+Why Aarna Patel's uploaded document showed "1" then "0": the
+15-minute CRM sync rebuilds families/students from scratch, and the
+database was configured to delete everything attached to them —
+student documents, invoices, parent uploads, pickup restrictions,
+enrollment invites, saved payment methods. Every sync silently erased
+whatever the office/parents had created since. FIXED: the sync now
+carries ALL of that data across the rebuild — verified by planting a
+test document, running a live sync, and confirming it survived.
+Office action: Aarna's document (and any other student doc uploaded
+before today) is gone and needs to be RE-uploaded once — from now on
+they persist, show correct counts, and open normally.
+
+### Megan + John O'Callaghan — consolidated
+Same fix as Gabrielle/Ross: Megan is now Parent 1 with BOTH boys
+(John Jr + Milo, all data) on her contact; John is Parent 2. Megan's
+portal login (password kept) now shows both kids — verified by
+logging in as her.
+
 ### Attendance: leave and come back, any number of times
 A student can now check in, check out mid-day (appointment, early
 pickup, anything), and check BACK in — on every surface:
