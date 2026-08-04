@@ -9,6 +9,23 @@ human digest.
 
 ## August 4, 2026
 
+### Emergency-card people imported as authorized pickup people
+The "person(s) who may accept responsibility for the child / to whom
+the child may be released" section of every signed AZ Emergency Card
+is now pulled into the platform automatically. One-time import done:
+407 people across 141 families, each scoped to the student(s) whose
+card named them, with phone numbers. They show in the family panel's
+pickup-people manager, on the Attendance dashboard's AUTHORIZED PICKUP
+column, and in the parent portal's pickup list. Going forward every
+newly signed card imports its people automatically within 15 minutes.
+Skipped automatically: blank/"NA" lines, and parents listing
+themselves (parents are always authorized). These people have no PIN
+until the office generates one (family panel → pickup people), so
+they can't use the kiosk yet — by design.
+OFFICE ACTION: two test cards created joke entries on real families —
+deactivate "Her smith" + "Henry Frankie" (Blanken) and "John Jo" +
+"Sarah Jo" (Zack) in those families' pickup lists.
+
 ### AZ Card fields now support "who hasn't submitted" smart lists
 Signed emergency cards were already flipping Student 1/2/3 AZ Card to
 "Complete" on the contact (195 so far, automatic within 15 minutes of

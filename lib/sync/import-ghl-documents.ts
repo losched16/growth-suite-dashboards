@@ -44,7 +44,76 @@ interface GhlDocument {
   status?: string;
   deleted?: boolean;
   recipients?: Array<{ id?: string; hasCompleted?: boolean; signedDate?: string }>;
+  fillableFields?: Array<{ fieldId?: string; type?: string; value?: unknown }>;
   updatedAt?: string;
+}
+
+// AZ Emergency Card layout (verified against DGM's signed cards): the
+// "person(s) who will accept responsibility for the child / to whom the
+// child may be released" section is text_field_17..20 (names) paired
+// positionally with text_field_21..24 (phones). These become authorized
+// pickup people scoped to the card's student.
+const CARD_PICKUP_PAIRS: Array<[string, string]> = [
+  ['text_field_17', 'text_field_21'],
+  ['text_field_18', 'text_field_22'],
+  ['text_field_19', 'text_field_23'],
+  ['text_field_20', 'text_field_24'],
+];
+const cleanCardText = (s: unknown): string =>
+  String(s ?? '').replace(/[\u200B-\u200F\u202A-\u202E\uFEFF]/g, '').replace(/\s+/g, ' ').trim();
+const normCardName = (s: string): string => cleanCardText(s).toLowerCase().replace(/[^a-z]/g, '');
+const isCardJunk = (s: string): boolean => s === '' || /^(na|n\/?a|none|nil|-+|\.+)$/i.test(s);
+
+// Emergency/release-to people from a signed card → pickup_persons rows
+// scoped to the card's student. Skips the family's own parents, junk
+// entries, and anyone already on the family's pickup list (any source).
+async function importCardPickupPeople(
+  schoolId: string,
+  familyId: string,
+  studentId: string | null,
+  doc: GhlDocument,
+): Promise<number> {
+  const fieldVal = (fid: string): string => {
+    const f = (doc.fillableFields ?? []).find((x) => x.fieldId === fid && x.type !== 'Checkbox');
+    return f ? cleanCardText(f.value) : '';
+  };
+  const { rows: fam } = await query<{ id: string; is_primary: boolean; first_name: string; last_name: string }>(
+    `SELECT id, is_primary, first_name, last_name FROM parents
+      WHERE family_id = $1 AND status = 'active'`, [familyId]);
+  if (fam.length === 0) return 0;
+  const parentNorms = new Set(fam.map((p) => normCardName(`${p.first_name} ${p.last_name}`)));
+  for (const fid of ['text_field_8', 'text_field_16', 'text_field_27']) {
+    const v = fieldVal(fid);
+    if (v) parentNorms.add(normCardName(v));
+  }
+  const { rows: existing } = await query<{ id: string; name: string }>(
+    `SELECT id, name FROM pickup_persons WHERE family_id = $1`, [familyId]);
+  const existingByNorm = new Map(existing.map((e) => [normCardName(e.name), e.id]));
+  const p1 = fam.find((p) => p.is_primary) ?? fam[0];
+
+  let added = 0;
+  for (const [nf, pf] of CARD_PICKUP_PAIRS) {
+    const name = fieldVal(nf);
+    if (isCardJunk(name) || parentNorms.has(normCardName(name))) continue;
+    const phone = fieldVal(pf);
+    let ppId = existingByNorm.get(normCardName(name)) ?? null;
+    if (!ppId) {
+      const { rows: ins } = await query<{ id: string }>(
+        `INSERT INTO pickup_persons (school_id, family_id, added_by_parent_id, name, relationship, phone, notes, active, is_temporary)
+         VALUES ($1, $2, $3, $4, 'Emergency card contact', $5, 'Imported from signed AZ Emergency Card', true, false)
+         RETURNING id`,
+        [schoolId, familyId, p1.id, name, isCardJunk(phone) ? null : phone]);
+      ppId = ins[0].id;
+      existingByNorm.set(normCardName(name), ppId);
+      added++;
+    }
+    if (studentId) {
+      await query(
+        `INSERT INTO pickup_person_students (pickup_person_id, student_id, school_id)
+         VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`, [ppId, studentId, schoolId]);
+    }
+  }
+  return added;
 }
 
 export interface ImportGhlDocumentsResult {
@@ -53,11 +122,12 @@ export interface ImportGhlDocumentsResult {
   processed: number;
   fields_set: number;
   not_complete_set: number;
+  pickup_people_added: number;
   errors: number;
 }
 
 export async function importGhlDocuments(schoolId: string): Promise<ImportGhlDocumentsResult> {
-  const result: ImportGhlDocumentsResult = { ran: false, completed_seen: 0, processed: 0, fields_set: 0, not_complete_set: 0, errors: 0 };
+  const result: ImportGhlDocumentsResult = { ran: false, completed_seen: 0, processed: 0, fields_set: 0, not_complete_set: 0, pickup_people_added: 0, errors: 0 };
   const settings = await loadSchoolSettings(schoolId);
   if (!settings.ghl_documents_sync) return result;
   result.ran = true;
@@ -158,6 +228,10 @@ export async function importGhlDocuments(schoolId: string): Promise<ImportGhlDoc
           ).catch(() => undefined);
         }
         if (fieldSet) result.fields_set++;
+        if (familyId) {
+          result.pickup_people_added += await importCardPickupPeople(schoolId, familyId, studentId, doc)
+            .catch((e) => { console.warn('[import-ghl-documents] pickup import failed for doc', doc._id, ':', e instanceof Error ? e.message : String(e)); return 0; });
+        }
       }
 
       await query(
