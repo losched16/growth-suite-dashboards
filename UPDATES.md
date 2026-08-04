@@ -9,6 +9,13 @@ human digest.
 
 ## August 4, 2026
 
+### Parent PINs visible on the Attendance dashboard
+New right-hand "Parent PINs" column on the Attendance & Curbside
+dashboard: each active parent's first name + kiosk PIN, at a glance.
+A dash means no viewable PIN yet — set one from the Student Roster
+family panel. Office-only view (same audience as the roster's PIN
+manager).
+
 ### Emergency-card people imported as authorized pickup people
 The "person(s) who may accept responsibility for the child / to whom
 the child may be released" section of every signed AZ Emergency Card

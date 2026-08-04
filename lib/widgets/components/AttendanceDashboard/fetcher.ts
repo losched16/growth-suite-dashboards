@@ -1,4 +1,5 @@
 import { query } from '@/lib/db';
+import { decrypt } from '@/lib/crypto';
 import type { SchoolContext, WidgetSearchParams } from '@/lib/widgets/types';
 import type { AttendanceDashboardConfig } from './config';
 
@@ -29,6 +30,10 @@ export interface StudentRow {
   // the GHL do-not-pickup free-text field).
   authorized_pickup: string | null;
   do_not_pickup: string | null;
+  // "First 1234 · First 5678" — each active parent's kiosk PIN
+  // (decrypted office-viewable copy), for at-a-glance front-desk
+  // lookups. Null when no parent in the family has a viewable PIN.
+  parent_pins: string | null;
   // Joined string of every parent note left on today's check-in /
   // check-out events for this student (most-recent last). Null when
   // no notes today.
@@ -87,6 +92,7 @@ export interface AttendanceDashboardData {
 
 interface DbStudentRow {
   student_id: string;
+  family_id: string;
   first_name: string;
   last_name: string;
   classroom: string | null;
@@ -207,6 +213,7 @@ export async function fetcher(
      )
      SELECT
        s.id AS student_id,
+       s.family_id,
        s.first_name, s.last_name,
        COALESCE(s.metadata->>'homeroom', s.metadata->>'classroom_name') AS classroom,
        s.metadata->>'program' AS program,
@@ -267,6 +274,32 @@ export async function fetcher(
     [school.schoolId, dateIso, tz],
   );
 
+  // Parents' kiosk PINs (decrypted office-viewable copies), one string
+  // per family: "First 1234 · First 5678", primary parent first.
+  // Hash-only PINs from before the viewable-copy upgrade can't be
+  // displayed and are simply absent. This dashboard is office-only
+  // (embed-token / school session), same audience as the roster's PIN
+  // manager, so showing them at a glance is intentional.
+  const { rows: pinRows } = await query<{
+    family_id: string; first_name: string;
+    pin_encrypted: Buffer; pin_iv: Buffer; pin_tag: Buffer;
+  }>(
+    `SELECT family_id, first_name, pin_encrypted, pin_iv, pin_tag
+       FROM parents
+      WHERE school_id = $1 AND status = 'active' AND pin_encrypted IS NOT NULL
+      ORDER BY family_id, is_primary DESC, first_name`,
+    [school.schoolId],
+  );
+  const pinsByFamily = new Map<string, string>();
+  for (const p of pinRows) {
+    let pin: string | null = null;
+    try { pin = decrypt(p.pin_encrypted, p.pin_iv, p.pin_tag); } catch { pin = null; }
+    if (!pin) continue;
+    const entry = `${p.first_name} ${pin}`;
+    pinsByFamily.set(p.family_id, pinsByFamily.has(p.family_id)
+      ? `${pinsByFamily.get(p.family_id)} · ${entry}` : entry);
+  }
+
   // Recent events for the live feed (top of dashboard).
   const { rows: evRows } = await query<DbEventRow>(
     `SELECT
@@ -309,6 +342,7 @@ export async function fetcher(
     last_admin_override_at: r.last_admin_override_at,
     authorized_pickup: [r.parent_names, r.pickup_person_names].filter(Boolean).join('; ') || null,
     do_not_pickup: [r.restriction_names, r.do_not_free_text?.trim() || null].filter(Boolean).join('; ') || null,
+    parent_pins: pinsByFamily.get(r.family_id) ?? null,
   }));
 
   const classrooms = Array.from(new Set(allRows.map((r) => r.classroom).filter((c): c is string => !!c))).sort();

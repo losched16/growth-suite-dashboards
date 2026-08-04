@@ -50,6 +50,7 @@ export function RosterTable({ rows, dateIso, isToday }: { rows: StudentRow[]; da
             <th className="px-3 py-2 font-medium">Notes</th>
             <th className="px-3 py-2 font-medium">Authorized pickup</th>
             <th className="px-3 py-2 font-medium text-rose-700">Do NOT pickup</th>
+            <th className="px-3 py-2 font-medium">Parent PINs</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-100">
@@ -90,7 +91,7 @@ function FragmentRow({
     <>
       {sectionLabel !== null ? (
         <tr className="bg-emerald-50/70 border-y border-emerald-200">
-          <td colSpan={10} className="px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-emerald-900">
+          <td colSpan={12} className="px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-emerald-900">
             {sectionLabel}
           </td>
         </tr>
@@ -168,10 +169,15 @@ function FragmentRow({
             ? <span className="block font-medium text-rose-700" title={r.do_not_pickup}>⛔ {r.do_not_pickup}</span>
             : <span className="text-gray-400">{EMDASH}</span>}
         </td>
+        <td className="px-3 py-2 align-top text-[11px] whitespace-nowrap">
+          {r.parent_pins
+            ? <span className="font-mono text-gray-800" title="Each active parent's kiosk PIN (first name + PIN)">{r.parent_pins}</span>
+            : <span className="text-gray-400" title="No viewable PIN — set one from the Student Roster family panel">{EMDASH}</span>}
+        </td>
       </tr>
       {open ? (
         <tr>
-          <td colSpan={10} className="bg-gray-50 p-0 border-y border-emerald-200">
+          <td colSpan={12} className="bg-gray-50 p-0 border-y border-emerald-200">
             <Drawer row={r} dateIso={dateIso} isToday={isToday} />
           </td>
         </tr>
