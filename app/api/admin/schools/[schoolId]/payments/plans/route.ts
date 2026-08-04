@@ -35,8 +35,14 @@ function back(
   q: { msg?: string; err?: string; returnTo?: string | null },
 ) {
   const url = request.nextUrl.clone();
-  url.pathname = safeReturn(q.returnTo ?? null, schoolId);
-  url.search = '';
+  // return_to may carry a query string (the school iframe passes
+  // "/school/{loc}/payments?tab=plans"). Assigning it to url.pathname
+  // percent-encodes the "?" and 404s — split it like the enrollments
+  // route does.
+  const target = safeReturn(q.returnTo ?? null, schoolId);
+  const [path, qs] = target.split('?');
+  url.pathname = path;
+  url.search = qs ? `?${qs}` : '';
   if (q.msg) url.searchParams.set('msg', q.msg);
   if (q.err) url.searchParams.set('err', q.err);
   return NextResponse.redirect(url, 303);
