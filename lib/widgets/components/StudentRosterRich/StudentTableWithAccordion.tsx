@@ -585,6 +585,11 @@ function AttendanceCell({ s }: { s: RosterStudent }) {
   // 13 duplicate check-ins on day one. Updating in place shows the
   // result instantly and removes the reason to re-tap.
   const [localStatus, setLocalStatus] = useState<string | null>(null);
+  // Timestamp of the in-place action so the cell shows "in 8:03"
+  // immediately — without it, post-tap rows read as bare "Present"
+  // until a refresh (the MYHS "after 8:00 it only states present"
+  // report) even though the event time was recorded fine.
+  const [localAt, setLocalAt] = useState<{ in?: string; out?: string }>({});
   async function act(eventType: 'check_in' | 'check_out') {
     if (busy) return;
     setBusy(true);
@@ -596,6 +601,7 @@ function AttendanceCell({ s }: { s: RosterStudent }) {
       const r = await fetch('/api/school/attendance/manual-override', { method: 'POST', body: fd });
       if (!r.ok) throw new Error(await r.text());
       setLocalStatus(eventType === 'check_in' ? 'present' : 'checked_out');
+      setLocalAt((prev) => ({ ...prev, [eventType === 'check_in' ? 'in' : 'out']: new Date().toISOString() }));
     } catch {
       // leave status as-is; button re-enables for retry
     } finally {
@@ -609,8 +615,8 @@ function AttendanceCell({ s }: { s: RosterStudent }) {
              : status === 'absent'       ? 'bg-rose-100 text-rose-800'
              :                              'bg-gray-100 text-gray-600';
   const label = status === 'not_yet' ? 'Not yet' : status.replace(/_/g, ' ');
-  const inAt = s.attendance_check_in_at;
-  const outAt = s.attendance_check_out_at;
+  const inAt = s.attendance_check_in_at ?? localAt.in ?? null;
+  const outAt = s.attendance_check_out_at ?? localAt.out ?? null;
   return (
     <div>
       <div className="flex items-center gap-1 flex-wrap">

@@ -797,7 +797,9 @@ export function mergeCoparentFamilies(
     const parents: MappedParent[] = [];
     const seen = new Set<string>();
     for (const f of grp) for (const p of f.parents) {
-      const pk = (p.ghl_contact_id || p.email?.toLowerCase() || `${p.first_name} ${p.last_name}`.toLowerCase()).trim();
+      // EMAIL-first key: the same human's P2 mirror copy often lacks a
+      // contact id, so contact-first keying let them through twice.
+      const pk = (p.email?.toLowerCase() || p.ghl_contact_id || `${p.first_name} ${p.last_name}`.toLowerCase()).trim();
       if (!pk || seen.has(pk)) continue;
       seen.add(pk); parents.push({ ...p });
     }
@@ -1234,7 +1236,25 @@ export async function runGhlSync(schoolId: string): Promise<SyncResult> {
       const familyId = famRows[0].id;
       familiesCreated++;
 
-      for (const p of fam.parents) {
+      // One row per human: dedupe the family's parents by email (falling
+      // back to contact id, then name). Split-family merges produced the
+      // same person twice — once as their own P1 copy (with contact id)
+      // and once as the co-parent's P2 mirror (often WITHOUT one) — and
+      // the duplicate rows then fought over the same preserved id every
+      // sync, silently dropping the loser's PIN/password (Nandwana,
+      // Aug 2026: mom's kiosk PIN vanished this way).
+      const seenParentKeys = new Set<string>();
+      // Survivor preference: primary first, then contact-bearing — so
+      // the dedupe keeps the row that carries the identity.
+      const parentsOrdered = [...fam.parents].sort((a, b) =>
+        (Number(b.is_primary) - Number(a.is_primary))
+        || (Number(!!b.ghl_contact_id) - Number(!!a.ghl_contact_id)));
+      for (const p of parentsOrdered) {
+        const dedupeKey = (p.email?.trim().toLowerCase()
+          || p.ghl_contact_id
+          || `${p.first_name} ${p.last_name}`.trim().toLowerCase());
+        if (dedupeKey && seenParentKeys.has(dedupeKey)) continue;
+        if (dedupeKey) seenParentKeys.add(dedupeKey);
         let effectiveContactId = p.ghl_contact_id;
         // P2 with email + P1 known → check carryover map
         if (!effectiveContactId && !p.is_primary && p.email && p1ContactId) {
