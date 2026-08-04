@@ -41,7 +41,6 @@ export function RosterTable({ rows, dateIso, isToday }: { rows: StudentRow[]; da
           <tr>
             <th className="w-6 px-2 py-2" />
             <th className="px-3 py-2 font-medium">Student</th>
-            <th className="px-3 py-2 font-medium">Classroom</th>
             <th className="px-3 py-2 font-medium">Status</th>
             <th className="px-3 py-2 font-medium">Pickup at</th>
             <th className="px-3 py-2 font-medium">In</th>
@@ -49,19 +48,25 @@ export function RosterTable({ rows, dateIso, isToday }: { rows: StudentRow[]; da
             <th className="px-3 py-2 font-medium">By</th>
             <th className="px-3 py-2 font-medium text-center">Curbside</th>
             <th className="px-3 py-2 font-medium">Notes</th>
+            <th className="px-3 py-2 font-medium">Authorized pickup</th>
+            <th className="px-3 py-2 font-medium text-rose-700">Do NOT pickup</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-100">
-          {rows.map((r) => {
+          {rows.map((r, i) => {
             const open = expanded === r.student_id;
+            // Classroom-grouped presentation: rows arrive sorted by
+            // classroom, so a header row marks each new section.
+            const newSection = i === 0 || r.classroom !== rows[i - 1].classroom;
             return (
-              <Row
+              <FragmentRow
                 key={r.student_id}
                 row={r}
                 open={open}
                 onToggle={() => setExpanded(open ? null : r.student_id)}
                 dateIso={dateIso}
                 isToday={isToday}
+                sectionLabel={newSection ? (r.classroom ?? 'No classroom') : null}
               />
             );
           })}
@@ -71,17 +76,25 @@ export function RosterTable({ rows, dateIso, isToday }: { rows: StudentRow[]; da
   );
 }
 
-function Row({
-  row: r, open, onToggle, dateIso, isToday,
+function FragmentRow({
+  row: r, open, onToggle, dateIso, isToday, sectionLabel,
 }: {
   row: StudentRow;
   open: boolean;
   onToggle: () => void;
   dateIso: string;
   isToday: boolean;
+  sectionLabel: string | null;
 }) {
   return (
     <>
+      {sectionLabel !== null ? (
+        <tr className="bg-emerald-50/70 border-y border-emerald-200">
+          <td colSpan={10} className="px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-emerald-900">
+            {sectionLabel}
+          </td>
+        </tr>
+      ) : null}
       <tr
         onClick={onToggle}
         className={`cursor-pointer ${open ? 'bg-emerald-50/50' : 'hover:bg-gray-50'}`}
@@ -105,7 +118,6 @@ function Row({
           </div>
           <div className="text-[10px] text-gray-500">{r.primary_parent_name}</div>
         </td>
-        <td className="px-3 py-2 align-top text-xs text-gray-700">{r.classroom ?? EMDASH}</td>
         <td className="px-3 py-2 align-top"><StatusBadge status={r.status} /></td>
         <td className="px-3 py-2 align-top">
           {r.pickup_time ? (
@@ -146,10 +158,20 @@ function Row({
             <span className="text-gray-400">{EMDASH}</span>
           )}
         </td>
+        <td className="px-3 py-2 align-top text-[11px] text-gray-700 max-w-[14rem]">
+          {r.authorized_pickup
+            ? <span className="block" title={r.authorized_pickup}>{r.authorized_pickup}</span>
+            : <span className="text-gray-400">{EMDASH}</span>}
+        </td>
+        <td className="px-3 py-2 align-top text-[11px] max-w-[12rem]">
+          {r.do_not_pickup
+            ? <span className="block font-medium text-rose-700" title={r.do_not_pickup}>⛔ {r.do_not_pickup}</span>
+            : <span className="text-gray-400">{EMDASH}</span>}
+        </td>
       </tr>
       {open ? (
         <tr>
-          <td colSpan={9} className="bg-gray-50 p-0 border-y border-emerald-200">
+          <td colSpan={10} className="bg-gray-50 p-0 border-y border-emerald-200">
             <Drawer row={r} dateIso={dateIso} isToday={isToday} />
           </td>
         </tr>

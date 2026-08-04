@@ -24,6 +24,11 @@ export interface StudentRow {
   pickup_time: string | null;
   total_minutes: number | null;
   event_count_today: number;
+  // Who CAN pick this student up (family parents + active pickup
+  // persons scoped to them) and who must NOT (active restrictions +
+  // the GHL do-not-pickup free-text field).
+  authorized_pickup: string | null;
+  do_not_pickup: string | null;
   // Joined string of every parent note left on today's check-in /
   // check-out events for this student (most-recent last). Null when
   // no notes today.
@@ -105,6 +110,10 @@ interface DbStudentRow {
   todays_notes: string | null;
   last_admin_override_email: string | null;
   last_admin_override_at: string | null;
+  parent_names: string | null;
+  pickup_person_names: string | null;
+  restriction_names: string | null;
+  do_not_free_text: string | null;
 }
 
 interface DbEventRow {
@@ -215,7 +224,11 @@ export async function fetcher(
        COALESCE(ec.n, 0) AS event_count_today,
        en.todays_notes,
        lo.email AS last_admin_override_email,
-       lo.at AS last_admin_override_at
+       lo.at AS last_admin_override_at,
+       fam_par.names AS parent_names,
+       auth_pp.names AS pickup_person_names,
+       restr.names AS restriction_names,
+       s.metadata->>'unauthorized__do_not_pickup' AS do_not_free_text
      FROM students s
      LEFT JOIN daily_attendance da
        ON da.student_id = s.id AND da.school_id = s.school_id AND da.date = $2::date
@@ -230,6 +243,25 @@ export async function fetcher(
        WHERE pp.family_id = s.family_id AND pp.is_primary = true AND pp.status = 'active'
        ORDER BY pp.created_at LIMIT 1
      ) p ON true
+     LEFT JOIN LATERAL (
+       -- All active parents — implicitly authorized to pick up.
+       SELECT string_agg(pa.first_name || ' ' || pa.last_name, '; ' ORDER BY pa.is_primary DESC, pa.first_name) AS names
+         FROM parents pa WHERE pa.family_id = s.family_id AND pa.status = 'active'
+     ) fam_par ON true
+     LEFT JOIN LATERAL (
+       -- Active pickup persons, honoring per-student scoping (empty
+       -- junction = authorized for all the family's kids).
+       SELECT string_agg(pp2.name || COALESCE(' (' || NULLIF(pp2.relationship, '') || ')', ''), '; ' ORDER BY pp2.name) AS names
+         FROM pickup_persons pp2
+        WHERE pp2.family_id = s.family_id AND pp2.active = true
+          AND (NOT EXISTS (SELECT 1 FROM pickup_person_students pps WHERE pps.pickup_person_id = pp2.id)
+               OR EXISTS (SELECT 1 FROM pickup_person_students pps WHERE pps.pickup_person_id = pp2.id AND pps.student_id = s.id))
+     ) auth_pp ON true
+     LEFT JOIN LATERAL (
+       SELECT string_agg(r2.person_name || COALESCE(' — ' || NULLIF(r2.reason, ''), ''), '; ' ORDER BY r2.person_name) AS names
+         FROM student_pickup_restrictions r2
+        WHERE r2.student_id = s.id AND r2.active = true
+     ) restr ON true
      WHERE s.school_id = $1 AND s.status = 'active'
      ORDER BY classroom NULLS LAST, s.first_name`,
     [school.schoolId, dateIso, tz],
@@ -275,6 +307,8 @@ export async function fetcher(
     todays_notes: r.todays_notes,
     last_admin_override_email: r.last_admin_override_email,
     last_admin_override_at: r.last_admin_override_at,
+    authorized_pickup: [r.parent_names, r.pickup_person_names].filter(Boolean).join('; ') || null,
+    do_not_pickup: [r.restriction_names, r.do_not_free_text?.trim() || null].filter(Boolean).join('; ') || null,
   }));
 
   const classrooms = Array.from(new Set(allRows.map((r) => r.classroom).filter((c): c is string => !!c))).sort();
