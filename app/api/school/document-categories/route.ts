@@ -78,3 +78,38 @@ export async function POST(request: NextRequest) {
   );
   return NextResponse.json({ category: rows[0] });
 }
+
+// DELETE /api/school/document-categories?key=<key>
+//
+// Removes a CUSTOM category. Refused when any document still uses it
+// (recategorize first) — and the standard presets aren't rows here, so
+// they can't be deleted by construction.
+export async function DELETE(request: NextRequest) {
+  const ck = await cookies();
+  const session = await verifySchoolSession(ck.get(SCHOOL_SESSION_COOKIE)?.value);
+  if (!session) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+
+  const key = (request.nextUrl.searchParams.get('key') ?? '').trim().toLowerCase();
+  if (!key) return NextResponse.json({ error: 'missing_key' }, { status: 400 });
+
+  const { rows: inUse } = await query<{ n: string }>(
+    `SELECT COUNT(*)::text AS n FROM student_documents
+      WHERE school_id = $1 AND category = $2 AND is_complete = true`,
+    [session.school_id, key],
+  );
+  if (Number(inUse[0].n) > 0) {
+    return NextResponse.json({
+      error: 'category_in_use',
+      detail: `${inUse[0].n} document(s) still use this category — recategorize or delete them first.`,
+    }, { status: 409 });
+  }
+
+  const res = await query(
+    `DELETE FROM school_document_categories WHERE school_id = $1 AND key = $2`,
+    [session.school_id, key],
+  );
+  if ((res.rowCount ?? 0) === 0) {
+    return NextResponse.json({ error: 'not_found', detail: 'No custom category with that key (presets cannot be deleted).' }, { status: 404 });
+  }
+  return NextResponse.json({ ok: true });
+}

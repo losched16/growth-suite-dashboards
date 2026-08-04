@@ -40,6 +40,25 @@ export function UploadForm({
   const [newCatLabel, setNewCatLabel] = useState('');
   const [catBusy, setCatBusy] = useState(false);
 
+  // Standard preset keys can't be deleted (they aren't DB rows); only
+  // school-created customs get the delete affordance.
+  const PRESET_KEYS = new Set(['iep_504', 'health', 'immunization', 'enrollment', 'transcript']);
+
+  async function deleteCategory(key: string) {
+    if (!key || PRESET_KEYS.has(key)) return;
+    if (!window.confirm('Delete this category? Documents already using it keep their label; the category just leaves the dropdown. Refused if any document still uses it.')) return;
+    setCatBusy(true); setErr(null);
+    try {
+      const r = await fetch(`/api/school/document-categories?key=${encodeURIComponent(key)}`, { method: 'DELETE' });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) { setErr(j.detail || j.error || `Failed (${r.status})`); return; }
+      setCategories((prev) => prev.filter((c) => c.key !== key));
+      setCategory('');
+    } finally {
+      setCatBusy(false);
+    }
+  }
+
   async function createCategory() {
     const lbl = newCatLabel.trim();
     if (!lbl) return;
@@ -234,6 +253,17 @@ export function UploadForm({
               <option value="__create__">+ Create new category…</option>
             </select>
           )}
+          {!creatingCat && category && !PRESET_KEYS.has(category) ? (
+            <button
+              type="button"
+              onClick={() => deleteCategory(category)}
+              disabled={catBusy}
+              className="mt-0.5 text-[10px] text-slate-500 underline hover:text-rose-700"
+              title="Delete this custom category (standard categories can't be deleted)"
+            >
+              delete this category
+            </button>
+          ) : null}
         </label>
 
         <label className="block text-sm sm:col-span-2">
