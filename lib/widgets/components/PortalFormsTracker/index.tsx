@@ -437,7 +437,7 @@ function Component({
                     );
                   })}
                   <td className="px-3 py-3 align-top">
-                    <UploadsCell uploads={r.uploads} href={familyHref(r.family_id)} />
+                    <UploadsCell uploads={r.uploads} href={familyHref(r.family_id)} dlToken={deriveEmbedToken(school.locationId)} />
                   </td>
                   <td className="px-3 py-3 align-top">
                     <ol className="text-xs text-gray-700 space-y-0.5">
@@ -464,20 +464,23 @@ function Component({
 // form submission (each has its own download route). More than 3
 // collapses into a "+N" link to the family's forms drilldown where the
 // full list (with notes + acknowledge) lives.
-function UploadsCell({ uploads, href }: { uploads: FamilyRow['uploads']; href: string }) {
+function UploadsCell({ uploads, href, dlToken }: { uploads: FamilyRow['uploads']; href: string; dlToken: string }) {
   if (uploads.length === 0) {
     return <span className="block text-center text-[10px] text-gray-300">—</span>;
   }
   const shown = uploads.slice(0, 3);
   const extra = uploads.length - shown.length;
+  // Downloads open outside the iframe where the session cookie doesn't
+  // follow — the embed token IS the credential ("unauthorized" class).
+  const q = `?embed_token=${encodeURIComponent(dlToken)}`;
   return (
     <div className="flex flex-wrap justify-center gap-1">
       {shown.map((u) => (
         <a
           key={u.id}
           href={u.kind === 'upload'
-            ? `/api/school/uploads/${u.id}/download`
-            : `/api/school/staff-requests/files/${u.id}`}
+            ? `/api/school/uploads/${u.id}/download${q}`
+            : `/api/school/staff-requests/files/${u.id}${q}`}
           className="inline-flex h-5 items-center gap-0.5 rounded-full bg-sky-100 px-1.5 text-[10px] font-medium text-sky-800 hover:bg-sky-200"
           title={`${u.display_name}${u.student_name ? ` · ${u.student_name}` : ''}${u.form_name ? ` · attached to "${u.form_name}"` : ''} · uploaded ${new Date(u.uploaded_at).toLocaleDateString()} · click to download`}
         >

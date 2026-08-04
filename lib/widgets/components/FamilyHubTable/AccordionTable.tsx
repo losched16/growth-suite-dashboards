@@ -39,9 +39,13 @@ interface Props {
   crmAppBase: string;
   // Header labels for the added catalog columns, keyed by attr_key.
   dynamicLabels?: Record<string, string>;
+  // Embed token derived server-side — carried on the View-as-parent
+  // link because it opens a NEW TAB, where the iframe's partitioned
+  // session cookie doesn't follow (the "unauthorized" class).
+  viewAsToken: string;
 }
 
-export function AccordionTable({ rows, columns, locationId, current, crmAppBase, dynamicLabels = {} }: Props) {
+export function AccordionTable({ rows, columns, locationId, current, crmAppBase, dynamicLabels = {}, viewAsToken }: Props) {
   const [expanded, setExpanded] = useState<string | null>(null);
 
   if (rows.length === 0) {
@@ -87,6 +91,7 @@ export function AccordionTable({ rows, columns, locationId, current, crmAppBase,
                 onToggle={() => setExpanded(isOpen ? null : f.family_id)}
                 locationId={locationId}
                 crmAppBase={crmAppBase}
+                viewAsToken={viewAsToken}
               />
             );
           })}
@@ -103,6 +108,7 @@ function FamilyAccordionRow({
   onToggle,
   locationId,
   crmAppBase,
+  viewAsToken,
 }: {
   family: FamilyRow;
   columns: string[];
@@ -110,6 +116,7 @@ function FamilyAccordionRow({
   onToggle: () => void;
   locationId: string;
   crmAppBase: string;
+  viewAsToken: string;
 }) {
   const titleLabel = pickTitle(f);
   const subtitle = pickSubtitle(f);
@@ -135,7 +142,7 @@ function FamilyAccordionRow({
       {expanded ? (
         <tr>
           <td colSpan={columns.length + 1} className="bg-gray-50 p-0 border-y border-emerald-200">
-            <FamilyDetailPanel family={f} locationId={locationId} crmAppBase={crmAppBase} />
+            <FamilyDetailPanel family={f} locationId={locationId} crmAppBase={crmAppBase} viewAsToken={viewAsToken} />
           </td>
         </tr>
       ) : null}
@@ -214,10 +221,12 @@ function FamilyDetailPanel({
   family,
   locationId,
   crmAppBase,
+  viewAsToken,
 }: {
   family: FamilyRow;
   locationId: string;
   crmAppBase: string;
+  viewAsToken: string;
 }) {
   const primary = family.parents.find((p) => p.is_primary) ?? family.parents[0];
   const secondary = family.parents.filter((p) => p !== primary);
@@ -258,19 +267,18 @@ function FamilyDetailPanel({
             ) : null}
             {/* View this family's parent portal exactly as the parent
                 sees it — opens in a new tab, logged in as the primary
-                parent. Posts to a school-session endpoint that mints a
-                short-lived login token; no password needed. */}
-            <form action="/api/school/view-as-parent" method="POST" target="_blank">
-              <input type="hidden" name="family_id" value={family.family_id} />
-              <input type="hidden" name="return_to" value={`/school/${locationId}/family-hub`} />
-              <button
-                type="submit"
-                title="Open this family's parent portal as the parent sees it (new tab)"
-                className="inline-flex items-center gap-1 rounded-md border border-emerald-300 bg-white px-2.5 py-1 text-xs font-semibold text-emerald-700 hover:bg-emerald-50"
-              >
-                View as parent ↗
-              </button>
-            </form>
+                parent. GET link carrying the embed token: the old POST
+                form relied on the session cookie, which does NOT follow
+                into a new tab from inside the CRM iframe (partitioned
+                cookies) — every click said {"error":"unauthorized"}. */}
+            <a
+              href={`/api/school/family/${family.family_id}/view-as-parent?embed_token=${encodeURIComponent(viewAsToken)}`}
+              target="_blank" rel="noopener"
+              title="Open this family's parent portal as the parent sees it (new tab)"
+              className="inline-flex items-center gap-1 rounded-md border border-emerald-300 bg-white px-2.5 py-1 text-xs font-semibold text-emerald-700 hover:bg-emerald-50"
+            >
+              View as parent ↗
+            </a>
           </div>
         </div>
 

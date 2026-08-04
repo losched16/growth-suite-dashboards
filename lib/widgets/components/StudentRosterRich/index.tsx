@@ -155,6 +155,19 @@ function FilterRow({
             </label>
           );
         }
+        // Attendance statuses are internal codes — show friendly labels
+        // ("not_yet" read as gibberish to the office). 'partial' no
+        // longer occurs (status follows the latest event) and is
+        // filtered out defensively if old data surfaces it.
+        const ATT_LABELS: Record<string, string> = {
+          not_yet: 'Not checked in yet',
+          present: 'Present',
+          checked_out: 'Checked out',
+          absent: 'Absent',
+        };
+        const opts = k === 'attendance_status'
+          ? (selectOpts[k] ?? []).filter((o) => o !== 'partial')
+          : selectOpts[k];
         return (
           <label key={k} className="text-xs text-gray-600">
             {meta.label}:{' '}
@@ -164,8 +177,8 @@ function FilterRow({
               className="rounded-md border border-gray-300 bg-white px-2 py-1 text-sm focus:border-emerald-600 focus:outline-none"
             >
               <option value="">all</option>
-              {selectOpts[k]?.map((o) => (
-                <option key={o} value={o}>{o}</option>
+              {opts?.map((o) => (
+                <option key={o} value={o}>{k === 'attendance_status' ? (ATT_LABELS[o] ?? o) : o}</option>
               ))}
             </select>
           </label>

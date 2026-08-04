@@ -18,6 +18,7 @@ import { fetcher, type FamilyHubData } from './fetcher';
 import { DownloadCsvButton } from '@/components/DownloadCsvButton';
 import { SyncGhlButton } from '@/lib/widgets/components/_shared/SyncGhlButton';
 import { AccordionTable } from './AccordionTable';
+import { deriveEmbedToken } from '@/lib/auth/embed';
 import { PreserveEmbedParams, clearHref } from '@/lib/widgets/components/_shared/PreserveEmbedParams';
 import { AutoSubmitForm } from '@/lib/widgets/components/_shared/AutoSubmitForm';
 import { crmAppBase } from '@/lib/ghl/contact-url';
@@ -246,6 +247,7 @@ function Component({
         current={sp}
         crmAppBase={crmAppBase()}
         dynamicLabels={data.dynamic_labels}
+        viewAsToken={deriveEmbedToken(school.locationId)}
       />
       <Pagination
         page={data.page}
