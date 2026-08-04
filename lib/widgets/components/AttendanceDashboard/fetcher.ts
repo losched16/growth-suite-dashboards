@@ -1,5 +1,6 @@
 import { query } from '@/lib/db';
 import { decrypt } from '@/lib/crypto';
+import { readCustomStatuses, type CustomAttendanceStatus } from '@/lib/attendance/custom-statuses';
 import type { SchoolContext, WidgetSearchParams } from '@/lib/widgets/types';
 import type { AttendanceDashboardConfig } from './config';
 
@@ -14,6 +15,9 @@ export interface StudentRow {
   primary_parent_name: string;
   primary_parent_email: string | null;
   status: 'present' | 'absent' | 'checked_out' | 'not_yet' | 'partial';
+  // Office-set custom category key ('field_trip'); displays INSTEAD of
+  // the derived status until a newer real event auto-clears it.
+  custom_status: string | null;
   first_check_in_at: string | null;
   last_check_out_at: string | null;
   picked_up_by_name: string | null;
@@ -88,6 +92,8 @@ export interface AttendanceDashboardData {
   // Student dropdown options for the Compliance Reports panel — the
   // full active roster, not just today's filtered subset.
   all_students: Array<{ id: string; name: string }>;
+  // School-defined status categories (self-serve managed on this page).
+  custom_statuses: CustomAttendanceStatus[];
 }
 
 interface DbStudentRow {
@@ -103,6 +109,7 @@ interface DbStudentRow {
   primary_parent_last: string | null;
   primary_parent_email: string | null;
   status: string | null;
+  custom_status: string | null;
   first_check_in_at: string | null;
   last_check_out_at: string | null;
   picked_up_by_name: string | null;
@@ -214,6 +221,7 @@ export async function fetcher(
      SELECT
        s.id AS student_id,
        s.family_id,
+       da.custom_status,
        s.first_name, s.last_name,
        COALESCE(s.metadata->>'homeroom', s.metadata->>'classroom_name') AS classroom,
        s.metadata->>'program' AS program,
@@ -329,6 +337,7 @@ export async function fetcher(
     primary_parent_name: [r.primary_parent_first, r.primary_parent_last].filter(Boolean).join(' ').trim() || '(no name)',
     primary_parent_email: r.primary_parent_email,
     status: (r.status ?? 'not_yet') as StudentRow['status'],
+    custom_status: r.custom_status,
     first_check_in_at: r.first_check_in_at,
     last_check_out_at: r.last_check_out_at,
     picked_up_by_name: r.picked_up_by_name,
@@ -407,5 +416,6 @@ export async function fetcher(
     rows: filtered,
     recent_events: recentEvents,
     all_students,
+    custom_statuses: await readCustomStatuses(school.schoolId),
   };
 }

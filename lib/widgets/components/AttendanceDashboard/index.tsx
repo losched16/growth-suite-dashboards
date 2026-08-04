@@ -225,7 +225,7 @@ function Component({
       </AutoSubmitForm>
 
       <div id="roster">
-        <RosterTable rows={data.rows} dateIso={data.date_iso} isToday={data.is_today} />
+        <RosterTable rows={data.rows} dateIso={data.date_iso} isToday={data.is_today} customStatuses={data.custom_statuses} />
       </div>
 
       {/* Compliance Reports — separate from the live view because

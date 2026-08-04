@@ -6,12 +6,26 @@
 // URL-state driven.
 
 import { useState } from 'react';
-import { ChevronRight, ChevronDown, AlertCircle, Download, ShieldCheck } from 'lucide-react';
+import { ChevronRight, ChevronDown, AlertCircle, Download, ShieldCheck, Plus, X } from 'lucide-react';
 import type { StudentRow } from './fetcher';
+import type { CustomAttendanceStatus } from '@/lib/attendance/custom-statuses';
 import { formatPickupTime } from '@/lib/attendance/pickup-times';
 
 const TZ = 'America/Phoenix';
 const EMDASH = '—';
+
+// Literal Tailwind classes per stored color name (JIT-safe). Keep in
+// sync with STATUS_COLORS in lib/attendance/custom-statuses.ts.
+const STATUS_CHIP: Record<string, string> = {
+  slate:  'bg-slate-200 text-slate-800',
+  amber:  'bg-amber-100 text-amber-800',
+  violet: 'bg-violet-100 text-violet-800',
+  sky:    'bg-sky-100 text-sky-800',
+  teal:   'bg-teal-100 text-teal-800',
+  rose:   'bg-rose-100 text-rose-800',
+  orange: 'bg-orange-100 text-orange-800',
+  lime:   'bg-lime-100 text-lime-800',
+};
 
 // Map curbside_slot stored values ('14:30') to a display string.
 function fmtCurbsideSlot(v: string | null): string | null {
@@ -23,18 +37,25 @@ function fmtCurbsideSlot(v: string | null): string | null {
   return `${h12}:${String(mm).padStart(2, '0')} ${period}`;
 }
 
-export function RosterTable({ rows, dateIso, isToday }: { rows: StudentRow[]; dateIso: string; isToday: boolean }) {
+export function RosterTable({ rows, dateIso, isToday, customStatuses = [] }: {
+  rows: StudentRow[]; dateIso: string; isToday: boolean; customStatuses?: CustomAttendanceStatus[];
+}) {
   const [expanded, setExpanded] = useState<string | null>(null);
 
   if (rows.length === 0) {
     return (
-      <div className="rounded-lg border border-gray-200 bg-white p-8 text-center text-sm text-gray-500">
-        No students match the current filters.
+      <div className="space-y-2">
+        <StatusCategoriesManager categories={customStatuses} />
+        <div className="rounded-lg border border-gray-200 bg-white p-8 text-center text-sm text-gray-500">
+          No students match the current filters.
+        </div>
       </div>
     );
   }
 
   return (
+    <div className="space-y-2">
+    <StatusCategoriesManager categories={customStatuses} />
     <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
       <table className="w-full text-sm">
         <thead className="border-b border-gray-100 bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-500">
@@ -68,17 +89,19 @@ export function RosterTable({ rows, dateIso, isToday }: { rows: StudentRow[]; da
                 dateIso={dateIso}
                 isToday={isToday}
                 sectionLabel={newSection ? (r.classroom ?? 'No classroom') : null}
+                customStatuses={customStatuses}
               />
             );
           })}
         </tbody>
       </table>
     </div>
+    </div>
   );
 }
 
 function FragmentRow({
-  row: r, open, onToggle, dateIso, isToday, sectionLabel,
+  row: r, open, onToggle, dateIso, isToday, sectionLabel, customStatuses,
 }: {
   row: StudentRow;
   open: boolean;
@@ -86,6 +109,7 @@ function FragmentRow({
   dateIso: string;
   isToday: boolean;
   sectionLabel: string | null;
+  customStatuses: CustomAttendanceStatus[];
 }) {
   return (
     <>
@@ -119,7 +143,9 @@ function FragmentRow({
           </div>
           <div className="text-[10px] text-gray-500">{r.primary_parent_name}</div>
         </td>
-        <td className="px-3 py-2 align-top"><StatusBadge status={r.status} /></td>
+        <td className="px-3 py-2 align-top">
+          <StatusBadge status={r.status} custom={r.custom_status} categories={customStatuses} />
+        </td>
         <td className="px-3 py-2 align-top">
           {r.pickup_time ? (
             <span className="inline-block rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-900 whitespace-nowrap tabular-nums">
@@ -178,7 +204,7 @@ function FragmentRow({
       {open ? (
         <tr>
           <td colSpan={12} className="bg-gray-50 p-0 border-y border-emerald-200">
-            <Drawer row={r} dateIso={dateIso} isToday={isToday} />
+            <Drawer row={r} dateIso={dateIso} isToday={isToday} customStatuses={customStatuses} />
           </td>
         </tr>
       ) : null}
@@ -186,7 +212,9 @@ function FragmentRow({
   );
 }
 
-function Drawer({ row: r, dateIso, isToday }: { row: StudentRow; dateIso: string; isToday: boolean }) {
+function Drawer({ row: r, dateIso, isToday, customStatuses }: {
+  row: StudentRow; dateIso: string; isToday: boolean; customStatuses: CustomAttendanceStatus[];
+}) {
   return (
     <div className="px-6 py-5 space-y-4">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-sm">
@@ -263,7 +291,7 @@ function Drawer({ row: r, dateIso, isToday }: { row: StudentRow; dateIso: string
 
       {/* Manual override actions — only show for today (historical dates are read-only) */}
       {isToday ? (
-        <ManualOverrideForm row={r} />
+        <ManualOverrideForm row={r} customStatuses={customStatuses} />
       ) : (
         <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 flex items-start gap-2">
           <AlertCircle className="h-3.5 w-3.5 mt-0.5" />
@@ -277,7 +305,7 @@ function Drawer({ row: r, dateIso, isToday }: { row: StudentRow; dateIso: string
   );
 }
 
-function ManualOverrideForm({ row: r }: { row: StudentRow }) {
+function ManualOverrideForm({ row: r, customStatuses }: { row: StudentRow; customStatuses: CustomAttendanceStatus[] }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -295,6 +323,24 @@ function ManualOverrideForm({ row: r }: { row: StudentRow }) {
         const t = await r2.text();
         throw new Error(t || 'failed');
       }
+      window.location.reload();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'failed');
+      setBusy(false);
+    }
+  }
+
+  // Set / clear the office-defined custom status for today.
+  async function setCustom(statusKey: string) {
+    if (busy) return;
+    setBusy(true);
+    setErr(null);
+    try {
+      const fd = new FormData();
+      fd.set('student_id', r.student_id);
+      fd.set('status', statusKey); // '' clears
+      const r2 = await fetch('/api/school/attendance/custom-status', { method: 'POST', body: fd });
+      if (!r2.ok) throw new Error((await r2.text()) || 'failed');
       window.location.reload();
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'failed');
@@ -334,12 +380,165 @@ function ManualOverrideForm({ row: r }: { row: StudentRow }) {
           Mark absent
         </button>
       </div>
+      {customStatuses.length > 0 ? (
+        <div className="pt-1 border-t border-emerald-100">
+          <div className="text-[11px] text-gray-600 mb-1">
+            Status category (cleared automatically by the next check-in/out):
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {customStatuses.map((c) => (
+              <button
+                key={c.key}
+                type="button"
+                disabled={busy || r.custom_status === c.key}
+                onClick={() => setCustom(c.key)}
+                className={`rounded-full px-3 py-1 text-xs font-medium disabled:opacity-60 ${STATUS_CHIP[c.color] ?? STATUS_CHIP.slate} ${r.custom_status === c.key ? 'ring-2 ring-emerald-500' : 'hover:brightness-95'}`}
+              >
+                {c.label}{r.custom_status === c.key ? ' ✓' : ''}
+              </button>
+            ))}
+            {r.custom_status ? (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => setCustom('')}
+                className="rounded-full border border-gray-300 bg-white px-3 py-1 text-xs text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+              >
+                Clear status
+              </button>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
       {err ? <div className="text-xs text-red-700">{err}</div> : null}
     </div>
   );
 }
 
-function StatusBadge({ status }: { status: StudentRow['status'] }) {
+// Self-serve editor for the school's custom status categories. Collapsed
+// to one small link so the dashboard stays clean; changes reload the page.
+function StatusCategoriesManager({ categories }: { categories: CustomAttendanceStatus[] }) {
+  const [open, setOpen] = useState(false);
+  const [label, setLabel] = useState('');
+  const [color, setColor] = useState('violet');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  async function add() {
+    if (busy || !label.trim()) return;
+    setBusy(true);
+    setErr(null);
+    try {
+      const r = await fetch('/api/school/attendance/status-categories', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ label: label.trim(), color }),
+      });
+      if (!r.ok) throw new Error((await r.text()) || 'failed');
+      window.location.reload();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'failed');
+      setBusy(false);
+    }
+  }
+
+  async function remove(key: string) {
+    if (busy) return;
+    setBusy(true);
+    setErr(null);
+    try {
+      const r = await fetch('/api/school/attendance/status-categories', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key }),
+      });
+      if (!r.ok) throw new Error((await r.text()) || 'failed');
+      window.location.reload();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'failed');
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="flex flex-col items-end gap-1">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="inline-flex items-center gap-1 text-xs text-gray-500 hover:text-emerald-700"
+        title="Create status categories (Field Trip, Sick, Late …) you can set on any student for the day"
+      >
+        <Plus className="h-3 w-3" /> Manage status categories
+      </button>
+      {open ? (
+        <div className="w-full rounded-lg border border-gray-200 bg-white p-3 space-y-2 text-left">
+          <div className="text-xs text-gray-600">
+            Categories you create here appear as one-tap buttons in each student&apos;s row drawer and
+            show as the student&apos;s status chip. A real check-in/out afterward clears the label automatically.
+          </div>
+          {categories.length > 0 ? (
+            <div className="flex flex-wrap gap-2">
+              {categories.map((c) => (
+                <span key={c.key} className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium ${STATUS_CHIP[c.color] ?? STATUS_CHIP.slate}`}>
+                  {c.label}
+                  <button type="button" disabled={busy} onClick={() => remove(c.key)} title={`Delete "${c.label}"`} className="hover:opacity-70">
+                    <X className="h-3 w-3" />
+                  </button>
+                </span>
+              ))}
+            </div>
+          ) : (
+            <div className="text-xs text-gray-400 italic">No custom categories yet.</div>
+          )}
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              type="text"
+              value={label}
+              onChange={(e) => setLabel(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') add(); }}
+              placeholder="New category (e.g. Field Trip)"
+              maxLength={24}
+              className="rounded border border-gray-300 px-2 py-1 text-xs w-52"
+            />
+            <select value={color} onChange={(e) => setColor(e.target.value)} className="rounded border border-gray-300 px-1.5 py-1 text-xs">
+              {Object.keys(STATUS_CHIP).map((c) => <option key={c} value={c}>{c}</option>)}
+            </select>
+            <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${STATUS_CHIP[color] ?? STATUS_CHIP.slate}`}>{label.trim() || 'preview'}</span>
+            <button
+              type="button"
+              disabled={busy || !label.trim()}
+              onClick={add}
+              className="rounded-md border border-emerald-600 bg-white px-3 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-50 disabled:opacity-50"
+            >
+              Add
+            </button>
+          </div>
+          {err ? <div className="text-xs text-red-700">{err}</div> : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function StatusBadge({ status, custom, categories }: {
+  status: StudentRow['status'];
+  custom?: string | null;
+  categories?: CustomAttendanceStatus[];
+}) {
+  // Office-set custom category displays INSTEAD of the derived status
+  // (a later real check-in/out clears it server-side). Deleted-category
+  // keys fall back to showing the raw key so nothing renders blank.
+  if (custom) {
+    const cat = (categories ?? []).find((c) => c.key === custom);
+    return (
+      <span
+        title={`Office-set status — cleared automatically by the next check-in/out (underlying: ${statusLabel(status)})`}
+        className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide ${STATUS_CHIP[cat?.color ?? 'slate'] ?? STATUS_CHIP.slate}`}
+      >
+        {cat?.label ?? custom.replace(/_/g, ' ')}
+      </span>
+    );
+  }
   const map: Record<StudentRow['status'], string> = {
     not_yet: 'bg-amber-100 text-amber-800',
     present: 'bg-emerald-100 text-emerald-800',

@@ -9,6 +9,15 @@ human digest.
 
 ## August 4, 2026
 
+### Create your own attendance status categories
+The Attendance dashboard now has "Manage status categories" (top right
+of the roster): create categories like Field Trip, Sick, or Late with
+a color, delete them anytime. Open any student's row drawer to tap a
+category — it becomes their status chip for the day. The moment a real
+check-in or check-out happens afterward, the label clears itself (the
+"Sick" kid who shows up flips to In automatically). Started you off
+with Field Trip and Sick — rename or delete freely.
+
 ### Parent PINs visible on the Attendance dashboard
 New right-hand "Parent PINs" column on the Attendance & Curbside
 dashboard: each active parent's first name + kiosk PIN, at a glance.
