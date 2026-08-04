@@ -30,8 +30,12 @@ import { loadSchoolSettings } from '@/lib/school-settings';
 // Which signed documents flip which per-student tracking field. Kept as a
 // module-level rule list until a second school needs a different mapping —
 // then this moves into school settings.
-const FIELD_RULES: Array<{ pattern: RegExp; field_base: string; value: string }> = [
-  { pattern: /emergency.*card/i, field_base: 'az_card', value: 'Complete' },
+// missing_value: what an enrolled student's tracking field is set to when
+// NO completed document exists — smart lists filter on it ("Not Complete").
+// Without it non-submitters just have an EMPTY field, which a picklist
+// smart-list filter can't catch.
+const FIELD_RULES: Array<{ pattern: RegExp; field_base: string; value: string; missing_value: string }> = [
+  { pattern: /emergency.*card/i, field_base: 'az_card', value: 'Complete', missing_value: 'Not Complete' },
 ];
 
 interface GhlDocument {
@@ -48,11 +52,12 @@ export interface ImportGhlDocumentsResult {
   completed_seen: number;
   processed: number;
   fields_set: number;
+  not_complete_set: number;
   errors: number;
 }
 
 export async function importGhlDocuments(schoolId: string): Promise<ImportGhlDocumentsResult> {
-  const result: ImportGhlDocumentsResult = { ran: false, completed_seen: 0, processed: 0, fields_set: 0, errors: 0 };
+  const result: ImportGhlDocumentsResult = { ran: false, completed_seen: 0, processed: 0, fields_set: 0, not_complete_set: 0, errors: 0 };
   const settings = await loadSchoolSettings(schoolId);
   if (!settings.ghl_documents_sync) return result;
   result.ran = true;
@@ -72,7 +77,10 @@ export async function importGhlDocuments(schoolId: string): Promise<ImportGhlDoc
 
   const completed = docs.filter((d) => d.status === 'completed' && !d.deleted);
   result.completed_seen = completed.length;
-  if (completed.length === 0) return result;
+  if (completed.length === 0) {
+    await reconcileMissingCards(schoolId, client, result);
+    return result;
+  }
 
   // Skip already-processed ones.
   const { rows: seen } = await query<{ ghl_document_id: string }>(
@@ -166,5 +174,80 @@ export async function importGhlDocuments(schoolId: string): Promise<ImportGhlDoc
       console.warn('[import-ghl-documents] failed for doc', doc._id, ':', e instanceof Error ? e.message : String(e));
     }
   }
+  await reconcileMissingCards(schoolId, client, result);
   return result;
+}
+
+// Enrolled students with NO value in their tracking field get the rule's
+// missing_value ("Not Complete") so office smart lists can target
+// non-submitters by picklist option. students.metadata mirrors the contact
+// field via the regular sync, so a NULL there means "field empty as of the
+// last sync" — we re-check the LIVE contact before writing, so a value the
+// office set by hand minutes ago is never clobbered (we mirror it instead,
+// which also stops the row from re-qualifying here). Capped per run; the
+// one-time backfill handles the bulk, this keeps NEW students stamped.
+async function reconcileMissingCards(
+  schoolId: string,
+  client: Awaited<ReturnType<typeof loadGhlClient>>,
+  result: ImportGhlDocumentsResult,
+): Promise<void> {
+  for (const rule of FIELD_RULES) {
+    try {
+      const { rows: missing } = await query<{ id: string; slot: string; ghl_contact_id: string }>(
+        `SELECT st.id, st.metadata->>'ghl_slot' AS slot, p.ghl_contact_id
+           FROM students st
+           JOIN families f ON f.id = st.family_id
+           JOIN parents p ON p.family_id = f.id AND p.is_primary = true
+                         AND p.status = 'active' AND p.ghl_contact_id IS NOT NULL
+          WHERE f.school_id = $1 AND st.status = 'active'
+            AND st.metadata->>'ghl_slot' IS NOT NULL
+            AND COALESCE(st.metadata->>$2, '') = ''
+          LIMIT 40`,
+        [schoolId, rule.field_base],
+      );
+      if (missing.length === 0) continue;
+
+      // One contact fetch per family even with several unstamped kids.
+      const contactFields = new Map<string, Map<string, string>>();
+      for (const m of missing) {
+        const fieldKey = `student_${m.slot}_${rule.field_base}`;
+        const { rows: fld } = await query<{ ghl_field_id: string }>(
+          `SELECT ghl_field_id FROM school_field_catalog
+            WHERE school_id = $1 AND field_key = $2 LIMIT 1`,
+          [schoolId, fieldKey],
+        );
+        const fieldId = fld[0]?.ghl_field_id ?? null;
+        if (!fieldId) continue; // no such field for this slot — nothing to stamp
+
+        let byFieldId = contactFields.get(m.ghl_contact_id);
+        if (!byFieldId) {
+          const { data } = await client.axios.get<{
+            contact?: { customFields?: Array<{ id: string; value?: unknown }> };
+          }>(`/contacts/${m.ghl_contact_id}`);
+          byFieldId = new Map(
+            (data.contact?.customFields ?? []).map((cf) => [cf.id, cf.value == null ? '' : String(cf.value)]),
+          );
+          contactFields.set(m.ghl_contact_id, byFieldId);
+        }
+
+        const current = (byFieldId.get(fieldId) ?? '').trim();
+        if (current === '') {
+          await client.axios.put(`/contacts/${m.ghl_contact_id}`, {
+            customFields: [{ id: fieldId, field_value: rule.missing_value }],
+          });
+          result.not_complete_set++;
+        }
+        // Mirror contact truth onto the student row either way.
+        await query(
+          `UPDATE students SET metadata = jsonb_set(metadata, $2::text[], to_jsonb($3::text)), updated_at = now()
+            WHERE id = $1`,
+          [m.id, `{${rule.field_base}}`, current === '' ? rule.missing_value : current],
+        ).catch(() => undefined);
+        await new Promise((r) => setTimeout(r, 150)); // pace GHL calls
+      }
+    } catch (e) {
+      result.errors++;
+      console.warn('[import-ghl-documents] reconcile failed:', e instanceof Error ? e.message : String(e));
+    }
+  }
 }
