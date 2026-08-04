@@ -1155,6 +1155,18 @@ export async function runGhlSync(schoolId: string): Promise<SyncResult> {
     // them when families rebuild — so they're stashed + restored too.
     await q(`CREATE TEMP TABLE _att_preserve    ON COMMIT DROP AS SELECT * FROM attendance_events WHERE school_id = $1`, [schoolId]);
     await q(`CREATE TEMP TABLE _pickup_preserve ON COMMIT DROP AS SELECT * FROM pickup_persons    WHERE school_id = $1`, [schoolId]);
+    // Office-set custom statuses (daily_attendance.custom_status, migration
+    // 091). daily_attendance itself is regenerated from the restored events
+    // by its trigger — which (correctly) nulls custom_status on every write —
+    // so the labels must be stashed and re-applied after the events restore.
+    // Rows with NO events (kid marked "Sick" before any check-in) have no
+    // daily row after the rebuild at all; the restore below re-creates them.
+    await q(
+      `CREATE TEMP TABLE _custom_status_preserve ON COMMIT DROP AS
+       SELECT school_id, student_id, date, custom_status, custom_status_set_at
+         FROM daily_attendance WHERE school_id = $1 AND custom_status IS NOT NULL`,
+      [schoolId],
+    );
 
     // ── Generic preserve: EVERY office/parent-created table that hangs
     // off families/parents/students via ON DELETE CASCADE and is NOT
@@ -1436,6 +1448,25 @@ export async function runGhlSync(schoolId: string): Promise<SyncResult> {
     );
     const attKept = (attRestored.rowCount ?? 0) + (pickupsRestored.rowCount ?? 0);
     if (attKept > 0) warnings.push(`Preserved ${attRestored.rowCount ?? 0} attendance event(s) + ${pickupsRestored.rowCount ?? 0} pickup person(s) across the sync.`);
+
+    // Re-apply office-set custom statuses on top of the trigger-rebuilt
+    // daily rows. Safe to re-apply verbatim: the snapshot was taken under
+    // the "newer event clears the label" rule, and the exact same events
+    // were just restored, so no label can be stale.
+    const customStatusRestored = await q(
+      `INSERT INTO daily_attendance
+         (school_id, student_id, date, status, custom_status, custom_status_set_at, updated_at)
+       SELECT p.school_id, p.student_id, p.date, 'not_yet', p.custom_status, p.custom_status_set_at, now()
+         FROM _custom_status_preserve p
+        WHERE EXISTS (SELECT 1 FROM students s WHERE s.id = p.student_id)
+       ON CONFLICT (school_id, student_id, date) DO UPDATE SET
+         custom_status        = EXCLUDED.custom_status,
+         custom_status_set_at = EXCLUDED.custom_status_set_at,
+         updated_at           = now()`,
+    );
+    if ((customStatusRestored.rowCount ?? 0) > 0) {
+      warnings.push(`Preserved ${customStatusRestored.rowCount} custom attendance status(es) across the sync.`);
+    }
 
     // ── Generic restore of the preserved data tables (see DATA_PRESERVE).
     // For each: null out optional references whose target genuinely left
