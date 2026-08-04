@@ -7,6 +7,29 @@ human digest.
 
 ---
 
+## August 4, 2026
+
+### Wrong kid at the kiosk (Smarika's mom, Rachel Wehn) — root-caused
+No PIN is shared between two people — verified, every PIN at DGM is
+unique. What happened: split-family processing was creating DUPLICATE
+parent rows (30 families school-wide had them), and duplicate rows
+silently lose their PIN/password during nightly rebuilds. Smarika's
+mom's PIN vanished that way — so the number she typed at the kiosk no
+longer belonged to her, and it matched a DIFFERENT family's PIN,
+pulling up their child. Fixed at the source: the sync now keeps
+exactly one row per parent (all 30 duplicated families are already
+clean, split families untouched and still working as designed).
+OFFICE ACTION: re-set PINs for Smarika's mom (Pravallika) and have
+Rachel Wehn confirm hers — Student Roster → family → Set PIN, takes
+seconds. Any parent who reports a dead PIN or password: same fix.
+
+### MYHS check-ins "only says present" after 8:00 — display only
+The times were always recorded. After the office taps ✓ In, the row
+updated its status chip but not the time until refresh. It now shows
+"in 8:03" the moment the tap lands.
+
+---
+
 ## August 3, 2026 — QA sweep from Sonia's testing
 
 ### Every "unauthorized" fixed at the root
