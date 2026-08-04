@@ -167,7 +167,7 @@ function fmtStartDate(v: string | null): string {
 }
 
 export function StudentTableWithAccordion({
-  rows, columns, locationId, documentsAudience = 'all', current = {}, dynamicLabels = {}, detailSections,
+  rows, columns, locationId, documentsAudience = 'all', current = {}, dynamicLabels = {}, detailSections, embedToken,
 }: {
   rows: RosterStudent[];
   // Static ColumnKeys plus any catalog attr_keys ('tag', 'cf:…') the
@@ -179,6 +179,10 @@ export function StudentTableWithAccordion({
   dynamicLabels?: Record<string, string>;
   // Which built-in detail-panel sections render (undefined = all).
   detailSections?: string[];
+  // Server-derived embed token — required on every link that opens a
+  // NEW TAB (document Open, attendance history). The proxy strips
+  // embed_token off the iframe URL, so client-side URL reads miss it.
+  embedToken?: string;
 }) {
   // Build a header href that toggles asc/desc on the clicked column and
   // preserves all existing URL params (filters, year, view, embed).
@@ -287,6 +291,7 @@ export function StudentTableWithAccordion({
                 detail={isOpen ? details[s.family_id] : undefined}
                 onToggle={() => setExpanded(isOpen ? null : { row: s.student_id, family: s.family_id })}
                 detailSections={detailSections}
+                embedToken={embedToken}
               />
             );
           })}
@@ -297,7 +302,7 @@ export function StudentTableWithAccordion({
 }
 
 function RowGroup({
-  s, columns, locationId, documentsAudience, isOpen, detail, onToggle, detailSections,
+  s, columns, locationId, documentsAudience, isOpen, detail, onToggle, detailSections, embedToken,
 }: {
   s: RosterStudent;
   columns: string[];
@@ -307,13 +312,14 @@ function RowGroup({
   detail: FamilyDetail | 'loading' | { err: string } | undefined;
   onToggle: () => void;
   detailSections?: string[];
+  embedToken?: string;
 }) {
   return (
     <>
       <tr className={`hover:bg-gray-50 ${isOpen ? 'bg-emerald-50/30' : ''}`}>
         {columns.map((c) => (
           <td key={c} className="px-3 py-2 align-top">
-            {renderCell(s, c, locationId, isOpen, onToggle, documentsAudience)}
+            {renderCell(s, c, locationId, isOpen, onToggle, documentsAudience, embedToken)}
           </td>
         ))}
       </tr>
@@ -577,7 +583,7 @@ function PickupPeopleManager({
 // Attendance cell + admin quick actions. The buttons write an
 // admin-attributed attendance event via the existing manual-override
 // API — for when a parent can't do kiosk check-in/out themselves.
-function AttendanceCell({ s }: { s: RosterStudent }) {
+function AttendanceCell({ s, embedToken }: { s: RosterStudent; embedToken?: string }) {
   const [busy, setBusy] = useState(false);
   // Local status override after an admin action. The old
   // window.location.reload() served the CACHED roster, so the chip
@@ -660,7 +666,7 @@ function AttendanceCell({ s }: { s: RosterStudent }) {
         ) : null}
         <button
           type="button"
-          onClick={() => window.open(attendanceHistoryHref(s.student_id), '_blank', 'noopener')}
+          onClick={() => window.open(attendanceHistoryHref(s.student_id, embedToken), '_blank', 'noopener')}
           title="Full check-in/out history for this student, with signatures"
           className="rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[10px] font-medium text-slate-500 hover:bg-slate-50">
           history
@@ -670,15 +676,14 @@ function AttendanceCell({ s }: { s: RosterStudent }) {
   );
 }
 
-// Deep-link to the per-student attendance history page, carrying the
-// embed auth params so it works from inside the GHL iframe. Called from
-// a click handler, so window is always available (an SSR-rendered href
-// would bake in an empty location before hydration).
-function attendanceHistoryHref(studentId: string): string {
+// Deep-link to the per-student attendance history page. Auth comes from
+// the server-derived embedToken prop — the proxy strips embed_token off
+// the iframe URL, so reading window.location.search misses it and the
+// new tab lands unauthorized. URL read kept only as a fallback.
+function attendanceHistoryHref(studentId: string, embedToken?: string): string {
   const q = new URLSearchParams({ student: studentId });
   const m = window.location.pathname.match(/^\/school\/([^/]+)/);
-  const cur = new URLSearchParams(window.location.search);
-  const et = cur.get('embed_token');
+  const et = embedToken || new URLSearchParams(window.location.search).get('embed_token');
   if (et) q.set('embed_token', et);
   return `/school/${m ? m[1] : ''}/attendance-history?${q.toString()}`;
 }
@@ -700,6 +705,7 @@ function renderCell(
   isOpen: boolean,
   onToggleFamily: () => void,
   documentsAudience: 'teacher' | 'all' = 'all',
+  embedToken?: string,
 ): React.ReactNode {
   // Dynamic (catalog) column: render the resolved display value.
   if (s.dynamic && s.dynamic[col] !== undefined) {
@@ -804,6 +810,7 @@ function renderCell(
           studentDisplay={`${s.preferred_name || s.first_name} ${s.last_name}`}
           initialCount={s.documents_count}
           audience={documentsAudience}
+          embedToken={embedToken}
         />
       );
     case 'lunch': {
@@ -874,7 +881,7 @@ function renderCell(
         </div>
       );
     }
-    case 'attendance': return <AttendanceCell s={s} />;
+    case 'attendance': return <AttendanceCell s={s} embedToken={embedToken} />;
   }
   // Dynamic column with no value for this student, or unknown key —
   // render an em-dash so the table stays aligned.

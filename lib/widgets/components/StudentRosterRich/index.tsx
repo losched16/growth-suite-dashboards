@@ -21,6 +21,7 @@ import {
 import { fetcher, type StudentRosterData, type RosterStudent } from './fetcher';
 import { PreserveEmbedParams, clearHref } from '@/lib/widgets/components/_shared/PreserveEmbedParams';
 import { AutoSubmitForm } from '@/lib/widgets/components/_shared/AutoSubmitForm';
+import { deriveEmbedToken } from '@/lib/auth/embed';
 
 function ageFrom(dob: string | null): string {
   if (!dob) return '—';
@@ -627,6 +628,9 @@ function Component({
               current={sp}
               dynamicLabels={data.dynamic_labels}
               detailSections={config.detail_sections}
+              // Server-derived: the proxy strips embed_token off the iframe
+              // URL, so client components can't recover it from location.
+              embedToken={deriveEmbedToken(school.locationId)}
             />
           </div>
           <PrintRoster students={data.filtered} schoolName={school.schoolName} />

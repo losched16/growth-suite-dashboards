@@ -41,6 +41,7 @@ export function DocumentsCell({
   studentDisplay,
   initialCount,
   audience = 'all',
+  embedToken,
 }: {
   studentId: string;
   studentDisplay: string;
@@ -48,6 +49,12 @@ export function DocumentsCell({
   // 'teacher' → API filters out documents flagged visible_to_teacher=false.
   // 'all' (default) → operator view, shows everything.
   audience?: 'teacher' | 'all';
+  // Server-derived embed token (HMAC of the school's locationId). The
+  // proxy STRIPS embed_token off the iframe URL after minting its
+  // session cookie, so reading window.location here yields nothing and
+  // the Open/Upload links go out uncredentialed — "unauthorized" in the
+  // new tab on any browser that doesn't carry the partitioned cookie.
+  embedToken?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -159,7 +166,7 @@ export function DocumentsCell({
                         </div>
                       </div>
                       <a
-                        href={downloadHref(d.id)}
+                        href={downloadHref(d.id, embedToken)}
                         target="_blank" rel="noopener"
                         className="inline-flex items-center gap-1 rounded border border-slate-300 bg-white px-2 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-50 shrink-0"
                         title={`Download ${d.file_name}`}
@@ -178,7 +185,7 @@ export function DocumentsCell({
               {docs ? `${docs.length} document${docs.length === 1 ? '' : 's'}` : `${count} document${count === 1 ? '' : 's'}`}
             </span>
             <a
-              href={docsHref(studentId)}
+              href={docsHref(studentId, embedToken)}
               className="inline-flex items-center gap-1 text-blue-700 hover:underline"
             >
               <Upload className="h-3 w-3" /> Upload / manage in Documents tab
@@ -200,31 +207,27 @@ function currentLocationId(): string {
 }
 
 // Deep-link to the Documents dashboard, CARRYING the embed auth state.
-// Inside the GHL iframe the roster URL has ?embed_token=…&chrome=none;
-// dropping them sent operators to an unauthorized page ("upload from
-// the roster doesn't work"). upload=1 + student=<id> make the upload
-// form open immediately, preselected on THIS kid. Only rendered
-// client-side (popover), so window is always available.
-function docsHref(studentId: string): string {
+// upload=1 + student=<id> make the upload form open immediately,
+// preselected on THIS kid. Auth comes from the server-derived token
+// prop; window.location is only a fallback (the proxy strips
+// embed_token off the URL, so it's usually absent there).
+function docsHref(studentId: string, embedToken?: string): string {
   const q = new URLSearchParams({ student: studentId, upload: '1' });
-  if (typeof window !== 'undefined') {
-    const cur = new URLSearchParams(window.location.search);
-    for (const k of ['embed_token', 'chrome']) {
-      const v = cur.get(k);
-      if (v) q.set(k, v);
-    }
-  }
+  const et = embedToken || urlParam('embed_token');
+  if (et) q.set('embed_token', et);
+  const chrome = urlParam('chrome');
+  if (chrome) q.set('chrome', chrome);
   return `/school/${currentLocationId()}/documents?${q.toString()}`;
 }
 
 // Downloads open in a NEW TAB where the iframe's session cookie doesn't
 // follow — carry the embed token so the download route authenticates.
-function downloadHref(docId: string): string {
-  const q = new URLSearchParams();
-  if (typeof window !== 'undefined') {
-    const et = new URLSearchParams(window.location.search).get('embed_token');
-    if (et) q.set('embed_token', et);
-  }
-  const qs = q.toString();
-  return `/api/school/documents/${docId}/download${qs ? `?${qs}` : ''}`;
+function downloadHref(docId: string, embedToken?: string): string {
+  const et = embedToken || urlParam('embed_token');
+  return `/api/school/documents/${docId}/download${et ? `?embed_token=${encodeURIComponent(et)}` : ''}`;
+}
+
+function urlParam(key: string): string | null {
+  if (typeof window === 'undefined') return null;
+  return new URLSearchParams(window.location.search).get(key);
 }
