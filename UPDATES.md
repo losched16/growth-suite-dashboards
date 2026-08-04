@@ -9,6 +9,17 @@ human digest.
 
 ## August 4, 2026
 
+### "Unauthorized" opening a student document from the roster — fixed
+Aidan Augustine's MET form (uploaded by Gautham, visible in his file,
+but "unauthorized" on open for others). The document itself was always
+fine — the Open link in the roster's documents popover relied on a
+credential in the page URL that the platform strips after login, so
+the link went out bare and only worked on machines whose browser
+happened to carry the login into the new tab. The roster now embeds
+its own credential in the Open link, the "Upload / manage in
+Documents" link, and the attendance "history" button — they work for
+everyone, from anywhere. Live and verified: Aidan's MET opens.
+
 ### Wrong kid at the kiosk (Smarika's mom, Rachel Wehn) — root-caused
 No PIN is shared between two people — verified, every PIN at DGM is
 unique. What happened: split-family processing was creating DUPLICATE
