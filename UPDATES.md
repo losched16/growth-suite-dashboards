@@ -7,6 +7,56 @@ human digest.
 
 ---
 
+## August 3, 2026 — QA sweep from Sonia's testing
+
+### Every "unauthorized" fixed at the root
+Cause across the board: links that open a NEW TAB from inside the CRM
+lose the login cookie. All of them now carry their own credential:
+- Family Hub "View as parent" (was guaranteed to fail) — fixed.
+- Upload paperclips on the Portal Forms tracker (the teststudent 3
+  error) — fixed, both file types.
+- (Documents "Open" was fixed in the previous batch.)
+
+### Attendance dashboard — classroom-grouped, with pickup lists
+The Attendance dashboard's roster now renders as classroom sections
+(like the classroom dashboards) and every student row shows:
+check-in time, check-out time, notes, curbside, AUTHORIZED PICKUP
+(parents + approved pickup people) and DO NOT PICKUP (in red). Live
+now — 14 classroom sections rendering.
+
+### Attendance filter wording
+The roster's attendance filter now reads Present / Not checked in yet /
+Checked out / Absent. ("Not yet" = hasn't checked in today.
+"Partial" is gone — it was an old status that no longer exists.)
+
+### Parent-2 records audited and cleaned
+All parent-2 contacts were scanned: 13 still carried student data —
+every one a duplicate of data already on Parent 1 (no hidden split
+families). All cleared; parent 2 contacts are now communication-only
+across the board.
+
+### Custom document categories can be deleted
+Select a custom category in the upload form → "delete this category".
+Standard categories (IEP/504 etc.) can't be deleted; a category still
+in use by documents can't be deleted either.
+
+### Verified working (could not reproduce)
+- MYHS Technology Letter shows under School Documents for MYHS
+  families (checked live as Nunez AND the Jain test family).
+- Parent-visible uploads DO show in the parent portal and open fine —
+  verified end to end. Earlier failures were the sync data-wipe bug
+  (fixed yesterday); anything uploaded before that fix needs one
+  re-upload.
+
+### Where to find things (answers)
+- Authorized pickup + do-not-pickup: the new Attendance dashboard
+  columns, or click any family on the Student Roster.
+- PINs: click the family name on the Student Roster — each parent
+  shows their PIN with a Set/Change button. No masquerading needed.
+- Category dropdown: office dashboards only; parents never see it.
+
+---
+
 ## August 3, 2026
 
 ### CRITICAL FIX: uploaded documents (and more) were being wiped by the sync
