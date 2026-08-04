@@ -9,6 +9,20 @@ human digest.
 
 ## August 4, 2026
 
+### AZ Card fields now support "who hasn't submitted" smart lists
+Signed emergency cards were already flipping Student 1/2/3 AZ Card to
+"Complete" on the contact (195 so far, automatic within 15 minutes of
+signing). What was missing: non-submitters had an EMPTY field, so a
+smart list filtering on "Not Complete" found nobody. Every enrolled
+student without a signed card is now stamped "Not Complete" (117
+students across 92 contacts), and the system keeps doing this
+automatically as new students enroll. Also created the missing
+"Student 4 AZ Card" field (one family has 4 kids). Smart list recipe:
+Student 1 AZ Card is "Not Complete" OR Student 2 AZ Card is
+"Not Complete" OR Student 3 AZ Card is "Not Complete" (add Student 4
+to be thorough). Manual values the office sets by hand are never
+overwritten.
+
 ### "Unauthorized" opening a student document from the roster — fixed
 Aidan Augustine's MET form (uploaded by Gautham, visible in his file,
 but "unauthorized" on open for others). The document itself was always
