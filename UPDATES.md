@@ -9,6 +9,19 @@ human digest.
 
 ## August 5, 2026
 
+### Staff forms switched ON (incident reports live)
+All three teacher-facing forms are now active at the staff hub:
+growth-suite-dashboards.vercel.app/school/1JOwnyxFSKEwJNgmq84I/staff-requests
+- SST: Accident / Incident Form — full incident report (child picker,
+  type of injury, photo, witnesses, first aid, reset day, parent
+  meeting flag). Emails lexi@ on submission.
+- In-House Supplies Request
+- Labor Request
+Teachers pick their name from the staff directory, fill the form, and
+can see "my recent requests". The office reviews everything in the
+staff-requests Inbox (+ calendar view). These forms never appear to
+parents. OFFICE ACTION: share the staff hub link with teachers.
+
 ### "Alumni" added to enrollment status
 Every student slot's Enrollment Status dropdown in the CRM now has
 Alumni (Enrolled / Pending / Withdrawn / Hold / Alumni). Alumni
