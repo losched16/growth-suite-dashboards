@@ -162,6 +162,35 @@ export async function GET(_request: NextRequest, { params }: { params: Params })
     [familyId, schoolId],
   );
 
+  // ALSO surface the CRM's free-text "unauthorized / do not pick up"
+  // field per student. The roster COLUMN and Attendance dashboard merge
+  // both sources; the expanded family panel silently showed only the
+  // office-entered restrictions ("No restrictions on file" while the
+  // row said otherwise — Clint, Aug 5). Synthetic rows, same shape.
+  const { rows: metaRestrictions } = await query<{
+    student_id: string; student_display: string; person_name: string;
+  }>(
+    `SELECT s.id AS student_id,
+            (COALESCE(NULLIF(s.preferred_name, ''), s.first_name) || ' ' || s.last_name) AS student_display,
+            btrim(s.metadata->>'unauthorized__do_not_pickup') AS person_name
+       FROM students s
+      WHERE s.family_id = $1 AND s.school_id = $2 AND s.status = 'active'
+        AND NULLIF(btrim(s.metadata->>'unauthorized__do_not_pickup'), '') IS NOT NULL
+      ORDER BY s.first_name`,
+    [familyId, schoolId],
+  );
+  for (const m of metaRestrictions) {
+    pickup_restrictions.push({
+      id: `crm-${m.student_id}`,
+      student_id: m.student_id,
+      student_display: m.student_display,
+      person_name: m.person_name,
+      relationship: null,
+      reason: 'From the CRM "unauthorized / do not pick up" field',
+      notes: null,
+    });
+  }
+
   // Health profiles per student — emergency contact #1, doctor, hospital,
   // insurance, allergies, medications, medical conditions. Keyed by
   // student_id so the panel can show a card per student.
