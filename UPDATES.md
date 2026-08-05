@@ -7,6 +7,35 @@ human digest.
 
 ---
 
+## August 5, 2026
+
+### Haddad/Koenig split family created
+Joseph Haddad is now a split family: Jennifer Koenig has her own
+contact (jennifer.koenig@asu.edu) carrying Joseph's full record,
+cross-referenced with Rodney Haddad, both tagged parent 1 + split.
+Verified: merged Haddad Family shows both parents + Joseph. Jennifer
+can create her portal login with her email.
+
+### 21 families flipped: Parent 2 → Parent 1
+Per Clint's list. Each family's contact identity is now the requested
+parent, with the former Parent 1 moved to the Parent 2 slot. All
+portal passwords and PINs were preserved through the flip (26
+credential sets verified). Family names follow the new Parent 1
+(Fall→Tucker, Darling→Hoffman, Wang→Zhang, Chavez→Hernandez,
+Sinks→Walters, Alami→Brightwell, Rosales, Romen, Sell, Perez,
+Della Valle, Medders, Haskovec, Dunton, Martinez, Rostain, Spring,
+Luna, Jacobson, Houellemont + Friend). Each new P1's old "parent 2"
+marketing shell contact was removed (the nightly promotion recreates
+shells for the new Parent 2s automatically).
+- Friend family: Bridgette is Parent 1, Patrick Parent 2. NOTE: this
+  displaced Ian Walker from the Parent 2 slot (added by the office
+  this morning) — if Ian should be authorized for pickup, add him as
+  a pickup person in the family panel.
+- Already Parent 1, no change needed: Collette Johnson, Rachel Wehn.
+- Not found in the CRM: "Gabrielle Shively" — check the spelling?
+- Skipped as ambiguous: "Jesse Weaver" (that family is Jesse HANSON
+  P1 + Amanda WEAVER P2 — tell me which way you want it).
+
 ## August 4, 2026
 
 ### Parent PIN + pickup changes now go through the office
