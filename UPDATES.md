@@ -9,14 +9,14 @@ human digest.
 
 ## August 4, 2026
 
-### Parents are now view-only for PINs and pickup people
-In the parent portal, parents can SEE their kiosk PIN but can no
-longer set, change, or remove it — and they can't add, deactivate,
-reactivate, or re-scope pickup people. Every one of those changes goes
-through the school office (portal copy points parents to admissions),
-so the office always knows. Enforced at the API level, not just
-hidden buttons. The office sets PINs from the Student Roster family
-panel as before.
+### Parent PIN + pickup changes now go through the office
+Parents can still set their kiosk PIN the FIRST time (self-serve setup
+unchanged), but once set, changing or removing it goes through the
+school office — and parents can no longer add, deactivate, reactivate,
+or re-scope pickup people at all. Portal copy points them to
+admissions for every change, so the office always knows the family's
+active PIN and pickup list. Enforced at the API level, not just hidden
+buttons. The office manages both from the Student Roster family panel.
 
 ### Hold + Withdrawn students hidden from every active view
 Students whose contact says Hold or Withdrawn no longer appear on the
