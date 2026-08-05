@@ -326,7 +326,7 @@ function RowGroup({
       {isOpen ? (
         <tr>
           <td colSpan={columns.length} className="bg-gray-50 border-y border-emerald-200 p-0">
-            <FamilyDetailPanel detail={detail} onClose={onToggle} locationId={locationId} sections={detailSections} />
+            <FamilyDetailPanel detail={detail} onClose={onToggle} locationId={locationId} sections={detailSections} embedToken={embedToken} />
           </td>
         </tr>
       ) : null}
@@ -901,7 +901,7 @@ function renderCell(
 }
 
 function FamilyDetailPanel({
-  detail, onClose, locationId, sections,
+  detail, onClose, locationId, sections, embedToken,
 }: {
   detail: FamilyDetail | 'loading' | { err: string } | undefined;
   onClose: () => void;
@@ -909,6 +909,7 @@ function FamilyDetailPanel({
   // Built-in sections to render. undefined = all (back-compat for
   // schools that never customized the dropdown).
   sections?: string[];
+  embedToken?: string;
 }) {
   const show = (key: string) => !sections || sections.includes(key);
   return (
@@ -971,6 +972,21 @@ function FamilyDetailPanel({
                         </a>
                       ) : null}
                       <ParentPinCell familyId={detail.family.id} parent={p} />
+                      {p.email && embedToken ? (
+                        // Per-parent portal impersonation — split/married
+                        // co-parents each have their OWN portal login, so
+                        // "View as parent" must exist per parent, not just
+                        // for the primary ("I can only login as Phillip
+                        // but not Capri").
+                        <a
+                          href={`/api/school/family/${detail.family.id}/view-as-parent?embed_token=${encodeURIComponent(embedToken)}&parent_id=${encodeURIComponent(p.id)}`}
+                          target="_blank" rel="noopener"
+                          className="inline-flex items-center gap-0.5 rounded border border-emerald-300 bg-white px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 hover:bg-emerald-50"
+                          title={`Open the parent portal logged in as ${p.first_name}`}
+                        >
+                          view {p.first_name}&rsquo;s portal ↗
+                        </a>
+                      ) : null}
                       {!p.email && !p.phone ? (
                         <span className="text-slate-400 italic">no contact info on file</span>
                       ) : null}

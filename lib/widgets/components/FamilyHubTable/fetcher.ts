@@ -380,12 +380,14 @@ export async function fetcher(
       total_tuition: Number(r.total_tuition ?? 0),
       has_allergy: !!r.has_allergy,
       search_haystack: haystack,
-      // Both parents see the same family portal — point every parent's
-      // preview at the family-level magic-link route (logs in as the
-      // family's primary parent).
+      // Each parent has their OWN portal login (own PIN, own visibility)
+      // — the preview link impersonates THAT parent via parent_id, not
+      // always the primary ("I can only login as Phillip but not Capri").
       parents: (r.parents_json ?? []).map((p) => ({
         ...p,
-        portal_preview_url: `/api/school/family/${r.family_id}/view-as-parent?embed_token=${encodeURIComponent(embedToken)}`,
+        portal_preview_url: p.email
+          ? `/api/school/family/${r.family_id}/view-as-parent?embed_token=${encodeURIComponent(embedToken)}&parent_id=${encodeURIComponent(p.id)}`
+          : null,
       })),
       students: r.students_json ?? [],
     };

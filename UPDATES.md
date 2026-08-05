@@ -9,6 +9,19 @@ human digest.
 
 ## August 5, 2026
 
+### View EITHER parent's portal (split families)
+"View parent portal" now logs in as the SPECIFIC parent you clicked —
+Family Hub's per-parent links impersonate that parent (previously
+every link opened the primary's portal, so you could see Phillip's but
+never Capri's), and the Student Roster family panel has a new "view
+{name}'s portal" button on every parent with an email.
+
+### Do-not-pickup now shows in the expanded family panel
+The roster's expanded family view previously said "No restrictions on
+file" even when the CRM's unauthorized/do-not-pickup field had names
+(the row column showed them, the panel didn't). The panel now merges
+both sources: office-entered restrictions AND the CRM field.
+
 ### Staff forms switched ON (incident reports live)
 All three teacher-facing forms are now active at the staff hub:
 growth-suite-dashboards.vercel.app/school/1JOwnyxFSKEwJNgmq84I/staff-requests

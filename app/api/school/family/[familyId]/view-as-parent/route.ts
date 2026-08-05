@@ -65,14 +65,18 @@ async function parentPortalBaseFor(schoolId: string): Promise<string> {
 export async function GET(request: NextRequest, { params }: { params: Params }) {
   const { familyId } = await params;
   const embedToken = request.nextUrl.searchParams.get('embed_token');
+  // Optional: impersonate a SPECIFIC parent in the family (split/married
+  // co-parents each have their own login — "I can only login as Phillip
+  // but not Capri"). Without it, the primary parent as before.
+  const requestedParentId = request.nextUrl.searchParams.get('parent_id')?.trim() || null;
 
   const ck = await cookies();
   const isOperator = verifySessionToken(ck.get(SESSION_COOKIE)?.value);
   const schoolSession = await verifySchoolSession(ck.get(SCHOOL_SESSION_COOKIE)?.value);
 
-  // Pick the family's primary active parent. Falls back to any active
-  // parent if no primary is flagged. Must have an email — magic-link
-  // tokens key on email.
+  // Pick the requested parent (must belong to THIS family), else the
+  // family's primary active parent, falling back to any active parent.
+  // Must have an email — magic-link tokens key on email.
   const { rows } = await query<ParentRow & { ghl_location_id: string | null }>(
     `SELECT p.id, p.school_id, p.email, p.first_name, p.is_primary,
             s.ghl_location_id
@@ -80,9 +84,10 @@ export async function GET(request: NextRequest, { params }: { params: Params }) 
        JOIN schools s ON s.id = p.school_id
       WHERE p.family_id = $1 AND p.status = 'active'
         AND p.email IS NOT NULL AND p.email <> ''
+        AND ($2::uuid IS NULL OR p.id = $2::uuid)
       ORDER BY p.is_primary DESC, p.created_at ASC
       LIMIT 1`,
-    [familyId],
+    [familyId, requestedParentId],
   );
   const parent = rows[0];
   if (!parent) {
