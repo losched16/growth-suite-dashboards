@@ -168,7 +168,7 @@ export function normalizeEnrollmentStatus(raw: string, warnings: string[]): stri
   // Direct match (already normalized)
   const allowed = new Set([
     'inquiry', 'tour_scheduled', 'application_submitted',
-    'accepted', 'pending', 'enrolled', 'waitlisted', 'withdrawn', 'declined', 'on_hold',
+    'accepted', 'pending', 'enrolled', 'waitlisted', 'withdrawn', 'declined', 'on_hold', 'alumni',
   ]);
   if (allowed.has(v)) return v;
   // GHL freetext variants
@@ -183,6 +183,8 @@ export function normalizeEnrollmentStatus(raw: string, warnings: string[]): stri
   // re-enrollment). Not attending: excluded from enrolled/pending views,
   // surfaced under the roster's Withdrawn scope alongside withdrawn.
   if (collapsed === 'hold' || collapsed === 'on hold' || collapsed === 'enrollment hold') return 'on_hold';
+  // "Alumni" — graduated / moved on. Kept addressable, never active.
+  if (collapsed === 'alumni' || collapsed === 'alum' || collapsed === 'alumnus' || collapsed === 'alumna') return 'alumni';
   if (collapsed === 'inquiry' || collapsed === 'inquired' || collapsed === 'lead') return 'inquiry';
   if (collapsed === 'tour scheduled' || collapsed === 'tour') return 'tour_scheduled';
   if (collapsed === 'application submitted' || collapsed === 'applied') return 'application_submitted';
@@ -738,7 +740,7 @@ function normStudentName(first: string, last: string): string {
 
 const _STATUS_RANK: Record<string, number> = {
   enrolled: 5, accepted: 4, pending: 3, application_submitted: 2,
-  tour_scheduled: 1, inquiry: 0, waitlisted: -1, on_hold: -1.5, withdrawn: -2, declined: -3,
+  tour_scheduled: 1, inquiry: 0, waitlisted: -1, on_hold: -1.5, withdrawn: -2, alumni: -2.5, declined: -3,
 };
 function _statusRank(s: string): number {
   return _STATUS_RANK[String(s ?? '').toLowerCase().replace(/[\s-]+/g, '_')] ?? -5;

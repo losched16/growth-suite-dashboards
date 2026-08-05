@@ -427,7 +427,7 @@ export async function fetcher(
     // stay visible — hiding on absence would vanish legit families.
     if (!fEnr) {
       const st = f.enrollment_statuses;
-      if (st.length > 0 && st.every((s) => s === 'withdrawn' || s === 'on_hold' || s === 'declined')) return false;
+      if (st.length > 0 && st.every((s) => s === 'withdrawn' || s === 'on_hold' || s === 'declined' || s === 'alumni')) return false;
     }
     if (fEnr && fEnr !== 'all' && !f.enrollment_statuses.includes(fEnr)) return false;
     if (fProg && !f.programs.split(', ').includes(fProg)) return false;
@@ -532,6 +532,7 @@ const STATUS_RANK: Record<string, number> = {
   waitlisted: -1,
   on_hold: -1.5,
   withdrawn: -2,
+  alumni: -2.5,
   declined: -3,
 };
 

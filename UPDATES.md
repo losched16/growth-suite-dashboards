@@ -9,6 +9,16 @@ human digest.
 
 ## August 5, 2026
 
+### "Alumni" added to enrollment status
+Every student slot's Enrollment Status dropdown in the CRM now has
+Alumni (Enrolled / Pending / Withdrawn / Hold / Alumni). Alumni
+students behave like withdrawn/hold: hidden from the Attendance
+dashboard, default rosters, Family Hub, forms trackers, portal
+check-in, and the kiosk — visible under the roster's Withdrawn scope
+with a violet "Alumni" chip, and their family stays addressable in the
+CRM for alumni communication. Set it on the contact; everything
+updates within 15 minutes.
+
 ### Haddad/Koenig split family created
 Joseph Haddad is now a split family: Jennifer Koenig has her own
 contact (jennifer.koenig@asu.edu) carrying Joseph's full record,

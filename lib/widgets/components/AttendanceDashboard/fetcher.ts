@@ -283,7 +283,7 @@ export async function fetcher(
        -- Withdrawn scope). Metadata-driven so it works even before an
        -- enrollment row exists for the status.
        AND lower(coalesce(s.metadata->>'enrollment_status', ''))
-           NOT IN ('hold', 'on hold', 'on_hold', 'withdrawn', 'withdrew', 'graduated', 'declined')
+           NOT IN ('hold', 'on hold', 'on_hold', 'withdrawn', 'withdrew', 'graduated', 'declined', 'alumni', 'alum')
      ORDER BY classroom NULLS LAST, s.first_name`,
     [school.schoolId, dateIso, tz],
   );
