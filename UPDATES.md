@@ -9,6 +9,16 @@ human digest.
 
 ## August 4, 2026
 
+### Miller family fixed (Brynley moved from Grandma's record)
+Brynley Miller lived under grandma Paige Julius's contact as a
+one-parent family. She's now Student 2 on Brett Miller's contact —
+Miller family shows Brett (P1) + Jennifer (P2) with Miles and Brynley.
+All 37 of her fields moved (tuition, classroom 12, emergency-card
+status, everything), her attendance history (yesterday + today's
+check-in) came with her, and the Julius "family" is gone from Growth
+Suite. Paige's CRM contact still exists for communication — it just
+has no student data; delete it in the CRM if you want it gone entirely.
+
 ### Create your own attendance status categories
 The Attendance dashboard now has "Manage status categories" (top right
 of the roster): create categories like Field Trip, Sick, or Late with
