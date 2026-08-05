@@ -278,6 +278,12 @@ export async function fetcher(
         WHERE r2.student_id = s.id AND r2.active = true
      ) restr ON true
      WHERE s.school_id = $1 AND s.status = 'active'
+       -- Hold / withdrawn students aren't attending — keep them off the
+       -- daily ops board entirely (they still exist in the roster's
+       -- Withdrawn scope). Metadata-driven so it works even before an
+       -- enrollment row exists for the status.
+       AND lower(coalesce(s.metadata->>'enrollment_status', ''))
+           NOT IN ('hold', 'on hold', 'on_hold', 'withdrawn', 'withdrew', 'graduated', 'declined')
      ORDER BY classroom NULLS LAST, s.first_name`,
     [school.schoolId, dateIso, tz],
   );

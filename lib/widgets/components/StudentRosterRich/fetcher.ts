@@ -402,7 +402,9 @@ export async function fetcher(
          CASE $5::text
            WHEN 'enrolled'  THEN (s.status = 'active' AND e.status = 'enrolled')
            WHEN 'pending'   THEN (s.status = 'active' AND e.status = 'pending')
-           WHEN 'withdrawn' THEN (s.status = 'withdrawn' OR e.status = 'withdrawn')
+           -- The Withdrawn scope is the "not attending" bucket: withdrawn
+           -- AND on-hold students (offices group them together).
+           WHEN 'withdrawn' THEN (s.status = 'withdrawn' OR e.status IN ('withdrawn', 'on_hold'))
            -- 'all': everyone in the roster, any status.
            ELSE                  (s.status = 'active' OR s.status = 'withdrawn' OR e.status = 'withdrawn')
          END

@@ -721,6 +721,10 @@ function renderCell(
             <span className="ml-1.5 rounded-full bg-rose-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-rose-700 align-middle">
               Withdrawn
             </span>
+          ) : s.status === 'on_hold' ? (
+            <span className="ml-1.5 rounded-full bg-orange-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-orange-700 align-middle">
+              On hold
+            </span>
           ) : s.status === 'pending' ? (
             <span className="ml-1.5 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700 align-middle">
               Pending

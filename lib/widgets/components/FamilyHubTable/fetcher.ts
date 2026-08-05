@@ -420,6 +420,15 @@ export async function fetcher(
 
   let filtered = allFamilies.filter((f) => {
     if (fStatus && f.family_status !== fStatus) return false;
+    // No explicit enrollment filter → hide families whose EVERY student
+    // is hold/withdrawn/declined (they aren't part of the active school
+    // community). Still fully reachable by choosing the withdrawn /
+    // on_hold / all options in the filter. Families with unset statuses
+    // stay visible — hiding on absence would vanish legit families.
+    if (!fEnr) {
+      const st = f.enrollment_statuses;
+      if (st.length > 0 && st.every((s) => s === 'withdrawn' || s === 'on_hold' || s === 'declined')) return false;
+    }
     if (fEnr && fEnr !== 'all' && !f.enrollment_statuses.includes(fEnr)) return false;
     if (fProg && !f.programs.split(', ').includes(fProg)) return false;
     if (fPlan && f.payment_plan !== fPlan) return false;
@@ -521,6 +530,7 @@ const STATUS_RANK: Record<string, number> = {
   accepted: 3,
   enrolled: 4,
   waitlisted: -1,
+  on_hold: -1.5,
   withdrawn: -2,
   declined: -3,
 };

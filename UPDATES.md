@@ -9,6 +9,18 @@ human digest.
 
 ## August 4, 2026
 
+### Hold + Withdrawn students hidden from every active view
+Students whose contact says Hold or Withdrawn no longer appear on the
+Attendance dashboard, in Family Hub's default list (families whose
+EVERY kid is hold/withdrawn are hidden — find them via the status
+filter), in parent-portal check-in, or at the kiosk. The Student
+Roster and Portal Forms tracker already excluded them. "Hold" is now a
+first-class status ("On hold" chip, grouped with Withdrawn under the
+roster's Withdrawn scope) — it previously wasn't recognized at all.
+Affected today: 4 on hold (Haberle, A. Miller, Thystrup, L. Zack) and
+10 withdrawn across 8 families. Nothing is deleted — flip the contact's
+enrollment status back and they reappear everywhere within 15 minutes.
+
 ### Crossed-sibling emergency-card data — found and fixed school-wide
 A parent flagged William Hoffman (CR7) showing "gluten free please"
 with a card listing no allergies. Root cause: some families' cards
