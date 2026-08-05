@@ -64,6 +64,23 @@ const cleanCardText = (s: unknown): string =>
 const normCardName = (s: string): string => cleanCardText(s).toLowerCase().replace(/[^a-z]/g, '');
 const isCardJunk = (s: string): boolean => s === '' || /^(na|n\/?a|none|nil|-+|\.+)$/i.test(s);
 
+// Small Levenshtein for name-variant tolerance (Londyn/London). Inputs
+// are short normalized first names, so the O(n\u00B7m) matrix is fine.
+function editDistance(a: string, b: string): number {
+  if (a === b) return 0;
+  const m = a.length, n = b.length;
+  if (m === 0 || n === 0) return Math.max(m, n);
+  let prev = Array.from({ length: n + 1 }, (_, j) => j);
+  for (let i = 1; i <= m; i++) {
+    const cur = [i];
+    for (let j = 1; j <= n; j++) {
+      cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    }
+    prev = cur;
+  }
+  return prev[n];
+}
+
 // Emergency/release-to people from a signed card → pickup_persons rows
 // scoped to the card's student. Skips the family's own parents, junk
 // entries, and anyone already on the family's pickup list (any source).
@@ -189,18 +206,44 @@ export async function importGhlDocuments(schoolId: string): Promise<ImportGhlDoc
         }
       }
 
-      // "- S2" suffix → the family's student on that GHL slot.
-      const slotMatch = (doc.name ?? '').match(/[-–]\s*S(\d)\s*$/i);
-      const slot = slotMatch ? parseInt(slotMatch[1], 10) : null;
+      // Which student is this card for? Trust the child NAME written on
+      // the card first — the office's "- S2" numbering doesn't always
+      // match the contact's slot numbering (the Darling family's cards
+      // were numbered opposite to their slots, which crossed the two
+      // kids' allergies; a parent also filled both kids' links with the
+      // SAME child once). The suffix is only a fallback for cards whose
+      // name field is blank; a name that matches NO student (test cards
+      // like "Sunny Days") resolves to nothing and stamps nothing.
+      const suffixMatch = (doc.name ?? '').match(/[-–]\s*S(\d)\s*$/i);
+      const suffixSlot = suffixMatch ? parseInt(suffixMatch[1], 10) : null;
+      const cardChild = String(
+        ((doc.fillableFields ?? []).find((f) => f.fieldId === 'text_field_1' && f.type === 'TextField') ?? {}).value ?? '',
+      ).trim().split(/\s+/)[0] ?? '';
       let studentId: string | null = null;
-      if (familyId && slot) {
-        const { rows: st } = await query<{ id: string }>(
-          `SELECT id FROM students
-            WHERE family_id = $1 AND status = 'active' AND metadata->>'ghl_slot' = $2
-            LIMIT 1`,
-          [familyId, String(slot)],
+      let slot: number | null = null;
+      if (familyId) {
+        const { rows: kids } = await query<{ id: string; first_name: string; slot: string | null }>(
+          `SELECT id, first_name, metadata->>'ghl_slot' AS slot
+             FROM students WHERE family_id = $1 AND status = 'active'`,
+          [familyId],
         );
-        studentId = st[0]?.id ?? null;
+        const cn = normCardName(cardChild);
+        const similar = (a: string, b: string) =>
+          a === b || (a.length >= 3 && b.startsWith(a)) || (b.length >= 3 && a.startsWith(b)) || editDistance(a, b) <= 2;
+        const named = cn ? kids.filter((k) => similar(normCardName(k.first_name), cn)) : [];
+        let pick = named.length === 1 ? named[0]
+          : named.length > 1 ? (named.find((k) => k.slot === String(suffixSlot)) ?? named[0])
+          : null;
+        if (!pick && !cn && suffixSlot) {
+          // Blank name field — legacy suffix behavior.
+          pick = kids.find((k) => k.slot === String(suffixSlot)) ?? null;
+        }
+        if (pick) {
+          studentId = pick.id;
+          slot = pick.slot ? parseInt(pick.slot, 10) : suffixSlot;
+        } else if (cn) {
+          console.warn(`[import-ghl-documents] card "${doc.name}" child "${cardChild}" matches no student in family ${familyId} — not stamped`);
+        }
       }
 
       // Tracking-field flip on the PRIMARY contact.

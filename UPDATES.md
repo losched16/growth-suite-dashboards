@@ -9,6 +9,32 @@ human digest.
 
 ## August 4, 2026
 
+### Crossed-sibling emergency-card data — found and fixed school-wide
+A parent flagged William Hoffman (CR7) showing "gluten free please"
+with a card listing no allergies. Root cause: some families' cards
+were numbered (S1/S2) OPPOSITE to the CRM's student slots, so card
+answers landed on the wrong sibling. Audited all 214 signed cards:
+- Darling family: gluten-free note belongs to ISABELLE (now on her),
+  William correctly shows none.
+- CRITICAL — Phillips family: Miller's "Anaphylactic (Severe) reaction
+  to Dairy and Eggs" was sitting on his brother Bryce. Now on Miller.
+  Also: the parent filled BOTH card links in Miller's name, so BRYCE
+  HAS NO CARD — he's now flagged Not Complete for follow-up.
+- 6 sibling-pair families had swapped card tracking/pickup scoping —
+  all corrected (Parker, Smith, Bennin, Kilgas, Gellis, Darling).
+- Malek Alami: no card of his own (Mae's was filled twice) — flagged
+  Not Complete. Lauren Zack's real card validated; the test card no
+  longer counts.
+The card processor now matches every card to the child NAMED on it
+instead of trusting the S-number, so this can't recur on our side.
+OFFICE NOTE: the CRM automation that copies card allergies onto the
+contact still keys on the S-number — when sending cards, keep S1/S2
+matching the contact's Student 1/Student 2 order (or ask us to switch
+that automation off; the platform now tracks it correctly by name).
+OFFICE ACTION: get cards signed for Bryce Phillips and Malek Alami;
+confirm Miller Phillips' allergy answer with the parent (his two cards
+disagreed — the anaphylactic answer is on file).
+
 ### Miller family fixed (Brynley moved from Grandma's record)
 Brynley Miller lived under grandma Paige Julius's contact as a
 one-parent family. She's now Student 2 on Brett Miller's contact —
