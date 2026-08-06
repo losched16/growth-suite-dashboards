@@ -57,7 +57,10 @@ interface PendingRow {
 }
 
 // Stripe PI statuses that mean "no charge landed / never will" → mark failed.
-const DEAD = new Set(['canceled', 'requires_payment_method', 'requires_action', 'requires_confirmation']);
+// Deliberately conservative: 'requires_action'/'requires_confirmation' are
+// LEFT pending (a card may still be mid-3DS or an ACH mid-verification), so
+// the daily auto-run never fails a genuinely in-flight payment.
+const DEAD = new Set(['canceled', 'requires_payment_method']);
 
 export async function GET(request: NextRequest) { return run(request); }
 export async function POST(request: NextRequest) { return run(request); }

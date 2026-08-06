@@ -11,6 +11,10 @@
     {
       "path": "/api/cron/onboarding-reminders",
       "schedule": "0 15 * * *"
+    },
+    {
+      "path": "/api/cron/reconcile-payments?apply=1&min_age_hours=24",
+      "schedule": "0 16 * * *"
     }
   ]
 }
