@@ -797,7 +797,15 @@ export function mergeCoparentFamilies(
     if (idxs.length === 1) { out.push(families[idxs[0]]); continue; }
     mergedGroups++;
     const gcOf = (f: MappedFamily) => f.parents.find((p) => p.is_primary)?.ghl_contact_id ?? '';
-    const grp = idxs.map((i) => families[i]).sort((a, b) => (gcOf(a) < gcOf(b) ? -1 : gcOf(a) > gcOf(b) ? 1 : 0));
+    // Anchor on the FULLER household: the family with more students wins
+    // P1 (a co-parent contact carrying only the shared child must never
+    // take over as the family's primary — Ian Walker briefly became P1
+    // of the Friend family because his contact id sorted first, which
+    // demoted the real household and churned their credentials). Ties
+    // (full split duplicates like Bates) keep the stable contact-id sort.
+    const grp = idxs.map((i) => families[i]).sort((a, b) =>
+      (b.students.length - a.students.length)
+      || (gcOf(a) < gcOf(b) ? -1 : gcOf(a) > gcOf(b) ? 1 : 0));
 
     // Merge parents — dedupe by contact id / email / name.
     const parents: MappedParent[] = [];
