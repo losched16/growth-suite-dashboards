@@ -174,6 +174,16 @@ function FragmentRow({
           )}
         </td>
         <td className="px-3 py-2 align-top text-xs text-gray-700 max-w-[16rem]">
+          {/* Office note first (admin-entered, parents never see it),
+              then any parent notes from today's events. */}
+          {r.admin_notes ? (
+            <span
+              title={`Office note (not visible to parents): ${r.admin_notes}`}
+              className="block truncate font-medium text-amber-800"
+            >
+              🔒 {r.admin_notes}
+            </span>
+          ) : null}
           {r.todays_notes ? (
             <span
               title={r.todays_notes}
@@ -181,9 +191,10 @@ function FragmentRow({
             >
               &ldquo;{r.todays_notes}&rdquo;
             </span>
-          ) : (
+          ) : null}
+          {!r.admin_notes && !r.todays_notes ? (
             <span className="text-gray-400">{EMDASH}</span>
-          )}
+          ) : null}
         </td>
         <td className="px-3 py-2 align-top text-[11px] text-gray-700 max-w-[14rem]">
           {r.authorized_pickup
@@ -252,6 +263,10 @@ function Drawer({ row: r, dateIso, isToday, customStatuses }: {
         </div>
       ) : null}
 
+      {/* Office-only note on the day (migration 096). Editable here for
+          any date; NEVER rendered in the parent portal. */}
+      <AdminNotesEditor studentId={r.student_id} dateIso={dateIso} initial={r.admin_notes} />
+
       {/* Most-recent admin override on this student today — surfaced so
           operators have a clear audit trail without digging through the
           full events feed. */}
@@ -301,6 +316,73 @@ function Drawer({ row: r, dateIso, isToday, customStatuses }: {
           </span>
         </div>
       )}
+    </div>
+  );
+}
+
+// Office-only day note: editable textarea + save/clear. Persists on the
+// daily_attendance row (survives check-in/out — unlike custom_status,
+// the recompute trigger doesn't clear it) and is preserved across syncs.
+// Parents never see it: the parent portal's attendance page reads only
+// status/times and event notes.
+function AdminNotesEditor({ studentId, dateIso, initial }: {
+  studentId: string; dateIso: string; initial: string | null;
+}) {
+  const [text, setText] = useState(initial ?? '');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const dirty = text.trim() !== (initial ?? '').trim();
+
+  async function save(value: string) {
+    if (busy) return;
+    setBusy(true);
+    setErr(null);
+    try {
+      const fd = new FormData();
+      fd.set('student_id', studentId);
+      fd.set('date', dateIso);
+      fd.set('notes', value);
+      const r2 = await fetch('/api/school/attendance/admin-notes', { method: 'POST', body: fd });
+      if (!r2.ok) throw new Error((await r2.text()) || 'failed');
+      window.location.reload();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'failed');
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="rounded-md border border-amber-300 bg-amber-50/60 px-3 py-2 space-y-1.5">
+      <Label>Office notes — not visible to parents 🔒</Label>
+      <textarea
+        rows={2}
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        maxLength={2000}
+        placeholder="e.g. Grandma picking up at 2pm — verify ID · left early for appointment"
+        className="w-full rounded border border-amber-200 bg-white px-2 py-1.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-amber-400 focus:outline-none"
+      />
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          disabled={busy || !dirty}
+          onClick={() => save(text.trim())}
+          className="rounded-md bg-amber-600 px-3 py-1 text-xs font-semibold text-white hover:bg-amber-700 disabled:opacity-50"
+        >
+          {busy ? 'Saving…' : 'Save note'}
+        </button>
+        {initial ? (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => save('')}
+            className="rounded-md border border-amber-300 bg-white px-3 py-1 text-xs font-medium text-amber-800 hover:bg-amber-50 disabled:opacity-50"
+          >
+            Clear note
+          </button>
+        ) : null}
+        {err ? <span className="text-xs text-red-700">{err}</span> : null}
+      </div>
     </div>
   );
 }

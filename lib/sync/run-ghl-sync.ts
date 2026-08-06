@@ -1180,10 +1180,15 @@ export async function runGhlSync(schoolId: string): Promise<SyncResult> {
     // so the labels must be stashed and re-applied after the events restore.
     // Rows with NO events (kid marked "Sick" before any check-in) have no
     // daily row after the rebuild at all; the restore below re-creates them.
+    // admin_notes (096, office-only day notes) ride along in the same
+    // stash — daily_attendance is trigger-regenerated, so they'd vanish
+    // on every sync otherwise.
     await q(
       `CREATE TEMP TABLE _custom_status_preserve ON COMMIT DROP AS
-       SELECT school_id, student_id, date, custom_status, custom_status_set_at
-         FROM daily_attendance WHERE school_id = $1 AND custom_status IS NOT NULL`,
+       SELECT school_id, student_id, date, custom_status, custom_status_set_at,
+              admin_notes, admin_notes_updated_at
+         FROM daily_attendance
+        WHERE school_id = $1 AND (custom_status IS NOT NULL OR admin_notes IS NOT NULL)`,
       [schoolId],
     );
 
@@ -1474,17 +1479,21 @@ export async function runGhlSync(schoolId: string): Promise<SyncResult> {
     // were just restored, so no label can be stale.
     const customStatusRestored = await q(
       `INSERT INTO daily_attendance
-         (school_id, student_id, date, status, custom_status, custom_status_set_at, updated_at)
-       SELECT p.school_id, p.student_id, p.date, 'not_yet', p.custom_status, p.custom_status_set_at, now()
+         (school_id, student_id, date, status, custom_status, custom_status_set_at,
+          admin_notes, admin_notes_updated_at, updated_at)
+       SELECT p.school_id, p.student_id, p.date, 'not_yet', p.custom_status, p.custom_status_set_at,
+              p.admin_notes, p.admin_notes_updated_at, now()
          FROM _custom_status_preserve p
         WHERE EXISTS (SELECT 1 FROM students s WHERE s.id = p.student_id)
        ON CONFLICT (school_id, student_id, date) DO UPDATE SET
-         custom_status        = EXCLUDED.custom_status,
-         custom_status_set_at = EXCLUDED.custom_status_set_at,
-         updated_at           = now()`,
+         custom_status          = EXCLUDED.custom_status,
+         custom_status_set_at   = EXCLUDED.custom_status_set_at,
+         admin_notes            = EXCLUDED.admin_notes,
+         admin_notes_updated_at = EXCLUDED.admin_notes_updated_at,
+         updated_at             = now()`,
     );
     if ((customStatusRestored.rowCount ?? 0) > 0) {
-      warnings.push(`Preserved ${customStatusRestored.rowCount} custom attendance status(es) across the sync.`);
+      warnings.push(`Preserved ${customStatusRestored.rowCount} custom attendance status(es)/office note(s) across the sync.`);
     }
 
     // ── Generic restore of the preserved data tables (see DATA_PRESERVE).

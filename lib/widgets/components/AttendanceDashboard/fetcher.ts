@@ -42,6 +42,9 @@ export interface StudentRow {
   // check-out events for this student (most-recent last). Null when
   // no notes today.
   todays_notes: string | null;
+  // OFFICE-ONLY note on the day's row (migration 096) — editable from
+  // this dashboard, never rendered in the parent portal.
+  admin_notes: string | null;
   // Most recent admin who performed a manual override today (if any).
   // Surfaced inline on the roster row so the front desk can see at a
   // glance which records were operator-touched today.
@@ -121,6 +124,7 @@ interface DbStudentRow {
   // Today's parent notes from check-in / check-out events for this
   // student, joined into a single string with " · " separators.
   todays_notes: string | null;
+  admin_notes: string | null;
   last_admin_override_email: string | null;
   last_admin_override_at: string | null;
   parent_names: string | null;
@@ -238,6 +242,7 @@ export async function fetcher(
        da.total_minutes,
        COALESCE(ec.n, 0) AS event_count_today,
        en.todays_notes,
+       da.admin_notes,
        lo.email AS last_admin_override_email,
        lo.at AS last_admin_override_at,
        fam_par.names AS parent_names,
@@ -353,6 +358,7 @@ export async function fetcher(
     total_minutes: r.total_minutes,
     event_count_today: r.event_count_today,
     todays_notes: r.todays_notes,
+    admin_notes: r.admin_notes,
     last_admin_override_email: r.last_admin_override_email,
     last_admin_override_at: r.last_admin_override_at,
     authorized_pickup: [r.parent_names, r.pickup_person_names].filter(Boolean).join('; ') || null,
