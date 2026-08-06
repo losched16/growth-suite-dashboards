@@ -263,11 +263,16 @@ function connectFieldTo(f: FieldBlock, gf: GhlField, metadataKeys: string[]): Fi
 export function FormBuilderV2({
   schoolId, formId, slug, initialSchema, initialSettings, ghlFields, metadataKeys = [],
   programOptions = [], gradeOptions = [], tagOptions = [], studentOptions = [], previewHref, backHref,
+  embedToken,
 }: {
   schoolId: string;
   formId: string;
   slug: string;
   displayName: string;
+  // Server-derived embed credential — the builder usually runs in a tab
+  // where the CRM iframe's session cookie doesn't follow; saves carry
+  // this so they authenticate ("forms are not being saved").
+  embedToken?: string;
   initialSchema: FieldBlock[];
   initialSettings: FormSettings;
   ghlFields: GhlField[];
@@ -349,7 +354,7 @@ export function FormBuilderV2({
   async function save() {
     setBusy(true); setErr(null);
     try {
-      const r = await fetch(`/api/admin/schools/${schoolId}/forms/${formId}`, {
+      const r = await fetch(`/api/admin/schools/${schoolId}/forms/${formId}${embedToken ? `?embed_token=${encodeURIComponent(embedToken)}` : ''}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

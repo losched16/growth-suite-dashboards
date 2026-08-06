@@ -128,10 +128,14 @@ const FIELD_TYPE_OPTIONS: Array<{ value: FieldType; label: string; group: string
 
 export function FormEditor({
   schoolId, formId, slug, initial, programOptions = [], gradeOptions = [], tagOptions = [], studentOptions = [],
+  embedToken,
 }: {
   schoolId: string;
   formId: string;
   slug: string;
+  // Server-derived embed credential so saves work in tabs where the CRM
+  // iframe's session cookie doesn't follow.
+  embedToken?: string;
   initial: InitialState;
   // Distinct GHL contact tags synced for this school, for the
   // "who sees this form" tag checklist. Backed by applies_to.tag_match.
@@ -309,7 +313,7 @@ export function FormEditor({
         .filter(Boolean);
       const { notify_emails_raw, webhook_urls_raw, ...metaForApi } = meta;
       void notify_emails_raw; void webhook_urls_raw;
-      const r = await fetch(`/api/admin/schools/${schoolId}/forms/${formId}`, {
+      const r = await fetch(`/api/admin/schools/${schoolId}/forms/${formId}${embedToken ? `?embed_token=${encodeURIComponent(embedToken)}` : ''}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

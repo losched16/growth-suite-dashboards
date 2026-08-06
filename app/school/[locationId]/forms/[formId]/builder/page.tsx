@@ -5,6 +5,7 @@
 import { notFound } from 'next/navigation';
 import { query } from '@/lib/db';
 import { loadSchoolByLocationId } from '@/lib/dashboards/loader';
+import { deriveEmbedToken } from '@/lib/auth/embed';
 import { loadGhlClient } from '@/lib/ghl/client';
 import { loadGhlLocationTags } from '@/lib/ghl/tags';
 import { FormBuilderV2, type FieldBlock, type GhlField, type FormAppliesTo } from './FormBuilderV2';
@@ -113,6 +114,7 @@ export default async function FormBuilderPage({ params }: { params: Params }) {
 
   return (
     <FormBuilderV2
+      embedToken={deriveEmbedToken(locationId)}
       schoolId={school.id}
       formId={form.id}
       slug={form.slug}

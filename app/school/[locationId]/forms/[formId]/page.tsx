@@ -15,6 +15,7 @@ import { notFound } from 'next/navigation';
 import { ArrowLeft, Eye, Wand2 } from 'lucide-react';
 import { query } from '@/lib/db';
 import { loadSchoolByLocationId } from '@/lib/dashboards/loader';
+import { deriveEmbedToken } from '@/lib/auth/embed';
 import { FormEditor } from '@/app/admin/[schoolId]/forms/[formId]/FormEditor';
 
 export const dynamic = 'force-dynamic';
@@ -236,6 +237,7 @@ export default async function FormEditPageScoped({
         </section>
 
         <FormEditor
+            embedToken={deriveEmbedToken(locationId)}
           schoolId={school.id}
           formId={form.id}
           slug={form.slug}

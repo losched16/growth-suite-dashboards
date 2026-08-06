@@ -15,6 +15,7 @@ import { cookies } from 'next/headers';
 import { query, withTransaction } from '@/lib/db';
 import { SESSION_COOKIE, verifySessionToken } from '@/lib/auth/operator';
 import { SCHOOL_SESSION_COOKIE, verifySchoolSession } from '@/lib/auth/school';
+import { checkEmbedToken } from '@/lib/auth/embed';
 import { resolveRecipients, sanitizeAudience, summarizeAudience } from '@/lib/notifications/audience';
 import { loadGhlClient } from '@/lib/ghl/client';
 
@@ -22,7 +23,15 @@ import { loadGhlClient } from '@/lib/ghl/client';
 //   - operator session (back-office /admin pages), or
 //   - a school session for the SAME school (embedded /school pages
 //     under GHL). Anything else → 401/403.
-async function authorizeFormMutation(schoolId: string): Promise<{ ok: true } | { ok: false; status: 401 | 403 }> {
+async function authorizeFormMutation(
+  schoolId: string,
+  // The form builder opens in a NEW TAB from the CRM iframe, where the
+  // partitioned session cookie doesn't follow — saves 401'd ("forms are
+  // not being saved", Sonia). The builder pages derive a per-school
+  // embed token server-side and send it with every save; accept it here
+  // like the documents/uploads routes do.
+  embedToken?: string | null,
+): Promise<{ ok: true } | { ok: false; status: 401 | 403 }> {
   const ck = await cookies();
   if (verifySessionToken(ck.get(SESSION_COOKIE)?.value)) {
     return { ok: true };
@@ -30,6 +39,12 @@ async function authorizeFormMutation(schoolId: string): Promise<{ ok: true } | {
   const ss = await verifySchoolSession(ck.get(SCHOOL_SESSION_COOKIE)?.value);
   if (ss && ss.school_id === schoolId) {
     return { ok: true };
+  }
+  if (embedToken) {
+    const { rows } = await query<{ ghl_location_id: string | null }>(
+      `SELECT ghl_location_id FROM schools WHERE id = $1`, [schoolId]);
+    const loc = rows[0]?.ghl_location_id;
+    if (loc && checkEmbedToken(loc, embedToken)) return { ok: true };
   }
   return { ok: false, status: ss ? 403 : 401 };
 }
@@ -201,7 +216,7 @@ function audienceForAppliesTo(appliesTo: unknown): unknown | null {
 
 export async function PATCH(request: NextRequest, { params }: { params: Params }) {
   const { schoolId, formId } = await params;
-  const auth = await authorizeFormMutation(schoolId);
+  const auth = await authorizeFormMutation(schoolId, request.nextUrl.searchParams.get('embed_token'));
   if (!auth.ok) return NextResponse.json({ error: 'unauthorized' }, { status: auth.status });
 
   let body: Body = {};
@@ -441,7 +456,7 @@ ${linkUrl ? `<p><a href="${linkUrl}">Open the form</a> — or log in to your par
 //     draft, etc.).
 export async function DELETE(request: NextRequest, { params }: { params: Params }) {
   const { schoolId, formId } = await params;
-  const auth = await authorizeFormMutation(schoolId);
+  const auth = await authorizeFormMutation(schoolId, request.nextUrl.searchParams.get('embed_token'));
   if (!auth.ok) return NextResponse.json({ error: 'unauthorized' }, { status: auth.status });
 
   const expectedCountRaw = new URL(request.url).searchParams.get('confirm_count');
