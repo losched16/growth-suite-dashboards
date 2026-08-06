@@ -9,6 +9,19 @@ human digest.
 
 ## August 6, 2026
 
+### Split families: pickup people are now private per household
+In split families, each parent's portal shows ONLY their own
+authorized pickup people — the other household's list is invisible
+(list page, check-out picker, counts, and the API; a split parent
+can't even select the other household's person at check-out). Pickup
+people from emergency cards now belong to the parent who SIGNED the
+card, and both households may list the same person (own copy each).
+Normal married-couple families are unchanged — they share one list.
+Office dashboards always see everything. Verified live on the Bates
+family: Phillip sees only his 4, Capri only her 2.
+
+
+
 ### NEW: restrict a parent to specific children (blended families)
 A parent can now be limited to specific students — their portal, home
 page, forms, attendance, check-in/out, AND the kiosk only show and
