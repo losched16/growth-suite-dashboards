@@ -14,7 +14,7 @@ import {
   GripVertical, Plus, Trash2, Eye, ArrowLeft, Check, Loader2,
   Type, AlignLeft, Mail, Phone, Hash, Calendar, ChevronDown, CircleDot,
   CheckSquare, PenLine, Heading, Text as TextIcon, X, Search, Plug, Settings as SettingsIcon,
-  Pencil, Users,
+  Pencil, Users, Bell,
 } from 'lucide-react';
 import {
   DndContext, closestCenter, PointerSensor, KeyboardSensor, useSensor, useSensors,
@@ -300,6 +300,12 @@ export function FormBuilderV2({
   const [savedAt, setSavedAt] = useState<Date | null>(null);
   const [dirty, setDirty] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  // "Send notification" — the family-facing announcement is decoupled
+  // from publishing so the school can publish + test silently first.
+  // Two-step (arm → confirm) so one stray click can't blast families.
+  const [notifyArm, setNotifyArm] = useState(false);
+  const [notifyBusy, setNotifyBusy] = useState(false);
+  const [notifyMsg, setNotifyMsg] = useState<string | null>(null);
 
   const keys = new Set(fields.map((f) => f.key).filter(Boolean) as string[]);
 
@@ -384,6 +390,29 @@ export function FormBuilderV2({
     }
   }
 
+  async function sendNotification() {
+    setNotifyBusy(true); setNotifyMsg(null);
+    try {
+      const r = await fetch(`/api/admin/schools/${schoolId}/forms/${formId}/notify${embedToken ? `?embed_token=${encodeURIComponent(embedToken)}` : ''}`, { method: 'POST' });
+      let b: { error?: string; notified?: number } = {};
+      try { b = await r.json(); } catch { /* ignore */ }
+      if (!r.ok) {
+        const reason = String(b?.error || 'failed');
+        setNotifyMsg(reason === 'recently_sent' ? 'Already sent in the last 10 minutes.'
+          : reason === 'form_not_published' ? 'Turn on "Form is live" and save first.'
+          : reason === 'no_recipients' ? 'No families match this form’s targeting.'
+          : `Could not send (${reason.replace(/_/g, ' ')}).`);
+      } else {
+        const n = b?.notified ?? 0;
+        setNotifyMsg(`Sent to ${n} parent${n === 1 ? '' : 's'} (portal + email).`);
+      }
+    } catch {
+      setNotifyMsg('Could not send — network error.');
+    } finally {
+      setNotifyBusy(false); setNotifyArm(false);
+    }
+  }
+
   const selField = sel != null ? fields[sel] : null;
 
   return (
@@ -415,6 +444,24 @@ export function FormBuilderV2({
           {err ? <span className="text-xs text-red-600">{err}</span>
             : savedAt ? <span className="inline-flex items-center gap-1 text-xs text-emerald-700"><Check className="h-3.5 w-3.5" /> Saved</span>
             : dirty ? <span className="text-xs text-amber-600">Unsaved changes</span> : null}
+          {notifyMsg && <span className="max-w-[260px] truncate text-xs text-slate-600" title={notifyMsg}>{notifyMsg}</span>}
+          {settings.is_active && (notifyArm ? (
+            <span className="inline-flex items-center gap-1.5 rounded-md border border-amber-300 bg-amber-50 px-2 py-1">
+              <span className="text-xs font-medium text-amber-800">Email + portal alert to every targeted family?</span>
+              <button onClick={sendNotification} disabled={notifyBusy}
+                className="inline-flex items-center gap-1 rounded bg-amber-600 px-2 py-0.5 text-xs font-semibold text-white hover:bg-amber-700 disabled:opacity-50">
+                {notifyBusy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Bell className="h-3 w-3" />} Send
+              </button>
+              <button onClick={() => setNotifyArm(false)} disabled={notifyBusy}
+                className="rounded px-1.5 py-0.5 text-xs font-medium text-amber-800 hover:bg-amber-100">Cancel</button>
+            </span>
+          ) : (
+            <button onClick={() => { setNotifyMsg(null); setNotifyArm(true); }} disabled={notifyBusy || dirty}
+              title={dirty ? 'Save your changes first — the notification uses the saved targeting' : 'Notify the targeted families that this form is ready (portal + email)'}
+              className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50">
+              <Bell className="h-3.5 w-3.5" /> Send notification
+            </button>
+          ))}
           <a href={previewHref} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50" title="Open the full portal preview in a new tab">
             <Eye className="h-3.5 w-3.5" /> Full preview
           </a>
@@ -1200,6 +1247,7 @@ function FormSettingsPanel({ settings, onPatch, programOptions, gradeOptions, ta
       <label className={toggle}>One form per student<input type="checkbox" checked={settings.per_student} onChange={(e) => onPatch({ per_student: e.target.checked })} className={cb} /></label>
       <label className={toggle}>Allow re-submission<input type="checkbox" checked={settings.resubmission_allowed} onChange={(e) => onPatch({ resubmission_allowed: e.target.checked })} className={cb} /></label>
       <label className={toggle}>Form is live<input type="checkbox" checked={settings.is_active} onChange={(e) => onPatch({ is_active: e.target.checked })} className={cb} /></label>
+      <p className="-mt-2 text-[11px] text-slate-400">Going live is silent — parents aren’t told until you click “Send notification” in the top bar. Publish, test it yourself, then send.</p>
       <WhoSeesEditor settings={settings} onPatch={onPatch} programOptions={programOptions} gradeOptions={gradeOptions} tagOptions={tagOptions} studentOptions={studentOptions} />
     </div>
   );

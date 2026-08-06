@@ -10,14 +10,11 @@
 
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { after } from 'next/server';
 import { cookies } from 'next/headers';
-import { query, withTransaction } from '@/lib/db';
+import { query } from '@/lib/db';
 import { SESSION_COOKIE, verifySessionToken } from '@/lib/auth/operator';
 import { SCHOOL_SESSION_COOKIE, verifySchoolSession } from '@/lib/auth/school';
 import { checkEmbedToken } from '@/lib/auth/embed';
-import { resolveRecipients, sanitizeAudience, summarizeAudience } from '@/lib/notifications/audience';
-import { loadGhlClient } from '@/lib/ghl/client';
 
 // Authorize a DELETE for `schoolId`. Accepts EITHER:
 //   - operator session (back-office /admin pages), or
@@ -51,9 +48,6 @@ async function authorizeFormMutation(
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-// Publish-notification email fan-out (via after()) can take ~2 minutes
-// for a school-wide form — keep the function alive long enough.
-export const maxDuration = 300;
 
 type Params = Promise<{ schoolId: string; formId: string }>;
 
@@ -195,25 +189,6 @@ function validateFieldSchema(raw: unknown): { ok: true; schema: unknown[] } | { 
   return { ok: true, schema: raw };
 }
 
-// Map a form's applies_to rule to a notification audience. The three
-// rule types the builder's "Who sees this form" UI produces (program,
-// grade_level, tag) translate 1:1; OR semantics on both sides. Rules
-// this can't express (student_ids, tuition_grid, other metadata keys)
-// return null → no auto-notification, publish still succeeds.
-function audienceForAppliesTo(appliesTo: unknown): unknown | null {
-  if (!appliesTo || typeof appliesTo !== 'object' || Array.isArray(appliesTo)) {
-    return { match: 'any', conditions: [{ field: 'all' }] };
-  }
-  const r = appliesTo as Record<string, unknown>;
-  const conds: Array<{ field: string; values?: string[] }> = [];
-  const arr = (v: unknown): string[] => (Array.isArray(v) ? v.map(String).filter(Boolean) : []);
-  if (arr(r.program_match).length) conds.push({ field: 'program', values: arr(r.program_match) });
-  const mm = (r.metadata_match ?? {}) as Record<string, unknown>;
-  if (arr(mm.grade_level).length) conds.push({ field: 'grade_level', values: arr(mm.grade_level) });
-  if (arr(r.tag_match).length) conds.push({ field: 'tag', values: arr(r.tag_match) });
-  return conds.length ? { match: 'any', conditions: conds } : null;
-}
-
 export async function PATCH(request: NextRequest, { params }: { params: Params }) {
   const { schoolId, formId } = await params;
   const auth = await authorizeFormMutation(schoolId, request.nextUrl.searchParams.get('embed_token'));
@@ -223,16 +198,14 @@ export async function PATCH(request: NextRequest, { params }: { params: Params }
   try { body = await request.json(); }
   catch { return NextResponse.json({ error: 'invalid_json' }, { status: 400 }); }
 
-  // Confirm the form exists and belongs to this school; remember the
-  // pre-save publish state so we can detect the draft → published flip.
-  const { rows: existing } = await query<{ id: string; is_active: boolean }>(
-    `SELECT id, is_active FROM portal_form_definitions WHERE id = $1 AND school_id = $2`,
+  // Confirm the form exists and belongs to this school.
+  const { rows: existing } = await query<{ id: string }>(
+    `SELECT id FROM portal_form_definitions WHERE id = $1 AND school_id = $2`,
     [formId, schoolId],
   );
   if (existing.length === 0) {
     return NextResponse.json({ error: 'not_found' }, { status: 404 });
   }
-  const wasActive = existing[0].is_active;
 
   // Validate field_schema
   if (body.field_schema !== undefined) {
@@ -326,112 +299,11 @@ export async function PATCH(request: NextRequest, { params }: { params: Params }
     args,
   );
 
-  // Draft → published: tell exactly the families the form targets that
-  // something new is waiting in their portal (bell + inbox). Best-effort
-  // — a notification hiccup must never fail the publish itself.
-  let notified = 0;
-  if (asBool(body.meta?.is_active, false) === true && !wasActive) {
-    try {
-      const { rows: defRows } = await query<{ display_name: string; slug: string; applies_to: unknown }>(
-        `SELECT display_name, slug, applies_to FROM portal_form_definitions WHERE id = $1`,
-        [formId],
-      );
-      const def = defRows[0];
-      const title = `New form: ${def.display_name}`;
-
-      // Dedupe: a re-publish within 14 days (accidental toggle, quick
-      // edit cycle) must not re-blast every family.
-      const { rows: dup } = await query<{ n: string }>(
-        `SELECT COUNT(*)::text AS n FROM portal_notifications
-          WHERE school_id = $1 AND title = $2 AND created_at > now() - interval '14 days'`,
-        [schoolId, title],
-      );
-      if (Number(dup[0].n) === 0) {
-        const audience = sanitizeAudience(audienceForAppliesTo(def.applies_to));
-        if (audience) {
-          const recipients = await resolveRecipients(schoolId, audience);
-          if (recipients.length > 0) {
-            const { rows: hostRows } = await query<{ custom_host: string | null }>(
-              `SELECT custom_host FROM school_branding WHERE school_id = $1`,
-              [schoolId],
-            );
-            const host = hostRows[0]?.custom_host?.trim();
-            const linkUrl = host ? `https://${host}/forms-v2/${def.slug}` : null;
-            await withTransaction(async (q) => {
-              const { rows } = await q<{ id: string }>(
-                `INSERT INTO portal_notifications
-                   (school_id, title, body, link_url, link_label, pinned, audience, audience_label, recipient_count, created_by_email)
-                 VALUES ($1, $2, $3, $4, $5, false, $6::jsonb, $7, $8, $9)
-                 RETURNING id`,
-                [schoolId, title,
-                 `"${def.display_name}" has been published to your parent portal. Please open it and complete it when you have a moment.`,
-                 linkUrl, linkUrl ? 'Open the form' : null,
-                 JSON.stringify(audience), summarizeAudience(audience), recipients.length, 'auto: form published'],
-              );
-              await q(
-                `INSERT INTO portal_notification_recipients (notification_id, school_id, parent_id, family_id)
-                 SELECT $1, $2, pid, fid FROM unnest($3::uuid[], $4::uuid[]) AS t(pid, fid)
-                 ON CONFLICT (notification_id, parent_id) DO NOTHING`,
-                [rows[0].id, schoolId, recipients.map((r) => r.parent_id), recipients.map((r) => r.family_id)],
-              );
-            });
-            notified = recipients.length;
-
-            // EMAIL each recipient too — parents need a heads-up to even
-            // open the portal (Clint, Aug 3). Sent through the school's
-            // CRM so every email lands in the contact's conversation
-            // history. Runs via after() so the builder's publish click
-            // returns immediately while the fan-out completes (after()
-            // keeps the function alive — a naked detached promise would
-            // not survive the response).
-            const emailBody = `<p>Hi {first},</p>
-<p>A new form — <strong>${def.display_name.replace(/&/g, '&amp;').replace(/</g, '&lt;')}</strong> — has been published to your parent portal and needs your attention.</p>
-${linkUrl ? `<p><a href="${linkUrl}">Open the form</a> — or log in to your parent portal and find it under your forms.</p>` : '<p>Please log in to your parent portal and find it under your forms.</p>'}
-<p>Thank you!</p>`;
-            const parentIds = [...new Set(recipients.map((r) => r.parent_id))];
-            after(async () => {
-              try {
-                const { rows: pRows } = await query<{ id: string; first_name: string | null; ghl_contact_id: string | null }>(
-                  `SELECT id, first_name, ghl_contact_id FROM parents
-                    WHERE id = ANY($1::uuid[]) AND ghl_contact_id IS NOT NULL`,
-                  [parentIds],
-                );
-                const seen = new Set<string>();
-                const ghl = await loadGhlClient(schoolId);
-                let sent = 0, failed = 0;
-                for (const p of pRows) {
-                  if (!p.ghl_contact_id || seen.has(p.ghl_contact_id)) continue;
-                  seen.add(p.ghl_contact_id);
-                  try {
-                    await ghl.axios.post('/conversations/messages', {
-                      type: 'Email',
-                      contactId: p.ghl_contact_id,
-                      subject: `New form to complete: ${def.display_name}`,
-                      html: emailBody.replace('{first}', (p.first_name ?? 'there')
-                        .replace(/&/g, '&amp;').replace(/</g, '&lt;')),
-                    }, { headers: { Version: '2021-04-15' } });
-                    sent++;
-                  } catch (e) {
-                    failed++;
-                    console.error(`[publish-notify] email to contact ${p.ghl_contact_id} failed:`,
-                      e instanceof Error ? e.message : String(e));
-                  }
-                  await new Promise((r) => setTimeout(r, 350));
-                }
-                console.log(`[publish-notify] "${def.display_name}": emailed ${sent}, failed ${failed}`);
-              } catch (e) {
-                console.error('[publish-notify] email fan-out failed:', e);
-              }
-            });
-          }
-        }
-      }
-    } catch (e) {
-      console.error('publish notification failed (form still published):', e);
-    }
-  }
-
-  return NextResponse.json({ ok: true, notified });
+  // Publishing is deliberately SILENT (Clint, Aug 6: schools need to
+  // publish + test a form without families being told). Families are
+  // notified only when the school explicitly clicks "Send notification"
+  // in the builder → POST .../notify (lib/forms/publish-notification).
+  return NextResponse.json({ ok: true });
 }
 
 // DELETE /api/admin/schools/{schoolId}/forms/{formId}[?confirm_count=N]

@@ -265,6 +265,34 @@ export function FormEditor({
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState<Date | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  // Family-facing announcement is decoupled from publishing — sent only
+  // via this explicit action so a form can be published + tested first.
+  const [notifyBusy, setNotifyBusy] = useState(false);
+  const [notifyMsg, setNotifyMsg] = useState<string | null>(null);
+
+  async function sendNotification() {
+    if (!confirm('Send a portal notification + email to every family this form is targeted to?')) return;
+    setNotifyBusy(true); setNotifyMsg(null);
+    try {
+      const r = await fetch(`/api/admin/schools/${schoolId}/forms/${formId}/notify${embedToken ? `?embed_token=${encodeURIComponent(embedToken)}` : ''}`, { method: 'POST' });
+      let b: { error?: string; notified?: number } = {};
+      try { b = await r.json(); } catch { /* ignore */ }
+      if (!r.ok) {
+        const reason = String(b?.error || 'failed');
+        setNotifyMsg(reason === 'recently_sent' ? 'Already sent in the last 10 minutes.'
+          : reason === 'form_not_published' ? 'Publish the form first, then send.'
+          : reason === 'no_recipients' ? 'No families match this form’s targeting.'
+          : `Could not send (${reason.replace(/_/g, ' ')}).`);
+      } else {
+        const n = b?.notified ?? 0;
+        setNotifyMsg(`Sent to ${n} parent${n === 1 ? '' : 's'} (portal + email).`);
+      }
+    } catch {
+      setNotifyMsg('Could not send — network error.');
+    } finally {
+      setNotifyBusy(false);
+    }
+  }
 
   const fieldCount = useMemo(() => fields.filter((f) => 'key' in f).length, [fields]);
 
@@ -378,7 +406,7 @@ export function FormEditor({
             onChange={(v) => patchMeta('is_active', v)}
             hint={meta.is_active
               ? 'Visible in the parent portal. Toggle off to unpublish (Draft) — parents won\'t see it.'
-              : 'Hidden from the parent portal. Toggle on to publish.'}
+              : 'Hidden from the parent portal. Toggle on to publish. Publishing is silent — families are only told when you click "Send notification".'}
           />
           <ToggleField label="Per-student" checked={meta.per_student}
             onChange={(v) => patchMeta('per_student', v)}
@@ -701,16 +729,30 @@ export function FormEditor({
               <AlertCircle className="h-3 w-3" /> {err}
             </span>
           ) : null}
+          {notifyMsg ? <span className="ml-3 text-zinc-600">{notifyMsg}</span> : null}
         </div>
-        <button
-          type="button"
-          onClick={save}
-          disabled={saving}
-          className="inline-flex items-center gap-1.5 rounded-md bg-emerald-700 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-800 disabled:opacity-60"
-        >
-          <Save className="h-4 w-4" />
-          {saving ? 'Saving…' : 'Save form'}
-        </button>
+        <div className="flex items-center gap-2">
+          {meta.is_active ? (
+            <button
+              type="button"
+              onClick={sendNotification}
+              disabled={notifyBusy || saving}
+              title="Notify the targeted families that this form is ready (portal + email). Publishing alone is silent."
+              className="inline-flex items-center gap-1.5 rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-60"
+            >
+              {notifyBusy ? 'Sending…' : 'Send notification'}
+            </button>
+          ) : null}
+          <button
+            type="button"
+            onClick={save}
+            disabled={saving}
+            className="inline-flex items-center gap-1.5 rounded-md bg-emerald-700 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-800 disabled:opacity-60"
+          >
+            <Save className="h-4 w-4" />
+            {saving ? 'Saving…' : 'Save form'}
+          </button>
+        </div>
       </div>
     </div>
   );
