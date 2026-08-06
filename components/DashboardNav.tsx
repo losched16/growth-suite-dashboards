@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import {
   FileText, Users, GraduationCap, TrendingUp, Megaphone, CreditCard, BarChart3, Upload, Settings,
-  FilePen, Bell, BookOpen, LayoutDashboard, Database,
+  FilePen, Bell, BookOpen, LayoutDashboard, Database, Images,
   type LucideIcon,
 } from 'lucide-react';
 import type { SchoolDashboardRow } from '@/lib/dashboards/types';
@@ -73,6 +73,18 @@ export function DashboardNav({ schoolName, locationId, dashboards, activeSlug, i
       </div>
 
       {portalOnly ? null : (<>
+      {/* Website — manages what shows on the school's public marketing site. */}
+      <div className="px-2 mt-3 pt-3 border-t border-gray-100">
+        <div className="px-2 pb-1 text-[10px] font-semibold uppercase tracking-wide text-gray-400">Website</div>
+        <Link
+          href={`/school/${locationId}/gallery${linkSuffix}`}
+          className="flex items-center gap-2 rounded px-2 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
+        >
+          <Images className="h-4 w-4 shrink-0" />
+          <span className="truncate">Photo Gallery</span>
+        </Link>
+      </div>
+
       {/* Tools — data/admin utilities. */}
       <div className="px-2 mt-3 pt-3 border-t border-gray-100">
         <div className="px-2 pb-1 text-[10px] font-semibold uppercase tracking-wide text-gray-400">Tools</div>
