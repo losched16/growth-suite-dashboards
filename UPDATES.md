@@ -7,6 +7,29 @@ human digest.
 
 ---
 
+## August 6, 2026
+
+### NEW: restrict a parent to specific children (blended families)
+A parent can now be limited to specific students — their portal, home
+page, forms, attendance, check-in/out, AND the kiosk only show and
+accept the children they're scoped to. Office sets it in the Student
+Roster family panel: each parent card shows "Portal: all children"
+with an edit button (only appears for multi-child families). Default
+is unchanged: every parent sees the whole family.
+
+### Friend/Walker family set up per the Aug 4 meeting
+Bridgette (P1) + Patrick (P2): one shared family, all three kids
+(Lola, Tristan, Maelynn). Ian Walker (Maelynn's biological father, in
+Kentucky) now has his own contact + his own portal login, restricted
+to MAELYNN ONLY — verified live: his portal shows Maelynn and never
+Lola/Tristan; Bridgette's shows all three. Patrick's password + PIN
+intact. NOTE: Bridgette needs one more "Forgot password" (or an office
+reset from Family Hub) — her latest password was caught in the
+restructuring.
+Also fixed at the root: when a co-parent contact carrying one shared
+child joins a family, the FULLER household now stays Parent 1 (Ian
+briefly became the family's P1 by accident — can't happen again).
+
 ## August 5, 2026
 
 ### View EITHER parent's portal (split families)
