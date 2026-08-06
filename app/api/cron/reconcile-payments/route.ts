@@ -48,6 +48,7 @@ interface PendingRow {
   school_id: string;
   invoice_id: string | null;
   amount_cents: number;
+  our_status: string;
   pi: string;
   acct: string | null;
   method: string | null;
@@ -72,9 +73,14 @@ async function run(request: NextRequest) {
   const apply = url.searchParams.get('apply') === '1';
   const school = url.searchParams.get('school');
   const minAgeHours = Math.max(0, Number(url.searchParams.get('min_age_hours') ?? '2') || 2);
+  // refund_scan=1 ALSO scans already-'succeeded' payments so refunds/
+  // chargebacks that landed AFTER the charge get netted out of the invoice
+  // (a refunded charge still reports PaymentIntent.status='succeeded').
+  const refundScan = url.searchParams.get('refund_scan') === '1';
+  const statuses = refundScan ? ['pending', 'succeeded'] : ['pending'];
 
   const { rows: pend } = await query<PendingRow>(
-    `SELECT p.id, p.school_id, p.invoice_id, p.amount_cents,
+    `SELECT p.id, p.school_id, p.invoice_id, p.amount_cents, p.status AS our_status,
             p.stripe_payment_intent_id AS pi, a.stripe_account_id AS acct,
             p.stripe_payment_method_type AS method,
             i.invoice_number, i.status AS istatus,
@@ -83,12 +89,12 @@ async function run(request: NextRequest) {
        LEFT JOIN payment_accounts a ON a.school_id = p.school_id
        LEFT JOIN invoices i ON i.id = p.invoice_id
        LEFT JOIN families f ON f.id = p.family_id
-      WHERE p.status = 'pending'
+      WHERE p.status = ANY($1::text[])
         AND p.stripe_payment_intent_id IS NOT NULL
-        AND p.created_at < now() - make_interval(hours => $1::int)
-        AND ($2::uuid IS NULL OR p.school_id = $2::uuid)
+        AND p.created_at < now() - make_interval(hours => $2::int)
+        AND ($3::uuid IS NULL OR p.school_id = $3::uuid)
       ORDER BY p.created_at`,
-    [minAgeHours, school],
+    [statuses, minAgeHours, school],
   );
 
   const results: Array<Record<string, unknown>> = [];
@@ -103,41 +109,82 @@ async function run(request: NextRequest) {
       action = 'skip';
     } else {
       try {
-        const pi = await stripe().paymentIntents.retrieve(r.pi, {}, { stripeAccount: r.acct });
+        const pi = await stripe().paymentIntents.retrieve(r.pi, { expand: ['latest_charge'] }, { stripeAccount: r.acct });
         stripeStatus = pi.status;
-        const charge = typeof pi.latest_charge === 'string'
-          ? pi.latest_charge
-          : (pi.latest_charge && 'id' in pi.latest_charge ? pi.latest_charge.id : null);
+        const ch = (pi.latest_charge && typeof pi.latest_charge === 'object') ? pi.latest_charge : null;
+        const chargeId = ch?.id ?? (typeof pi.latest_charge === 'string' ? pi.latest_charge : null);
+        const refunded = ch?.amount_refunded ?? 0;
+        const disputed = ch?.disputed ?? false;
+        const gross = r.amount_cents;
+        // How much of this charge was pulled back — a dispute/chargeback pulls
+        // the whole amount; a refund pulls amount_refunded.
+        const reversed = disputed ? gross : refunded;
 
-        if (stripeStatus === 'succeeded') {
-          action = r.istatus === 'paid' ? 'mark_succeeded (invoice already paid — likely overpayment/dup)' : 'mark_succeeded + apply_to_invoice';
+        if (stripeStatus === 'succeeded' && reversed >= gross) {
+          // Fully refunded or charged back → nets to $0. Reverse it out of the
+          // invoice if it had been applied; mark the payment 'refunded'.
+          const why = disputed ? 'chargeback' : 'refund';
+          note = `${why}${refunded ? ` $${(refunded / 100).toFixed(2)}` : ''}`;
+          action = r.our_status === 'succeeded' ? `net_out_${why} (reverse from invoice)` : `mark_refunded (was pending — never applied)`;
           if (apply) {
             const upd = await query(
-              `UPDATE payments SET status='succeeded',
-                      stripe_charge_id = COALESCE(stripe_charge_id, $2), updated_at = now()
-                WHERE id = $1 AND status = 'pending'`,
-              [r.id, charge],
+              `UPDATE payments SET status='refunded',
+                      stripe_charge_id = COALESCE(stripe_charge_id, $2),
+                      failure_message = COALESCE(failure_message, $3), updated_at = now()
+                WHERE id = $1 AND status IN ('pending','succeeded')`,
+              [r.id, chargeId, `Reconciled: ${why} in Stripe`],
             );
-            if ((upd.rowCount ?? 0) > 0 && r.invoice_id) {
+            if ((upd.rowCount ?? 0) > 0 && r.our_status === 'succeeded' && r.invoice_id) {
               await query(
                 `UPDATE invoices
-                    SET amount_paid_cents = amount_paid_cents + $1,
+                    SET amount_paid_cents = GREATEST(0, amount_paid_cents - $1),
                         status = CASE
-                          WHEN amount_paid_cents + $1 >= total_cents THEN 'paid'
-                          WHEN amount_paid_cents + $1 > 0 THEN 'partially_paid'
-                          ELSE status END,
-                        paid_at = CASE WHEN amount_paid_cents + $1 >= total_cents THEN now() ELSE paid_at END,
+                          WHEN GREATEST(0, amount_paid_cents - $1) >= total_cents THEN 'paid'
+                          WHEN GREATEST(0, amount_paid_cents - $1) > 0 THEN 'partially_paid'
+                          ELSE 'open' END,
+                        paid_at = CASE WHEN GREATEST(0, amount_paid_cents - $1) >= total_cents THEN paid_at ELSE NULL END,
                         updated_at = now()
                   WHERE id = $2`,
-                [r.amount_cents, r.invoice_id],
+                [gross, r.invoice_id],
               );
             }
+          }
+        } else if (stripeStatus === 'succeeded' && reversed > 0) {
+          action = `partial_refund $${(reversed / 100).toFixed(2)} — review manually`;
+        } else if (stripeStatus === 'succeeded') {
+          // Clean success — apply only if we hadn't already (pending→succeeded).
+          if (r.our_status === 'pending') {
+            action = r.istatus === 'paid' ? 'mark_succeeded (invoice already paid — likely dup)' : 'mark_succeeded + apply_to_invoice';
+            if (apply) {
+              const upd = await query(
+                `UPDATE payments SET status='succeeded',
+                        stripe_charge_id = COALESCE(stripe_charge_id, $2), updated_at = now()
+                  WHERE id = $1 AND status = 'pending'`,
+                [r.id, chargeId],
+              );
+              if ((upd.rowCount ?? 0) > 0 && r.invoice_id) {
+                await query(
+                  `UPDATE invoices
+                      SET amount_paid_cents = amount_paid_cents + $1,
+                          status = CASE
+                            WHEN amount_paid_cents + $1 >= total_cents THEN 'paid'
+                            WHEN amount_paid_cents + $1 > 0 THEN 'partially_paid'
+                            ELSE status END,
+                          paid_at = CASE WHEN amount_paid_cents + $1 >= total_cents THEN now() ELSE paid_at END,
+                          updated_at = now()
+                    WHERE id = $2`,
+                  [gross, r.invoice_id],
+                );
+              }
+            }
+          } else {
+            action = 'ok (already succeeded, no refund)';
           }
         } else if (stripeStatus === 'processing') {
           action = 'leave_pending (ACH clearing)';
         } else if (DEAD.has(stripeStatus)) {
           action = 'mark_failed';
-          if (apply) {
+          if (apply && r.our_status === 'pending') {
             await query(
               `UPDATE payments SET status='failed',
                       failure_message = COALESCE(failure_message, $2), updated_at = now()
@@ -146,7 +193,7 @@ async function run(request: NextRequest) {
             );
           }
         } else {
-          action = 'leave_pending (unhandled status)';
+          action = 'leave (unhandled status)';
         }
       } catch (e) {
         stripeStatus = 'retrieve_error';
