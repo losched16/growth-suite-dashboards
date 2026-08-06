@@ -352,6 +352,95 @@ function fmtCurbTime(v: string): string {
 // phone: "make my PIN 4482". Writes the same hash + lookup + encrypted
 // copy the portal writes, so it works at the kiosk immediately and is
 // viewable both here and in the parent's own portal.
+// Per-parent portal scoping editor (blended families). "All children"
+// is the default; restricting a parent limits their PORTAL and KIOSK
+// to the checked students only — e.g. Maelynn's biological father sees
+// Maelynn, never his co-parent's other kids.
+function PortalScopeEditor({ parent: p, kids }: {
+  parent: ParentInfo;
+  kids: Array<{ id: string; first_name: string; last_name: string; preferred_name: string | null }>;
+}) {
+  const current = p.assigned_student_ids ?? [];
+  const [editing, setEditing] = useState(false);
+  const [checked, setChecked] = useState<Set<string>>(new Set(current));
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const label = (k: { first_name: string; preferred_name: string | null }) => k.preferred_name?.trim() || k.first_name;
+
+  async function save(ids: string[]) {
+    setBusy(true);
+    setErr(null);
+    try {
+      const r = await fetch(`/api/school/parent/${p.id}/student-scope`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ student_ids: ids }),
+      });
+      if (!r.ok) throw new Error((await r.text()) || 'failed');
+      window.location.reload();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'failed');
+      setBusy(false);
+    }
+  }
+
+  if (kids.length < 2) return null; // one-kid families have nothing to scope
+
+  if (!editing) {
+    return (
+      <span className="inline-flex items-center gap-1">
+        <span className={`text-[10px] ${current.length > 0 ? 'font-semibold text-violet-800' : 'text-slate-500'}`}>
+          Portal: {current.length === 0
+            ? 'all children'
+            : kids.filter((k) => current.includes(k.id)).map(label).join(', ') + ' only'}
+        </span>
+        <button
+          type="button"
+          onClick={() => { setChecked(new Set(current)); setEditing(true); }}
+          className="rounded border border-slate-300 bg-white px-1.5 py-0.5 text-[10px] text-slate-600 hover:bg-slate-50"
+          title="Limit which children this parent can see and act on in the portal and at the kiosk"
+        >
+          edit
+        </button>
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-2 flex-wrap rounded border border-violet-200 bg-violet-50/40 px-2 py-1">
+      {kids.map((k) => (
+        <label key={k.id} className="inline-flex items-center gap-1 text-[11px]">
+          <input
+            type="checkbox"
+            checked={checked.has(k.id)}
+            onChange={(e) => {
+              const next = new Set(checked);
+              if (e.target.checked) next.add(k.id); else next.delete(k.id);
+              setChecked(next);
+            }}
+            className="h-3 w-3 rounded border-violet-300"
+          />
+          {label(k)}
+        </label>
+      ))}
+      <button type="button" disabled={busy || checked.size === 0}
+        onClick={() => save([...checked])}
+        title="Restrict this parent to the checked children"
+        className="rounded bg-violet-700 px-2 py-0.5 text-[10px] font-semibold text-white disabled:opacity-50">
+        Save
+      </button>
+      <button type="button" disabled={busy} onClick={() => save([])}
+        className="rounded border border-slate-300 bg-white px-2 py-0.5 text-[10px] text-slate-600">
+        All children
+      </button>
+      <button type="button" disabled={busy} onClick={() => setEditing(false)}
+        className="text-[10px] text-slate-500 underline">
+        cancel
+      </button>
+      {err ? <span className="text-[10px] text-rose-700">{err}</span> : null}
+    </span>
+  );
+}
+
 function ParentPinCell({ familyId, parent: p }: { familyId: string; parent: ParentInfo }) {
   const [state, setState] = useState<{ pinState: string; pin: string | null }>({
     pinState: p.pin_state ?? 'none', pin: p.pin ?? null,
@@ -990,6 +1079,7 @@ function FamilyDetailPanel({
                       {!p.email && !p.phone ? (
                         <span className="text-slate-400 italic">no contact info on file</span>
                       ) : null}
+                      <PortalScopeEditor parent={p} kids={detail.students} />
                     </div>
                     {/* Per-student assignment summary. Only render when the
                         parent has explicitly scoped to a subset — the

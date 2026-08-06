@@ -903,6 +903,11 @@ const DATA_PRESERVE: Array<{
   { table: 'pickup_person_students', temp: '_pps_preserve',
     snapshot: `SELECT pps.* FROM pickup_person_students pps JOIN pickup_persons pp ON pp.id = pps.pickup_person_id WHERE pp.school_id = $1`,
     requireFks: [{ col: 'pickup_person_id', ref: 'pickup_persons' }, { col: 'student_id', ref: 'students' }] },
+  // Per-parent student scoping (blended families: a co-parent restricted
+  // to their own child across portal + kiosk). Office-set; must survive
+  // rebuilds or the restriction silently vanishes every 15 minutes.
+  { table: 'parent_student_assignments', temp: '_psa_preserve',
+    requireFks: [{ col: 'parent_id', ref: 'parents' }, { col: 'student_id', ref: 'students' }] },
   { table: 'fa_applications', temp: '_faapp_preserve',
     nullFks: [{ col: 'student_id', ref: 'students' }],
     requireFks: [{ col: 'family_id', ref: 'families' }] },
