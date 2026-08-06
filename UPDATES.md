@@ -9,6 +9,24 @@ human digest.
 
 ## August 6, 2026
 
+### Form builder: saves now work + text formatting added
+Sonia's two reports, both fixed:
+1. "Forms are not being saved" — saves from the builder (old AND new
+   layout) were silently rejected with an auth error when opened from
+   the CRM, because the builder tab loses the login cookie. Both
+   editors now carry their own credential on every save — verified
+   live. Grade-level targeting (and everything else) saves correctly.
+   To target flag football at 4th-8th grade: open the form in the new
+   builder → "Who sees this form" → Specific students/grades → check
+   U4, U5, U6, M7, M8 → Save. The form then only appears for kids in
+   those grades.
+2. "No html or rich editor" — Text blocks in the new builder now have
+   a formatting toolbar (Bold, Italic, Link, bullet list, subheading)
+   with a live preview; formatting renders for parents on the form,
+   the print view, and co-sign pages.
+
+
+
 ### Split families: pickup people are now private per household
 In split families, each parent's portal shows ONLY their own
 authorized pickup people — the other household's list is invisible
