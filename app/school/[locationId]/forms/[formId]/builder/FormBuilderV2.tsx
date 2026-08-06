@@ -8,7 +8,8 @@
 // It edits the SAME schema as the classic editor and saves through the same
 // PATCH endpoint, so a form can move between the two freely.
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
+import { FormattedText } from '@/lib/forms/rich-text';
 import {
   GripVertical, Plus, Trash2, Eye, ArrowLeft, Check, Loader2,
   Type, AlignLeft, Mail, Phone, Hash, Calendar, ChevronDown, CircleDot,
@@ -564,10 +565,7 @@ function Inspector({ field, allFields, ghlFields, metadataKeys, onPatch, onConne
       <div className="text-xs font-semibold text-slate-800">{TYPE_LABEL[field.type] ?? field.type}</div>
 
       {field.type === 'paragraph' ? (
-        <div>
-          <label className={lbl}>Text</label>
-          <textarea rows={4} className={input} value={field.text ?? ''} onChange={(e) => onPatch({ text: e.target.value })} />
-        </div>
+        <ParagraphEditor lbl={lbl} input={input} value={field.text ?? ''} onChange={(v) => onPatch({ text: v })} />
       ) : (
         <div>
           <label className={lbl}>Label</label>
@@ -843,7 +841,7 @@ function FormPreview({ fields, settings, answers, setAnswers }: {
         {shown.map((f, i) => {
           if (f.type === 'header') return <h2 key={i} className="text-base font-bold text-slate-900">{f.label}</h2>;
           if (f.type === 'section') return <h3 key={i} className="border-b border-slate-100 pb-1 text-sm font-semibold uppercase tracking-wide text-slate-700">{f.label}</h3>;
-          if (f.type === 'paragraph') return <p key={i} className="whitespace-pre-wrap text-sm text-slate-600">{f.text}</p>;
+          if (f.type === 'paragraph') return <FormattedText key={i} text={f.text ?? ''} className="text-sm text-slate-600" />;
           const key = f.key ?? `f${i}`;
           const val = answers[key];
           const strVal = typeof val === 'string' ? val : '';
@@ -1198,6 +1196,64 @@ function FormSettingsPanel({ settings, onPatch, programOptions, gradeOptions, ta
       <label className={toggle}>Allow re-submission<input type="checkbox" checked={settings.resubmission_allowed} onChange={(e) => onPatch({ resubmission_allowed: e.target.checked })} className={cb} /></label>
       <label className={toggle}>Form is live<input type="checkbox" checked={settings.is_active} onChange={(e) => onPatch({ is_active: e.target.checked })} className={cb} /></label>
       <WhoSeesEditor settings={settings} onPatch={onPatch} programOptions={programOptions} gradeOptions={gradeOptions} tagOptions={tagOptions} studentOptions={studentOptions} />
+    </div>
+  );
+}
+
+
+// Text-block editor with lightweight formatting (Sonia: "no html or rich
+// editor"). Toolbar wraps the selection in a markdown subset that every
+// form surface renders safely: **bold**, *italic*, [link](url),
+// "- " bullets, "## " subheadings. Live preview underneath.
+function ParagraphEditor({ lbl, input, value, onChange }: {
+  lbl: string; input: string; value: string; onChange: (v: string) => void;
+}) {
+  const taRef = useRef<HTMLTextAreaElement>(null);
+
+  function wrap(before: string, after: string, placeholder: string) {
+    const ta = taRef.current;
+    if (!ta) return;
+    const start = ta.selectionStart ?? 0;
+    const end = ta.selectionEnd ?? 0;
+    const sel = value.slice(start, end) || placeholder;
+    const next = value.slice(0, start) + before + sel + after + value.slice(end);
+    onChange(next);
+    requestAnimationFrame(() => {
+      ta.focus();
+      ta.setSelectionRange(start + before.length, start + before.length + sel.length);
+    });
+  }
+  function linePrefix(prefix: string) {
+    const ta = taRef.current;
+    if (!ta) return;
+    const start = ta.selectionStart ?? 0;
+    const lineStart = value.lastIndexOf('\n', start - 1) + 1;
+    const next = value.slice(0, lineStart) + prefix + value.slice(lineStart);
+    onChange(next);
+    requestAnimationFrame(() => { ta.focus(); });
+  }
+
+  const btn = 'rounded border border-slate-300 bg-white px-2 py-0.5 text-[11px] text-slate-700 hover:bg-slate-50';
+  return (
+    <div>
+      <label className={lbl}>Text</label>
+      <div className="mb-1 flex flex-wrap gap-1">
+        <button type="button" className={btn + ' font-bold'} title="Bold" onClick={() => wrap('**', '**', 'bold text')}>B</button>
+        <button type="button" className={btn + ' italic'} title="Italic" onClick={() => wrap('*', '*', 'italic text')}>I</button>
+        <button type="button" className={btn} title="Link" onClick={() => wrap('[', '](https://)', 'link text')}>Link</button>
+        <button type="button" className={btn} title="Bullet line" onClick={() => linePrefix('- ')}>&bull; List</button>
+        <button type="button" className={btn} title="Subheading line" onClick={() => linePrefix('## ')}>H</button>
+      </div>
+      <textarea ref={taRef} rows={6} className={input} value={value} onChange={(e) => onChange(e.target.value)} />
+      <div className="mt-1 text-[10px] text-slate-400">
+        Formatting: **bold**, *italic*, [link text](https://url), &quot;- &quot; for bullets, &quot;## &quot; for a subheading.
+      </div>
+      {value.trim() ? (
+        <div className="mt-2 rounded border border-slate-200 bg-slate-50 p-2">
+          <div className="mb-1 text-[10px] uppercase tracking-wide text-slate-400">Preview</div>
+          <FormattedText text={value} className="text-sm text-slate-700" />
+        </div>
+      ) : null}
     </div>
   );
 }
