@@ -9,6 +9,35 @@ human digest.
 
 ## August 6, 2026
 
+### Publishing a form no longer notifies anyone — notify is now its own button
+Turning a form live used to auto-send the portal notification + email
+blast to every targeted family the moment it was published. That's
+gone: publishing is now SILENT, so the office can publish a form, test
+it in the portal, fix mistakes, and only then announce it. When it's
+ready, click **Send notification** — in the new builder's top bar, or
+next to Save in the classic editor. It asks for confirmation, then
+sends the portal alert + email to exactly the families the form's
+targeting matches, and reports how many parents it reached. Safety
+rails: the button is disabled while there are unsaved changes (so the
+saved targeting is what gets used), it refuses to fire on an
+unpublished form, and a double-click within 10 minutes won't send
+twice. Re-sending later (e.g. after widening the grade targeting) IS
+allowed — so once Sonia adds M8/U4/U5/U6 to flag football, she can hit
+Send notification again to reach the newly added grades.
+
+### Attendance dashboard: office notes on any student's day (parents can't see them)
+Open a student's row on the Attendance dashboard → "Office notes — not
+visible to parents 🔒". Type anything the front desk should know
+("grandma picking up at 2pm — check ID", "left early, dentist"), Save.
+The note shows 🔒-prefixed in the Notes column next to any notes the
+parents left at check-in/out, works for past dates too from the date
+picker, and — unlike status categories — is NOT cleared when the kid
+actually checks in or out. Notes survive the 15-minute CRM sync.
+Parents never see these anywhere: their portal reads only
+status/times/their own notes (verified against every parent-facing
+query).
+
+
 ### Form builder: saves now work + text formatting added
 Sonia's two reports, both fixed:
 1. "Forms are not being saved" — saves from the builder (old AND new
