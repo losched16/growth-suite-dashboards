@@ -89,6 +89,9 @@ async function importCardPickupPeople(
   familyId: string,
   studentId: string | null,
   doc: GhlDocument,
+  // The card SIGNER owns the people it names (split households keep
+  // separate lists; the portal hides them from the other household).
+  signerParentId: string | null,
 ): Promise<number> {
   const fieldVal = (fid: string): string => {
     const f = (doc.fillableFields ?? []).find((x) => x.fieldId === fid && x.type !== 'Checkbox');
@@ -103,10 +106,15 @@ async function importCardPickupPeople(
     const v = fieldVal(fid);
     if (v) parentNorms.add(normCardName(v));
   }
-  const { rows: existing } = await query<{ id: string; name: string }>(
-    `SELECT id, name FROM pickup_persons WHERE family_id = $1`, [familyId]);
-  const existingByNorm = new Map(existing.map((e) => [normCardName(e.name), e.id]));
   const p1 = fam.find((p) => p.is_primary) ?? fam[0];
+  const owner = (signerParentId && fam.some((p) => p.id === signerParentId))
+    ? fam.find((p) => p.id === signerParentId)! : p1;
+  // Dedupe PER OWNER (matches the per-owner unique index): each
+  // household keeps its own copy of a shared grandma.
+  const { rows: existing } = await query<{ id: string; name: string }>(
+    `SELECT id, name FROM pickup_persons WHERE family_id = $1 AND added_by_parent_id = $2`,
+    [familyId, owner.id]);
+  const existingByNorm = new Map(existing.map((e) => [normCardName(e.name), e.id]));
 
   let added = 0;
   for (const [nf, pf] of CARD_PICKUP_PAIRS) {
@@ -119,7 +127,7 @@ async function importCardPickupPeople(
         `INSERT INTO pickup_persons (school_id, family_id, added_by_parent_id, name, relationship, phone, notes, active, is_temporary)
          VALUES ($1, $2, $3, $4, 'Emergency card contact', $5, 'Imported from signed AZ Emergency Card', true, false)
          RETURNING id`,
-        [schoolId, familyId, p1.id, name, isCardJunk(phone) ? null : phone]);
+        [schoolId, familyId, owner.id, name, isCardJunk(phone) ? null : phone]);
       ppId = ins[0].id;
       existingByNorm.set(normCardName(name), ppId);
       added++;
@@ -272,7 +280,10 @@ export async function importGhlDocuments(schoolId: string): Promise<ImportGhlDoc
         }
         if (fieldSet) result.fields_set++;
         if (familyId) {
-          result.pickup_people_added += await importCardPickupPeople(schoolId, familyId, studentId, doc)
+          const { rows: signerRow } = await query<{ id: string }>(
+            `SELECT id FROM parents WHERE family_id = $1 AND ghl_contact_id = $2 AND status = 'active' LIMIT 1`,
+            [familyId, signerContactId]);
+          result.pickup_people_added += await importCardPickupPeople(schoolId, familyId, studentId, doc, signerRow[0]?.id ?? null)
             .catch((e) => { console.warn('[import-ghl-documents] pickup import failed for doc', doc._id, ':', e instanceof Error ? e.message : String(e)); return 0; });
         }
       }
