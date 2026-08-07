@@ -129,12 +129,22 @@ export default async function SubmissionsInboxPage({
                 CONCAT_WS(' ', COALESCE(NULLIF(st.preferred_name, ''), st.first_name), st.last_name) AS student_label
            FROM families f
            JOIN students st ON st.family_id = f.id AND st.status = 'active'
+           -- Eligible = currently-enrolled (or mid-admissions "pending")
+           -- students only. Without this, every prospective inquiry / tour /
+           -- declined family in the CRM was counted as "eligible", inflating
+           -- the denominator to the whole contact list.
+           JOIN LATERAL (
+             SELECT status FROM enrollments en
+              WHERE en.student_id = st.id ORDER BY en.created_at DESC LIMIT 1
+           ) enr ON true
            LEFT JOIN LATERAL (
              SELECT first_name, last_name, email, phone
                FROM parents
               WHERE family_id = f.id AND is_primary = true LIMIT 1
            ) p ON true
           WHERE f.school_id = $1
+            AND (st.metadata->>'is_demo') IS DISTINCT FROM 'true'
+            AND enr.status IN ('enrolled', 'pending')
        )
        SELECT e.family_id, e.family_label, e.parent_email, e.parent_phone,
               e.student_id, e.student_label
@@ -162,12 +172,22 @@ export default async function SubmissionsInboxPage({
                 p.phone AS parent_phone
            FROM families f
            JOIN students st ON st.family_id = f.id AND st.status = 'active'
+           -- Eligible = currently-enrolled (or mid-admissions "pending")
+           -- students only. Without this, every prospective inquiry / tour /
+           -- declined family in the CRM was counted as "eligible", inflating
+           -- the denominator to the whole contact list.
+           JOIN LATERAL (
+             SELECT status FROM enrollments en
+              WHERE en.student_id = st.id ORDER BY en.created_at DESC LIMIT 1
+           ) enr ON true
            LEFT JOIN LATERAL (
              SELECT first_name, last_name, email, phone
                FROM parents
               WHERE family_id = f.id AND is_primary = true LIMIT 1
            ) p ON true
           WHERE f.school_id = $1
+            AND (st.metadata->>'is_demo') IS DISTINCT FROM 'true'
+            AND enr.status IN ('enrolled', 'pending')
        )
        SELECT e.family_id, e.family_label, e.parent_email, e.parent_phone,
               NULL::uuid AS student_id, NULL::text AS student_label

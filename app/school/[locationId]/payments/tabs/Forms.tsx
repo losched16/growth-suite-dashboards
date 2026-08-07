@@ -88,8 +88,14 @@ export async function PaymentsHubForms({
       `SELECT COUNT(DISTINCT f.id)::int AS n
          FROM families f
          JOIN students st ON st.family_id = f.id
+         JOIN LATERAL (
+           SELECT status FROM enrollments en
+            WHERE en.student_id = st.id ORDER BY en.created_at DESC LIMIT 1
+         ) enr ON true
         WHERE f.school_id = $1
-          AND st.status = 'active'`,
+          AND st.status = 'active'
+          AND (st.metadata->>'is_demo') IS DISTINCT FROM 'true'
+          AND enr.status IN ('enrolled', 'pending')`,
       [schoolId],
     ),
   ]);
