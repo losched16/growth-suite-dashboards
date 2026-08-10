@@ -272,6 +272,11 @@ function GridView({ data, sp, room }: { data: Data; sp: WidgetSearchParams; room
           <tbody className="divide-y divide-slate-100">
             {rows.map(({ meta, status }) => {
               const byV = new Map(status.vaccines.map((vs) => [vs.vaccine, vs]));
+              // A student with an all-vaccine exemption reads "e" in every
+              // column — the exemption covers vaccines that aren't even in
+              // their grade's list.
+              const allExempt = status.overall === 'medical_exemption' || status.overall === 'religious_exemption';
+              const allExemptLabel = status.overall === 'medical_exemption' ? 'medical' : 'religious';
               return (
                 <tr key={meta.student_id} className="hover:bg-violet-50/40 break-inside-avoid">
                   <td className="px-2 py-1.5 sticky left-0 bg-white">
@@ -279,13 +284,20 @@ function GridView({ data, sp, room }: { data: Data; sp: WidgetSearchParams; room
                   </td>
                   <td className="px-2 py-1.5 text-[11px] text-slate-500 whitespace-nowrap">{fmtDob(meta.date_of_birth)}</td>
                   {CANON_ORDER.map((v) => {
+                    // Fully-exempt student → "e" in every column.
+                    if (allExempt) return <td key={v} className="px-1.5 py-1.5 text-center text-violet-600" title={`${allExemptLabel} exemption (all vaccines)`}>e</td>;
+                    // Adolescent shots (Tdap/Meningococcal) that aren't due
+                    // until 7th grade stay a dash for younger kids; the
+                    // childhood shots show a "0" when there's none on file.
+                    const isAdolescent = v === 'tdap' || v === 'mcv';
                     const vs = byV.get(v);
-                    if (!vs) return <td key={v} className="px-1.5 py-1.5 text-center text-slate-300">–</td>;
+                    if (!vs) return <td key={v} className={`px-1.5 py-1.5 text-center ${isAdolescent ? 'text-slate-300' : 'text-slate-400 tabular-nums'}`} title={`${VACCINES[v].label}: ${isAdolescent ? 'not due at this age' : 'none on file'}`}>{isAdolescent ? '–' : '0'}</td>;
                     // Admin-set "aged out" badge (manual toggle only).
                     if (vs.agedOut) return <td key={v} className="px-1.5 py-1.5 text-center text-amber-600 text-[10px] font-semibold" title={`${VACCINES[v].label}: marked aged out — not required for this child`}>AO</td>;
                     if (vs.exemption !== 'none') return <td key={v} className="px-1.5 py-1.5 text-center text-violet-600" title={`${VACCINES[v].label}: ${vs.exemption} exemption`}>e</td>;
-                    // Not required for this age/grade AND nothing recorded → plain dash.
-                    if (vs.required === 0 && vs.recorded === 0) return <td key={v} className="px-1.5 py-1.5 text-center text-slate-300" title={`${VACCINES[v].label}: not required for this child's age/grade`}>–</td>;
+                    // In this child's schedule but no longer required, none on
+                    // file → muted "0" (aged out with none), NOT a deficiency.
+                    if (vs.required === 0 && vs.recorded === 0) return <td key={v} className="px-1.5 py-1.5 text-center text-slate-400 tabular-nums" title={`${VACCINES[v].label}: none on file (not required at this age)`}>0</td>;
                     // Otherwise show the real dose count (even if the vaccine is
                     // no longer required — so up-to-date kids show their doses).
                     const behind = vs.required > 0 && vs.recorded < vs.required;
@@ -318,7 +330,8 @@ function Legend() {
       <span><span className="text-rose-600 font-bold">✗</span> Overdue</span>
       <span><span className="text-violet-600">e</span> Exempt</span>
       <span><span className="text-amber-600 font-semibold">AO</span> Aged out (exceeded max age)</span>
-      <span><span className="text-slate-400">–</span> Not applicable</span>
+      <span><span className="text-slate-400">0</span> None on file (not required at this age)</span>
+      <span><span className="text-slate-300">–</span> Not due yet (Tdap / Meningococcal)</span>
     </div>
   );
 }
