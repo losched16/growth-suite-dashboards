@@ -273,16 +273,18 @@ function GridView({ data, sp, room }: { data: Data; sp: WidgetSearchParams; room
                   {CANON_ORDER.map((v) => {
                     const vs = byV.get(v);
                     if (!vs) return <td key={v} className="px-1.5 py-1.5 text-center text-slate-300">–</td>;
-                    if (vs.agedOut) return <td key={v} className="px-1.5 py-1.5 text-center text-amber-600 text-[10px] font-semibold" title={`${VACCINES[v].label}: aged out — exceeded max age, not required`}>AO</td>;
-                    const cls = vs.category === 'up_to_date' ? 'text-emerald-700'
-                      : vs.exemption !== 'none' ? 'text-violet-600'
-                      : vs.required === 0 ? 'text-slate-300'
-                      : 'text-rose-600 font-semibold';
-                    const txt = vs.exemption !== 'none' ? 'e' : vs.required === 0 ? '–' : `${vs.recorded}`;
-                    const need = vs.required > 0 && vs.exemption === 'none' && vs.recorded < vs.required ? `/${vs.required}` : '';
+                    // Admin-set "aged out" badge (manual toggle only).
+                    if (vs.agedOut) return <td key={v} className="px-1.5 py-1.5 text-center text-amber-600 text-[10px] font-semibold" title={`${VACCINES[v].label}: marked aged out — not required for this child`}>AO</td>;
+                    if (vs.exemption !== 'none') return <td key={v} className="px-1.5 py-1.5 text-center text-violet-600" title={`${VACCINES[v].label}: ${vs.exemption} exemption`}>e</td>;
+                    // Not required for this age/grade AND nothing recorded → plain dash.
+                    if (vs.required === 0 && vs.recorded === 0) return <td key={v} className="px-1.5 py-1.5 text-center text-slate-300" title={`${VACCINES[v].label}: not required for this child's age/grade`}>–</td>;
+                    // Otherwise show the real dose count (even if the vaccine is
+                    // no longer required — so up-to-date kids show their doses).
+                    const behind = vs.required > 0 && vs.recorded < vs.required;
+                    const need = behind ? `/${vs.required}` : '';
                     return (
-                      <td key={v} className={`px-1.5 py-1.5 text-center tabular-nums ${cls}`} title={`${VACCINES[v].label}: ${vs.recorded} recorded${vs.required ? ` of ${vs.required} required` : ''}`}>
-                        {txt}<span className="text-[9px] text-slate-400">{need}</span>
+                      <td key={v} className={`px-1.5 py-1.5 text-center tabular-nums ${behind ? 'text-rose-600 font-semibold' : 'text-emerald-700'}`} title={`${VACCINES[v].label}: ${vs.recorded} recorded${vs.required ? ` of ${vs.required} required` : ''}`}>
+                        {vs.recorded}<span className="text-[9px] text-slate-400">{need}</span>
                       </td>
                     );
                   })}

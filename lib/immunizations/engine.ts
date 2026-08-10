@@ -135,12 +135,13 @@ export function computeVaccine(
   const immunity = !!flag?.immunity_documented && def.immunityAllowed;
   const required = isVaccineRequired(v, ctx, ageMonths, req) && !flag?.not_required ? (req[v]?.min ?? 0) : 0;
   const recorded = countRecorded(s.doses, v);
-  // "Aged out" = admin marked not-required OR the NC auto-drop (Hib/PCV
-  // after the 5th birthday). Distinct from "not part of this grade's list"
-  // — only counts for vaccines this grade's schedule otherwise requires.
-  const agedOut = !!flag?.not_required
-    || (def.dropsAfterAge5 && ageMonths != null && ageMonths >= 60
-        && (REQUIRED_BY_CONTEXT[ctx][v]?.min ?? 0) > 0);
+  // The "AO" badge is ADMIN-CONTROLLED ONLY — it shows when staff tick
+  // "Aged out" for a vaccine (student_vaccine_flags.not_required). The NC
+  // Hib/PCV age-drop still zeroes the *requirement* below (so an older
+  // child isn't falsely flagged overdue), but that renders as a plain
+  // "not required" dash — NOT an AO badge. Auto-AO was confusing: it fired
+  // for every student past age 5, even up-to-date and no-record ones.
+  const agedOut = !!flag?.not_required;
 
   // Per-dose glyphs (TC mirror).
   const doses: DoseStatus[] = [];
