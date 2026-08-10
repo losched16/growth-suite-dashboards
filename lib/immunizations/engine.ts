@@ -198,8 +198,17 @@ export function vaccinesForContext(ctx: ReportContext): VaccineCode[] {
 export function computeStudent(s: StudentImmunizationInput, asOf: Date): StudentStatus {
   const ctx = resolveContext(s, asOf);
   const ageMonths = s.date_of_birth ? ageInMonths(new Date(s.date_of_birth), asOf) : null;
-  const cols = vaccinesForContext(ctx);
-  const vaccines = cols.map((v) => computeVaccine(s, v, ctx, ageMonths, asOf));
+  // Compute the vaccines this grade REQUIRES, plus any vaccine the child
+  // actually has records or flags for — even if it's no longer required
+  // for their grade (e.g. Hib/PCV on an elementary student, which drop
+  // after age 5). Otherwise those doses would be invisible in the grid.
+  const canonOrder: VaccineCode[] = ['dtap', 'ipv', 'hib', 'hepb', 'mmr', 'var', 'pcv', 'tdap', 'mcv'];
+  const cols = new Set<VaccineCode>(vaccinesForContext(ctx));
+  for (const d of s.doses) if (d.vaccine_code in VACCINES) cols.add(d.vaccine_code as VaccineCode);
+  for (const f of s.flags) if (f.vaccine_code in VACCINES) cols.add(f.vaccine_code as VaccineCode);
+  const vaccines = canonOrder
+    .filter((v) => cols.has(v))
+    .map((v) => computeVaccine(s, v, ctx, ageMonths, asOf));
 
   // Section I rollup.
   const allExempt = s.profile?.all_vaccine_exemption ?? 'none';
