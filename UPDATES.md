@@ -7,6 +7,32 @@ human digest.
 
 ---
 
+## August 10, 2026
+
+### Parent 1 switch: 28 more families done (from the office's request sheet)
+Every un-checked request on "GS Request for becoming Parent1.xlsx" is
+complete. For each family the requesting parent is now Parent 1 (their
+name, email, and phone lead the contact) and the former Parent 1 moved
+to the Parent 2 fields — student data untouched, and all 45 portal
+passwords/PINs across the affected families carried over (verified).
+Flipped: Brewer, Green, Wadas (Johnson), Fox (Espinoza), Bry,
+Montgomery, Dennis, Wang (Zhang), Sine (Pelton), Jones, Miller
+(Priyanka), Schaefer, Carlson, Hooper (Bennin), Alexander, Miller
+(Jennifer/Brett), Augustine, Gednalske (Auli Casucci), Tao (Li), Mead,
+Melendi, Parker, Gerrish (Chavez), Moser (Faghih Imani), Bonelli,
+Snively, Orduno Flores (Medina), and Johnson (Michele).
+Notes for the office:
+- Gabrielle SNIVELY was the "Gabrielle Shively" we couldn't find last
+  week — done now.
+- Maribel Orduno's email on the sheet had a typo (maribell_ vs
+  maribel_) — matched and done.
+- Jesse "Weaver" needed nothing: Jesse Hanson was already Parent 1
+  (Weaver is Amanda's last name). Felix-Albert Desmangles was also
+  already Parent 1.
+- Michele & Adam Johnson share one email, so Adam's Parent 2 entry has
+  no email for now — if he ever wants his own portal login, send us a
+  distinct email address for him.
+
 ## August 6, 2026
 
 ### Publishing a form no longer notifies anyone — notify is now its own button
