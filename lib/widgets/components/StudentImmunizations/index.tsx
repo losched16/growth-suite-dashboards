@@ -25,6 +25,11 @@ import {
 
 export interface ImmunizationsConfig {
   default_room_filter?: string;
+  // Restrict the tracker to students whose GHL opportunity stage is in
+  // this list (matched on metadata.ghl_stage_name). Schools whose roster
+  // is still an admissions pipeline use this to exclude waiting-list /
+  // prospective kids. Unset/empty = show all active students.
+  enrolled_stage_names?: string[];
 }
 
 interface StudentMeta {
@@ -48,8 +53,10 @@ interface Data {
 
 const CANON_ORDER: VaccineCode[] = ['dtap', 'ipv', 'hib', 'hepb', 'mmr', 'var', 'pcv', 'tdap', 'mcv'];
 
-async function fetcher(school: SchoolContext): Promise<Data> {
+async function fetcher(school: SchoolContext, config: ImmunizationsConfig): Promise<Data> {
   const asOf = new Date();
+  const stageFilter = (config?.enrolled_stage_names && config.enrolled_stage_names.length > 0)
+    ? config.enrolled_stage_names : null;
 
   // DOB may live on the column or (for GHL-synced rows) in metadata.
   // Program/homeroom come from explicit keys OR the GHL pipeline name
@@ -66,8 +73,9 @@ async function fetcher(school: SchoolContext): Promise<Data> {
                      s.metadata->>'current_grade_level') AS grade
        FROM students s
       WHERE s.school_id = $1 AND s.status = 'active'
+        AND ($2::text[] IS NULL OR s.metadata->>'ghl_stage_name' = ANY($2))
       ORDER BY s.last_name, s.first_name`,
-    [school.schoolId],
+    [school.schoolId, stageFilter],
   );
 
   const ids = students.map((s) => s.student_id);
