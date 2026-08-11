@@ -131,6 +131,9 @@ export interface FormSettings {
   resubmission_allowed: boolean;
   is_active: boolean;
   applies_to: FormAppliesTo | null;
+  // CRM tags written to the family's parent contacts on submission —
+  // powers "email everyone who signed up" tag smart lists.
+  submit_tags: string[];
 }
 
 type PaletteType =
@@ -370,6 +373,7 @@ export function FormBuilderV2({
             description: settings.description,
             confirmation_message: settings.confirmation_message,
             notify_emails: settings.notify_emails,
+            submit_tags: settings.submit_tags,
             per_student: settings.per_student,
             resubmission_allowed: settings.resubmission_allowed,
             is_active: settings.is_active,
@@ -1243,6 +1247,15 @@ function FormSettingsPanel({ settings, onPatch, programOptions, gradeOptions, ta
         <input className={input} value={settings.notify_emails.join(', ')} placeholder="office@school.org, admissions@school.org"
           onChange={(e) => onPatch({ notify_emails: e.target.value.split(',').map((s) => s.trim()).filter(Boolean) })} />
         <p className="mt-1 text-[11px] text-slate-400">Comma-separated. Blank = no notification.</p>
+      </div>
+      <div>
+        <label className={lbl}>CRM tags on submit</label>
+        <input className={input} value={settings.submit_tags.join(', ')} placeholder="flag football 2026"
+          onChange={(e) => onPatch({ submit_tags: e.target.value.split(',').map((s) => s.trim()).filter(Boolean) })} />
+        <p className="mt-1 text-[11px] text-slate-400">
+          Each family that submits gets these tags on their CRM contacts — build a smart list on the tag to
+          email everyone who signed up, any time. Saving also tags families that already submitted. Comma-separated.
+        </p>
       </div>
       <label className={toggle}>One form per student<input type="checkbox" checked={settings.per_student} onChange={(e) => onPatch({ per_student: e.target.checked })} className={cb} /></label>
       <label className={toggle}>Allow re-submission<input type="checkbox" checked={settings.resubmission_allowed} onChange={(e) => onPatch({ resubmission_allowed: e.target.checked })} className={cb} /></label>

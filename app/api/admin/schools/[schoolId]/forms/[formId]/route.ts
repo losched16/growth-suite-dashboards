@@ -10,11 +10,13 @@
 
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { after } from 'next/server';
 import { cookies } from 'next/headers';
 import { query } from '@/lib/db';
 import { SESSION_COOKIE, verifySessionToken } from '@/lib/auth/operator';
 import { SCHOOL_SESSION_COOKIE, verifySchoolSession } from '@/lib/auth/school';
 import { checkEmbedToken } from '@/lib/auth/embed';
+import { loadGhlClient } from '@/lib/ghl/client';
 
 // Authorize a DELETE for `schoolId`. Accepts EITHER:
 //   - operator session (back-office /admin pages), or
@@ -48,6 +50,9 @@ async function authorizeFormMutation(
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+// The submit-tags backfill (after()) paces GHL tag writes — keep the
+// function alive long enough for large forms.
+export const maxDuration = 300;
 
 type Params = Promise<{ schoolId: string; formId: string }>;
 
@@ -70,6 +75,9 @@ interface Body {
     notifications_enabled?: unknown;
     // migration 042 — webhook fan-out (automation triggers)
     webhook_urls?: unknown;
+    // migration 097 — CRM tags applied to the family's parent contacts
+    // on submission (sign-up segmentation → tag smart lists)
+    submit_tags?: unknown;
     // per-student form visibility rule (portal_form_definitions.applies_to).
     // null / {} → form shows for every student (historical behavior).
     applies_to?: unknown;
@@ -198,6 +206,10 @@ export async function PATCH(request: NextRequest, { params }: { params: Params }
   try { body = await request.json(); }
   catch { return NextResponse.json({ error: 'invalid_json' }, { status: 400 }); }
 
+  // When submit_tags are set on this save, existing submitters get
+  // backfilled after the response (see the after() at the bottom).
+  let submitTagsToApply: string[] | null = null;
+
   // Confirm the form exists and belongs to this school.
   const { rows: existing } = await query<{ id: string }>(
     `SELECT id FROM portal_form_definitions WHERE id = $1 AND school_id = $2`,
@@ -281,6 +293,13 @@ export async function PATCH(request: NextRequest, { params }: { params: Params }
       args.push(res.value === null ? null : JSON.stringify(res.value));
       sets.push(`applies_to = $${args.length}::jsonb`);
     }
+    if (body.meta.submit_tags !== undefined) {
+      const arr = Array.isArray(body.meta.submit_tags) ? body.meta.submit_tags : [];
+      const cleaned = [...new Set(arr.map((v) => String(v ?? '').trim()).filter(Boolean))];
+      args.push(cleaned);
+      sets.push(`submit_tags = $${args.length}::text[]`);
+      submitTagsToApply = cleaned;
+    }
   }
   if (body.field_schema !== undefined) {
     args.push(JSON.stringify(body.field_schema));
@@ -298,6 +317,46 @@ export async function PATCH(request: NextRequest, { params }: { params: Params }
       WHERE id = $${args.length - 1} AND school_id = $${args.length}`,
     args,
   );
+
+  // Sign-up tags set on this save → backfill every family that ALREADY
+  // submitted this form (real submissions only, no test rows). New
+  // submissions get tagged by the portal submit handler going forward.
+  // Runs via after() so the save returns immediately; GHL tag writes
+  // are idempotent, so re-saving the same tags is harmless.
+  if (submitTagsToApply && submitTagsToApply.length > 0) {
+    const tags = submitTagsToApply;
+    after(async () => {
+      try {
+        const { rows: contacts } = await query<{ ghl_contact_id: string }>(
+          `SELECT DISTINCT p.ghl_contact_id
+             FROM portal_form_submissions s
+             JOIN parents p ON p.family_id = s.family_id AND p.school_id = s.school_id
+            WHERE s.form_definition_id = $1 AND s.school_id = $2
+              AND s.status IN ('submitted', 'paid', 'pending_payment', 'legacy_imported')
+              AND COALESCE(s.is_test, false) = false
+              AND p.status = 'active' AND p.ghl_contact_id IS NOT NULL`,
+          [formId, schoolId],
+        );
+        if (contacts.length === 0) return;
+        const ghl = await loadGhlClient(schoolId);
+        let ok = 0, failed = 0;
+        for (const c of contacts) {
+          try {
+            await ghl.axios.post(`/contacts/${c.ghl_contact_id}/tags`, { tags });
+            ok++;
+          } catch (e) {
+            failed++;
+            console.warn('[submit-tags backfill] failed for', c.ghl_contact_id, ':',
+              e instanceof Error ? e.message : String(e));
+          }
+          await new Promise((r) => setTimeout(r, 150));
+        }
+        console.log(`[submit-tags backfill] form ${formId}: tagged ${ok} contact(s), ${failed} failed`);
+      } catch (e) {
+        console.error('[submit-tags backfill] failed:', e);
+      }
+    });
+  }
 
   // Publishing is deliberately SILENT (Clint, Aug 6: schools need to
   // publish + test a form without families being told). Families are
