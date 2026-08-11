@@ -9,6 +9,18 @@ human digest.
 
 ## August 10, 2026
 
+### Email everyone who signed up for a form — self-serve, any time
+New form setting: **CRM tags on submit** (form -> new builder ->
+Settings). Type a tag (e.g. "flag football 2026"), Save, and every
+family that submits the form gets that tag on their CRM contacts —
+including families that already submitted (saving backfills them).
+From there the office emails the group whenever they want: CRM ->
+Contacts -> filter by the tag -> save as a smart list -> send. Game
+reminders, schedule changes, anything — no exports, no asking us.
+For one-off spreadsheets, the Forms Tracker's CSV export (with parent
+emails) still works too.
+
+
 ### Parent 1 switch: 28 more families done (from the office's request sheet)
 Every un-checked request on "GS Request for becoming Parent1.xlsx" is
 complete. For each family the requesting parent is now Parent 1 (their
