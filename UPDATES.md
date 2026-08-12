@@ -9,6 +9,15 @@ human digest.
 
 ## August 12, 2026
 
+### Attendance: admins can now fix check-in / check-out times
+On the Attendance dashboard, open a student's row → "Fix the recorded
+times (admin)". Pick the actual check-in or check-out time and save —
+the day recalculates everywhere (dashboard, exports, kiosk, parent
+portal). Works for past dates too via the date picker. Nothing is ever
+lost: the wrong entry stays in the audit log marked voided, with the
+correcting admin's email on both the void and the replacement.
+
+
 ### Internal student notes — a staff-only feed on every roster
 Click any student open on a roster dashboard (Student Roster, SST
 Dashboard, classroom hubs) and there's now an "Internal notes" thread:
