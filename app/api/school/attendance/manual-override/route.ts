@@ -44,6 +44,7 @@ export async function POST(request: NextRequest) {
   const { rows: lastRows } = await query<{ event_type: string }>(
     `SELECT event_type FROM attendance_events
       WHERE student_id = $1 AND school_id = $2
+        AND voided_at IS NULL
         AND (performed_at AT TIME ZONE 'America/Phoenix')::date
             = (now() AT TIME ZONE 'America/Phoenix')::date
       ORDER BY performed_at DESC LIMIT 1`,

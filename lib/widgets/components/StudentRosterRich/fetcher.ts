@@ -353,6 +353,7 @@ export async function fetcher(
          FROM attendance_events
         WHERE student_id = s.id
           AND school_id  = s.school_id
+          AND voided_at IS NULL
           AND curbside   = true
           AND curbside_slot IS NOT NULL
           AND (performed_at AT TIME ZONE $2)::date = ((now() AT TIME ZONE $2)::date)
@@ -369,6 +370,7 @@ export async function fetcher(
          FROM attendance_events
         WHERE student_id = s.id
           AND school_id  = s.school_id
+          AND voided_at IS NULL
           AND event_type = 'check_in'
           AND notes IS NOT NULL AND btrim(notes) <> ''
           AND lower(btrim(notes)) <> 'admin manual check-in'

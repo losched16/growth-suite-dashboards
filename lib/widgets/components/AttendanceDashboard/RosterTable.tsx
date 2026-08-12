@@ -304,18 +304,85 @@ function Drawer({ row: r, dateIso, isToday, customStatuses }: {
         ))}
       </div>
 
-      {/* Manual override actions — only show for today (historical dates are read-only) */}
+      {/* Manual override actions — only show for today (historical dates get time-fix only) */}
       {isToday ? (
         <ManualOverrideForm row={r} customStatuses={customStatuses} />
       ) : (
         <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 flex items-start gap-2">
           <AlertCircle className="h-3.5 w-3.5 mt-0.5" />
           <span>
-            Historical date ({dateIso}). Corrections are append-only via manual_override events — surfaced
-            here in a future iteration. For now, today&apos;s overrides only.
+            Historical date ({dateIso}) — status buttons are today-only, but you can still correct the
+            check-in / check-out times below.
           </span>
         </div>
       )}
+
+      {/* Time corrections — works for today AND past dates. Voids the
+          wrong event(s), keeps them for audit, recomputes the day. */}
+      <TimeFixForm studentId={r.student_id} dateIso={dateIso} />
+    </div>
+  );
+}
+
+// Admin "the time is wrong" fix: pick the actual check-in or check-out
+// time; the server voids that day's events of that type and writes one
+// corrected manual_override event, so the day recomputes everywhere.
+function TimeFixForm({ studentId, dateIso }: { studentId: string; dateIso: string }) {
+  const [inTime, setInTime] = useState('');
+  const [outTime, setOutTime] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  async function save(eventType: 'check_in' | 'check_out', time: string) {
+    if (busy || !time) return;
+    setBusy(true); setErr(null);
+    try {
+      const fd = new FormData();
+      fd.set('student_id', studentId);
+      fd.set('event_type', eventType);
+      fd.set('time', time);
+      fd.set('date', dateIso);
+      const r = await fetch('/api/school/attendance/set-time', { method: 'POST', body: fd });
+      if (!r.ok) throw new Error((await r.text()) || 'failed');
+      window.location.reload();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'failed');
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="rounded-md border border-blue-200 bg-blue-50/40 p-3 space-y-2">
+      <Label>Fix the recorded times (admin)</Label>
+      <p className="text-[11px] text-gray-600">
+        Overwrites the day&apos;s recorded time — the wrong entry is kept in the audit log as voided, and
+        your correction (with your email) takes its place.
+      </p>
+      <div className="flex flex-wrap items-end gap-4">
+        <div className="flex items-end gap-1.5">
+          <div>
+            <div className="text-[11px] text-gray-600 mb-0.5">Check-in time</div>
+            <input type="time" value={inTime} onChange={(e) => setInTime(e.target.value)}
+              className="rounded border border-blue-200 bg-white px-2 py-1 text-sm text-gray-900" />
+          </div>
+          <button type="button" disabled={busy || !inTime} onClick={() => save('check_in', inTime)}
+            className="rounded-md border border-blue-600 bg-white px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-50 disabled:opacity-50">
+            Set check-in
+          </button>
+        </div>
+        <div className="flex items-end gap-1.5">
+          <div>
+            <div className="text-[11px] text-gray-600 mb-0.5">Check-out time</div>
+            <input type="time" value={outTime} onChange={(e) => setOutTime(e.target.value)}
+              className="rounded border border-blue-200 bg-white px-2 py-1 text-sm text-gray-900" />
+          </div>
+          <button type="button" disabled={busy || !outTime} onClick={() => save('check_out', outTime)}
+            className="rounded-md border border-blue-600 bg-white px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-50 disabled:opacity-50">
+            Set check-out
+          </button>
+        </div>
+      </div>
+      {err ? <div className="text-xs text-red-700">{err}</div> : null}
     </div>
   );
 }

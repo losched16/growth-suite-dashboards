@@ -184,6 +184,7 @@ export async function fetcher(
     `WITH today_evs AS (
        SELECT * FROM attendance_events
         WHERE school_id = $1
+          AND voided_at IS NULL
           AND (performed_at AT TIME ZONE $3)::date = $2::date
      ),
      ev_counts AS (
@@ -333,6 +334,7 @@ export async function fetcher(
      JOIN students s ON s.id = e.student_id
      LEFT JOIN parents p ON p.id = e.performed_by_parent_id
      WHERE e.school_id = $1
+       AND e.voided_at IS NULL
        AND (e.performed_at AT TIME ZONE $3)::date = $2::date
      ORDER BY e.performed_at DESC
      LIMIT 25`,

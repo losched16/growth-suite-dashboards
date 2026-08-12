@@ -70,6 +70,7 @@ export async function GET(request: NextRequest, { params }: { params: Params }) 
             signature_png IS NOT NULL AND signature_png <> '' AS has_signature
        FROM attendance_events
       WHERE student_id = $1 AND school_id = $2
+        AND voided_at IS NULL
         AND performed_at >= ($3::date::timestamptz)
         AND performed_at < (($4::date + 1)::timestamptz)
       ORDER BY performed_at ASC

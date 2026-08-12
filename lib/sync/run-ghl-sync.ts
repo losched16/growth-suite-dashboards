@@ -1455,7 +1455,8 @@ export async function runGhlSync(schoolId: string): Promise<SyncResult> {
          (id, school_id, student_id, event_type, performed_by_parent_id, performed_by_admin_email,
           picked_up_by_parent_id, picked_up_by_pickup_person_id, picked_up_by_name_snapshot,
           performed_at, signature_png, curbside, notes, ip_address, user_agent, created_at,
-          curbside_slot, pickup_time, source, performed_by_pickup_person_id, performed_by_name_snapshot)
+          curbside_slot, pickup_time, source, performed_by_pickup_person_id, performed_by_name_snapshot,
+          voided_at, voided_by_admin_email)
        SELECT p.id, p.school_id, p.student_id, p.event_type,
               CASE WHEN EXISTS (SELECT 1 FROM parents x WHERE x.id = p.performed_by_parent_id) THEN p.performed_by_parent_id END,
               p.performed_by_admin_email,
@@ -1465,7 +1466,8 @@ export async function runGhlSync(schoolId: string): Promise<SyncResult> {
               p.performed_at, p.signature_png, p.curbside, p.notes, p.ip_address, p.user_agent, p.created_at,
               p.curbside_slot, p.pickup_time, p.source,
               CASE WHEN EXISTS (SELECT 1 FROM pickup_persons x WHERE x.id = p.performed_by_pickup_person_id) THEN p.performed_by_pickup_person_id END,
-              p.performed_by_name_snapshot
+              p.performed_by_name_snapshot,
+              p.voided_at, p.voided_by_admin_email
          FROM _att_preserve p
         WHERE EXISTS (SELECT 1 FROM students s WHERE s.id = p.student_id)
        ON CONFLICT DO NOTHING`,

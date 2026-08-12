@@ -127,6 +127,7 @@ async function buildEventsCsv(
      JOIN students s ON s.id = e.student_id
      LEFT JOIN parents p ON p.id = e.performed_by_parent_id
      WHERE e.school_id = $1
+       AND e.voided_at IS NULL
        AND (e.performed_at AT TIME ZONE $2)::date BETWEEN $3::date AND $4::date
        AND ($5::uuid IS NULL OR e.student_id = $5::uuid)
      ORDER BY e.performed_at`,
