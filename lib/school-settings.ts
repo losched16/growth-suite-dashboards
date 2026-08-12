@@ -44,6 +44,11 @@ export interface SchoolSettings {
   // Auto-fill Student N Program Name from the grade code when blank
   // (Leslie sets only Grade Level). Opt-in per school.
   derive_program_from_grade: boolean;
+  // Office emails alerted when a student's enrollment status transitions
+  // to Enrolled (lib/sync/enrollment-notifications). Empty = feature off
+  // (the status ledger is still maintained so enabling later never
+  // back-blasts old enrollments).
+  enrollment_notification_emails: string[];
 }
 
 // GHL sidebar items the Custom JS snippet can hide (docs/ghl-menu-snippet.js).
@@ -76,6 +81,7 @@ export const SCHOOL_SETTINGS_DEFAULTS: SchoolSettings = {
   merge_coparent_students: false,
   ghl_documents_sync: false,
   derive_program_from_grade: false,
+  enrollment_notification_emails: [],
 };
 
 export function normalizeSchoolSettings(raw: unknown): SchoolSettings {
@@ -96,6 +102,9 @@ export function normalizeSchoolSettings(raw: unknown): SchoolSettings {
     merge_coparent_students: r.merge_coparent_students === true,
     ghl_documents_sync: r.ghl_documents_sync === true,
     derive_program_from_grade: r.derive_program_from_grade === true,
+    enrollment_notification_emails: Array.isArray(r.enrollment_notification_emails)
+      ? r.enrollment_notification_emails.map((e) => String(e ?? '').trim().toLowerCase()).filter(Boolean)
+      : [],
   };
 }
 

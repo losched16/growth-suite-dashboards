@@ -1623,6 +1623,18 @@ export async function runGhlSync(schoolId: string): Promise<SyncResult> {
     warnings.push(`field-catalog refresh failed: ${err instanceof Error ? err.message : String(err)}`);
   }
 
+  // "Moved to Enrolled" office notifications (migration 098 ledger).
+  // Best-effort — must never fail the sync. Runs after the rebuild
+  // commits so the diff sees the fresh roster.
+  try {
+    const { fireEnrollmentNotifications } = await import('./enrollment-notifications');
+    const en = await fireEnrollmentNotifications(schoolId);
+    if (en.seeded) warnings.push('enrollment-status ledger seeded (baseline, no notifications).');
+    if (en.notified > 0) warnings.push(`Sent ${en.notified} "moved to Enrolled" notification(s).`);
+  } catch (err) {
+    warnings.push(`enrollment notifications failed: ${err instanceof Error ? err.message : String(err)}`);
+  }
+
   return {
     ghl_contacts_scanned: allContacts.length,
     ghl_contacts_with_household_id: withHouseholdId,
