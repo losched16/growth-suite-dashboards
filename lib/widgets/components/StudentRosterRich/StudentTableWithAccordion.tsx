@@ -327,10 +327,130 @@ function RowGroup({
         <tr>
           <td colSpan={columns.length} className="bg-gray-50 border-y border-emerald-200 p-0">
             <FamilyDetailPanel detail={detail} onClose={onToggle} locationId={locationId} sections={detailSections} embedToken={embedToken} />
+            <StudentNotesFeed studentId={s.student_id} studentName={`${s.first_name} ${s.last_name}`} embedToken={embedToken} />
           </td>
         </tr>
       ) : null}
     </>
+  );
+}
+
+// ─── Internal notes feed (staff-only, migration 099) ────────────────
+// Chronological thread of admin/teacher notes about a student — the
+// "Facebook-style" feed from the Aug 11 SST discussion, available in
+// every roster's expanded row (main roster, SST hub, classroom hubs).
+// Parents never see these: the portal has no code path to this data.
+interface StudentNote {
+  id: string; author_email: string; author_name: string; body: string; created_at: string;
+}
+
+function StudentNotesFeed({ studentId, studentName, embedToken }: {
+  studentId: string; studentName: string; embedToken?: string;
+}) {
+  const [notes, setNotes] = useState<StudentNote[] | null>(null);
+  const [canPost, setCanPost] = useState(false);
+  const [viewerEmail, setViewerEmail] = useState<string | null>(null);
+  const [draft, setDraft] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const load = async () => {
+    try {
+      const q = embedToken ? `&embed_token=${encodeURIComponent(embedToken)}` : '';
+      const r = await fetch(`/api/school/student-notes?student_id=${encodeURIComponent(studentId)}${q}`);
+      if (!r.ok) { setErr('Could not load notes'); setNotes([]); return; }
+      const j = await r.json();
+      setNotes(j.notes ?? []);
+      setCanPost(!!j.can_post);
+      setViewerEmail(j.viewer_email ?? null);
+    } catch { setErr('Could not load notes'); setNotes([]); }
+  };
+  useEffect(() => { void load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [studentId]);
+
+  async function addNote() {
+    const body = draft.trim();
+    if (!body || busy) return;
+    setBusy(true); setErr(null);
+    try {
+      const r = await fetch('/api/school/student-notes', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ student_id: studentId, body }),
+      });
+      if (!r.ok) {
+        const j = await r.json().catch(() => ({}));
+        throw new Error(j?.detail || j?.error || 'failed');
+      }
+      setDraft('');
+      await load();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'Could not save note');
+    } finally { setBusy(false); }
+  }
+
+  async function deleteNote(id: string) {
+    if (!confirm('Delete this note?')) return;
+    const r = await fetch(`/api/school/student-notes?id=${encodeURIComponent(id)}`, { method: 'DELETE' });
+    if (r.ok) await load();
+  }
+
+  const fmtWhen = (iso: string) => new Date(iso).toLocaleString('en-US', {
+    timeZone: 'America/Phoenix', month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit',
+  });
+
+  return (
+    <div className="border-t border-violet-200 bg-violet-50/40 px-6 py-4">
+      <div className="mb-2 flex items-baseline gap-2">
+        <span className="text-xs font-semibold uppercase tracking-wide text-violet-800">
+          🔒 Internal notes — {studentName}
+        </span>
+        <span className="text-[11px] text-violet-600">Staff only, never visible to parents.</span>
+      </div>
+      {canPost ? (
+        <div className="mb-3 flex items-start gap-2">
+          <textarea
+            rows={2}
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            maxLength={4000}
+            placeholder="Add a note — observations, parent conversations, follow-ups…"
+            className="flex-1 rounded border border-violet-200 bg-white px-2 py-1.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-violet-400 focus:outline-none"
+          />
+          <button
+            type="button"
+            disabled={busy || !draft.trim()}
+            onClick={addNote}
+            className="rounded-md bg-violet-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-violet-700 disabled:opacity-50"
+          >
+            {busy ? 'Posting…' : 'Post'}
+          </button>
+        </div>
+      ) : notes !== null ? (
+        <p className="mb-2 text-[11px] text-violet-600">Read-only here — open this dashboard from the CRM menu to post notes.</p>
+      ) : null}
+      {err ? <p className="mb-2 text-xs text-red-700">{err}</p> : null}
+      {notes === null ? (
+        <p className="text-xs text-gray-500">Loading…</p>
+      ) : notes.length === 0 ? (
+        <p className="text-xs text-gray-500">No notes yet.</p>
+      ) : (
+        <ul className="space-y-2">
+          {notes.map((n) => (
+            <li key={n.id} className="rounded-md border border-violet-100 bg-white px-3 py-2">
+              <div className="flex items-baseline justify-between gap-2">
+                <span className="text-xs font-semibold text-gray-900">{n.author_name || n.author_email || 'Staff'}</span>
+                <span className="flex items-center gap-2 text-[11px] text-gray-500">
+                  {fmtWhen(n.created_at)}
+                  {viewerEmail && n.author_email === viewerEmail ? (
+                    <button type="button" onClick={() => deleteNote(n.id)} className="text-gray-400 hover:text-red-600" title="Delete your note">✕</button>
+                  ) : null}
+                </span>
+              </div>
+              <p className="mt-0.5 whitespace-pre-wrap text-sm text-gray-800">{n.body}</p>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }
 
