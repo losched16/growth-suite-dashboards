@@ -9,6 +9,18 @@ human digest.
 
 ## August 12, 2026
 
+### "Moved to Enrolled" notifications are live
+From the Aug 11 call: whenever a student's enrollment status changes to
+Enrolled, the office gets an email automatically — student name, grade,
+program, classroom, lead teacher (or "not yet assigned" for brand-new
+enrollees), start date, and the parent's contact info. Runs off the
+15-minute sync, so the alert lands within ~15 minutes of the status
+change in the CRM. Tested live end-to-end. Currently going to Sonia,
+Lexi, and Anna (asison@); Sarah's and Lisa's addresses still needed to
+add them. A student won't re-alert within 14 days even if their status
+gets toggled during cleanup.
+
+
 ### SST Dashboard is live
 From the Aug 11 call: a dedicated dashboard for Student Support Team
 students. How it works:
