@@ -9,6 +9,19 @@ human digest.
 
 ## August 12, 2026
 
+### Internal student notes — a staff-only feed on every roster
+Click any student open on a roster dashboard (Student Roster, SST
+Dashboard, classroom hubs) and there's now an "Internal notes" thread:
+type a note, hit Post, and it joins a running feed — newest first, each
+note stamped with who wrote it and when. Use it for parent
+conversations, observations, follow-ups; the SST team gets their
+chronological communication thread on the SST Dashboard automatically.
+Strictly staff-only: parents have no way to see these, ever. You can
+delete your own notes; other people's stay put. Posting works when the
+dashboard is opened from the CRM menu (that's what signs the note);
+bare shared links are read-only.
+
+
 ### "Moved to Enrolled" notifications are live
 From the Aug 11 call: whenever a student's enrollment status changes to
 Enrolled, the office gets an email automatically — student name, grade,
