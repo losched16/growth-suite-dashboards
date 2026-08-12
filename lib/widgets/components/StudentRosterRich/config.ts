@@ -97,6 +97,12 @@ export interface StudentRosterConfig {
   // multi-classroom teacher groups where students share a program but
   // not a single homeroom. URL `?program=...` still wins.
   default_program_filter?: string;
+  // Hard scope: only students whose metadata matches EVERY entry
+  // ({ sst: ['Yes'] } → metadata.sst = 'Yes'). Not overridable by URL —
+  // powers flag-scoped dashboards like the SST hub, where the roster
+  // must only ever show the flagged students. Values compared
+  // case-insensitively, trimmed.
+  fixed_metadata_match?: Record<string, string[]>;
   // Academic year the roster defaults to (e.g. '2026-27'). Falls back
   // to the current year in the fetcher when unset.
   default_academic_year?: string;

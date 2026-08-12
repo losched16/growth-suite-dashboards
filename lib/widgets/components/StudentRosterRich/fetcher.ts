@@ -628,11 +628,23 @@ export async function fetcher(
     return out;
   }
 
+  // Hard metadata scope (flag dashboards like the SST hub): a student
+  // is only in this roster at all when metadata matches EVERY configured
+  // entry. Applied before any user-facing filter so no URL param can
+  // widen the view.
+  const fixedMatch = Object.entries(config.fixed_metadata_match ?? {});
+  const matchesFixed = (md: Record<string, unknown>): boolean =>
+    fixedMatch.every(([key, vals]) => {
+      const v = String(md?.[key] ?? '').trim().toLowerCase();
+      return (vals ?? []).some((want) => String(want).trim().toLowerCase() === v);
+    });
+
   // Defensive: one roster row per student, always. The query is already
   // one-row-per-student, but this guarantees the invariant so a future
   // join change can never surface a student twice.
   const seenStudentIds = new Set<string>();
   const all: RosterStudent[] = rows.filter((r) => {
+    if (fixedMatch.length > 0 && !matchesFixed(r.metadata ?? {})) return false;
     if (seenStudentIds.has(r.student_id)) return false;
     seenStudentIds.add(r.student_id);
     return true;
