@@ -7,6 +7,22 @@ human digest.
 
 ---
 
+## August 12, 2026
+
+### SST Dashboard is live
+From the Aug 11 call: a dedicated dashboard for Student Support Team
+students. How it works:
+1. On a student's contact record in the CRM, set **Student 1 SST**
+   (or Student 2/3/4 SST, matching the child's slot) to **Yes**.
+2. Within 15 minutes the student appears on the **SST Dashboard**
+   (it's in the school's dashboards list, next to Family Hub etc.).
+   Set the field to No or blank and they drop off the same way.
+The dashboard is the full student roster view (family, contact info,
+documents, attendance) but only ever shows SST-flagged students — no
+one can widen it from the URL. It starts empty until the office flags
+the first student. Internal SST notes/conversation feed is the next
+conversation (pending the notes-permissions decision from the call).
+
 ## August 10, 2026
 
 ### Email everyone who signed up for a form — self-serve, any time
