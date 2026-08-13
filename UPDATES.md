@@ -9,6 +9,20 @@ human digest.
 
 ## August 13, 2026
 
+### Force check-in at a chosen time + attendance notes on the Student Roster
+Two upgrades in one pass:
+1. The manual override now has an "at [time]" field next to the note —
+   force a check-in (or check-out) AT the actual time in one click,
+   with the note riding along ("walked in with grandma"). It replaces
+   any earlier entry of the same type that day, so the chosen time wins
+   outright. Leave the time blank and it stamps "now" as before.
+2. The Student Roster's notes column (was "Check-in notes") is now
+   "Attendance notes" and shows the same picture as the Attendance
+   dashboard: every substantive note from today's check-ins AND
+   check-outs, plus the office's 🔒 day-note as its own purple pill.
+   Works on the main roster, SST Dashboard, and classroom hubs.
+
+
 ### Force check-in/out with a note in one step
 The Attendance dashboard's manual override now has a note field: type
 the reason ("arrived late from dentist, mom called ahead"), then hit
