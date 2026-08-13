@@ -49,7 +49,7 @@ export const AVAILABLE_COLUMNS = [
   { key: 'iep_504',              label: 'IEP/504' },
   { key: 'lunch',                label: 'Lunch' },
   { key: 'attendance',           label: 'Today\'s attendance' },
-  { key: 'attendance_notes',     label: 'Check-in notes' },
+  { key: 'attendance_notes',     label: 'Attendance notes' },
   { key: 'pickup_restrictions',  label: 'NOT authorized pickup' },
   { key: 're_enrolled',          label: 'Re-enrolled' },
   { key: 'address',              label: 'Home address' },

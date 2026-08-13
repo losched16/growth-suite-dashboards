@@ -1062,17 +1062,30 @@ function renderCell(
         : <span className="text-gray-400">—</span>;
     }
     case 'attendance_notes': {
-      // Substantive notes left during today's check-in. Surfaces things
-      // like "ate breakfast late" / "needs nap by 10:30" without making
-      // the teacher click into the attendance dashboard.
+      // Today's attendance notes, mirroring the Attendance dashboard's
+      // Notes column: the office day-note (staff-only) first, then all
+      // substantive event notes from check-ins/outs.
       const n = s.attendance_notes;
-      if (!n) return <span className="text-gray-400">—</span>;
+      const a = s.attendance_admin_note;
+      if (!n && !a) return <span className="text-gray-400">—</span>;
       return (
-        <span
-          className="inline-block rounded bg-amber-50 border border-amber-200 px-2 py-1 text-[11px] text-amber-900 whitespace-pre-wrap"
-          title={n}
-        >
-          {n.length > 80 ? `${n.slice(0, 80).trim()}…` : n}
+        <span className="inline-flex flex-col gap-1">
+          {a ? (
+            <span
+              className="inline-block rounded bg-violet-50 border border-violet-200 px-2 py-1 text-[11px] font-medium text-violet-900 whitespace-pre-wrap"
+              title={`Office note (not visible to parents): ${a}`}
+            >
+              🔒 {a.length > 80 ? `${a.slice(0, 80).trim()}…` : a}
+            </span>
+          ) : null}
+          {n ? (
+            <span
+              className="inline-block rounded bg-amber-50 border border-amber-200 px-2 py-1 text-[11px] text-amber-900 whitespace-pre-wrap"
+              title={n}
+            >
+              {n.length > 80 ? `${n.slice(0, 80).trim()}…` : n}
+            </span>
+          ) : null}
         </span>
       );
     }

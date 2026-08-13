@@ -143,6 +143,9 @@ export interface RosterStudent {
   // a column so teachers can see "had a rough morning" / "needs nap
   // by 10:30" without opening the attendance dashboard.
   attendance_notes: string | null;
+  // The office's day-level note from the Attendance dashboard
+  // (daily_attendance.admin_notes) — staff-only, never in the portal.
+  attendance_admin_note: string | null;
   // People who are NOT authorized to pick up this kid (custody
   // arrangements, no-contact orders). Surfaced as a column so the
   // teacher at the door doesn't have to open the family accordion to
@@ -236,6 +239,7 @@ interface DbRow {
   // Latest check-in notes from today (school-tz). Null if no check-in
   // happened yet OR if the check-in had no notes.
   attendance_notes_today: string | null;
+  attendance_admin_note: string | null;
   // JSON array of { name, reason } for everyone on this student's
   // pickup_restrictions list (active rows only).
   pickup_restrictions_json: Array<{ name: string; reason: string | null }> | null;
@@ -319,6 +323,7 @@ export async function fetcher(
        shp.allergies          AS hp_allergies,
        shp.medical_conditions AS hp_medical_conditions,
        an.notes               AS attendance_notes_today,
+       da.admin_notes         AS attendance_admin_note,
        pr.restrictions_json   AS pickup_restrictions_json,
        s.metadata->>'unauthorized__do_not_pickup' AS unauthorized_pickup_text,
        (s.metadata->>'re_enrolled')::boolean AS re_enrolled_flag
@@ -362,20 +367,20 @@ export async function fetcher(
      LEFT JOIN student_health_profiles shp
        ON shp.student_id = s.id AND shp.school_id = s.school_id
      LEFT JOIN LATERAL (
-       -- Most recent check-in event TODAY (school tz) with non-empty
-       -- notes. Skips the auto-generated "Admin manual check-in" sentinel
-       -- since that's noise — teachers care about substantive notes
-       -- (mood, illness, drop-off changes).
-       SELECT notes
+       -- ALL substantive notes from today's events (check-in AND
+       -- check-out, oldest first), matching the Attendance dashboard's
+       -- Notes column. Auto-generated admin sentinels are noise —
+       -- teachers care about substantive notes (mood, illness,
+       -- drop-off changes, admin reasons).
+       SELECT string_agg(notes, ' · ' ORDER BY performed_at) AS notes
          FROM attendance_events
         WHERE student_id = s.id
           AND school_id  = s.school_id
           AND voided_at IS NULL
-          AND event_type = 'check_in'
+          AND event_type IN ('check_in', 'check_out')
           AND notes IS NOT NULL AND btrim(notes) <> ''
-          AND lower(btrim(notes)) <> 'admin manual check-in'
+          AND lower(btrim(notes)) NOT IN ('admin manual check-in', 'admin manual check-out', 'admin marked absent')
           AND (performed_at AT TIME ZONE $2)::date = ((now() AT TIME ZONE $2)::date)
-        ORDER BY performed_at DESC LIMIT 1
      ) an ON true
      LEFT JOIN LATERAL (
        -- All active pickup restrictions for this student. Aggregated
@@ -766,6 +771,7 @@ export async function fetcher(
       curbside_today: !!r.attendance_curbside,
       curbside_slot: r.curbside_slot,
       attendance_notes: r.attendance_notes_today,
+      attendance_admin_note: r.attendance_admin_note,
       // Structured restriction rows win; when the school only filled the GHL
       // contact's free-text "Unauthorized / Do Not Pickup" field, surface
       // that VERBATIM as one entry — custody language must never be lost
