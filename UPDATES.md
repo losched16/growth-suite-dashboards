@@ -9,6 +9,16 @@ human digest.
 
 ## August 13, 2026
 
+### Attendance dashboard: easy date navigation (past days + their notes)
+Browsing previous days is now one click: ← / → arrows step through
+days, picking a date in the calendar box jumps straight there (no more
+tiny "Go" button), and a "Today" button snaps back. Past days show
+everything that day had: who was in/out and when, parents' drop-off
+notes, admin notes on events, and the office's 🔒 day-notes. (Office
+day-notes only exist from Aug 12 onward — the feature's birthday — so
+earlier days correctly show none.)
+
+
 ### Force check-in at a chosen time + attendance notes on the Student Roster
 Two upgrades in one pass:
 1. The manual override now has an "at [time]" field next to the note —
