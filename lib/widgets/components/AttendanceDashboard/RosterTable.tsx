@@ -256,7 +256,7 @@ function Drawer({ row: r, dateIso, isToday, customStatuses }: {
           so the front desk can scan them at a glance. */}
       {r.todays_notes ? (
         <div className="rounded-md border border-emerald-200 bg-emerald-50/50 px-3 py-2">
-          <Label>Notes from parents today</Label>
+          <Label>Notes from today&apos;s check-ins &amp; outs</Label>
           <p className="text-sm italic text-gray-800 whitespace-pre-wrap">
             &ldquo;{r.todays_notes}&rdquo;
           </p>
@@ -457,8 +457,12 @@ function AdminNotesEditor({ studentId, dateIso, initial }: {
 function ManualOverrideForm({ row: r, customStatuses }: { row: StudentRow; customStatuses: CustomAttendanceStatus[] }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  // Optional note attached to the override event itself (Clint, Aug 13:
+  // "force a check in and also make a note at the same time"). Shows in
+  // the Notes column + event feed alongside parent check-in notes.
+  const [note, setNote] = useState('');
 
-  async function submit(eventType: 'check_in' | 'check_out' | 'absent', notes: string) {
+  async function submit(eventType: 'check_in' | 'check_out' | 'absent', fallback: string) {
     if (busy) return;
     setBusy(true);
     setErr(null);
@@ -466,7 +470,7 @@ function ManualOverrideForm({ row: r, customStatuses }: { row: StudentRow; custo
       const fd = new FormData();
       fd.set('student_id', r.student_id);
       fd.set('event_type', eventType);
-      fd.set('notes', notes);
+      fd.set('notes', note.trim() || fallback);
       const r2 = await fetch('/api/school/attendance/manual-override', { method: 'POST', body: fd });
       if (!r2.ok) {
         const t = await r2.text();
@@ -503,6 +507,14 @@ function ManualOverrideForm({ row: r, customStatuses }: { row: StudentRow; custo
       <p className="text-[11px] text-gray-600">
         Force a status change. Writes a `manual_override` audit row with your email — original events stay intact.
       </p>
+      <input
+        type="text"
+        value={note}
+        onChange={(e) => setNote(e.target.value)}
+        maxLength={500}
+        placeholder="Optional note saved with the action — e.g. “arrived late from dentist, mom called ahead”"
+        className="w-full rounded border border-emerald-200 bg-white px-2 py-1.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-emerald-400 focus:outline-none"
+      />
       <div className="flex flex-wrap gap-2">
         <button
           type="button"
