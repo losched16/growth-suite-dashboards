@@ -80,6 +80,7 @@ export interface PickupPersonRow {
 
 export interface AttendanceDashboardData {
   date_iso: string;                  // selected date (YYYY-MM-DD in tz)
+  today_iso: string;                 // today (YYYY-MM-DD in tz) — date-nav bound
   date_label: string;                // for display
   is_today: boolean;
   stats: {
@@ -423,6 +424,7 @@ export async function fetcher(
 
   return {
     date_iso: dateIso,
+    today_iso: today,
     date_label: dateLabel,
     is_today: isToday,
     stats,

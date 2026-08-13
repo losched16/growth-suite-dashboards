@@ -13,6 +13,7 @@ import { fetcher, type AttendanceDashboardData } from './fetcher';
 import { RosterTable } from './RosterTable';
 import { ReportsPanel } from './ReportsPanel';
 import { AutoSubmitForm } from '@/lib/widgets/components/_shared/AutoSubmitForm';
+import { DateNav } from './DateNav';
 import { PreserveEmbedParams, clearHref } from '@/lib/widgets/components/_shared/PreserveEmbedParams';
 
 const TZ = 'America/Phoenix';
@@ -74,23 +75,7 @@ function Component({
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <form method="GET" className="flex items-center gap-1">
-            <label className="text-xs text-gray-600">Date:</label>
-            <input
-              type="date"
-              name="date"
-              defaultValue={data.date_iso}
-              className="rounded-md border border-gray-300 bg-white px-2 py-1 text-sm focus:border-emerald-600 focus:outline-none"
-            />
-            {sp.classroom ? <input type="hidden" name="classroom" value={sp.classroom} /> : null}
-            {sp.status ? <input type="hidden" name="status" value={sp.status} /> : null}
-            {sp.curbside ? <input type="hidden" name="curbside" value={sp.curbside} /> : null}
-            {sp.q ? <input type="hidden" name="q" value={sp.q} /> : null}
-            <PreserveEmbedParams current={sp} />
-            <button type="submit" className="rounded-md bg-gray-900 px-2 py-1 text-xs font-medium text-white hover:bg-gray-800">
-              Go
-            </button>
-          </form>
+          <DateNav sp={sp} dateIso={data.date_iso} todayIso={data.today_iso} />
           <a
             href={`/api/school/attendance/export?${exportParams.toString()}`}
             target="_top"
