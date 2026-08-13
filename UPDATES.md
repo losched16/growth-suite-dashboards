@@ -9,6 +9,17 @@ human digest.
 
 ## August 13, 2026
 
+### Force check-in/out with a note in one step
+The Attendance dashboard's manual override now has a note field: type
+the reason ("arrived late from dentist, mom called ahead"), then hit
+Force check-in / Force check-out / Mark absent — the note saves with
+the action, stamped with your email, and shows in the Notes column and
+the day's event feed. Leave it blank and the buttons work exactly as
+before. (Reminder: for notes parents should never see, use the amber
+"Office notes" box in the same drawer — event notes travel with the
+attendance record.)
+
+
 ### Fixed: overnight sync outage for DGM + MCS (my bug, resolved)
 Yesterday's attendance time-correction change accidentally removed the
 database exception the 15-minute sync relies on to rebuild attendance
