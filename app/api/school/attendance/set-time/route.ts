@@ -25,6 +25,7 @@ export async function POST(request: NextRequest) {
   const eventType = String(fd.get('event_type') ?? '').trim();
   const time = String(fd.get('time') ?? '').trim();          // 'HH:MM' Phoenix local
   const dateRaw = String(fd.get('date') ?? '').trim();        // optional YYYY-MM-DD, default today
+  const customNote = String(fd.get('notes') ?? '').trim();    // optional admin note
   if (!studentId) return new NextResponse('student_id required', { status: 400 });
   if (eventType !== 'check_in' && eventType !== 'check_out') {
     return new NextResponse('event_type must be check_in or check_out', { status: 400 });
@@ -66,7 +67,9 @@ export async function POST(request: NextRequest) {
        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
       [session.school_id, studentId, eventType, session.user_email,
        performedAt,
-       `Admin set ${eventType === 'check_in' ? 'check-in' : 'check-out'} time to ${time} (${day}) — replaced ${voided.rowCount ?? 0} prior event(s)`,
+       customNote
+         ? `${customNote} — admin set ${eventType === 'check_in' ? 'check-in' : 'check-out'} time to ${time}${(voided.rowCount ?? 0) > 0 ? `, replaced ${voided.rowCount} prior event(s)` : ''}`
+         : `Admin set ${eventType === 'check_in' ? 'check-in' : 'check-out'} time to ${time} (${day}) — replaced ${voided.rowCount ?? 0} prior event(s)`,
        request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? null,
        request.headers.get('user-agent')],
     );

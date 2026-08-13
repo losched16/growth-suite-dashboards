@@ -461,6 +461,11 @@ function ManualOverrideForm({ row: r, customStatuses }: { row: StudentRow; custo
   // "force a check in and also make a note at the same time"). Shows in
   // the Notes column + event feed alongside parent check-in notes.
   const [note, setNote] = useState('');
+  // Optional time: force the check-in/out AT this time instead of "now"
+  // (Clint: "when an admin checks in a parent, the time can be
+  // overwritten"). Routed through set-time, which also voids any prior
+  // same-type event that day so the chosen time wins outright.
+  const [atTime, setAtTime] = useState('');
 
   async function submit(eventType: 'check_in' | 'check_out' | 'absent', fallback: string) {
     if (busy) return;
@@ -471,7 +476,15 @@ function ManualOverrideForm({ row: r, customStatuses }: { row: StudentRow; custo
       fd.set('student_id', r.student_id);
       fd.set('event_type', eventType);
       fd.set('notes', note.trim() || fallback);
-      const r2 = await fetch('/api/school/attendance/manual-override', { method: 'POST', body: fd });
+      const useSetTime = atTime && eventType !== 'absent';
+      if (useSetTime) {
+        fd.set('time', atTime);
+        if (!note.trim()) fd.delete('notes'); // let the route write its audit sentence
+      }
+      const r2 = await fetch(
+        useSetTime ? '/api/school/attendance/set-time' : '/api/school/attendance/manual-override',
+        { method: 'POST', body: fd },
+      );
       if (!r2.ok) {
         const t = await r2.text();
         throw new Error(t || 'failed');
@@ -507,14 +520,26 @@ function ManualOverrideForm({ row: r, customStatuses }: { row: StudentRow; custo
       <p className="text-[11px] text-gray-600">
         Force a status change. Writes a `manual_override` audit row with your email — original events stay intact.
       </p>
-      <input
-        type="text"
-        value={note}
-        onChange={(e) => setNote(e.target.value)}
-        maxLength={500}
-        placeholder="Optional note saved with the action — e.g. “arrived late from dentist, mom called ahead”"
-        className="w-full rounded border border-emerald-200 bg-white px-2 py-1.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-emerald-400 focus:outline-none"
-      />
+      <div className="flex items-center gap-2">
+        <input
+          type="text"
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          maxLength={500}
+          placeholder="Optional note saved with the action — e.g. “arrived late from dentist, mom called ahead”"
+          className="flex-1 rounded border border-emerald-200 bg-white px-2 py-1.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-emerald-400 focus:outline-none"
+        />
+        <label className="flex items-center gap-1 text-[11px] text-gray-600 whitespace-nowrap">
+          at
+          <input
+            type="time"
+            value={atTime}
+            onChange={(e) => setAtTime(e.target.value)}
+            title="Optional — force the check-in/out at this time instead of now (replaces any earlier entry of the same type today)"
+            className="rounded border border-emerald-200 bg-white px-2 py-1 text-sm text-gray-900"
+          />
+        </label>
+      </div>
       <div className="flex flex-wrap gap-2">
         <button
           type="button"
