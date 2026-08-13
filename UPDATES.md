@@ -7,6 +7,20 @@ human digest.
 
 ---
 
+## August 13, 2026
+
+### Fixed: overnight sync outage for DGM + MCS (my bug, resolved)
+Yesterday's attendance time-correction change accidentally removed the
+database exception the 15-minute sync relies on to rebuild attendance
+data — so Desert Garden and Montessori Children's School stopped
+syncing at 1:04 PM Phoenix yesterday (hence the repeated failure-alert
+emails). Fixed this morning; all 12 schools sync green again. No data
+was lost or corrupted: every failed sync rolled back cleanly, kiosk
+check-ins/outs and the portal kept working the whole time, and all
+3,620 DGM attendance events verified intact. The only real impact was
+CRM contact edits not flowing to dashboards for ~18 hours — they all
+caught up on the first fixed sync.
+
 ## August 12, 2026
 
 ### Attendance: admins can now fix check-in / check-out times
