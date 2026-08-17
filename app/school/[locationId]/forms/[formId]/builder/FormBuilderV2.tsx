@@ -134,6 +134,9 @@ export interface FormSettings {
   // CRM tags written to the family's parent contacts on submission —
   // powers "email everyone who signed up" tag smart lists.
   submit_tags: string[];
+  // false = link-only: published but hidden from parents' checklists;
+  // reachable only via Send to families / direct link.
+  list_in_checklist: boolean;
 }
 
 type PaletteType =
@@ -374,6 +377,7 @@ export function FormBuilderV2({
             confirmation_message: settings.confirmation_message,
             notify_emails: settings.notify_emails,
             submit_tags: settings.submit_tags,
+            list_in_checklist: settings.list_in_checklist,
             per_student: settings.per_student,
             resubmission_allowed: settings.resubmission_allowed,
             is_active: settings.is_active,
@@ -1261,6 +1265,12 @@ function FormSettingsPanel({ settings, onPatch, programOptions, gradeOptions, ta
       <label className={toggle}>Allow re-submission<input type="checkbox" checked={settings.resubmission_allowed} onChange={(e) => onPatch({ resubmission_allowed: e.target.checked })} className={cb} /></label>
       <label className={toggle}>Form is live<input type="checkbox" checked={settings.is_active} onChange={(e) => onPatch({ is_active: e.target.checked })} className={cb} /></label>
       <p className="-mt-2 text-[11px] text-slate-400">Going live is silent — parents aren’t told until you click “Send notification” in the top bar. Publish, test it yourself, then send.</p>
+      <label className={toggle}>Show in parents’ forms list<input type="checkbox" checked={settings.list_in_checklist} onChange={(e) => onPatch({ list_in_checklist: e.target.checked })} className={cb} /></label>
+      <p className="-mt-2 text-[11px] text-slate-400">
+        {settings.list_in_checklist
+          ? 'Parents who match the targeting see it in their Forms list and pending checklist.'
+          : 'Link-only: hidden from every parent’s Forms list. Only families you push it to (Send to families) can open it — e.g. the Enrollment Amendment. Keep “Form is live” ON or the link won’t work.'}
+      </p>
       <WhoSeesEditor settings={settings} onPatch={onPatch} programOptions={programOptions} gradeOptions={gradeOptions} tagOptions={tagOptions} studentOptions={studentOptions} />
     </div>
   );

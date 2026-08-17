@@ -93,6 +93,21 @@ export async function POST(_request: NextRequest, { params }: { params: Params }
   const newSlug = await uniqueSlug(schoolId, src.slug);
   const newDisplay = `${src.display_name} (Copy)`;
 
+  // CRM writeback rules only make sense for fields that exist. Copies get
+  // re-purposed (the "Feeding Transition Log" was duplicated from the
+  // Enrollment Amendment and inherited 14 tuition/LDMA/lunch-fee rules for
+  // fields it no longer had — inert until someone reuses a matching key,
+  // then it silently rewrites tuition on the contact). Keep only rules whose
+  // field_key is present in the schema being copied; the builder re-derives
+  // rules for connected fields anyway.
+  const schemaKeys = new Set(
+    (Array.isArray(src.field_schema) ? src.field_schema : [])
+      .map((b) => (b && typeof b === 'object' && 'key' in b ? String((b as { key?: unknown }).key ?? '') : ''))
+      .filter(Boolean),
+  );
+  const copiedWriteback = (Array.isArray(src.ghl_writeback) ? src.ghl_writeback : [])
+    .filter((w) => w && typeof w === 'object' && schemaKeys.has(String((w as { field_key?: unknown }).field_key ?? '')));
+
   const { rows: inserted } = await query<{ id: string; slug: string }>(
     `INSERT INTO portal_form_definitions (
        school_id, slug, display_name, description, category,
@@ -119,7 +134,7 @@ export async function POST(_request: NextRequest, { params }: { params: Params }
     [
       schoolId, newSlug, newDisplay, src.description, src.category,
       src.per_student, src.required_for,
-      JSON.stringify(src.field_schema ?? []), JSON.stringify(src.ghl_writeback ?? {}),
+      JSON.stringify(src.field_schema ?? []), JSON.stringify(copiedWriteback),
       src.one_submission_per_year, src.resubmission_allowed, src.fee_amount,
       src.admin_notes, src.needs_review, src.legacy_completion_field_key,
       src.payment_config == null ? null : JSON.stringify(src.payment_config), src.allow_addendum,

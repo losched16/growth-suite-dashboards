@@ -78,6 +78,11 @@ interface Body {
     // migration 097 — CRM tags applied to the family's parent contacts
     // on submission (sign-up segmentation → tag smart lists)
     submit_tags?: unknown;
+    // migration 066 — false = "link-only": published but hidden from the
+    // parents' checklist/hub; reachable only when the office pushes it to
+    // a family (Send to families) or shares the direct link. The
+    // Enrollment Amendment uses this.
+    list_in_checklist?: unknown;
     // per-student form visibility rule (portal_form_definitions.applies_to).
     // null / {} → form shows for every student (historical behavior).
     applies_to?: unknown;
@@ -292,6 +297,9 @@ export async function PATCH(request: NextRequest, { params }: { params: Params }
       // null → NULL::jsonb (show to everyone); object → stored rule.
       args.push(res.value === null ? null : JSON.stringify(res.value));
       sets.push(`applies_to = $${args.length}::jsonb`);
+    }
+    if (body.meta.list_in_checklist !== undefined) {
+      set('list_in_checklist', asBool(body.meta.list_in_checklist, true));
     }
     if (body.meta.submit_tags !== undefined) {
       const arr = Array.isArray(body.meta.submit_tags) ? body.meta.submit_tags : [];

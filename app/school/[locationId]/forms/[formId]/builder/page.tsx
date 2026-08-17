@@ -54,11 +54,12 @@ export default async function FormBuilderPage({ params }: { params: Params }) {
     resubmission_allowed: boolean; is_active: boolean;
     applies_to: Record<string, unknown> | null;
     submit_tags: string[] | null;
+    list_in_checklist: boolean | null;
   }>(
     `SELECT id, slug, display_name, field_schema,
             description, confirmation_message, notify_emails,
             per_student, resubmission_allowed, is_active, applies_to,
-            submit_tags
+            submit_tags, list_in_checklist
        FROM portal_form_definitions
       WHERE id = $1 AND school_id = $2`,
     [formId, school.id],
@@ -132,6 +133,7 @@ export default async function FormBuilderPage({ params }: { params: Params }) {
         is_active: form.is_active,
         applies_to: (form.applies_to ?? null) as FormAppliesTo | null,
         submit_tags: form.submit_tags ?? [],
+        list_in_checklist: form.list_in_checklist !== false,
       }}
       ghlFields={ghlFields}
       metadataKeys={metaKeyRows.rows.map((r) => r.v)}
