@@ -51,3 +51,22 @@ June Miller, Valerie Shepherd (both my error from v1's "Non-existant" rows), Tri
 
 ## Sheet notes
 - v2 email column is aligned except: row 114 (Keira Jasper shows Mia Jiang's email), rows 127/129 (Ari Lee / Ronan Lee swapped), rows 185–186 (Jett Seaman / Harley Sheaffer off by one). No impact — those contacts already had correct emails.
+
+## v3 sheet addendum (later 2026-08-17)
+
+v3 filled in parent names; no student changes. Applied:
+- Azeila Spitler's parent = **Alyssa Spittler** (contact renamed; was Teri Malcuit)
+- Zong Han Jiang Parent 2 = **Jin Jiang** (Frankjjiang@gmail.com)
+- **Tristan Dixon removed** (Joe: "should be gone"); Sophia Snodgrass now slot 1 on the ladyangel3444 contact
+- Confirmed by v3: Pummell = Alissa, Reed = Chris, Sigler = Steven, Zsoldos = Johnathan, Allison Allison is the parent's name
+
+Answered: **Isabella Griffith / Isabella Koval = one child** (Joe). GHL keeps "Izzabella Griffith"; the sheet's Koval row is a duplicate.
+
+Still open (small):
+1. The ladyangel3444 contact is named **Abigail Shepp** in GHL; v3 says Sophia's parent is **Chrystal Micheals**. Rename the contact to Chrystal Micheals?
+2. Program labels not in GHL: Knox Reed "4 day toddler 8-4", Delilah Frederick-Norr "Two day toddler 11:30am-5pm".
+3. Turchyn contact is "Andrei" but email + sheet say Jessica → rename to Jessica, Andrei as Parent 2?
+4. Spitler (child) vs Spittler (parent) spelling.
+5. No email for Mary Carraway or Stacey Adams → they can't get reminders/portal until one is added.
+
+Count unchanged: **234 enrolled**.
