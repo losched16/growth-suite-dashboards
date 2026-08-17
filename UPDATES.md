@@ -9,6 +9,18 @@ human digest.
 
 ## August 17, 2026
 
+### Form URL slugs are now editable
+New builder → Settings → **URL slug**. Type the address you want
+(lowercase, numbers, hyphens — it auto-cleans as you type), Save. Must
+be unique; the save tells you plainly if another form has it. This is
+the fix for duplicated forms being stuck as "…-copy": duplicate →
+rename slug → edit → publish. Heads-up shown in the field: renaming a
+form that's live or has submissions breaks any link already sent to
+families — re-send after saving. (Kinnari's Feeding Transition Log,
+which was still "dgm2-enrollment-amendment-2026-27-copy", is now
+"feeding-transition-log".)
+
+
 ### Enrollment Amendment: fixed and ready for Kim to push
 Two things had broken it, both fixed and verified end-to-end (pushed
 to a test family, submitted a lunch-only change, confirmed the contact
