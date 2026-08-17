@@ -70,3 +70,12 @@ Still open (small):
 5. No email for Mary Carraway or Stacey Adams → they can't get reminders/portal until one is added.
 
 Count unchanged: **234 enrolled**.
+
+## Later 2026-08-17 — v4 sheet, dashboards aligned, reminder sent
+
+- **v4 sheet:** +4 students → **238 enrolled / 159 families**. Meghan Arnold (Betty Amstutz — put on her existing contact, which owns the pipeline card), Paris Heard (Allison Foster, new contact), Croix Johnson (Bethany Johnson, new contact), Myles Phillips (Alyssa Spittler, slot 2).
+- **Reminder sent 2026-08-17 afternoon:** 94 emails / 94 families via GHL (from noreply@mail.woomontessori.org, reply-to admissions@). Subject carries no count. 2 failures: Jin Jiang (Parent 2 without own GHL contact) and a duplicate John Wachtel contact with typo email `kwachtel3@aoo.com` — kids consolidated onto the real `aol.com` contact (which did get the email); typo contact neutralised.
+- **Legacy submissions in the portal:** the previous system's answers were stored under GHL field-ids and rendered blank. `responses._legacy_answers` now holds every answer with the original question label; the parent's saved-copy page shows "Answers as originally submitted".
+- **"Student Roster" page showing 282/236 + duplicates is the ARCHIVED bespoke app** `_archive/wooster-family-hub` (Vercel project `wooster-family-hub`), which counts "enrolled" by contact tag per slot and reads GHL directly. Replace its GHL menu link with the platform Student Roster:
+  `https://growth-suite-dashboards.vercel.app/school/tFP5UnlBYQayjettNeuG/student-roster` (and `/family-hub`).
+- **One enrolled definition everywhere:** Student Roster (`enrolled_only`), Family Hub (`only_enrolled`), Enrollment Hub (`only_enrolled`), Portal Forms (status-scoped; tag gates removed) all count `students.status='active' AND enrollments.status='enrolled'` for 2026-27 → **238**. Enrollment status comes from the per-student GHL dropdown; pipeline stage drives auto-advance.
