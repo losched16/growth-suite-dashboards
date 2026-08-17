@@ -10,6 +10,7 @@ import { notFound } from 'next/navigation';
 import { ArrowLeft, ChevronDown, Mail, Phone, Inbox, Users, FlaskConical, Trash2, Paperclip, Download, FileText, PencilLine } from 'lucide-react';
 import { query } from '@/lib/db';
 import { loadSchoolByLocationId } from '@/lib/dashboards/loader';
+import { studentMatchesRule, familyMatchesRule, type AppliesToRule } from '@/lib/forms/applies-to-eligibility';
 import { HelpCallout } from '@/components/HelpCallout';
 
 export const dynamic = 'force-dynamic';
@@ -24,6 +25,7 @@ interface FormDef {
   display_name: string;
   per_student: boolean;
   field_schema: Array<{ key?: string; label?: string; type?: string }>;
+  applies_to: AppliesToRule | null;
 }
 
 interface Submission {
@@ -107,7 +109,7 @@ export default async function SubmissionsInboxScoped({
   const schoolId = school.id;
 
   const { rows: defRows } = await query<FormDef>(
-    `SELECT id, slug, display_name, per_student, field_schema
+    `SELECT id, slug, display_name, per_student, field_schema, applies_to
        FROM portal_form_definitions
       WHERE id = $1 AND school_id = $2`,
     [formId, schoolId],
@@ -158,8 +160,8 @@ export default async function SubmissionsInboxScoped({
   // from the form answers above — staff see + download them right here.
   const { rows: uploads } = await query<FormUpload>(
     `SELECT u.id, u.display_name, u.original_filename, u.size_bytes,
-            to_char(u.uploaded_at, 'YYYY-MM-DD"T"HH24:MI:SSOF') AS uploaded_at,
-            to_char(u.acknowledged_at, 'YYYY-MM-DD"T"HH24:MI:SSOF') AS acknowledged_at,
+            to_char(u.uploaded_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS uploaded_at,
+            to_char(u.acknowledged_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS acknowledged_at,
             COALESCE(NULLIF(f.display_name, ''), '(unnamed family)') AS family_label,
             CASE WHEN u.student_id IS NOT NULL THEN
               (SELECT COALESCE(NULLIF(st.preferred_name,''), st.first_name) || ' ' || st.last_name
@@ -262,6 +264,49 @@ export default async function SubmissionsInboxScoped({
     missing = rows;
   }
 
+  // Honor the form's targeting ("Who sees this form"). A family who can't
+  // see the form must not be counted as "not yet submitted" — before this,
+  // the flag football form (4th-8th only) listed all ~283 enrolled families
+  // as outstanding. Same evaluator the Forms Tracker + parent portal use.
+  if (def.applies_to && missing.length > 0) {
+    const famIds = Array.from(new Set(missing.map((m) => m.family_id)));
+    const [{ rows: metaRows }, { rows: tagRows }] = await Promise.all([
+      query<{ student_id: string; family_id: string; metadata: Record<string, unknown> | null }>(
+        `SELECT id AS student_id, family_id, metadata FROM students
+          WHERE school_id = $1 AND family_id = ANY($2::uuid[]) AND status = 'active'`,
+        [schoolId, famIds],
+      ),
+      query<{ family_id: string; tag: string }>(
+        `SELECT DISTINCT p.family_id, LOWER(t.tag) AS tag
+           FROM ghl_contact_tags t
+           JOIN parents p ON p.ghl_contact_id = t.ghl_contact_id
+          WHERE t.school_id = $1 AND p.family_id = ANY($2::uuid[]) AND p.is_primary = true`,
+        [schoolId, famIds],
+      ),
+    ]);
+    const studentsByFamily = new Map<string, typeof metaRows>();
+    const metaByStudent = new Map<string, (typeof metaRows)[number]>();
+    for (const r of metaRows) {
+      metaByStudent.set(r.student_id, r);
+      if (!studentsByFamily.has(r.family_id)) studentsByFamily.set(r.family_id, []);
+      studentsByFamily.get(r.family_id)!.push(r);
+    }
+    const tagsByFamily = new Map<string, Set<string>>();
+    for (const r of tagRows) {
+      if (!tagsByFamily.has(r.family_id)) tagsByFamily.set(r.family_id, new Set());
+      tagsByFamily.get(r.family_id)!.add(r.tag);
+    }
+    const rule = def.applies_to;
+    missing = missing.filter((m) => {
+      const tags = tagsByFamily.get(m.family_id) ?? new Set<string>();
+      if (m.student_id) {
+        const st = metaByStudent.get(m.student_id);
+        return st ? studentMatchesRule(rule, st, tags) : false;
+      }
+      return familyMatchesRule(rule, studentsByFamily.get(m.family_id) ?? [], tags);
+    });
+  }
+
   // Engagement signals for the "not yet submitted" roster: has the family
   // logged in at all, and has anyone in it actually OPENED this form? Both
   // aggregated to the family (a family can have two logins). Lets the office
@@ -272,7 +317,7 @@ export default async function SubmissionsInboxScoped({
   if (missingFamilyIds.length > 0) {
     const { rows: loginRows } = await query<{ family_id: string; last_login: string }>(
       `SELECT p.family_id,
-              to_char(MAX(ps.issued_at), 'YYYY-MM-DD"T"HH24:MI:SSOF') AS last_login
+              to_char(MAX(ps.issued_at) AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS last_login
          FROM parent_sessions ps
          JOIN parents p ON p.id = ps.parent_id
         WHERE ps.school_id = $1 AND p.family_id = ANY($2::uuid[])
@@ -282,7 +327,7 @@ export default async function SubmissionsInboxScoped({
     for (const r of loginRows) lastLoginByFamily.set(r.family_id, r.last_login);
     const { rows: viewRows } = await query<{ family_id: string; last_viewed: string }>(
       `SELECT family_id,
-              to_char(MAX(last_viewed_at), 'YYYY-MM-DD"T"HH24:MI:SSOF') AS last_viewed
+              to_char(MAX(last_viewed_at) AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS last_viewed
          FROM portal_form_views
         WHERE school_id = $1 AND form_definition_id = $2 AND family_id = ANY($3::uuid[])
         GROUP BY family_id`,
