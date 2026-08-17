@@ -123,6 +123,8 @@ export interface FormAppliesTo {
 }
 
 export interface FormSettings {
+  // Portal URL slug — editable (validated + unique server-side).
+  slug: string;
   display_name: string;
   description: string | null;
   confirmation_message: string | null;
@@ -269,7 +271,7 @@ function connectFieldTo(f: FieldBlock, gf: GhlField, metadataKeys: string[]): Fi
 export function FormBuilderV2({
   schoolId, formId, slug, initialSchema, initialSettings, ghlFields, metadataKeys = [],
   programOptions = [], gradeOptions = [], tagOptions = [], studentOptions = [], previewHref, backHref,
-  embedToken,
+  embedToken, submissionCount = 0,
 }: {
   schoolId: string;
   formId: string;
@@ -279,6 +281,9 @@ export function FormBuilderV2({
   // where the CRM iframe's session cookie doesn't follow; saves carry
   // this so they authenticate ("forms are not being saved").
   embedToken?: string;
+  // Real submissions on file — drives the "links already sent" warning
+  // on slug rename.
+  submissionCount?: number;
   initialSchema: FieldBlock[];
   initialSettings: FormSettings;
   ghlFields: GhlField[];
@@ -372,6 +377,7 @@ export function FormBuilderV2({
         body: JSON.stringify({
           field_schema: fields.map((f) => { const { _uid: _u, ...rest } = f; void _u; return rest; }),
           meta: {
+            slug: settings.slug,
             display_name: settings.display_name,
             description: settings.description,
             confirmation_message: settings.confirmation_message,
@@ -387,7 +393,9 @@ export function FormBuilderV2({
       });
       if (!r.ok) {
         let msg = 'Could not save';
-        try { const b = await r.json(); msg = b?.error || b?.detail || msg; } catch { /* ignore */ }
+        // Prefer the server's human-readable detail ("Another form already
+        // uses the slug…") over the machine code ("duplicate_slug").
+        try { const b = await r.json(); msg = b?.detail || b?.error || msg; } catch { /* ignore */ }
         throw new Error(String(msg).replace(/_/g, ' '));
       }
       setSavedAt(new Date()); setDirty(false);
@@ -430,7 +438,7 @@ export function FormBuilderV2({
         <div className="flex items-center gap-2 min-w-0">
           <a href={backHref} className="text-slate-400 hover:text-slate-700" title="Back to forms"><ArrowLeft className="h-4 w-4" /></a>
           <span className="text-sm font-semibold text-slate-900 truncate">{settings.display_name}</span>
-          <span className="font-mono text-[11px] text-slate-400 truncate">{slug}</span>
+          <span className="font-mono text-[11px] text-slate-400 truncate" title="Portal URL: /forms-v2/<slug>">{settings.slug || slug}</span>
         </div>
         <div className="flex items-center gap-2 shrink-0">
           {/* Build / Preview toggle — swaps the canvas between the editor and a
@@ -560,7 +568,7 @@ export function FormBuilderV2({
               onConnect={connectSelected}
             />
           ) : (
-            <FormSettingsPanel settings={settings} onPatch={patchSettings}
+            <FormSettingsPanel settings={settings} onPatch={patchSettings} submissionCount={submissionCount}
               programOptions={programOptions} gradeOptions={gradeOptions} tagOptions={tagOptions} studentOptions={studentOptions} />
           )}
         </aside>
@@ -1222,8 +1230,9 @@ function TagChecklist({ options, selected, onToggle, checkboxClass }: {
   );
 }
 
-function FormSettingsPanel({ settings, onPatch, programOptions, gradeOptions, tagOptions, studentOptions }: {
+function FormSettingsPanel({ settings, onPatch, programOptions, gradeOptions, tagOptions, studentOptions, submissionCount = 0 }: {
   settings: FormSettings; onPatch: (patch: Partial<FormSettings>) => void;
+  submissionCount?: number;
   programOptions: string[]; gradeOptions: string[]; tagOptions: string[];
   studentOptions: Array<{ id: string; name: string; program: string | null }>;
 }) {
@@ -1241,6 +1250,19 @@ function FormSettingsPanel({ settings, onPatch, programOptions, gradeOptions, ta
       <div>
         <label className={lbl}>Description</label>
         <input className={input} value={settings.description ?? ''} onChange={(e) => onPatch({ description: e.target.value || null })} />
+      </div>
+      <div>
+        <label className={lbl}>URL slug</label>
+        <input className={`${input} font-mono`} value={settings.slug}
+          onChange={(e) => onPatch({ slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-') })}
+          onBlur={(e) => onPatch({ slug: e.target.value.replace(/^-+|-+$/g, '') })}
+          placeholder="flag-football-2026" spellCheck={false} />
+        <p className="mt-1 text-[11px] text-slate-400">
+          Portal address: <span className="font-mono">/forms-v2/{settings.slug || '…'}</span>. Lowercase letters, numbers, hyphens; must be unique.
+          {submissionCount > 0 || settings.is_active
+            ? <span className="block mt-0.5 text-amber-700">⚠ Renaming breaks any link already sent to families{submissionCount > 0 ? ` (${submissionCount} submission${submissionCount === 1 ? '' : 's'} on file)` : ''}. Re-send after saving.</span>
+            : null}
+        </p>
       </div>
       <div>
         <label className={lbl}>Confirmation message</label>

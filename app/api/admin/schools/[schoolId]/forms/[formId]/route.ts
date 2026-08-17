@@ -58,6 +58,11 @@ type Params = Promise<{ schoolId: string; formId: string }>;
 
 interface Body {
   meta?: {
+    // Portal URL slug (/forms-v2/<slug>). Editable — validated,
+    // unique per school; existing submissions/invites reference the form
+    // by id so nothing breaks, but any link already sent to families
+    // stops working (the builder warns).
+    slug?: unknown;
     display_name?: unknown;
     description?: unknown;
     category?: unknown;
@@ -241,6 +246,26 @@ export async function PATCH(request: NextRequest, { params }: { params: Params }
   }
 
   if (body.meta) {
+    if (body.meta.slug !== undefined) {
+      const raw = String(body.meta.slug ?? '').trim().toLowerCase();
+      if (!raw || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(raw) || raw.length > 120) {
+        return NextResponse.json({
+          error: 'invalid_slug',
+          detail: 'Slug must be lowercase letters, numbers, and single hyphens (e.g. flag-football-2026).',
+        }, { status: 400 });
+      }
+      const { rows: clash } = await query<{ id: string }>(
+        `SELECT id FROM portal_form_definitions WHERE school_id = $1 AND slug = $2 AND id <> $3`,
+        [schoolId, raw, formId],
+      );
+      if (clash.length > 0) {
+        return NextResponse.json({
+          error: 'duplicate_slug',
+          detail: `Another form already uses the slug "${raw}". Pick a different one.`,
+        }, { status: 409 });
+      }
+      set('slug', raw);
+    }
     if (body.meta.display_name !== undefined) {
       const s = asStr(body.meta.display_name, null);
       if (s && s.trim()) set('display_name', s.trim());

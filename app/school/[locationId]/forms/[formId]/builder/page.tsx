@@ -67,6 +67,15 @@ export default async function FormBuilderPage({ params }: { params: Params }) {
   if (rows.length === 0) notFound();
   const form = rows[0];
 
+  // Real (non-test) submission count — the builder warns before a slug
+  // rename when links may already be in families' inboxes.
+  const { rows: subCountRows } = await query<{ n: number }>(
+    `SELECT COUNT(*)::int AS n FROM portal_form_submissions
+      WHERE form_definition_id = $1 AND COALESCE(is_test, false) = false`,
+    [form.id],
+  );
+  const submissionCount = subCountRows[0]?.n ?? 0;
+
   // "Who sees this form" checklists — distinct program / grade / tag values on
   // this school's roster (demo students excluded). Same source the classic
   // editor uses, so both editors offer identical targeting choices.
@@ -123,7 +132,9 @@ export default async function FormBuilderPage({ params }: { params: Params }) {
       slug={form.slug}
       displayName={form.display_name}
       initialSchema={(form.field_schema ?? []) as FieldBlock[]}
+      submissionCount={submissionCount}
       initialSettings={{
+        slug: form.slug,
         display_name: form.display_name,
         description: form.description,
         confirmation_message: form.confirmation_message,
