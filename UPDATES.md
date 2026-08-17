@@ -7,6 +7,30 @@ human digest.
 
 ---
 
+## August 17, 2026
+
+### Enrollment Amendment: fixed and ready for Kim to push
+Two things had broken it, both fixed and verified end-to-end (pushed
+to a test family, submitted a lunch-only change, confirmed the contact
+updated exactly that one field and nothing else):
+1. It had been unpublished. The amendment is deliberately hidden from
+   parents' forms lists ("link-only"), but it must stay published or the
+   pushed link 404s. Republished; the builder now shows a separate
+   "Show in parents' forms list" toggle so the two ideas aren't confused.
+2. It had been switched to a family-level form. It has to be "one form
+   per student" so the change lands on the right child's CRM fields —
+   otherwise every answer was silently dropped. Switched back, and the
+   system now refuses that flip on any form that writes per-student
+   fields.
+HOW KIM PUSHES ONE: Forms → Enrollment Agreement Amendment → Send →
+pick the family (and the child) → Send. The parent gets an email with a
+one-click link, and the form appears in their portal Forms list. When
+they submit, only the sections they marked "Yes, amending" update the
+CRM; joint-LDMA families get the co-sign step automatically.
+Also: the "Feeding Transition Log" (built by duplicating the amendment)
+had inherited the amendment's tuition/lunch-fee CRM rules — cleared, and
+Duplicate no longer copies rules for fields the copy doesn't have.
+
 ## August 13, 2026
 
 ### Attendance dashboard: easy date navigation (past days + their notes)
