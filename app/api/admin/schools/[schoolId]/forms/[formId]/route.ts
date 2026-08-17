@@ -216,8 +216,8 @@ export async function PATCH(request: NextRequest, { params }: { params: Params }
   let submitTagsToApply: string[] | null = null;
 
   // Confirm the form exists and belongs to this school.
-  const { rows: existing } = await query<{ id: string }>(
-    `SELECT id FROM portal_form_definitions WHERE id = $1 AND school_id = $2`,
+  const { rows: existing } = await query<{ id: string; ghl_writeback: unknown }>(
+    `SELECT id, ghl_writeback FROM portal_form_definitions WHERE id = $1 AND school_id = $2`,
     [formId, schoolId],
   );
   if (existing.length === 0) {
@@ -252,7 +252,22 @@ export async function PATCH(request: NextRequest, { params }: { params: Params }
       const s = asStr(body.meta.category, null);
       set('category', s && s.trim() ? s.trim() : null);
     }
-    if (body.meta.per_student !== undefined)             set('per_student',            asBool(body.meta.per_student, false));
+    if (body.meta.per_student !== undefined) {
+      const wantPerStudent = asBool(body.meta.per_student, false);
+      // A form whose CRM writeback targets per-student slots (student_N_*)
+      // cannot be family-level: without a chosen child there is no slot,
+      // and every answer silently drops as "skipped keys" (the Enrollment
+      // Amendment was flipped this way and stopped updating contacts —
+      // Kim's "not firing", Aug 2026). Refuse rather than let it happen.
+      const wb = Array.isArray(existing[0].ghl_writeback) ? existing[0].ghl_writeback as Array<{ per_student?: unknown }> : [];
+      if (!wantPerStudent && wb.some((w) => w && typeof w === 'object' && w.per_student === true)) {
+        return NextResponse.json({
+          error: 'per_student_required',
+          detail: 'This form writes answers to per-student CRM fields (Student 1/2/3…), so it must stay "One form per student". Turning that off would make every answer silently fail to reach the contact.',
+        }, { status: 400 });
+      }
+      set('per_student', wantPerStudent);
+    }
     if (body.meta.is_active !== undefined)               set('is_active',              asBool(body.meta.is_active, true));
     if (body.meta.allow_addendum !== undefined)          set('allow_addendum',         asBool(body.meta.allow_addendum, false));
     if (body.meta.needs_review !== undefined)            set('needs_review',           asBool(body.meta.needs_review, false));
