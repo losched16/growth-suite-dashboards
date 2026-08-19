@@ -77,6 +77,17 @@ function getStudentField(
     const v = getField(contact, key, schema);
     if (v) return v;
   }
+  // Slot 1 only: an UN-prefixed custom field is slot 1 by convention (same
+  // rule captureAllContactFieldsForSlot applies) — but only when the
+  // location has NO prefixed variant of this base, so a school that keys
+  // students as student_<base> can never accidentally read a parent-level
+  // field. Wooster's `select_the_program_this_child_will_attend` (slot 1)
+  // vs `student_2_select_the_program…` (slots 2+) is the motivating case.
+  if (slot === 1 && !/^(parent|household|parents_combined)/.test(base)
+      && !schema.has(`student_${base}`) && !schema.has(`student_1_${base}`)) {
+    const v = getField(contact, base, schema);
+    if (v) return v;
+  }
   return '';
 }
 
