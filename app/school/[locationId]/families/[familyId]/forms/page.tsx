@@ -210,6 +210,22 @@ export default async function FamilyFormsPage({
     [school.id, familyId],
   );
 
+  // Auto-generated completed PDFs (paper-mode / PDF-template forms like the
+  // EEC cards) are filed on the student's record in student_documents, NOT
+  // on the submission. Match each back to its submission via the id embedded
+  // in the description so we can offer a one-click download of the official
+  // filled document right next to the submission — everything in one place.
+  const { rows: completedPdfs } = await query<{ doc_id: string; sub_id: string | null }>(
+    `SELECT sd.id AS doc_id,
+            (regexp_match(sd.description, 'submission ([0-9a-fA-F-]{36})'))[1] AS sub_id
+       FROM student_documents sd
+      WHERE sd.school_id = $1 AND sd.category = 'forms'
+        AND sd.student_id IN (SELECT id FROM students WHERE family_id = $2 AND school_id = $1)`,
+    [school.id, familyId],
+  );
+  const pdfDocBySubmission = new Map<string, string>();
+  for (const r of completedPdfs) if (r.sub_id) pdfDocBySubmission.set(r.sub_id, r.doc_id);
+
   // Group by form (for the "what have they submitted" summary at top)
   const byForm = new Map<string, { displayName: string; slug: string; category: string | null; count: number }>();
   for (const s of submissions) {
@@ -405,6 +421,15 @@ export default async function FamilyFormsPage({
                           >
                             <Printer className="h-3.5 w-3.5" /> Print / PDF
                           </Link>
+                          {pdfDocBySubmission.has(s.id) ? (
+                            <a
+                              href={`/api/school/documents/${pdfDocBySubmission.get(s.id)}/download`}
+                              className="inline-flex items-center gap-1 rounded-md border border-indigo-300 bg-indigo-50 px-2.5 py-1 text-xs font-semibold text-indigo-800 hover:bg-indigo-100"
+                              title="Download the completed, signed PDF on official letterhead"
+                            >
+                              <Download className="h-3.5 w-3.5" /> Download PDF
+                            </a>
+                          ) : null}
                         </div>
                       </li>
                     ))}
