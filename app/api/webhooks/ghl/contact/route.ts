@@ -129,13 +129,14 @@ async function applyToParent(
     // Capture the old last name BEFORE we update — we need it to
     // identify which students should inherit the new surname (only
     // those who currently share the parent's old surname).
-    const { rows: existing } = await q<{ family_id: string; last_name: string | null }>(
-      `SELECT family_id, last_name FROM parents
-        WHERE school_id = $1 AND ghl_contact_id = $2 LIMIT 1`,
+    const { rows: existing } = await q<{ family_id: string; last_name: string | null; is_primary: boolean }>(
+      `SELECT family_id, last_name, is_primary FROM parents
+        WHERE school_id = $1 AND ghl_contact_id = $2
+        ORDER BY is_primary DESC LIMIT 1`,
       [schoolId, contact.contact_id],
     );
     if (existing.length === 0) return { rowsAffected: 0, status: 'ignored' };
-    const { family_id: familyId, last_name: oldLastName } = existing[0];
+    const { family_id: familyId, last_name: oldLastName, is_primary: isPrimary } = existing[0];
 
     // Update the parent. COALESCE so absent fields don't NULL out
     // existing values (some workflow payloads send only the changed
@@ -156,7 +157,8 @@ async function applyToParent(
     // parent's OLD last name — catches the "skulski → Skulski" case
     // without touching students who already have a different surname
     // (blended families, etc).
-    if (contact.last_name
+    if (isPrimary
+        && contact.last_name
         && oldLastName
         && contact.last_name !== oldLastName) {
       const { rowCount: sCount } = await q(
@@ -182,13 +184,14 @@ async function applyFullSync(
   contactId: string,
 ): Promise<ApplyResult> {
   return withTransaction(async (q) => {
-    const { rows: existing } = await q<{ id: string; family_id: string; last_name: string | null }>(
-      `SELECT id, family_id, last_name FROM parents
-        WHERE school_id = $1 AND ghl_contact_id = $2 LIMIT 1`,
+    const { rows: existing } = await q<{ id: string; family_id: string; last_name: string | null; is_primary: boolean }>(
+      `SELECT id, family_id, last_name, is_primary FROM parents
+        WHERE school_id = $1 AND ghl_contact_id = $2
+        ORDER BY is_primary DESC LIMIT 1`,
       [schoolId, contactId],
     );
     if (existing.length === 0) return { rowsAffected: 0, status: 'ignored' };
-    const { id: parentId, family_id: familyId, last_name: oldLastName } = existing[0];
+    const { id: parentId, family_id: familyId, last_name: oldLastName, is_primary: isPrimary } = existing[0];
 
     // Fetch the canonical record from GHL. If the call fails (rate
     // limit, transient 5xx, deleted contact), fall back to "no-op" so
@@ -246,6 +249,13 @@ async function applyFullSync(
       [schoolId, contactId, firstName, lastName, email, phone, parentId],
     );
     rowsAffected += pCount ?? 0;
+
+    // A promoted / linked PARENT-2 contact owns nothing but its own name,
+    // email and phone. Its parent_2_* fields point back at Parent 1, its
+    // students are the family's, and it must never rename the family —
+    // treating it as a primary cascaded "parent_2 = P1" as a junk row and
+    // renamed the family after the co-parent (Wooster, 2026-08-19).
+    if (!isPrimary) return { rowsAffected, status: 'applied' };
 
     // 2. Cascade last-name change to students that share the parent's
     // OLD last name (handles blended families correctly — students with
@@ -309,8 +319,9 @@ async function applyFullSync(
     const p2First = cfByKey('parent_2_first_name');
     const p2Last  = cfByKey('parent_2_last_name');
     const p2Phone = cfByKey('parent_2_cell_phone') ?? cfByKey('parent_2_phone');
+    const p2Email = cfByKey('parent_2_email');
 
-    if (p2First || p2Last || p2Phone) {
+    if (p2First || p2Last || p2Phone || p2Email) {
       const { rows: secondaryRows } = await q<{ id: string }>(
         `SELECT id FROM parents
           WHERE school_id = $1 AND family_id = $2
@@ -327,9 +338,10 @@ async function applyFullSync(
               SET first_name = COALESCE($3, first_name),
                   last_name  = COALESCE($4, last_name),
                   phone      = COALESCE($5, phone),
+                  email      = COALESCE($6, email),
                   updated_at = now()
             WHERE id = $1 AND school_id = $2`,
-          [secondaryRows[0].id, schoolId, p2First, p2Last, p2Phone],
+          [secondaryRows[0].id, schoolId, p2First, p2Last, p2Phone, p2Email],
         );
         rowsAffected += p2Count ?? 0;
       } else if (p2First && p2Last) {
@@ -339,24 +351,32 @@ async function applyFullSync(
           `INSERT INTO parents
              (family_id, school_id, ghl_contact_id, first_name, last_name,
               email, phone, role, is_primary, status)
-           VALUES ($1, $2, NULL, $3, $4, NULL, $5, 'parent', false, 'active')`,
-          [familyId, schoolId, p2First, p2Last, p2Phone],
+           VALUES ($1, $2, NULL, $3, $4, $6, $5, 'parent', false, 'active')`,
+          [familyId, schoolId, p2First, p2Last, p2Phone, p2Email],
         );
         rowsAffected += p2Ins ?? 0;
       }
     }
 
-    // 4. Family display name follows the primary parent's full name
-    //    "FirstName LastName" when the school doesn't set a custom one.
-    //    Only touch when both names are present so we don't blank it.
-    if (firstName && lastName) {
-      const { rowCount: fCount } = await q(
-        `UPDATE families
-            SET display_name = $1, updated_at = now()
-          WHERE id = $2 AND school_id = $3`,
-        [`${firstName} ${lastName}`, familyId, schoolId],
-      );
-      rowsAffected += fCount ?? 0;
+    // 4. Family display name — SAME rule as the snapshot sync
+    //    (run-ghl-sync mapContactToFamily): the family_display_name
+    //    override when set, else "<LastName> Family". (This used to write
+    //    "FirstName LastName", so every contact edit flipped the name until
+    //    the next sync flipped it back.)
+    {
+      const override = cfByKey('family_display_name');
+      const name = override
+        ? (/family/i.test(override) ? override : `${override} Family`)
+        : (lastName ? `${lastName} Family` : null);
+      if (name) {
+        const { rowCount: fCount } = await q(
+          `UPDATE families
+              SET display_name = $1, updated_at = now()
+            WHERE id = $2 AND school_id = $3 AND display_name IS DISTINCT FROM $1`,
+          [name, familyId, schoolId],
+        );
+        rowsAffected += fCount ?? 0;
+      }
     }
 
     // 5. Propagate this contact's per-student custom fields (program,
