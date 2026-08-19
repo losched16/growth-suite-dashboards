@@ -111,6 +111,17 @@ interface DbRow {
   primary_parent_ghl_contact_id: string | null;
 }
 
+
+// Program name → group: cut at " program", " (", or the first digit/time
+// token, so schedule and age qualifiers drop off. Generic; only used as the
+// last-resort "grade / homeroom" axis when a school has neither.
+function programGroup(program: string | null): string | null {
+  if (!program) return null;
+  const cut = program.split(/\s+program|\s*\(|\s+\d/i)[0] ?? '';
+  const g = cut.replace(/\s+/g, ' ').trim();
+  return g || null;
+}
+
 export async function fetcher(
   school: SchoolContext,
   config: EnrollmentHubConfig,
@@ -236,10 +247,15 @@ export async function fetcher(
       // For schools without dedicated homerooms (Wooster) we fall back
       // to the Final-Forms-derived grade_level so the "By homeroom"
       // breakdown becomes "by grade level" — the more useful signal.
+      // Last resort: the program GROUP — the program name with its
+      // schedule/age qualifiers stripped ("Lower Elementary program 9 am -
+      // 3:30 pm" → "Lower Elementary"; "Five day toddler program (18
+      // months…)" → "Five day toddler") — so a school whose programs
+      // double as grade levels still gets a by-level breakdown.
       homeroom:
         typeof md.homeroom === 'string' ? md.homeroom :
         typeof md.grade_level === 'string' ? md.grade_level :
-        null,
+        programGroup(typeof md.program === 'string' ? md.program : null),
       iep: typeof md.iep === 'string' ? md.iep : null,
       five04_plan: typeof md.five04_plan === 'string' ? md.five04_plan : null,
       allergy: typeof md.allergy === 'string' ? md.allergy : null,
