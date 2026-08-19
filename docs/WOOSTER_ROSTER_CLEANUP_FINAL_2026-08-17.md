@@ -79,3 +79,13 @@ Count unchanged: **234 enrolled**.
 - **"Student Roster" page showing 282/236 + duplicates is the ARCHIVED bespoke app** `_archive/wooster-family-hub` (Vercel project `wooster-family-hub`), which counts "enrolled" by contact tag per slot and reads GHL directly. Replace its GHL menu link with the platform Student Roster:
   `https://growth-suite-dashboards.vercel.app/school/tFP5UnlBYQayjettNeuG/student-roster` (and `/family-hub`).
 - **One enrolled definition everywhere:** Student Roster (`enrolled_only`), Family Hub (`only_enrolled`), Enrollment Hub (`only_enrolled`), Portal Forms (status-scoped; tag gates removed) all count `students.status='active' AND enrollments.status='enrolled'` for 2026-27 → **238**. Enrollment status comes from the per-student GHL dropdown; pipeline stage drives auto-advance.
+
+## 2026-08-19 — Parent 2 fix, pickups fix, pipeline cards, teacher hubs
+
+- **Parent 2 logins:** root cause was no Parent 2 Email field + invites routed through GHL to people with no contact. Fixed: add-co-parent persists `parent_2_email`; `promote_parent2` ON for Wooster (P2s with email get a linked "Parent 2" contact); 12 co-parents recovered/promoted and re-invited; webhook no longer treats a P2 contact as the family's primary. 117 families still have a Parent 2 with no email — list sent; office adds **Parent 2 Email** on the Parent 1 contact.
+- **Authorized pickups:** parent-side add was failing platform-wide (ON CONFLICT named a non-existent index). Fixed + deployed.
+- **Pipeline cards:** one card per enrolled student, named "First Last", in the highest stage reached — 13 renamed/restaged, 12 duplicate/partial cards deleted, parent-named cards fixed. Left alone for the office: "Adam Draper" (vs Claira?), "Ruby Langevoort" (not enrolled). 92 enrolled students have NO card (came in via the old system) — not created; the pipeline is for admissions.
+- **Program** now populates for 236/239 enrolled (sync reads Wooster's un-prefixed slot-1 program field). Knox Reed = 3-day toddler 8–4 (per call).
+- **Teacher hubs (program-scoped, enrolled-only, no tuition, no Customize):** `/school/tFP5UnlBYQayjettNeuG/hub-toddler`, `hub-childrens-house`, `hub-lower-elementary`, `hub-upper-elementary`, `hub-middle-school`, `hub-high-school`. Detail panel shows parents, students, **authorized pickups**, NOT-authorized, per-student health.
+- Reed/Woody per the Aug-17 call: Raice = Crystal Woody + Chris Reed (P2); Knox = Chris Reed + Tayler Reed (P2). Zutavern consolidated on her live gmail contact; Calvin Miller → Tracy primary + Matt as P2.
+- Count: **239 enrolled** (238 + Jett Cooper, added by the office).
