@@ -931,18 +931,16 @@ export function mergeFamiliesByHousehold(
       continue;
     }
     // DOB reconciliation. The household id is operator-set and authoritative,
-    // so a shared-name child with a SMALL DOB discrepancy across the two
-    // contacts is a data-entry slip (the same child) — merge, keep one copy,
-    // and flag it. Only a LARGE gap (> ~1 year) suggests genuinely different
-    // children (a mis-pointed field that slipped past the cardinality guard),
-    // which we leave unmerged.
+    // so we always TRUST the link and merge — a shared-name child with
+    // different DOBs across the two contacts is a data-entry discrepancy for
+    // the same child (parents entered it differently), not a signal to unlink.
+    // (Mass mis-pointing is already caught by the cardinality guard above.) We
+    // keep one copy and warn — loudly for a large gap so the office fixes the
+    // record or unlinks if the id really was set wrong.
     const dobIssue = householdDobIssue(grp);
     if (dobIssue === 'conflict') {
-      skipped.push(`household id "${hid}" has a shared-name child with DOBs over a year apart — likely different children; left unmerged`);
-      for (const f of grp) out.push(f);
-      continue;
-    }
-    if (dobIssue === 'typo') {
+      warned.push(`household id "${hid}": a shared-name child has DOBs over a year apart across the two contacts — merged (trusting the household link); VERIFY in GHL (bad typo, or two children linked by mistake?)`);
+    } else if (dobIssue === 'typo') {
       warned.push(`household id "${hid}": a shared-name child has slightly different DOBs across the two contacts — merged, keeping one; verify the DOB in GHL`);
     }
     mergedGroups++;
