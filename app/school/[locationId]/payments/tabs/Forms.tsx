@@ -65,17 +65,7 @@ export async function PaymentsHubForms({
          AND COALESCE(d.audience, 'parents') = 'parents'   -- staff forms have their own UI under /staff-requests
        ORDER BY
          d.is_active DESC,                                 -- published first, drafts below
-
-         CASE d.category
-           WHEN 'registration' THEN 1
-           WHEN 'medical' THEN 2
-           WHEN 'permission' THEN 3
-           WHEN 'release' THEN 4
-           WHEN 'legal' THEN 5
-           WHEN 'trip' THEN 6
-           ELSE 9
-         END,
-         d.display_name`,
+         lower(d.display_name)                             -- then A→Z (Sonia: alphabetical)`,
       [schoolId],
     ),
     query<{ name: string }>(
