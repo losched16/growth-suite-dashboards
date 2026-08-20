@@ -906,7 +906,7 @@ function combineFamilyGroup(group: MappedFamily[]): MappedFamily {
 // never be wrongly merged, and there is no per-name DOB-conflict ambiguity.
 export function mergeFamiliesByHousehold(
   families: MappedFamily[],
-): { merged: MappedFamily[]; mergedGroups: number; skipped: string[] } {
+): { merged: MappedFamily[]; mergedGroups: number; skipped: string[]; warned: string[] } {
   // A real co-parent household is 2 contacts, occasionally 3. A group far
   // larger than that means the field was pointed at a low-cardinality value
   // (a "Yes" checkbox, an enrollment-year or program dropdown) — collapsing on
