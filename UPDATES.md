@@ -9,6 +9,13 @@ human digest.
 
 ## August 17, 2026
 
+### Two small fixes: home shortcut + alphabetical forms list
+The "Forms & Documents" shortcut at the bottom of the parent portal
+home sent parents to the legacy documents page — it now goes to the
+real Forms page. And the office's forms manager now lists forms
+alphabetically (published first, then A→Z).
+
+
 ### Optional forms, "Action Items", and full-answer CSV exports
 Three asks from Sonia, all live:
 1. **Optional forms** — new builder → Settings → "Optional form". An
