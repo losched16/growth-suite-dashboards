@@ -139,6 +139,12 @@ export interface FormSettings {
   // false = link-only: published but hidden from parents' checklists;
   // reachable only via Send to families / direct link.
   list_in_checklist: boolean;
+  // CLIENT-ONLY (never sent): sticky "Who sees this form" radio. Without
+  // it the mode was inferred from content, so removing the last selected
+  // student/grade silently snapped the radio back to "Everyone" and the
+  // save stored exactly that — Sonia's OTC form went out to every family
+  // when she believed nothing was saved at all.
+  ui_specific_targeting?: boolean;
 }
 
 type PaletteType =
@@ -369,6 +375,17 @@ export function FormBuilderV2({
   }
 
   async function save() {
+    // "Only specific…" with nothing picked is ambiguous — before, it
+    // silently saved as EVERYONE (empty rule = no rule). Force a choice.
+    const at = settings.applies_to ?? {};
+    const hasCriteria = (at.program_match?.length ?? 0) > 0
+      || (at.tag_match?.length ?? 0) > 0
+      || (at.student_ids?.length ?? 0) > 0
+      || ((at.metadata_match?.grade_level as string[] | undefined)?.length ?? 0) > 0;
+    if (settings.ui_specific_targeting === true && !hasCriteria) {
+      setErr('“Who sees this form” is set to Only specific… but nothing is picked. Add at least one student, grade, program, or tag — or switch back to Everyone.');
+      return;
+    }
     setBusy(true); setErr(null);
     try {
       const r = await fetch(`/api/admin/schools/${schoolId}/forms/${formId}${embedToken ? `?embed_token=${encodeURIComponent(embedToken)}` : ''}`, {
@@ -1039,6 +1056,11 @@ function WhoSeesEditor({ settings, onPatch, programOptions, gradeOptions, tagOpt
   // Exclusion deliberately does NOT count as a "rule": "Everyone (except
   // tagged-out families)" keeps the Everyone radio selected.
   const hasRule = programs.length > 0 || grades.length > 0 || tags.length > 0 || studentIds.length > 0;
+  // Sticky radio: the user's CHOICE of mode, not inferred from content —
+  // unchecking the last criterion no longer snaps back to "Everyone"
+  // (which then saved as everyone). The save button blocks the
+  // specific-but-empty state with a clear message instead.
+  const specific = settings.ui_specific_targeting ?? hasRule;
   // Student search for the "Specific students" picker.
   const [stuSearch, setStuSearch] = useState('');
 
@@ -1093,18 +1115,24 @@ function WhoSeesEditor({ settings, onPatch, programOptions, gradeOptions, tagOpt
       ) : (
         <>
           <label className="mb-1.5 flex items-center gap-2 text-sm text-slate-700">
-            <input type="radio" checked={!hasRule}
-              onChange={() => onPatch({ applies_to: excl.length ? { tag_exclude: excl } : null })}
+            <input type="radio" checked={!specific}
+              onChange={() => onPatch({ ui_specific_targeting: false, applies_to: excl.length ? { tag_exclude: excl } : null })}
               className="h-4 w-4 text-emerald-600" />
             Everyone
           </label>
           <label className="mb-2 flex items-center gap-2 text-sm text-slate-700">
-            <input type="radio" checked={hasRule}
-              onChange={() => { if (!hasRule) { const first = showProgram && progList.length ? [progList[0]] : []; const t = !first.length && tagList.length ? [tagList[0]] : []; apply({ programs: first, grades: [], tags: t }); } }}
+            <input type="radio" checked={specific}
+              onChange={() => onPatch({ ui_specific_targeting: true })}
               className="h-4 w-4 text-emerald-600" />
             Only specific students, programs, grades, or tags
           </label>
-          {hasRule ? (
+          {specific && !hasRule ? (
+            <p className="mb-2 rounded border border-amber-300 bg-amber-50 px-2 py-1.5 text-[11px] text-amber-800">
+              Nothing picked yet — the form can&rsquo;t be saved until you select at least one
+              student, grade, program, or tag below (or switch back to Everyone).
+            </p>
+          ) : null}
+          {specific ? (
             <div className="space-y-3 rounded-md border border-slate-200 bg-slate-50 p-2.5">
               {studentOptions.length > 0 ? (
                 <div>
