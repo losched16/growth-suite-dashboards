@@ -83,6 +83,9 @@ interface Body {
     // migration 097 — CRM tags applied to the family's parent contacts
     // on submission (sign-up segmentation → tag smart lists)
     submit_tags?: unknown;
+    // migration 102 — optional: listed + submittable but never owed
+    // (excluded from Action Items banner, completion %, reminder emails)
+    is_optional?: unknown;
     // migration 066 — false = "link-only": published but hidden from the
     // parents' checklist/hub; reachable only when the office pushes it to
     // a family (Send to families) or shares the direct link. The
@@ -337,6 +340,9 @@ export async function PATCH(request: NextRequest, { params }: { params: Params }
       // null → NULL::jsonb (show to everyone); object → stored rule.
       args.push(res.value === null ? null : JSON.stringify(res.value));
       sets.push(`applies_to = $${args.length}::jsonb`);
+    }
+    if (body.meta.is_optional !== undefined) {
+      set('is_optional', asBool(body.meta.is_optional, false));
     }
     if (body.meta.list_in_checklist !== undefined) {
       set('list_in_checklist', asBool(body.meta.list_in_checklist, true));

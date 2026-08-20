@@ -139,6 +139,9 @@ export interface FormSettings {
   // false = link-only: published but hidden from parents' checklists;
   // reachable only via Send to families / direct link.
   list_in_checklist: boolean;
+  // Optional: listed + submittable, but never in Action Items /
+  // completion % / reminder emails.
+  is_optional: boolean;
   // CLIENT-ONLY (never sent): sticky "Who sees this form" radio. Without
   // it the mode was inferred from content, so removing the last selected
   // student/grade silently snapped the radio back to "Everyone" and the
@@ -401,6 +404,7 @@ export function FormBuilderV2({
             notify_emails: settings.notify_emails,
             submit_tags: settings.submit_tags,
             list_in_checklist: settings.list_in_checklist,
+            is_optional: settings.is_optional,
             per_student: settings.per_student,
             resubmission_allowed: settings.resubmission_allowed,
             is_active: settings.is_active,
@@ -1315,6 +1319,12 @@ function FormSettingsPanel({ settings, onPatch, programOptions, gradeOptions, ta
       <label className={toggle}>Allow re-submission<input type="checkbox" checked={settings.resubmission_allowed} onChange={(e) => onPatch({ resubmission_allowed: e.target.checked })} className={cb} /></label>
       <label className={toggle}>Form is live<input type="checkbox" checked={settings.is_active} onChange={(e) => onPatch({ is_active: e.target.checked })} className={cb} /></label>
       <p className="-mt-2 text-[11px] text-slate-400">Going live is silent — parents aren’t told until you click “Send notification” in the top bar. Publish, test it yourself, then send.</p>
+      <label className={toggle}>Optional form<input type="checkbox" checked={settings.is_optional} onChange={(e) => onPatch({ is_optional: e.target.checked })} className={cb} /></label>
+      <p className="-mt-2 text-[11px] text-slate-400">
+        {settings.is_optional
+          ? 'Listed in parents’ Forms page with an “Optional” badge — but never in the Action Items banner, the completion percentage, or reminder emails.'
+          : 'Required: families see it in Action Items until they submit, and reminder emails chase it.'}
+      </p>
       <label className={toggle}>Show in parents’ forms list<input type="checkbox" checked={settings.list_in_checklist} onChange={(e) => onPatch({ list_in_checklist: e.target.checked })} className={cb} /></label>
       <p className="-mt-2 text-[11px] text-slate-400">
         {settings.list_in_checklist

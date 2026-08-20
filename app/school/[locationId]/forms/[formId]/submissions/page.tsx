@@ -365,6 +365,16 @@ export default async function SubmissionsInboxScoped({
             </p>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
+            <a
+              href={`/api/export/form-responses/${locationId}?form_id=${def.id}`}
+              target="_top"
+              rel="noopener"
+              download
+              className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+              title="Download every submission's full answers as a spreadsheet (one row per submission, one column per question)"
+            >
+              <Download className="h-3 w-3" /> Export responses (CSV)
+            </a>
             <Link
               href={toggleTestUrl}
               className={
