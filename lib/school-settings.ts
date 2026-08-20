@@ -35,6 +35,16 @@ export interface SchoolSettings {
   // school that uses one-contact-per-family is unaffected (no shared students
   // → no-op). Name-collisions with DIFFERENT DOBs are left separate.
   merge_coparent_students: boolean;
+  // EXPLICIT co-parent linkage: the GHL custom-field key holding a shared
+  // "household id". When set, families whose PRIMARY contact carries the same
+  // non-empty value in this field are collapsed into one family (both parents,
+  // one copy of each child) — the source-of-truth alternative to inferring
+  // co-parents from matching student names (merge_coparent_students). The
+  // operator controls exactly which contacts pair up by writing the same id on
+  // both. null/empty = off. Takes precedence over merge_coparent_students when
+  // both are set. Does NOT gate the roster (unlike family_fields.householdId) —
+  // a contact without a value simply stays its own family.
+  coparent_household_field: string | null;
   // Poll GHL Documents & Contracts for completed (signed) documents each
   // sync cycle: flips the matching per-student tracking field (e.g. a
   // signed "AZ Emergency ... Card - S2" sets Student 2 AZ Card=Complete on
@@ -79,6 +89,7 @@ export const SCHOOL_SETTINGS_DEFAULTS: SchoolSettings = {
   roster_tag_filter: [],
   ghl_hidden_menu: [],
   merge_coparent_students: false,
+  coparent_household_field: null,
   ghl_documents_sync: false,
   derive_program_from_grade: false,
   enrollment_notification_emails: [],
@@ -100,6 +111,8 @@ export function normalizeSchoolSettings(raw: unknown): SchoolSettings {
       ? r.ghl_hidden_menu.map((t) => String(t ?? '').trim().toLowerCase()).filter(Boolean)
       : [],
     merge_coparent_students: r.merge_coparent_students === true,
+    coparent_household_field: typeof r.coparent_household_field === 'string' && r.coparent_household_field.trim()
+      ? r.coparent_household_field.trim() : null,
     ghl_documents_sync: r.ghl_documents_sync === true,
     derive_program_from_grade: r.derive_program_from_grade === true,
     enrollment_notification_emails: Array.isArray(r.enrollment_notification_emails)

@@ -226,6 +226,11 @@ export interface MappedFamily {
   status: string;
   parents: MappedParent[];
   students: MappedStudent[];
+  // Explicit co-parent linkage key (settings.coparent_household_field). Two
+  // families sharing the same non-empty value are collapsed into one. Set in
+  // runGhlSync from the primary contact; undefined when the school hasn't
+  // opted in. Not persisted — purely a sync-time grouping hint.
+  household_link_id?: string;
 }
 
 // Options for mapContactToFamily. Defaults preserve the snapshot-sync
@@ -807,51 +812,84 @@ export function mergeCoparentFamilies(
   for (const idxs of groups.values()) {
     if (idxs.length === 1) { out.push(families[idxs[0]]); continue; }
     mergedGroups++;
-    const gcOf = (f: MappedFamily) => f.parents.find((p) => p.is_primary)?.ghl_contact_id ?? '';
-    // Anchor on the FULLER household: the family with more students wins
-    // P1 (a co-parent contact carrying only the shared child must never
-    // take over as the family's primary — Ian Walker briefly became P1
-    // of the Friend family because his contact id sorted first, which
-    // demoted the real household and churned their credentials). Ties
-    // (full split duplicates like Bates) keep the stable contact-id sort.
-    const grp = idxs.map((i) => families[i]).sort((a, b) =>
-      (b.students.length - a.students.length)
-      || (gcOf(a) < gcOf(b) ? -1 : gcOf(a) > gcOf(b) ? 1 : 0));
-
-    // Merge parents — dedupe by contact id / email / name.
-    const parents: MappedParent[] = [];
-    const seen = new Set<string>();
-    for (const f of grp) for (const p of f.parents) {
-      // EMAIL-first key: the same human's P2 mirror copy often lacks a
-      // contact id, so contact-first keying let them through twice.
-      const pk = (p.email?.toLowerCase() || p.ghl_contact_id || `${p.first_name} ${p.last_name}`.toLowerCase()).trim();
-      if (!pk || seen.has(pk)) continue;
-      seen.add(pk); parents.push({ ...p });
-    }
-    let hasPrimary = false;
-    for (const p of parents) { if (p.is_primary && !hasPrimary) hasPrimary = true; else p.is_primary = false; }
-    if (!hasPrimary && parents[0]) parents[0].is_primary = true;
-
-    // Merge students — one per normalized name (families here don't have a
-    // DOB conflict for any shared name, so name is a safe key within the group).
-    const byKey = new Map<string, MappedStudent>();
-    for (const f of grp) for (const s of f.students) {
-      const k = normStudentName(s.first_name, s.last_name) || `${s.first_name}|${s.last_name}`;
-      const ex = byKey.get(k);
-      byKey.set(k, ex ? pickRicherStudent(ex, s) : s);
-    }
-    const students = [...byKey.values()];
-    const primary = parents.find((p) => p.is_primary) ?? parents[0];
-    const lastName = primary?.last_name || students[0]?.last_name || '';
-    out.push({
-      display_name: lastName ? `${lastName} Family` : grp[0].display_name,
-      notes: grp[0].notes,
-      status: 'active',
-      parents,
-      students,
-    });
+    out.push(combineFamilyGroup(idxs.map((i) => families[i])));
   }
   return { merged: out, mergedGroups, conflicts };
+}
+
+// Combine a set of families known to belong to the same household into one
+// (both parents, one copy of each child). Extracted from mergeCoparentFamilies
+// so the explicit household-id linkage below can reuse the exact same, tested
+// merge behavior — only the criterion for WHICH families group differs.
+function combineFamilyGroup(group: MappedFamily[]): MappedFamily {
+  const gcOf = (f: MappedFamily) => f.parents.find((p) => p.is_primary)?.ghl_contact_id ?? '';
+  // Anchor on the FULLER household: the family with more students wins
+  // P1 (a co-parent contact carrying only the shared child must never
+  // take over as the family's primary — Ian Walker briefly became P1
+  // of the Friend family because his contact id sorted first, which
+  // demoted the real household and churned their credentials). Ties
+  // (full split duplicates like Bates) keep the stable contact-id sort.
+  const grp = group.slice().sort((a, b) =>
+    (b.students.length - a.students.length)
+    || (gcOf(a) < gcOf(b) ? -1 : gcOf(a) > gcOf(b) ? 1 : 0));
+
+  // Merge parents — dedupe by contact id / email / name.
+  const parents: MappedParent[] = [];
+  const seen = new Set<string>();
+  for (const f of grp) for (const p of f.parents) {
+    // EMAIL-first key: the same human's P2 mirror copy often lacks a
+    // contact id, so contact-first keying let them through twice.
+    const pk = (p.email?.toLowerCase() || p.ghl_contact_id || `${p.first_name} ${p.last_name}`.toLowerCase()).trim();
+    if (!pk || seen.has(pk)) continue;
+    seen.add(pk); parents.push({ ...p });
+  }
+  let hasPrimary = false;
+  for (const p of parents) { if (p.is_primary && !hasPrimary) hasPrimary = true; else p.is_primary = false; }
+  if (!hasPrimary && parents[0]) parents[0].is_primary = true;
+
+  // Merge students — one per normalized name (richer row wins; DOB conflicts
+  // are screened out before a group is ever formed).
+  const byKey = new Map<string, MappedStudent>();
+  for (const f of grp) for (const s of f.students) {
+    const k = normStudentName(s.first_name, s.last_name) || `${s.first_name}|${s.last_name}`;
+    const ex = byKey.get(k);
+    byKey.set(k, ex ? pickRicherStudent(ex, s) : s);
+  }
+  const students = [...byKey.values()];
+  const primary = parents.find((p) => p.is_primary) ?? parents[0];
+  const lastName = primary?.last_name || students[0]?.last_name || '';
+  return {
+    display_name: lastName ? `${lastName} Family` : grp[0].display_name,
+    notes: grp[0].notes,
+    status: 'active',
+    parents,
+    students,
+  };
+}
+
+// Explicit household-id linkage (settings.coparent_household_field): collapse
+// families whose primary contact carries the same non-empty household id into
+// one. The source-of-truth alternative to mergeCoparentFamilies' name
+// inference — the operator decides which contacts pair by writing the same id
+// on both, so coincidental same-name/DOB children in unrelated families can
+// never be wrongly merged, and there is no per-name DOB-conflict ambiguity.
+export function mergeFamiliesByHousehold(
+  families: MappedFamily[],
+): { merged: MappedFamily[]; mergedGroups: number } {
+  const byHousehold = new Map<string, MappedFamily[]>();
+  const out: MappedFamily[] = [];
+  for (const f of families) {
+    const hid = (f.household_link_id ?? '').trim();
+    if (!hid) { out.push(f); continue; } // no linkage value → stays its own family
+    (byHousehold.get(hid) ?? byHousehold.set(hid, []).get(hid)!).push(f);
+  }
+  let mergedGroups = 0;
+  for (const grp of byHousehold.values()) {
+    if (grp.length === 1) { out.push(grp[0]); continue; }
+    mergedGroups++;
+    out.push(combineFamilyGroup(grp));
+  }
+  return { merged: out, mergedGroups };
 }
 
 // ----- Orchestrator ---------------------------------------------------------
@@ -991,6 +1029,10 @@ export async function runGhlSync(schoolId: string): Promise<SyncResult> {
   // "withdrawn" are kept but marked withdrawn. Empty = no filter (default).
   const schoolSettings = await import('@/lib/school-settings').then((m) => m.loadSchoolSettings(schoolId));
   const rosterTags = schoolSettings.roster_tag_filter.map((t) => t.toLowerCase());
+  // Explicit co-parent linkage: the field key whose shared value pairs two
+  // parents' contacts into one family (see mergeFamiliesByHousehold). null =
+  // off, so household_link_id stays undefined and grouping is a no-op.
+  const coparentHouseholdField = schoolSettings.coparent_household_field;
   const tagsLower = (c: GhlContact) => (c.tags ?? []).map((t) => String(t).trim().toLowerCase());
   const passesRosterFilter = (c: GhlContact) => rosterTags.length === 0 || rosterTags.some((rt) => tagsLower(c).includes(rt));
   const isWithdrawn = (c: GhlContact) => tagsLower(c).includes('withdrawn');
@@ -1010,6 +1052,7 @@ export async function runGhlSync(schoolId: string): Promise<SyncResult> {
         // default to the enrolled-only scope.
         for (const s of family.students) s.enrollment_status = 'enrolled';
       }
+      if (coparentHouseholdField) family.household_link_id = getField(c, coparentHouseholdField, schema);
       withHouseholdId++;
       enrolledContactIds.add(c.id);
       mapped.push(family);
@@ -1056,23 +1099,36 @@ export async function runGhlSync(schoolId: string): Promise<SyncResult> {
       warnings.push(`stage "${stage.stageName}" (pipeline "${stage.pipelineName}") didn't map to any funnel status`);
       continue;
     }
-    mapped.push(buildProspectiveFamily(
+    const prospective = buildProspectiveFamily(
       { contact, opp: primary, stage, funnelStatus },
       warnings,
       config,
       schema,
-    ));
+    );
+    if (coparentHouseholdField) prospective.household_link_id = getField(contact, coparentHouseholdField, schema);
+    mapped.push(prospective);
     prospectiveCreated++;
   }
 
   // Co-parent duplicate collapse (opt-in per school). Runs on the fully-built
   // family set (Phase 1 + Phase 2) so a child listed on both parents'
-  // contacts becomes ONE student in ONE family. No-op unless the school has
-  // settings.merge_coparent_students set (default off → existing schools
-  // unaffected).
+  // contacts becomes ONE student in ONE family. Two mutually-exclusive modes,
+  // both no-ops by default:
+  //   • coparent_household_field — EXPLICIT: pair by a shared GHL household id
+  //     the operator writes on both contacts (source of truth, no guessing).
+  //   • merge_coparent_students — INFERRED: pair by matching student name+DOB.
+  // The explicit field wins when both are set. Either way, credentials survive
+  // the P1→P2 demotion via the contact-keyed id fallback in the rebuild below.
   let familiesToInsert = mapped;
   let coparentMerged = 0;
-  if (schoolSettings.merge_coparent_students) {
+  if (coparentHouseholdField) {
+    const { merged, mergedGroups } = mergeFamiliesByHousehold(mapped);
+    familiesToInsert = merged;
+    coparentMerged = mergedGroups;
+    if (mergedGroups > 0) {
+      warnings.push(`Linked ${mergedGroups} co-parent household${mergedGroups === 1 ? '' : 's'} by shared household id (both parents on one family).`);
+    }
+  } else if (schoolSettings.merge_coparent_students) {
     const { merged, mergedGroups, conflicts } = mergeCoparentFamilies(mapped);
     familiesToInsert = merged;
     coparentMerged = mergedGroups;
@@ -1134,6 +1190,12 @@ export async function runGhlSync(schoolId: string): Promise<SyncResult> {
     };
     const reuseFamilyId = new Map<string, string>();
     const reuseParentId = new Map<string, string>();
+    // Role-INDEPENDENT parent-id index, keyed purely by GHL contact id. The
+    // primary-vs-secondary parentKey above orphans a parent's id (and thus
+    // their preserved password/PIN) the moment a household merge demotes them
+    // P1→P2 — the historical co-parent password wipe. Looking the id up by
+    // contact as a fallback carries it through the role change.
+    const reuseParentIdByContact = new Map<string, string>();
     const reuseStudentId = new Map<string, string>();
     {
       const { rows: ef } = await q<{ family_id: string; gc: string | null }>(
@@ -1146,6 +1208,16 @@ export async function runGhlSync(schoolId: string): Promise<SyncResult> {
                   WHERE pp.family_id = pa.family_id AND pp.is_primary = true LIMIT 1) AS p1gc
            FROM parents pa WHERE pa.school_id = $1`, [schoolId]);
       for (const r of ep) { const k = parentKey(r.is_primary, r.gc, r.p1gc, r.email); if (k) reuseParentId.set(k, r.id); }
+      // Separate, dedicated pass for the contact-keyed fallback so the
+      // reuseParentId population above stays byte-for-byte unchanged (zero
+      // behavior change for schools that don't merge). Credential-bearing
+      // rows first + first-wins: a contact with more than one row keeps the
+      // id that owns the password/PIN.
+      const { rows: epc } = await q<{ id: string; gc: string | null }>(
+        `SELECT id, ghl_contact_id AS gc FROM parents
+          WHERE school_id = $1 AND ghl_contact_id IS NOT NULL
+          ORDER BY (password_hash IS NOT NULL OR pin_hash IS NOT NULL) DESC, is_primary DESC`, [schoolId]);
+      for (const r of epc) if (r.gc && !reuseParentIdByContact.has(r.gc)) reuseParentIdByContact.set(r.gc, r.id);
       const { rows: es } = await q<{ id: string; gc: string | null; slot: string | null }>(
         `SELECT id, metadata->>'ghl_contact_id' AS gc, metadata->>'ghl_slot' AS slot
            FROM students WHERE school_id = $1`, [schoolId]);
@@ -1314,6 +1386,10 @@ export async function runGhlSync(schoolId: string): Promise<SyncResult> {
         }
         const pk = parentKey(p.is_primary, p.ghl_contact_id, p1ContactId, p.email);
         let keepParentId = pk ? reuseParentId.get(pk) : undefined;
+        // Role-independent fallback: if the role-key missed (e.g. a household
+        // merge just demoted this parent P1→P2), recover their prior id by
+        // contact so their preserved password/PIN still lands on this row.
+        if (!keepParentId && p.ghl_contact_id) keepParentId = reuseParentIdByContact.get(p.ghl_contact_id);
         if (keepParentId && usedParentIds.has(keepParentId)) keepParentId = undefined; // don't reuse an id twice
         if (keepParentId) {
           usedParentIds.add(keepParentId);
