@@ -9,6 +9,19 @@ human digest.
 
 ## August 17, 2026
 
+### Fixed: "Only specific students" with nothing picked silently saved as Everyone
+The trap Sonia hit on the OTC form: choosing "Only specific students…"
+in Who sees this form, ending up with nothing selected, and saving —
+the system stored that as EVERYONE (and on reload the radio snapped
+back, so it looked like the save simply didn't stick). Now: the radio
+choice stays put, an amber notice appears when nothing is picked yet,
+and Save refuses that state with a plain message ("add at least one
+student, grade, program, or tag — or switch back to Everyone"). Also
+removed the surprise where clicking the specific radio auto-selected
+the first program. Tip for "publish but let nobody see it yet": that's
+the new "Show in parents' forms list" toggle, not an empty selection.
+
+
 ### Form URL slugs are now editable
 New builder → Settings → **URL slug**. Type the address you want
 (lowercase, numbers, hyphens — it auto-cleans as you type), Save. Must
