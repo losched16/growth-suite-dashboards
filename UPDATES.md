@@ -9,6 +9,22 @@ human digest.
 
 ## August 17, 2026
 
+### Optional forms, "Action Items", and full-answer CSV exports
+Three asks from Sonia, all live:
+1. **Optional forms** — new builder → Settings → "Optional form". An
+   optional form stays in parents' Forms page (marked "Optional") and
+   can be submitted, but it never appears in the home banner, never
+   counts against the family's completion %, and never triggers
+   reminder emails. This is the control for "the yellow box shows forms
+   as necessary when they are not."
+2. The yellow banner itself is now titled **"Action Items"**.
+3. **Export responses (CSV)** — on any form's submissions page: one row
+   per submission, one column per question (plus family, student,
+   parent email, status, amendment marker). Answers from renamed or
+   removed questions are appended too, so nothing typed is ever lost.
+   Verified on the flag football form: 10 submissions, every answer.
+
+
 ### Fixed: "Only specific students" with nothing picked silently saved as Everyone
 The trap Sonia hit on the OTC form: choosing "Only specific students…"
 in Who sees this form, ending up with nothing selected, and saving —
