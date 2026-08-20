@@ -833,15 +833,46 @@ function combineFamilyGroup(group: MappedFamily[]): MappedFamily {
     (b.students.length - a.students.length)
     || (gcOf(a) < gcOf(b) ? -1 : gcOf(a) > gcOf(b) ? 1 : 0));
 
-  // Merge parents — dedupe by contact id / email / name.
+  // Merge parents — FOLD copies of the same human into one row that keeps the
+  // most complete fields. Within a household, the same email, the same contact
+  // id, or (absent a distinguishing email) the same name means the same person
+  // — couples have different names. The old single-key dedupe kept whichever
+  // copy sorted first, so a demoted co-parent could end up sourced from the
+  // OTHER parent's "parent 2" mirror (no contact id → their own-contact edits
+  // stopped flowing), and a name-only mirror alongside a contact-bearing copy
+  // survived as a phantom duplicate parent. Folding fixes both.
   const parents: MappedParent[] = [];
-  const seen = new Set<string>();
+  const parentByKey = new Map<string, MappedParent>();
+  const keysOf = (p: MappedParent): string[] => {
+    const ks: string[] = [];
+    const em = p.email?.trim().toLowerCase(); if (em) ks.push('e:' + em);
+    if (p.ghl_contact_id) ks.push('c:' + p.ghl_contact_id);
+    const nm = `${p.first_name} ${p.last_name}`.trim().toLowerCase(); if (nm) ks.push('n:' + nm);
+    return ks;
+  };
   for (const f of grp) for (const p of f.parents) {
-    // EMAIL-first key: the same human's P2 mirror copy often lacks a
-    // contact id, so contact-first keying let them through twice.
-    const pk = (p.email?.toLowerCase() || p.ghl_contact_id || `${p.first_name} ${p.last_name}`.toLowerCase()).trim();
-    if (!pk || seen.has(pk)) continue;
-    seen.add(pk); parents.push({ ...p });
+    // Match an existing fold by a STRONG id first (email, then contact), then
+    // by name only when the emails don't positively disagree.
+    let fold: MappedParent | undefined;
+    const em = p.email?.trim().toLowerCase();
+    if (em) fold = parentByKey.get('e:' + em);
+    if (!fold && p.ghl_contact_id) fold = parentByKey.get('c:' + p.ghl_contact_id);
+    if (!fold) {
+      const nm = `${p.first_name} ${p.last_name}`.trim().toLowerCase();
+      const cand = nm ? parentByKey.get('n:' + nm) : undefined;
+      if (cand) {
+        const cem = cand.email?.trim().toLowerCase();
+        if (!em || !cem || em === cem) fold = cand;
+      }
+    }
+    if (!fold) { fold = { ...p }; parents.push(fold); }
+    else {
+      if (!fold.ghl_contact_id && p.ghl_contact_id) fold.ghl_contact_id = p.ghl_contact_id;
+      if (!(fold.email && fold.email.trim()) && p.email) fold.email = p.email;
+      if (!(fold.phone && fold.phone.trim()) && p.phone) fold.phone = p.phone;
+      if (p.is_primary) fold.is_primary = true;
+    }
+    for (const k of keysOf(fold)) parentByKey.set(k, fold);
   }
   let hasPrimary = false;
   for (const p of parents) { if (p.is_primary && !hasPrimary) hasPrimary = true; else p.is_primary = false; }
@@ -875,7 +906,13 @@ function combineFamilyGroup(group: MappedFamily[]): MappedFamily {
 // never be wrongly merged, and there is no per-name DOB-conflict ambiguity.
 export function mergeFamiliesByHousehold(
   families: MappedFamily[],
-): { merged: MappedFamily[]; mergedGroups: number } {
+): { merged: MappedFamily[]; mergedGroups: number; skipped: string[] } {
+  // A real co-parent household is 2 contacts, occasionally 3. A group far
+  // larger than that means the field was pointed at a low-cardinality value
+  // (a "Yes" checkbox, an enrollment-year or program dropdown) — collapsing on
+  // it would fuse unrelated families and silently drop students. Refuse and
+  // leave the group intact instead.
+  const MAX_HOUSEHOLD = 4;
   const byHousehold = new Map<string, MappedFamily[]>();
   const out: MappedFamily[] = [];
   for (const f of families) {
@@ -884,12 +921,41 @@ export function mergeFamiliesByHousehold(
     (byHousehold.get(hid) ?? byHousehold.set(hid, []).get(hid)!).push(f);
   }
   let mergedGroups = 0;
-  for (const grp of byHousehold.values()) {
+  const skipped: string[] = [];
+  for (const [hid, grp] of byHousehold) {
     if (grp.length === 1) { out.push(grp[0]); continue; }
+    if (grp.length > MAX_HOUSEHOLD) {
+      skipped.push(`household id "${hid}" groups ${grp.length} families (> ${MAX_HOUSEHOLD}) — left unmerged (mis-pointed field?)`);
+      for (const f of grp) out.push(f);
+      continue;
+    }
+    // The explicit id carries no DOB screen of its own (unlike the inferred
+    // path). Guard here: a shared-name child appearing with two different DOBs
+    // is NOT the same child, so refuse to merge this group rather than fuse
+    // unrelated children and drop a DOB/enrollment.
+    if (householdHasDobConflict(grp)) {
+      skipped.push(`household id "${hid}" has a same-name child with conflicting DOBs — left unmerged`);
+      for (const f of grp) out.push(f);
+      continue;
+    }
     mergedGroups++;
     out.push(combineFamilyGroup(grp));
   }
-  return { merged: out, mergedGroups };
+  return { merged: out, mergedGroups, skipped };
+}
+
+// True when two families in a household group carry a child with the same
+// normalized name but different (both-present) DOBs — a sign the shared
+// household id is wrong, not that they're one child.
+function householdHasDobConflict(grp: MappedFamily[]): boolean {
+  const dobsByName = new Map<string, Set<string>>();
+  for (const f of grp) for (const s of f.students) {
+    const k = normStudentName(s.first_name, s.last_name);
+    if (!k || !s.date_of_birth) continue;
+    (dobsByName.get(k) ?? dobsByName.set(k, new Set<string>()).get(k)!).add(s.date_of_birth);
+  }
+  for (const set of dobsByName.values()) if (set.size >= 2) return true;
+  return false;
 }
 
 // ----- Orchestrator ---------------------------------------------------------
@@ -1122,12 +1188,13 @@ export async function runGhlSync(schoolId: string): Promise<SyncResult> {
   let familiesToInsert = mapped;
   let coparentMerged = 0;
   if (coparentHouseholdField) {
-    const { merged, mergedGroups } = mergeFamiliesByHousehold(mapped);
+    const { merged, mergedGroups, skipped } = mergeFamiliesByHousehold(mapped);
     familiesToInsert = merged;
     coparentMerged = mergedGroups;
     if (mergedGroups > 0) {
       warnings.push(`Linked ${mergedGroups} co-parent household${mergedGroups === 1 ? '' : 's'} by shared household id (both parents on one family).`);
     }
+    for (const s of skipped) warnings.push(`co-parent linkage skipped: ${s}`);
   } else if (schoolSettings.merge_coparent_students) {
     const { merged, mergedGroups, conflicts } = mergeCoparentFamilies(mapped);
     familiesToInsert = merged;
