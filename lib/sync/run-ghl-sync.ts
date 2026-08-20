@@ -922,6 +922,7 @@ export function mergeFamiliesByHousehold(
   }
   let mergedGroups = 0;
   const skipped: string[] = [];
+  const warned: string[] = [];
   for (const [hid, grp] of byHousehold) {
     if (grp.length === 1) { out.push(grp[0]); continue; }
     if (grp.length > MAX_HOUSEHOLD) {
@@ -929,33 +930,48 @@ export function mergeFamiliesByHousehold(
       for (const f of grp) out.push(f);
       continue;
     }
-    // The explicit id carries no DOB screen of its own (unlike the inferred
-    // path). Guard here: a shared-name child appearing with two different DOBs
-    // is NOT the same child, so refuse to merge this group rather than fuse
-    // unrelated children and drop a DOB/enrollment.
-    if (householdHasDobConflict(grp)) {
-      skipped.push(`household id "${hid}" has a same-name child with conflicting DOBs — left unmerged`);
+    // DOB reconciliation. The household id is operator-set and authoritative,
+    // so a shared-name child with a SMALL DOB discrepancy across the two
+    // contacts is a data-entry slip (the same child) — merge, keep one copy,
+    // and flag it. Only a LARGE gap (> ~1 year) suggests genuinely different
+    // children (a mis-pointed field that slipped past the cardinality guard),
+    // which we leave unmerged.
+    const dobIssue = householdDobIssue(grp);
+    if (dobIssue === 'conflict') {
+      skipped.push(`household id "${hid}" has a shared-name child with DOBs over a year apart — likely different children; left unmerged`);
       for (const f of grp) out.push(f);
       continue;
+    }
+    if (dobIssue === 'typo') {
+      warned.push(`household id "${hid}": a shared-name child has slightly different DOBs across the two contacts — merged, keeping one; verify the DOB in GHL`);
     }
     mergedGroups++;
     out.push(combineFamilyGroup(grp));
   }
-  return { merged: out, mergedGroups, skipped };
+  return { merged: out, mergedGroups, skipped, warned };
 }
 
-// True when two families in a household group carry a child with the same
-// normalized name but different (both-present) DOBs — a sign the shared
-// household id is wrong, not that they're one child.
-function householdHasDobConflict(grp: MappedFamily[]): boolean {
+// Classify a same-name-child DOB discrepancy inside an (operator-linked)
+// household: 'conflict' = DOBs more than a year apart (probably different
+// children — don't merge); 'typo' = a smaller discrepancy (same child, data
+// slip — merge but warn); null = no discrepancy.
+function householdDobIssue(grp: MappedFamily[]): 'conflict' | 'typo' | null {
   const dobsByName = new Map<string, Set<string>>();
   for (const f of grp) for (const s of f.students) {
     const k = normStudentName(s.first_name, s.last_name);
     if (!k || !s.date_of_birth) continue;
     (dobsByName.get(k) ?? dobsByName.set(k, new Set<string>()).get(k)!).add(s.date_of_birth);
   }
-  for (const set of dobsByName.values()) if (set.size >= 2) return true;
-  return false;
+  let result: 'conflict' | 'typo' | null = null;
+  for (const set of dobsByName.values()) {
+    if (set.size < 2) continue;
+    const ms = [...set].map((d) => Date.parse(d)).filter((n) => !Number.isNaN(n));
+    if (ms.length < 2) { result = result ?? 'typo'; continue; }
+    const spreadDays = (Math.max(...ms) - Math.min(...ms)) / 86_400_000;
+    if (spreadDays > 366) return 'conflict';
+    result = 'typo';
+  }
+  return result;
 }
 
 // ----- Orchestrator ---------------------------------------------------------
@@ -1188,13 +1204,14 @@ export async function runGhlSync(schoolId: string): Promise<SyncResult> {
   let familiesToInsert = mapped;
   let coparentMerged = 0;
   if (coparentHouseholdField) {
-    const { merged, mergedGroups, skipped } = mergeFamiliesByHousehold(mapped);
+    const { merged, mergedGroups, skipped, warned } = mergeFamiliesByHousehold(mapped);
     familiesToInsert = merged;
     coparentMerged = mergedGroups;
     if (mergedGroups > 0) {
       warnings.push(`Linked ${mergedGroups} co-parent household${mergedGroups === 1 ? '' : 's'} by shared household id (both parents on one family).`);
     }
     for (const s of skipped) warnings.push(`co-parent linkage skipped: ${s}`);
+    for (const w of warned) warnings.push(`co-parent linkage: ${w}`);
   } else if (schoolSettings.merge_coparent_students) {
     const { merged, mergedGroups, conflicts } = mergeCoparentFamilies(mapped);
     familiesToInsert = merged;
