@@ -140,6 +140,13 @@ export interface StudentRosterConfig {
   // 'teacher' so admin-only files (HR notes, sensitive IEP drafts,
   // etc.) don't leak.
   documents_audience?: 'teacher' | 'all';
+  // Default order the roster loads in, BEFORE the operator clicks a column
+  // header (a header click still sets ?sort=&dir= and wins). 'student' =
+  // first-name-first, matching the "First Last" display (platform default);
+  // 'last_name' = surname A–Z, the way a class list is normally alphabetized;
+  // 'first_name' = given name only. Unset = 'student' (unchanged for every
+  // school that hasn't opted in).
+  default_sort?: 'student' | 'last_name' | 'first_name';
 }
 
 export const studentRosterDefaults: StudentRosterConfig = {
@@ -166,5 +173,16 @@ export function orderColumns(order: string[] | undefined, enabled: string[]): st
 export const studentRosterSchema: ConfigSchema = {
   fields: [
     { key: 'page_size', label: 'Rows per page', type: 'number', min: 25, max: 1000 },
+    {
+      key: 'default_sort',
+      label: 'Default name sort',
+      type: 'select',
+      options: [
+        { value: 'student', label: 'First name (displayed First Last)' },
+        { value: 'last_name', label: 'Last name (surname A–Z)' },
+        { value: 'first_name', label: 'First name only' },
+      ],
+      help: 'How the roster is ordered before you click a column header.',
+    },
   ],
 };

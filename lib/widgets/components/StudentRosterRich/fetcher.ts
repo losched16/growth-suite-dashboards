@@ -903,8 +903,10 @@ export async function fetcher(
   // Sort (server-side so it orders the WHOLE filtered set, not just the
   // visible page). Default: first name A–Z — names display first-name-
   // first, so this is the order that LOOKS alphabetized (office request,
-  // Aug 2026). Clickable headers set ?sort=&dir=; last_name still works.
-  const sortKey = (sp.sort ?? 'student').trim();
+  // Aug 2026). A school can override the default order with the
+  // `default_sort` config (e.g. 'last_name' to alphabetize by surname like a
+  // class list). Clickable headers still set ?sort=&dir= and win.
+  const sortKey = (sp.sort ?? config.default_sort ?? 'student').trim();
   const sortDesc = sp.dir === 'desc';
   const sortText = (x: RosterStudent): string => {
     switch (sortKey) {
@@ -913,7 +915,9 @@ export async function fetcher(
       // matching the displayed "First Last" format.
       case 'student': return ((x.preferred_name || x.first_name || '') + ' ' + (x.last_name || '')).trim();
       case 'lunch': return x.lunch || '';
-      case 'last_name': return x.last_name || '';
+      // Surname A–Z, then given name so same-surname siblings order sensibly
+      // (e.g. two "Donelson" kids → by first name).
+      case 'last_name': return ((x.last_name || '') + ' ' + (x.preferred_name || x.first_name || '')).trim();
       case 'program': return x.program || x.classroom_name || '';
       case 'homeroom': return x.homeroom || x.classroom_name || '';
       case 'schedule': return x.schedule || '';
