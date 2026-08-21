@@ -216,7 +216,7 @@ export async function promoteParent2sForSchool(
         lastName: fam.p2_last_name ?? fam.p1_last_name ?? '',
         email: fam.p2_email,
         phone: fam.p2_phone,
-      });
+      }, { excludeContactId: fam.p1_ghl_contact_id });
 
       // Safety: if upsert returned P1's own contact (because someone set
       // parent_2_email = parent_1_email), bail out so we don't link a

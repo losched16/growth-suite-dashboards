@@ -1166,6 +1166,14 @@ export async function runGhlSync(schoolId: string): Promise<SyncResult> {
     const contact = contactsById.get(contactId);
     if (!contact) continue;
     if (!passesRosterFilter(contact)) continue; // roster tag gate applies to prospects too
+    // Same rule as Phase 1: a co-parent mirror ("parent 2" without "parent 1")
+    // is not a family record. Their pipeline cards belong to the family's
+    // Parent 1 — building a prospective family here duplicates the child
+    // (MCS: Tyler King's "Jace King" card vs Bianca King's roster row).
+    {
+      const ct = tagsLower(contact);
+      if (ct.includes('parent 2') && !ct.includes('parent 1')) continue;
+    }
     const primary = pickPrimaryOpportunity(contactOpps);
     if (!primary) continue;
     if (primary.status !== 'open') continue; // skip lost/won/abandoned for the funnel
