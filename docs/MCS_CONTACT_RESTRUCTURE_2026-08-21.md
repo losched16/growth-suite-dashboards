@@ -44,3 +44,8 @@ Platform config: `school_field_schemas` row (householdId '' , parent2 phone = `p
 - **Classroom dashboards** (enrolled-only, program-scoped, no tuition, no Customize; detail = parents, students, authorized pickups, not-authorized, per-student health):
   `/school/VwZSwFD2tkibAXbFZpQm/classroom-stepping-stones`, `classroom-primary`, `classroom-lower-elementary`, `classroom-upper-elementary`, `classroom-adolescent` (append `?chrome=none` for the GHL menu).
 - Lesson for onboarding any school moved to field-driven enrollment: grep its `school_dashboards` configs for `enrolled_stage_names` / `enrolled_tag` / `excluded_tag` / `roster_tag_filter` and strip them, or the dashboards silently go empty.
+
+## Addendum 2 — Classroom field (Clint, same day)
+- Per-student free-text classroom fields in the Student folder: **Student Classroom** (`classroom` — the pre-existing empty field, renamed) and **Student 2/3/4 Classroom** (`student_N_classroom`). Schema role `homeroom = 'classroom'`; slot 1 resolves the bare key via the slot-1 fallback.
+- Sync: classroom name = Classroom field if set, else Program. Whatever the office types (exactly — "Primary South" and "Primary south" are two classrooms) becomes a value in the roster's **Classroom** filter within 15 min (or instantly via the contact webhook). Roster filter relabelled Homeroom → **Classroom** (all schools).
+- Once values exist, per-classroom dashboards can be added the same way as the program ones (`fixed_metadata_match: {homeroom: ['Primary South']}`).

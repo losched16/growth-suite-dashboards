@@ -11,7 +11,7 @@ import type { ConfigSchema } from '@/lib/widgets/types';
 export const AVAILABLE_FILTERS = [
   { key: 'academic_year', label: 'School year', type: 'select' as const },
   { key: 'program', label: 'Program', type: 'select' as const },
-  { key: 'homeroom', label: 'Homeroom', type: 'select' as const },
+  { key: 'homeroom', label: 'Classroom', type: 'select' as const },
   { key: 'schedule', label: 'Schedule', type: 'select' as const },
   { key: 'lead_teacher', label: 'Teacher', type: 'select' as const },
   { key: 'gender', label: 'Gender', type: 'select' as const },
@@ -36,7 +36,7 @@ export const AVAILABLE_COLUMNS = [
   { key: 'age_jan1',             label: 'Age @ Jan 1' },
   { key: 'age_today',            label: 'Age @ Today' },
   { key: 'program',              label: 'Program' },
-  { key: 'homeroom',             label: 'Homeroom' },
+  { key: 'homeroom',             label: 'Classroom' },
   { key: 'lead_teacher',         label: 'Lead teacher' },
   { key: 'schedule',             label: 'Schedule' },
   { key: 'initial_start_date',   label: 'Initial start date' },
