@@ -7,6 +7,23 @@ human digest.
 
 ---
 
+## August 18, 2026
+
+### Parent 1 switch: batch 3 (11 families)
+All new requests on the updated sheet are done, with every portal
+password and kiosk PIN carried over (16 restored, 0 lost): Kelly
+Williams, Kristen Albero, Sandy Melendi (reversal per the Aug 15
+request), Sera Karavchuk, Noel Attridge, Karen Olson (Molinar), Lorraine
+Pounder (Hayes), Marta Arnote, Mary Katherine Koch, Heather Ortiz, and
+Kristen Desmangles (the sheet's "NOT DONE" item). The seven Aug 15 rows
+re-listing batch-2 families (Mead, Bonelli, Orduno, Bry, Moser,
+Alexander, Brewer) were already correct — no action needed.
+Notes: Heather Ortiz's separate staff contact now lives under
+hortiz@desertgardenmontessori.org (staff tag kept) since her personal
+email moved to the family record. Xu Zhang row: already done Aug 10
+(Dan Wang is Parent 1). Michele/Adam Johnson: still needs a distinct
+email for Adam before he can have his own contact.
+
 ## August 17, 2026
 
 ### Two small fixes: home shortcut + alphabetical forms list
