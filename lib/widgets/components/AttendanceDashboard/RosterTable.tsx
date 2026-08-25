@@ -37,8 +37,12 @@ function fmtCurbsideSlot(v: string | null): string | null {
   return `${h12}:${String(mm).padStart(2, '0')} ${period}`;
 }
 
-export function RosterTable({ rows, dateIso, isToday, customStatuses = [] }: {
+export function RosterTable({ rows, dateIso, isToday, customStatuses = [], exportAuth = '' }: {
   rows: StudentRow[]; dateIso: string; isToday: boolean; customStatuses?: CustomAttendanceStatus[];
+  // 'location_id=…&embed_token=…' — appended to every export link so
+  // downloads work from inside the CRM iframe (top-window navigation
+  // has no session cookie).
+  exportAuth?: string;
 }) {
   const [expanded, setExpanded] = useState<string | null>(null);
 
@@ -90,6 +94,7 @@ export function RosterTable({ rows, dateIso, isToday, customStatuses = [] }: {
                 isToday={isToday}
                 sectionLabel={newSection ? (r.classroom ?? 'No classroom') : null}
                 customStatuses={customStatuses}
+                exportAuth={exportAuth}
               />
             );
           })}
@@ -101,7 +106,7 @@ export function RosterTable({ rows, dateIso, isToday, customStatuses = [] }: {
 }
 
 function FragmentRow({
-  row: r, open, onToggle, dateIso, isToday, sectionLabel, customStatuses,
+  row: r, open, onToggle, dateIso, isToday, sectionLabel, customStatuses, exportAuth = '',
 }: {
   row: StudentRow;
   open: boolean;
@@ -110,6 +115,7 @@ function FragmentRow({
   isToday: boolean;
   sectionLabel: string | null;
   customStatuses: CustomAttendanceStatus[];
+  exportAuth?: string;
 }) {
   return (
     <>
@@ -215,7 +221,7 @@ function FragmentRow({
       {open ? (
         <tr>
           <td colSpan={12} className="bg-gray-50 p-0 border-y border-emerald-200">
-            <Drawer row={r} dateIso={dateIso} isToday={isToday} customStatuses={customStatuses} />
+            <Drawer row={r} dateIso={dateIso} isToday={isToday} customStatuses={customStatuses} exportAuth={exportAuth} />
           </td>
         </tr>
       ) : null}
@@ -223,8 +229,8 @@ function FragmentRow({
   );
 }
 
-function Drawer({ row: r, dateIso, isToday, customStatuses }: {
-  row: StudentRow; dateIso: string; isToday: boolean; customStatuses: CustomAttendanceStatus[];
+function Drawer({ row: r, dateIso, isToday, customStatuses, exportAuth = '' }: {
+  row: StudentRow; dateIso: string; isToday: boolean; customStatuses: CustomAttendanceStatus[]; exportAuth?: string;
 }) {
   return (
     <div className="px-6 py-5 space-y-4">
@@ -288,12 +294,13 @@ function Drawer({ row: r, dateIso, isToday, customStatuses }: {
         {[
           { days: 7, label: 'Last 7 days' },
           { days: 30, label: 'Last 30 days' },
-          { days: 60, label: 'Last 60 days' },
           { days: 90, label: 'Last 90 days' },
+          { days: 365, label: 'Last 12 months' },
+          { days: 1500, label: 'Full history' },
         ].map((p) => (
           <a
             key={p.days}
-            href={`/api/school/attendance/export?format=daily&from=${isoDaysAgo(p.days - 1)}&to=${todayIso()}&student_id=${r.student_id}`}
+            href={`/api/school/attendance/export?format=daily&from=${isoDaysAgo(p.days - 1)}&to=${todayIso()}&student_id=${r.student_id}${exportAuth ? `&${exportAuth}` : ''}`}
             target="_top"
             rel="noopener"
             download

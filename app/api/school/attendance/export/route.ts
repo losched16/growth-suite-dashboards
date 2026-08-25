@@ -18,6 +18,7 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { cookies } from 'next/headers';
 import { SCHOOL_SESSION_COOKIE, verifySchoolSession } from '@/lib/auth/school';
+import { checkEmbedToken } from '@/lib/auth/embed';
 import { query } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
@@ -26,11 +27,27 @@ export const dynamic = 'force-dynamic';
 const TZ = 'America/Phoenix';
 
 export async function GET(request: NextRequest) {
+  const sp = request.nextUrl.searchParams;
+
+  // Auth: school session cookie, OR location_id + embed_token. The
+  // second path is REQUIRED for CRM-embedded dashboards: download links
+  // navigate the top window, which doesn't carry the iframe's
+  // partitioned session cookie — session-only auth made every export
+  // fail with 'unauthorized' from inside the CRM.
+  let schoolId: string | null = null;
   const ck = await cookies();
   const session = await verifySchoolSession(ck.get(SCHOOL_SESSION_COOKIE)?.value);
-  if (!session) return new NextResponse('unauthorized', { status: 401 });
-
-  const sp = request.nextUrl.searchParams;
+  if (session) schoolId = session.school_id;
+  if (!schoolId) {
+    const locId = (sp.get('location_id') ?? '').trim();
+    const embedToken = (sp.get('embed_token') ?? '').trim();
+    if (locId && embedToken && checkEmbedToken(locId, embedToken)) {
+      const { rows } = await query<{ id: string }>(
+        `SELECT id FROM schools WHERE ghl_location_id = $1`, [locId]);
+      schoolId = rows[0]?.id ?? null;
+    }
+  }
+  if (!schoolId) return new NextResponse('unauthorized', { status: 401 });
   const format = (sp.get('format') ?? 'daily').toLowerCase();
   const singleDate = (sp.get('date') ?? '').trim();
   const rangeFromRaw = (sp.get('from') ?? '').trim();
@@ -69,13 +86,13 @@ export async function GET(request: NextRequest) {
   const rangeTag = isRange ? `${from}_to_${to}` : from;
 
   if (format === 'events') {
-    csv = await buildEventsCsv(session.school_id, from, to, { classroom, studentId, q });
+    csv = await buildEventsCsv(schoolId, from, to, { classroom, studentId, q });
     filename = `attendance-events-${rangeTag}.csv`;
   } else if (format === 'monthly') {
-    csv = await buildMonthlyCsv(session.school_id, from, to, { classroom, studentId, q });
+    csv = await buildMonthlyCsv(schoolId, from, to, { classroom, studentId, q });
     filename = `attendance-monthly-${rangeTag}.csv`;
   } else {
-    csv = await buildDailyCsv(session.school_id, from, to, { classroom, status, studentId, q });
+    csv = await buildDailyCsv(schoolId, from, to, { classroom, status, studentId, q });
     filename = `attendance-daily-${rangeTag}.csv`;
   }
 

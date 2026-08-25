@@ -10,6 +10,7 @@ import { notFound } from 'next/navigation';
 import { ArrowLeft, ChevronDown, Mail, Phone, Inbox, Users, FlaskConical, Trash2, Paperclip, Download, FileText, PencilLine } from 'lucide-react';
 import { query } from '@/lib/db';
 import { loadSchoolByLocationId } from '@/lib/dashboards/loader';
+import { deriveEmbedToken } from '@/lib/auth/embed';
 import { studentMatchesRule, familyMatchesRule, type AppliesToRule } from '@/lib/forms/applies-to-eligibility';
 import { HelpCallout } from '@/components/HelpCallout';
 
@@ -366,7 +367,7 @@ export default async function SubmissionsInboxScoped({
           </div>
           <div className="flex items-center gap-2 flex-wrap">
             <a
-              href={`/api/export/form-responses/${locationId}?form_id=${def.id}`}
+              href={`/api/export/form-responses/${locationId}?form_id=${def.id}&embed_token=${encodeURIComponent(deriveEmbedToken(locationId))}`}
               target="_top"
               rel="noopener"
               download

@@ -13,6 +13,7 @@ import { fetcher, type AttendanceDashboardData } from './fetcher';
 import { RosterTable } from './RosterTable';
 import { ReportsPanel } from './ReportsPanel';
 import { AutoSubmitForm } from '@/lib/widgets/components/_shared/AutoSubmitForm';
+import { deriveEmbedToken } from '@/lib/auth/embed';
 import { DateNav } from './DateNav';
 import { PreserveEmbedParams, clearHref } from '@/lib/widgets/components/_shared/PreserveEmbedParams';
 
@@ -60,10 +61,16 @@ function Component({
   const sp = searchParams ?? {};
   const isFiltered = !!(sp.classroom || sp.status || sp.q || sp.curbside);
 
-  // CSV export URL preserves current filters + date
+  // CSV export URL preserves current filters + date. Every export link
+  // carries location_id + a server-derived embed token: downloads
+  // navigate the top window, which doesn't have the iframe's session
+  // cookie, so cookie-only export links fail inside the CRM.
+  const embedToken = deriveEmbedToken(school.locationId);
   const exportParams = new URLSearchParams();
   for (const [k, v] of Object.entries(sp)) if (v) exportParams.set(k, v);
   if (!exportParams.has('date')) exportParams.set('date', data.date_iso);
+  exportParams.set('location_id', school.locationId);
+  exportParams.set('embed_token', embedToken);
 
   return (
     <div className="space-y-4">
@@ -210,7 +217,8 @@ function Component({
       </AutoSubmitForm>
 
       <div id="roster">
-        <RosterTable rows={data.rows} dateIso={data.date_iso} isToday={data.is_today} customStatuses={data.custom_statuses} />
+        <RosterTable rows={data.rows} dateIso={data.date_iso} isToday={data.is_today} customStatuses={data.custom_statuses}
+          exportAuth={`location_id=${encodeURIComponent(school.locationId)}&embed_token=${encodeURIComponent(embedToken)}`} />
       </div>
 
       {/* Compliance Reports — separate from the live view because

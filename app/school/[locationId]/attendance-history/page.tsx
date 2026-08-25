@@ -15,7 +15,7 @@ import { cookies } from 'next/headers';
 import { CalendarRange, Download, LogIn, LogOut, UserX } from 'lucide-react';
 import { loadSchoolByLocationId } from '@/lib/dashboards/loader';
 import { SCHOOL_SESSION_COOKIE, verifySchoolSession } from '@/lib/auth/school';
-import { checkEmbedToken } from '@/lib/auth/embed';
+import { checkEmbedToken, deriveEmbedToken } from '@/lib/auth/embed';
 import { query } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
@@ -62,13 +62,20 @@ export default async function AttendanceHistoryPage({
   const school = await loadSchoolByLocationId(locationId);
   if (!school) notFound();
 
-  // Auth: school session for this school OR a valid embed token.
-  const embedToken = one('embed_token');
+  // Auth: school session for this school OR a valid embed token FROM THE
+  // URL (incoming credential — never the derived one, which would make
+  // this page public).
+  const urlEmbedToken = one('embed_token');
   const ck = await cookies();
   const session = await verifySchoolSession(ck.get(SCHOOL_SESSION_COOKIE)?.value);
   const sessionOk = !!session && session.ghl_location_id === locationId;
-  const embedOk = !!embedToken && checkEmbedToken(locationId, embedToken);
+  const embedOk = !!urlEmbedToken && checkEmbedToken(locationId, urlEmbedToken);
   if (!sessionOk && !embedOk) notFound();
+
+  // OUTGOING links (CSV download, signature images) always carry a
+  // server-derived token: downloads navigate the top window, which has
+  // no iframe session cookie.
+  const embedToken = deriveEmbedToken(locationId);
 
   const studentId = one('student') ?? '';
   if (!/^[0-9a-f-]{36}$/i.test(studentId)) notFound();
