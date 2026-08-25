@@ -1,7 +1,8 @@
-// Shared top-nav for the teacher experience: tab bar with Roster /
-// Submit Request / My Requests. Renders inside the classroom hub
-// dashboards (where the active tab is 'roster') and the
-// staff-requests pages (active tab 'submit' or 'mine').
+// Shared top-nav for the teacher experience: Roster / Form Submissions
+// (the classroom's students' submitted portal forms, printable) /
+// Staff Forms (labor, supply, incident + My Requests) / Student
+// Records / Lunch Roster / Menus. Renders inside the classroom hub
+// dashboards (active 'roster') and the teacher pages.
 //
 // classroomSlug carries through the click flow so when a teacher
 // clicks "Submit Request" from Classroom 3, then "Roster" again,
@@ -10,7 +11,7 @@
 import Link from 'next/link';
 import { ClipboardList, Plus, Inbox, ArrowLeft, FolderOpen, Soup, Image as ImageIcon } from 'lucide-react';
 
-export type ActiveTab = 'roster' | 'submit' | 'mine' | 'inbox' | 'documents' | 'menus' | 'lunch';
+export type ActiveTab = 'roster' | 'submit' | 'mine' | 'inbox' | 'documents' | 'menus' | 'lunch' | 'forms';
 
 export function ClassroomTopNav({
   locationId,
@@ -38,7 +39,7 @@ export function ClassroomTopNav({
   const rosterLabel = classroomLabel ?? 'Roster';
 
   const submitHref = `/school/${locationId}/staff-requests?chrome=none${fromParam}`;
-  const mineHref   = `/school/${locationId}/staff-requests/mine?chrome=none${fromParam}`;
+  const formsHref  = `/school/${locationId}/teacher-forms?chrome=none${fromParam}`;
 
   // Documents tab → the existing "documents" dashboard (StudentDocumentsBrowser)
   // with the classroom name pre-filtered + audience=teacher so admin-only
@@ -66,22 +67,22 @@ export function ClassroomTopNav({
           label={rosterLabel}
         />
         <Tab
-          href={submitHref}
-          active={active === 'submit'}
-          icon={<Plus className="h-3.5 w-3.5" />}
-          label="Requests + Forms"
+          href={formsHref}
+          active={active === 'forms'}
+          icon={<Inbox className="h-3.5 w-3.5" />}
+          label="Form Submissions"
         />
         <Tab
-          href={mineHref}
-          active={active === 'mine'}
-          icon={<Inbox className="h-3.5 w-3.5" />}
-          label="My Requests"
+          href={submitHref}
+          active={active === 'submit' || active === 'mine'}
+          icon={<Plus className="h-3.5 w-3.5" />}
+          label="Staff Forms"
         />
         <Tab
           href={docsHref}
           active={active === 'documents'}
           icon={<FolderOpen className="h-3.5 w-3.5" />}
-          label="Documents"
+          label="Student Records"
         />
         <Tab
           href={lunchHref}

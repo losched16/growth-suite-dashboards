@@ -77,4 +77,6 @@ export const DGM_STAFF_DIRECTORY: Array<{ email: string; name: string }> = [
   { email: 'srobertson@desertgardenmontessori.org',   name: 'S. Robertson' },
   { email: 'tmusel@desertgardenmontessori.org',       name: 'T. Musel' },
   { email: 'vfettig@desertgardenmontessori.org',      name: 'V. Fettig' },
+  { email: 'sjain@desertgardenmontessori.org',        name: 'S. Jain' },
+  { email: 'lhenderson@desertgardenmontessori.org',   name: 'L. Henderson' },
 ];

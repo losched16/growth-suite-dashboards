@@ -84,9 +84,9 @@ export default async function StaffRequestsLanding({
         />
         <div className="mb-5 flex items-baseline justify-between gap-3 flex-wrap">
           <div>
-            <h1 className="text-2xl font-semibold text-slate-900">Submit a request</h1>
+            <h1 className="text-2xl font-semibold text-slate-900">Staff Forms</h1>
             <p className="text-sm text-slate-500 mt-0.5">
-              Pick a form below — Lexi gets notified the moment you submit. Track status in <Link href={`/school/${locationId}/staff-requests/mine?chrome=none${classroomSlug ? `&from=${classroomSlug}` : ''}`} className="text-blue-600 hover:underline">My Requests</Link>.
+              Pick a form below — Lexi gets notified the moment you submit. Track status in <Link href={`/school/${locationId}/staff-requests/mine?chrome=none${classroomSlug ? `&from=${classroomSlug}` : ''}`} className="text-blue-600 hover:underline">My Submissions</Link>.
             </p>
           </div>
           {teacher ? (

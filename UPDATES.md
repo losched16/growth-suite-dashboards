@@ -7,6 +7,45 @@ human digest.
 
 ---
 
+## August 25, 2026
+
+### Teacher tabs reorganized (classroom hubs)
+The tab bar teachers see on every classroom hub now reads:
+Roster · Form Submissions · Staff Forms · Student Records · Lunch
+Roster · Menus.
+- **Form Submissions** (new page) — the classroom's students'
+  submitted portal forms (permissions, tech agreements, med forms),
+  grouped by form. Click a student to see their full answers; the
+  Print button gives a paper copy of whatever is expanded. Office
+  view: open it without a classroom link and it shows the whole
+  school.
+- **Staff Forms** — the old "+ Request" area, renamed. Same in-house
+  forms (labor requests, incident reports); "My Requests" is now "My
+  Submissions".
+- **Student Records** — the old Documents tab, renamed. Same student
+  document view.
+
+### Hot Lunch List + roster radios removed
+The Lunch Roster tab now opens a native, printable list of every
+student on the organic lunch program — grouped by classroom, with
+each child's diet selection and allergies. Teachers coming from their
+classroom hub see just their room. The old external lunch app still
+exists under a "Lunch Admin" sub-tab, and Menus is unchanged.
+Because the list replaces filter-digging, the **Hot lunch** and
+**IEP/504** radio buttons are gone from all 13 classroom-hub rosters
+(the IEP/504 and Lunch columns are still on the roster; the office
+Student Roster and the Chef dashboard keep their filters).
+
+### Menus: month is self-serve
+The menu images are placeholders until someone at the school uploads
+the current month. Valerie (vfettig@) and Sonia (sjain@) can now do
+this themselves: Menus tab → Edit menus → pick your name → upload the
+new Lunch Calendar / Snack Menu / Harvest images. Takes effect
+immediately, no tech involvement — this is also how every future
+month gets updated.
+
+---
+
 ## August 18, 2026
 
 ### Parent tags stay deleted now + Parent 2 contacts stay clean

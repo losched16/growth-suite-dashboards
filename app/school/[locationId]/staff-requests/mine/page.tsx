@@ -97,7 +97,7 @@ export default async function MyStaffRequestsPage({
 
         <div className="flex items-baseline justify-between mb-4 flex-wrap gap-2">
           <div>
-            <h1 className="text-2xl font-semibold text-slate-900">My recent requests</h1>
+            <h1 className="text-2xl font-semibold text-slate-900">My Submissions</h1>
             <p className="text-sm text-slate-500 mt-0.5">
               {meEmail ? (
                 <>Requests submitted by <span className="font-mono">{meEmail}</span>. Status updates auto-refresh.</>

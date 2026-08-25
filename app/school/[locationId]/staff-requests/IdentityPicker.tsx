@@ -34,7 +34,7 @@ export function IdentityPicker({
         <div>
           <h2 className="text-lg font-semibold text-slate-900">Who&rsquo;s submitting this?</h2>
           <p className="text-xs text-slate-600 mt-1">
-            Pick your name so Lexi knows who to follow up with — and so &ldquo;My Requests&rdquo; only shows your stuff.
+            Pick your name so Lexi knows who to follow up with — and so &ldquo;My Submissions&rdquo; only shows your stuff.
             We&rsquo;ll remember you on this device for 30 days. You can switch users any time.
           </p>
         </div>
