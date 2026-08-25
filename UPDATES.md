@@ -9,6 +9,17 @@ human digest.
 
 ## August 18, 2026
 
+### Exports fixed everywhere + longer attendance ranges
+All CSV downloads were failing with "unauthorized" when clicked from
+inside the CRM — the download opens outside the embedded frame, where
+the login cookie doesn't follow. Every export link now carries its own
+credential: the attendance dashboard's CSV button, the per-student
+quick exports, the forms responses export, and the forms tracker
+export. Verified end-to-end.
+Also, for student records: the per-student quick exports now include
+**Last 12 months** and **Full history** alongside 7/30/90 days.
+
+
 ### Parent 1 switch: batch 3 (11 families)
 All new requests on the updated sheet are done, with every portal
 password and kiosk PIN carried over (16 restored, 0 lost): Kelly
