@@ -9,6 +9,22 @@ human digest.
 
 ## August 18, 2026
 
+### Parent tags stay deleted now + Parent 2 contacts stay clean
+Two things Sonia caught, both stopped at the source:
+1. The plain "parent" tag she deleted kept coming back — two automated
+   jobs were re-creating it (the nightly Parent-2 setup stamped it, and
+   the tag mirror re-copied it from Parent 1 within 15 minutes). Neither
+   touches it anymore, and it's been removed from all 87 contacts that
+   carried it. "Parent 1" / "Parent 2" role tags remain — the system
+   needs those.
+2. Parent 2 contacts were getting fields filled in (student names +
+   parent-2 slots) by the same nightly job. That's against how we run
+   Parent 2 contacts (communication-only; all family data lives on
+   Parent 1) and it's what caused the Zhang family confusion. The job
+   no longer writes any fields, and the carry-over data was cleared
+   from all 185 Parent 2 contacts. Split families untouched.
+
+
 ### Exports fixed everywhere + longer attendance ranges
 All CSV downloads were failing with "unauthorized" when clicked from
 inside the CRM — the download opens outside the embedded frame, where
