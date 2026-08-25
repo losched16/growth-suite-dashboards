@@ -27,7 +27,9 @@ import { loadGhlClient } from '@/lib/ghl/client';
 import { loadSchoolSettings } from '@/lib/school-settings';
 
 // Marker tags that describe WHICH parent a contact is — never mirrored.
-const NO_MIRROR = new Set(['parent 1', 'parent 2']);
+// Plain 'parent' included: the office deletes it and the mirror kept
+// copying it back from P1 (Sonia, Aug 2026).
+const NO_MIRROR = new Set(['parent 1', 'parent 2', 'parent']);
 
 export interface MirrorP2TagsResult {
   ran: boolean;

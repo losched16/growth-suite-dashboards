@@ -24,8 +24,11 @@ import { linkContacts } from '@/lib/ghl/associations';
 // Any school can still trigger a run on demand from the admin UI.
 
 // Email-marketing tags applied to each parent contact during promotion.
-const P1_TAGS = ['Parent 1', 'Parent'];
-const P2_TAGS = ['Parent 2', 'Parent'];
+// Just the role markers. The plain 'Parent' tag was ALSO stamped here
+// until Aug 2026 — the office deleted those tags and the promotion (and
+// the tag mirror) kept resurrecting them. Sonia's call: no plain tag.
+const P1_TAGS = ['Parent 1'];
+const P2_TAGS = ['Parent 2'];
 
 // Append tags to a GHL contact (does NOT clobber existing tags).
 async function addContactTags(client: GhlClient, contactId: string, tags: string[]): Promise<void> {
@@ -251,30 +254,18 @@ export async function promoteParent2sForSchool(
         [fam.family_id, schoolId, fam.p1_parent_id, fam.p2_parent_id, link.relationId],
       ).catch(() => undefined);
 
-      // #2 Tags (email-marketing segmentation) + #4 carry-over (mirror the
-      // family onto P2's contact so it stands alone: student name(s) + Parent 1
-      // in the co-parent parent_2_* slots). Best-effort — the promotion above
-      // already succeeded, so don't fail it on a tag/field error. P2's contact
-      // gets NO household_id, so the sync never treats it as a duplicate family.
+      // Role tags only. The old "carry-over" block that copied student
+      // names + parent_2_* fields onto the P2 contact is GONE: it broke
+      // the P2-contacts-are-communication-only policy, confused the
+      // office ("why are fields being filled in for parent 2?"), and one
+      // student-name-bearing P2 contact re-anchored a family's P1 via
+      // the co-parent merge (Dan Wang/Zhang, Aug 2026). Family data
+      // lives on the P1 contact, full stop.
       try {
         await addContactTags(client, fam.p1_ghl_contact_id, P1_TAGS);
         await addContactTags(client, p2.id, P2_TAGS);
-        const cf: Array<{ id: string; field_value: string }> = [];
-        const setField = (key: string, val: string | null | undefined) => {
-          const id = fieldMap.get(key);
-          if (id && val != null && String(val).trim() !== '') cf.push({ id, field_value: String(val) });
-        };
-        setField('parent_2_first_name', fam.p1_first_name);
-        setField('parent_2_last_name', fam.p1_last_name);
-        setField('parent_2_email', fam.p1_email);
-        setField('parent_2_phone', fam.p1_phone);
-        for (const s of fam.students ?? []) {
-          setField(`student_${s.slot}_first_name`, s.first);
-          setField(`student_${s.slot}_last_name`, s.last);
-        }
-        if (cf.length > 0) await client.axios.put(`/contacts/${p2.id}`, { customFields: cf });
       } catch (coErr) {
-        console.warn(`[promote-p2] ${famName} tags/carry-over failed:`, coErr instanceof Error ? coErr.message : String(coErr));
+        console.warn(`[promote-p2] ${famName} tagging failed:`, coErr instanceof Error ? coErr.message : String(coErr));
       }
 
       result.promoted_now++;
