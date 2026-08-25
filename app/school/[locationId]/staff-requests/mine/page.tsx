@@ -15,7 +15,8 @@ import { query } from '@/lib/db';
 import { loadSchoolByLocationId } from '@/lib/dashboards/loader';
 import { SCHOOL_SESSION_COOKIE, verifySchoolSession } from '@/lib/auth/school';
 import { ClassroomTopNav } from '@/components/ClassroomTopNav';
-import { getTeacherIdentity, isValidEmail, DGM_STAFF_DIRECTORY } from '@/lib/auth/teacher-identity';
+import { getTeacherIdentity, isValidEmail } from '@/lib/auth/teacher-identity';
+import { getStaffDirectory } from '@/lib/auth/staff-directory';
 import { IdentityPicker } from '../IdentityPicker';
 import { IdentityIndicator } from '../IdentityIndicator';
 
@@ -133,7 +134,7 @@ export default async function MyStaffRequestsPage({
 
         {!teacher && !meEmail ? (
           <div className="mb-4">
-            <IdentityPicker staff={DGM_STAFF_DIRECTORY} returnTo={thisUrl} />
+            <IdentityPicker staff={await getStaffDirectory(school.id)} returnTo={thisUrl} />
           </div>
         ) : null}
 

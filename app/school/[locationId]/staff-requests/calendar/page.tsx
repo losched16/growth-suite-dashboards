@@ -21,7 +21,8 @@ import { ChevronLeft, ChevronRight, CalendarDays, Wrench, AlertCircle, Package, 
 import { query } from '@/lib/db';
 import { loadSchoolByLocationId } from '@/lib/dashboards/loader';
 import { SCHOOL_SESSION_COOKIE, verifySchoolSession } from '@/lib/auth/school';
-import { getTeacherIdentity, isValidEmail, DGM_STAFF_DIRECTORY } from '@/lib/auth/teacher-identity';
+import { getTeacherIdentity, isValidEmail } from '@/lib/auth/teacher-identity';
+import { getStaffDirectory } from '@/lib/auth/staff-directory';
 import { ClassroomTopNav } from '@/components/ClassroomTopNav';
 import { IdentityPicker } from '../IdentityPicker';
 import { IdentityIndicator } from '../IdentityIndicator';
@@ -268,7 +269,7 @@ export default async function StaffRequestsCalendarPage({
 
         {mode === 'mine' && !teacherEmail ? (
           <div className="mb-4">
-            <IdentityPicker staff={DGM_STAFF_DIRECTORY} returnTo={thisUrl} />
+            <IdentityPicker staff={await getStaffDirectory(school.id)} returnTo={thisUrl} />
           </div>
         ) : null}
 

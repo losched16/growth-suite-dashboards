@@ -12,7 +12,8 @@ import Link from 'next/link';
 import { ArrowLeft, Lock, ImageIcon } from 'lucide-react';
 import { loadSchoolByLocationId } from '@/lib/dashboards/loader';
 import { SCHOOL_SESSION_COOKIE, verifySchoolSession } from '@/lib/auth/school';
-import { getTeacherIdentity, DGM_STAFF_DIRECTORY } from '@/lib/auth/teacher-identity';
+import { getTeacherIdentity } from '@/lib/auth/teacher-identity';
+import { getStaffDirectory } from '@/lib/auth/staff-directory';
 import { MENU_SLOTS, isMenuEditor, getMenuAssetIndex } from '@/lib/menus';
 import { ClassroomTopNav } from '@/components/ClassroomTopNav';
 import { IdentityPicker } from '../../staff-requests/IdentityPicker';
@@ -91,7 +92,7 @@ export default async function MenuEditorPage({
 
         {!teacher ? (
           <div className="mb-4">
-            <IdentityPicker staff={DGM_STAFF_DIRECTORY} returnTo={thisUrl} />
+            <IdentityPicker staff={await getStaffDirectory(school.id)} returnTo={thisUrl} />
           </div>
         ) : !editor ? (
           <div className="rounded-lg border-2 border-amber-200 bg-amber-50 p-5">

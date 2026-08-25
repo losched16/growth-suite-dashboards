@@ -9,6 +9,17 @@ human digest.
 
 ## August 25, 2026
 
+### Staff list is now self-serve
+The "Pick your name" list on Staff Forms (and the menu editor) used to
+be hardcoded — every staffing change needed a developer. It now lives
+in the database with an office editor page: add a name + email when
+someone joins, remove them when they leave, effective immediately.
+Removing someone only takes them out of the pick-list; their past
+submissions keep their name. The current 24 names carried over
+unchanged — the office should do a first pass to add/remove whoever
+is out of date.
+
+
 ### Teacher tabs reorganized (classroom hubs)
 The tab bar teachers see on every classroom hub now reads:
 Roster · Form Submissions · Staff Forms · Student Records · Lunch

@@ -48,35 +48,7 @@ export async function getTeacherIdentity(): Promise<{ email: string; name: strin
   return { email, name };
 }
 
-// DGM teacher roster — the same email list we use in the incident
-// form's "staff to notify" field. Source: DGM's pre-populated list
-// in the live form.
-//
-// Plus a few admin / leadership emails so people like Lexi can also
-// identify when they submit a request from a teacher's classroom.
-export const DGM_STAFF_DIRECTORY: Array<{ email: string; name: string }> = [
-  { email: 'abovis@desertgardenmontessori.org',       name: 'A. Bovis' },
-  { email: 'chelm@desertgardenmontessori.org',        name: 'C. Helm' },
-  { email: 'dwestermann@desertgardenmontessori.org',  name: 'D. Westermann' },
-  { email: 'dhenry@desertgardenmontessori.org',       name: 'D. Henry' },
-  { email: 'hstewart@desertgardenmontessori.org',     name: 'H. Stewart' },
-  { email: 'jmedders@desertgardenmontessori.org',     name: 'J. Medders' },
-  { email: 'jkhatinha@desertgardenmontessori.org',    name: 'J. Khatinha' },
-  { email: 'jcollins@desertgardenmontessori.org',     name: 'J. Collins' },
-  { email: 'jcarson@desertgardenmontessori.org',      name: 'J. Carson' },
-  { email: 'kpandya@desertgardenmontessori.org',      name: 'K. Pandya' },
-  { email: 'mwhite@desertgardenmontessori.org',       name: 'M. White' },
-  { email: 'mgamez@desertgardenmontessori.org',       name: 'M. Gamez' },
-  { email: 'nkenney@desertgardenmontessori.org',      name: 'N. Kenney' },
-  { email: 'ndull@desertgardenmontessori.org',        name: 'N. Dull' },
-  { email: 'orobertson@desertgardenmontessori.org',   name: 'O. Robertson' },
-  { email: 'pshupp@desertgardenmontessori.org',       name: 'P. Shupp' },
-  { email: 'rwehn@desertgardenmontessori.org',        name: 'R. Wehn' },
-  { email: 'rjones@desertgardenmontessori.org',       name: 'R. Jones' },
-  { email: 'sfrey@desertgardenmontessori.org',        name: 'S. Nova' },
-  { email: 'srobertson@desertgardenmontessori.org',   name: 'S. Robertson' },
-  { email: 'tmusel@desertgardenmontessori.org',       name: 'T. Musel' },
-  { email: 'vfettig@desertgardenmontessori.org',      name: 'V. Fettig' },
-  { email: 'sjain@desertgardenmontessori.org',        name: 'S. Jain' },
-  { email: 'lhenderson@desertgardenmontessori.org',   name: 'L. Henderson' },
-];
+// The staff roster itself now lives in the school_staff_directory
+// table (migration 103), maintained by the office at
+// /school/[locationId]/staff-directory. Load it with
+// getStaffDirectory() from lib/auth/staff-directory (server-only).

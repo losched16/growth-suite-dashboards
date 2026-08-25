@@ -10,7 +10,8 @@ import { FileText, Wrench, AlertCircle, Package } from 'lucide-react';
 import { query } from '@/lib/db';
 import { loadSchoolByLocationId } from '@/lib/dashboards/loader';
 import { ClassroomTopNav } from '@/components/ClassroomTopNav';
-import { getTeacherIdentity, DGM_STAFF_DIRECTORY } from '@/lib/auth/teacher-identity';
+import { getTeacherIdentity } from '@/lib/auth/teacher-identity';
+import { getStaffDirectory } from '@/lib/auth/staff-directory';
 import { IdentityPicker } from './IdentityPicker';
 import { IdentityIndicator } from './IdentityIndicator';
 
@@ -96,7 +97,7 @@ export default async function StaffRequestsLanding({
 
         {!teacher ? (
           <div className="mb-5">
-            <IdentityPicker staff={DGM_STAFF_DIRECTORY} returnTo={thisUrl} />
+            <IdentityPicker staff={await getStaffDirectory(school.id)} returnTo={thisUrl} />
           </div>
         ) : null}
 

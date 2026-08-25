@@ -16,8 +16,8 @@ import {
   TEACHER_NAME_COOKIE,
   TEACHER_COOKIE_TTL_S,
   isValidEmail,
-  DGM_STAFF_DIRECTORY,
 } from '@/lib/auth/teacher-identity';
+import { getStaffDirectory } from '@/lib/auth/staff-directory';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -44,7 +44,8 @@ export async function POST(request: NextRequest) {
 
   // Use the directory's friendly name when the email matches one we know,
   // otherwise fall back to whatever the user typed (Other path).
-  const known = DGM_STAFF_DIRECTORY.find((s) => s.email === email);
+  const directory = await getStaffDirectory(session.school_id);
+  const known = directory.find((s) => s.email === email);
   const name = known?.name ?? nameInput ?? '';
 
   // Where to redirect after identifying. Default = the staff-requests
