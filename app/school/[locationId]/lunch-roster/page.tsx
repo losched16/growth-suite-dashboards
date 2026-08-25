@@ -20,11 +20,12 @@
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { cookies } from 'next/headers';
-import { ClipboardList, Image as ImageIcon, Wrench } from 'lucide-react';
+import { ClipboardList, Image as ImageIcon, Pencil, Wrench } from 'lucide-react';
 import { query } from '@/lib/db';
 import { loadSchoolByLocationId } from '@/lib/dashboards/loader';
 import { SCHOOL_SESSION_COOKIE, verifySchoolSession } from '@/lib/auth/school';
-import { getMenuAssetIndex } from '@/lib/menus';
+import { getMenuAssetIndex, isMenuEditor } from '@/lib/menus';
+import { getTeacherIdentity } from '@/lib/auth/teacher-identity';
 import { ClassroomTopNav } from '@/components/ClassroomTopNav';
 import { DgmMenusView } from '@/components/DgmMenusView';
 import { PrintButton } from '@/lib/widgets/components/_shared/PrintButton';
@@ -95,6 +96,13 @@ export default async function LunchRosterPage({
     : null;
 
   const assets = tab === 'menus' ? await getMenuAssetIndex(school.id) : {};
+  // Same affordance as the standalone /menus page: designated editors
+  // get an "Edit menus" link (the edit page re-checks the allowlist).
+  let menuEditor = false;
+  if (tab === 'menus') {
+    const teacher = await getTeacherIdentity();
+    menuEditor = teacher ? await isMenuEditor(school.id, teacher.email) : false;
+  }
 
   let groups: Array<{ classroom: string; students: LunchRow[] }> = [];
   let totalOnLunch = 0;
@@ -173,7 +181,19 @@ export default async function LunchRosterPage({
         </nav>
 
         {tab === 'menus' ? (
-          <DgmMenusView assets={assets} />
+          <>
+            {menuEditor ? (
+              <div className="flex justify-end mb-2 print:hidden">
+                <Link
+                  href={`/school/${locationId}/menus/edit?chrome=none${fromQs}`}
+                  className="inline-flex items-center gap-1 rounded-md border border-blue-300 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-100"
+                >
+                  <Pencil className="h-3.5 w-3.5" /> Edit menus
+                </Link>
+              </div>
+            ) : null}
+            <DgmMenusView assets={assets} />
+          </>
         ) : tab === 'admin' ? (
           <div className="rounded-lg border border-slate-200 bg-white overflow-hidden">
             {/* The pre-existing external lunch app (kitchen/office tool);
