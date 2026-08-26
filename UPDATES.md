@@ -7,6 +7,27 @@ human digest.
 
 ---
 
+## August 26, 2026
+
+### New Student Application in the parent portal
+Existing families can now apply for an additional child without leaving
+the portal: a new **New Application** menu item explains who it is for
+and opens the full admissions application (student info, health &
+education history, background questions, typed signature — same
+content as the paper application). Parent/family fields are
+intentionally absent: the family is already on file, so nothing they
+submit can overwrite parent contact info. On submit, the new child is
+written to the FIRST EMPTY student slot on the family contact —
+1 child on file → the application fills Student 2; 2 children →
+Student 3 — never on top of an existing child, and the new child is
+stamped Enrollment Status = Pending (so they do not appear on teacher
+rosters). The office gets an email to admissions@ on each application,
+and every applicant family is tagged "new student application" in the
+CRM. The $75 fee is noted on the form but collected by the office
+(no card payment is connected in the portal). Verified end-to-end on
+the test family: application landed in the first open slot with both
+existing children untouched.
+
 ## August 25, 2026
 
 ### Staff list is now self-serve
