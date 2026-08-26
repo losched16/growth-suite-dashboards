@@ -47,6 +47,7 @@ export async function PaymentsHubForms({
       submission_count_this_year: number;
       notifications_enabled: boolean;
       notify_emails_count: number;
+      audience: string;
     }>(
       `SELECT
          d.id, d.slug, d.display_name, d.description, d.category,
@@ -59,10 +60,10 @@ export async function PaymentsHubForms({
            WHERE s.form_definition_id = d.id
              AND s.submitted_at >= date_trunc('year', now())) AS submission_count_this_year,
          COALESCE(d.notifications_enabled, true) AS notifications_enabled,
-         COALESCE(array_length(d.notify_emails, 1), 0) AS notify_emails_count
+         COALESCE(array_length(d.notify_emails, 1), 0) AS notify_emails_count,
+         COALESCE(d.audience, 'parents') AS audience
        FROM portal_form_definitions d
        WHERE d.school_id = $1
-         AND COALESCE(d.audience, 'parents') = 'parents'   -- staff forms have their own UI under /staff-requests
        ORDER BY
          d.is_active DESC,                                 -- published first, drafts below
          lower(d.display_name)                             -- then A→Z (Sonia: alphabetical)`,
@@ -93,13 +94,19 @@ export async function PaymentsHubForms({
   const schoolName = schoolRows[0]?.name ?? 'this school';
   const eligibleFamilyCount = familyCount[0]?.n ?? 0;
 
-  // Total active-year submissions across all forms (top KPI).
-  const totalSubmissionsThisYear = forms.reduce((acc, f) => acc + f.submission_count_this_year, 0);
+  // Staff (teacher-facing) forms list separately below — they are
+  // edited with the same builder but never pushed to families, so the
+  // parent-facing KPIs and sections exclude them.
+  const staffForms = forms.filter((f) => f.audience === 'staff');
+  const parentForms = forms.filter((f) => f.audience !== 'staff');
+
+  // Total active-year submissions across all parent forms (top KPI).
+  const totalSubmissionsThisYear = parentForms.reduce((acc, f) => acc + f.submission_count_this_year, 0);
   // Count of forms tagged as registration/enrollment — those are the
   // ones the demo audience cares about.
-  const enrollmentForms = forms.filter((f) => f.category === 'registration' || /enroll/i.test(f.display_name));
-  const published = forms.filter((f) => f.is_active);
-  const drafts    = forms.filter((f) => !f.is_active);
+  const enrollmentForms = parentForms.filter((f) => f.category === 'registration' || /enroll/i.test(f.display_name));
+  const published = parentForms.filter((f) => f.is_active);
+  const drafts    = parentForms.filter((f) => !f.is_active);
 
   return (
     <div className="space-y-4">
@@ -203,6 +210,48 @@ export async function PaymentsHubForms({
                 eligibleFamilyCount={eligibleFamilyCount}
                 draft
               />
+            ))}
+          </ul>
+        </section>
+      ) : null}
+      {/* Staff forms — teacher-facing (Staff Forms tab in the classroom
+          hubs). Same builder as parent forms; no family-push chrome
+          because these are never sent to parents. */}
+      {staffForms.length > 0 ? (
+        <section className="rounded-lg border border-indigo-200 bg-indigo-50/30 overflow-hidden">
+          <div className="border-b border-indigo-100 px-4 py-2.5 text-sm font-semibold text-indigo-900 flex items-center justify-between">
+            <span>Staff forms — filled out by teachers ({staffForms.length})</span>
+            <span className="text-xs font-normal text-indigo-800">
+              These appear under <strong>Staff Forms</strong> in the teacher hubs, never in the parent portal.
+            </span>
+          </div>
+          <ul className="divide-y divide-indigo-100">
+            {staffForms.map((f) => (
+              <li key={f.id} className="px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-slate-900">
+                    {f.display_name}
+                    {!f.is_active ? (
+                      <span className="ml-2 rounded bg-slate-200 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-slate-600">Inactive</span>
+                    ) : null}
+                  </p>
+                  <p className="text-xs text-slate-500 font-mono">{f.slug} · {f.field_count} fields · {f.submission_count} submission{f.submission_count === 1 ? '' : 's'}</p>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <Link
+                    href={`/school/${locationId}/forms/${f.id}`}
+                    className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                  >
+                    Edit
+                  </Link>
+                  <Link
+                    href={`/school/${locationId}/forms/${f.id}/submissions`}
+                    className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                  >
+                    Submissions
+                  </Link>
+                </div>
+              </li>
             ))}
           </ul>
         </section>
