@@ -30,6 +30,14 @@ family resubmitting the same child never doubles the card). The $75 fee is noted
 the test family: application landed in the first open slot with both
 existing children untouched.
 
+### Staff forms now editable in the forms manager
+The three teacher forms (In-House Supplies Request, Labor Request,
+SST: Accident/Incident) were invisible in the Forms & enrollment
+manager — there was no way to edit them. They now have their own
+"Staff forms" section at the bottom of that page with Edit (same
+builder as parent forms) and Submissions links. They stay out of the
+parent-facing counts and never get a "Send to families" option.
+
 ## August 25, 2026
 
 ### Staff list is now self-serve
