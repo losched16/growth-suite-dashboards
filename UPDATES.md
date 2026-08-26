@@ -22,8 +22,10 @@ written to the FIRST EMPTY student slot on the family contact —
 Student 3 — never on top of an existing child, and the new child is
 stamped Enrollment Status = Pending (so they do not appear on teacher
 rosters). The office gets an email to admissions@ on each application,
-and every applicant family is tagged "new student application" in the
-CRM. The $75 fee is noted on the form but collected by the office
+every applicant family is tagged "new student application" in the
+CRM, and a student-named opportunity card is created in the
+Admissions Pipeline's "Application Submitted" stage (deduped — a
+family resubmitting the same child never doubles the card). The $75 fee is noted on the form but collected by the office
 (no card payment is connected in the portal). Verified end-to-end on
 the test family: application landed in the first open slot with both
 existing children untouched.
