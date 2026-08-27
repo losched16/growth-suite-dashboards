@@ -206,11 +206,16 @@ export async function fetcher(
      LIMIT 5000`,
     [school.schoolId],
   );
-  const studentOptions: StudentOption[] = students.map((r) => ({
-    id: r.id,
-    display: `${(r.preferred?.trim() || r.first)} ${r.last}`.trim(),
-    classroom_name: r.classroom_name,
-  }));
+  // Classroom-scoped view (teacher hubs): the student dropdown only
+  // offers that classroom's students — teachers shouldn't browse the
+  // whole school's names from their hub.
+  const studentOptions: StudentOption[] = students
+    .filter((r) => !classroomFilter || (r.classroom_name ?? '') === classroomFilter)
+    .map((r) => ({
+      id: r.id,
+      display: `${(r.preferred?.trim() || r.first)} ${r.last}`.trim(),
+      classroom_name: r.classroom_name,
+    }));
 
   return {
     rows: pageRows,

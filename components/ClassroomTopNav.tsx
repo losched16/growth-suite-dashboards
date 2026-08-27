@@ -10,10 +10,40 @@
 
 import Link from 'next/link';
 import { ClipboardList, Plus, Inbox, ArrowLeft, FolderOpen, Soup, Image as ImageIcon } from 'lucide-react';
+import { query } from '@/lib/db';
 
 export type ActiveTab = 'roster' | 'submit' | 'mine' | 'inbox' | 'documents' | 'menus' | 'lunch' | 'forms';
 
-export function ClassroomTopNav({
+// The exact classroom name for the Student Records pre-filter comes from
+// the hub's own roster widget (default_homeroom_filter) — slugs don't
+// round-trip ("classroom-suite-100" is "Suite 100", not
+// "Classroom suite-100", and that mismatch left Suite 100's Student
+// Records tab showing nothing). Resolved here (server component) so
+// every page that renders the nav gets it without prop-threading.
+async function homeroomLabelFor(locationId: string, slug: string): Promise<string | null> {
+  try {
+    const { rows } = await query<{ layout: unknown }>(
+      `SELECT sd.layout
+         FROM school_dashboards sd
+         JOIN schools s ON s.id = sd.school_id
+        WHERE s.ghl_location_id = $1 AND sd.dashboard_slug = $2`,
+      [locationId, slug],
+    );
+    const widgets = rows[0]?.layout;
+    if (Array.isArray(widgets)) {
+      for (const w of widgets) {
+        const label = (w as { config?: { default_homeroom_filter?: string } })
+          ?.config?.default_homeroom_filter;
+        if (typeof label === 'string' && label.trim() !== '') return label.trim();
+      }
+    }
+  } catch {
+    // nav must never take a page down over a label lookup
+  }
+  return null;
+}
+
+export async function ClassroomTopNav({
   locationId,
   classroomSlug,
   classroomLabel,
@@ -44,8 +74,13 @@ export function ClassroomTopNav({
   // Documents tab → the existing "documents" dashboard (StudentDocumentsBrowser)
   // with the classroom name pre-filtered + audience=teacher so admin-only
   // files are hidden. The widget already accepts both as URL filters.
-  const docsClassroomLabel = classroomSlug?.startsWith('classroom-')
-    ? `Classroom ${classroomSlug.slice('classroom-'.length)}`
+  // Ground truth first (hub roster config); naive "Classroom N" fallback
+  // keeps the tab working if a hub has no roster widget.
+  const docsClassroomLabel = classroomSlug
+    ? (await homeroomLabelFor(locationId, classroomSlug))
+      ?? (classroomSlug.startsWith('classroom-')
+        ? `Classroom ${classroomSlug.slice('classroom-'.length)}`
+        : null)
     : null;
   const docsParams = new URLSearchParams({ chrome: 'none', audience: 'teacher' });
   if (docsClassroomLabel) docsParams.set('classroom', docsClassroomLabel);

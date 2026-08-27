@@ -22,7 +22,7 @@ import { PrintButton } from '@/lib/widgets/components/_shared/PrintButton';
 export const dynamic = 'force-dynamic';
 
 type Params = Promise<{ locationId: string }>;
-type SearchParams = Promise<{ from?: string }>;
+type SearchParams = Promise<{ from?: string; form?: string }>;
 
 function isClassroomSlug(s: string | undefined): boolean {
   return !!s && /^(classroom-|program-)[a-z0-9-]+$/.test(s);
@@ -92,6 +92,15 @@ export default async function TeacherFormsPage({
     ? (await homeroomLabelForSlug(school.id, classroomSlug)) ?? prettyClassroom(classroomSlug)
     : null;
 
+  // ?form=slug[,slug] narrows to specific forms — the share link the
+  // office gives auxiliary staff (SST, support) who need one form's
+  // submissions school-wide without a classroom dashboard (Sonia,
+  // 8/26 call: Staying Safe for Gautham + Crystal).
+  const formSlugs = (sp.form ?? '')
+    .split(',')
+    .map((x) => x.trim().toLowerCase())
+    .filter((x) => /^[a-z0-9-]+$/.test(x));
+
   const { rows } = await query<SubRow>(
     `SELECT s.id AS submission_id,
             d.id AS form_id, d.display_name AS form_name, d.field_schema,
@@ -110,8 +119,9 @@ export default async function TeacherFormsPage({
         AND d.audience IS DISTINCT FROM 'staff'
         AND ($2::text IS NULL
              OR COALESCE(NULLIF(st.metadata->>'homeroom',''), st.metadata->>'classroom_name') = $2)
+        AND (cardinality($3::text[]) = 0 OR d.slug = ANY($3::text[]))
       ORDER BY d.display_name, student_name, s.submitted_at DESC`,
-    [school.id, classroomLabel],
+    [school.id, classroomLabel, formSlugs],
   );
 
   // Group by form; keep only the NEWEST submission per (form, student).
@@ -139,7 +149,8 @@ export default async function TeacherFormsPage({
           <div>
             <h1 className="text-xl font-bold text-slate-900">Form Submissions</h1>
             <p className="text-sm text-slate-600">
-              {classroomLabel ? `${classroomLabel} — ` : ''}your students&rsquo; submitted forms.
+              {classroomLabel ? `${classroomLabel} — ` : ''}
+              {formSlugs.length > 0 ? 'submissions for the selected form(s). ' : 'your students’ submitted forms. '}
               Click a student to see their answers; use Print for a paper copy (only opened
               submissions print).
             </p>

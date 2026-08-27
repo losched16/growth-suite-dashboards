@@ -95,6 +95,13 @@ function Component({
       {/* Filter bar */}
       <AutoSubmitForm method="GET" className="flex flex-wrap gap-2 items-end rounded-lg border border-slate-200 bg-white p-3">
         <PreserveEmbedParams current={sp} />
+        {/* Classroom-hub scoping must SURVIVE filter changes — without
+            these, picking a category (e.g. IEP) resubmitted the form
+            minus classroom/audience and showed every classroom's
+            students to the teacher (privacy). */}
+        {sp.classroom ? <input type="hidden" name="classroom" value={sp.classroom} /> : null}
+        {sp.audience ? <input type="hidden" name="audience" value={sp.audience} /> : null}
+        {sp.from ? <input type="hidden" name="from" value={sp.from} /> : null}
         <label className="block text-xs">
           <span className="block text-[10px] uppercase tracking-wide text-slate-500 mb-0.5">Search</span>
           <input
@@ -125,7 +132,7 @@ function Component({
         </label>
         <noscript><button type="submit" className="rounded bg-blue-600 px-2 py-1 text-xs text-white">Apply</button></noscript>
         {(sp.q || sp.student || sp.category || sp.parent_visible) ? (
-          <a href={clearHref(sp)} className="text-xs text-slate-500 hover:text-slate-700 underline">clear</a>
+          <a href={clearHref(sp, { classroom: sp.classroom, audience: sp.audience, from: sp.from })} className="text-xs text-slate-500 hover:text-slate-700 underline">clear</a>
         ) : null}
       </AutoSubmitForm>
 
