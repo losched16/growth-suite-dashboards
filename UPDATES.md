@@ -9,6 +9,33 @@ human digest.
 
 ## August 27, 2026
 
+### Pushed forms now land in the yellow Action Items box
+When the office pushes a form to one family (Leslie sending the New
+Student Application, an amendment, etc.), it now appears in that
+family's yellow "Action Items" banner on their portal home page as a
+required item until they submit it — even for forms that aren't in
+the general checklist. Nobody else sees it. (Also fixed: test
+submissions no longer count as a family having completed a form.)
+
+### Student Records fixes (from the 8/26 call)
+1. Suite 100 (and Tower): the Student Records tab was showing nothing
+   because the classroom name didn't translate from the web address —
+   it now reads the real classroom name from the hub itself.
+2. Privacy: picking a filter (e.g. category IEP) on Student Records
+   was dropping the classroom scoping and showing every classroom's
+   students. Filters now always stay inside the teacher's classroom,
+   and the student dropdown only lists that classroom's students.
+
+### Form submissions for auxiliary staff (SST etc.)
+The Form Submissions viewer now takes a form filter, so staff who
+oversee a specific form school-wide (Gautham + Crystal on Staying
+Safe) get a link showing just that form's submissions across all
+classrooms — full answers, printable, no classroom dashboard needed.
+Example link for Staying Safe:
+growth-suite-dashboards.vercel.app/school/1JOwnyxFSKEwJNgmq84I/teacher-forms?chrome=none&form=le-staying-safe-permission
+(the form's slug is shown on its row in Forms & enrollment; combine
+several with commas).
+
 ### New Student Application: menu removed, office-push flow instead
 Per Clint: current parents who want to apply for another child now
 contact Leslie, and Leslie pushes the application into that family's
