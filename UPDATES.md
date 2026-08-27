@@ -7,6 +7,20 @@ human digest.
 
 ---
 
+## August 27, 2026
+
+### New Student Application: menu removed, office-push flow instead
+Per Clint: current parents who want to apply for another child now
+contact Leslie, and Leslie pushes the application into that family's
+portal one-off (Forms & enrollment -> "2026-27 New Student
+Application" row -> Send, pick the family) — the same per-family push
+used for the enrollment amendment. The self-serve "New Application"
+menu item is gone from the parent portal and the /new-application
+page is off. Everything downstream is unchanged and re-verified:
+pushed applications still write the new child into the first empty
+student slot, tag the family, email admissions@, and create the
+student-named card in Application Submitted.
+
 ## August 26, 2026
 
 ### New Student Application in the parent portal
