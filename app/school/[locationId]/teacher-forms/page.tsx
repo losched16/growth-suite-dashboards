@@ -120,10 +120,12 @@ export default async function TeacherFormsPage({
         <main className="min-h-screen bg-slate-50">
           <div className="max-w-2xl mx-auto px-4 sm:px-6 py-6">
             <h1 className="text-xl font-bold text-slate-900 mb-1">Form Submissions</h1>
-            <p className="text-sm text-slate-600 mb-4">
-              Pick your name to see the forms the office has shared with you.
-            </p>
-            <IdentityPicker staff={staff} returnTo={thisUrl} />
+            <IdentityPicker
+              staff={staff}
+              returnTo={thisUrl}
+              title="Who’s viewing?"
+              description="Pick your name to see the form reports the office has shared with you. We’ll remember you on this device for 30 days. You can switch users any time."
+            />
           </div>
         </main>
       );

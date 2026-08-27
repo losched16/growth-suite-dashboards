@@ -15,11 +15,17 @@ interface Staff { email: string; name: string }
 export function IdentityPicker({
   staff,
   returnTo,
+  title = 'Who’s submitting this?',
+  description = 'Pick your name so Lexi knows who to follow up with — and so “My Submissions” only shows your stuff. We’ll remember you on this device for 30 days. You can switch users any time.',
 }: {
   staff: Staff[];
   // Where to land after identifying. Usually the same /staff-requests
   // landing inside the iframe.
   returnTo: string;
+  // Context copy — the default reads correctly on the staff-requests
+  // SUBMIT flow; viewers (Form Submissions ?mine=1) pass their own.
+  title?: string;
+  description?: string;
 }) {
   // Local UI state — selected email + (for "Other") typed email/name.
   const [picked, setPicked] = useState<string>('');
@@ -32,11 +38,8 @@ export function IdentityPicker({
       <div className="flex items-start gap-3">
         <UserCircle className="h-7 w-7 text-blue-600 mt-0.5 shrink-0" />
         <div>
-          <h2 className="text-lg font-semibold text-slate-900">Who&rsquo;s submitting this?</h2>
-          <p className="text-xs text-slate-600 mt-1">
-            Pick your name so Lexi knows who to follow up with — and so &ldquo;My Submissions&rdquo; only shows your stuff.
-            We&rsquo;ll remember you on this device for 30 days. You can switch users any time.
-          </p>
+          <h2 className="text-lg font-semibold text-slate-900">{title}</h2>
+          <p className="text-xs text-slate-600 mt-1">{description}</p>
         </div>
       </div>
 
