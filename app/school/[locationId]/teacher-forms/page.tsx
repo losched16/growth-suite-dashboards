@@ -128,9 +128,12 @@ export default async function TeacherFormsPage({
         </main>
       );
     }
+    // No is_active filter: staff review submissions of UNPUBLISHED forms
+    // too — the office pulls a form down when the window closes, and
+    // that's precisely when SST reads the responses (Staying Safe).
     const { rows: granted } = await query<{ slug: string }>(
       `SELECT slug FROM portal_form_definitions
-        WHERE school_id = $1 AND is_active = true
+        WHERE school_id = $1
           AND audience IS DISTINCT FROM 'staff'
           AND EXISTS (SELECT 1 FROM unnest(COALESCE(notify_emails, '{}')) e
                        WHERE lower(e) = lower($2))
