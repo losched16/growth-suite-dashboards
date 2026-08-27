@@ -26,15 +26,18 @@ submissions no longer count as a family having completed a form.)
    students. Filters now always stay inside the teacher's classroom,
    and the student dropdown only lists that classroom's students.
 
-### Form submissions for auxiliary staff (SST etc.)
-The Form Submissions viewer now takes a form filter, so staff who
-oversee a specific form school-wide (Gautham + Crystal on Staying
-Safe) get a link showing just that form's submissions across all
-classrooms — full answers, printable, no classroom dashboard needed.
-Example link for Staying Safe:
-growth-suite-dashboards.vercel.app/school/1JOwnyxFSKEwJNgmq84I/teacher-forms?chrome=none&form=le-staying-safe-permission
-(the form's slug is shown on its row in Forms & enrollment; combine
-several with commas).
+### Form submissions for auxiliary staff (SST etc.) — one link, notify-list controlled
+Auxiliary staff (SST, support) can now see specific forms' submissions
+school-wide without a classroom dashboard. ONE permanent link for
+everyone:
+growth-suite-dashboards.vercel.app/school/1JOwnyxFSKEwJNgmq84I/teacher-forms?chrome=none&mine=1
+First visit, they pick their name (remembered 30 days). What they see
+is controlled by each form's existing NOTIFY list: add someone's email
+to a form's Notify list (Forms & enrollment -> Edit -> notification
+emails) and that form appears in their view — full answers, all
+classrooms, printable. Remove them, it disappears. Works for
+unpublished forms too, so SST can review responses after the office
+pulls a form down. No per-form links or new dashboards needed.
 
 ### New Student Application: menu removed, office-push flow instead
 Per Clint: current parents who want to apply for another child now
