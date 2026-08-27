@@ -9,6 +9,16 @@ human digest.
 
 ## August 27, 2026
 
+### Portal home banner: renamed + parent dismissals
+The yellow home-page box is now titled "Parent Forms" (was "Action
+Items"). And parents can now dismiss a form they're not interested in
+(e.g. the Golf registration): each non-required form card has a small
+"Not interested - dismiss" link. Dismissing hides the form from the
+banner AND stops reminder emails for the whole family; the form stays
+available on the Forms page if they change their mind, and office
+tracking is unaffected. Forms the office pushed to a family
+specifically can never be dismissed. Migration 104.
+
 ### Pushed forms now land in the yellow Action Items box
 When the office pushes a form to one family (Leslie sending the New
 Student Application, an amendment, etc.), it now appears in that
