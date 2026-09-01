@@ -27,7 +27,7 @@ import { createMissingEnrolledFamilies } from '@/lib/sync/create-family-from-con
 import { generateDepositsForAcceptedFamilies } from '@/lib/billing/enrollment-deposits';
 
 // Vercel cron may take longer than the default Hobby 10s; bump.
-export const maxDuration = 300; // 5 min
+export const maxDuration = 800; // full fleet no longer fits in 300s (2026-09-01 timeout incident)
 
 interface SchoolRow {
   id: string;
@@ -79,19 +79,32 @@ function authorize(request: NextRequest): boolean {
 
 async function runForAll(): Promise<NextResponse> {
   const started = Date.now();
+  // STALEST FIRST, with a time budget. The fleet outgrew the function
+  // cap (2026-09-01: every 5-min run died inside the same mid-alphabet
+  // school, so everything after it never synced). Ordering by last sync
+  // age means a partial run always resumes where the fleet is furthest
+  // behind, and the budget stops us BETWEEN schools instead of the
+  // runtime killing us inside one.
   const { rows: schools } = await query<SchoolRow>(
-    `SELECT id, name, ghl_location_id, COALESCE(sync_mode, 'snapshot') AS sync_mode
-     FROM schools
-     WHERE ghl_pit_encrypted IS NOT NULL
-     ORDER BY name`,
+    `SELECT s.id, s.name, s.ghl_location_id, COALESCE(s.sync_mode, 'snapshot') AS sync_mode
+     FROM schools s
+     LEFT JOIN LATERAL (
+       SELECT MAX(v.synced_at) AS last_sync
+         FROM ghl_contact_field_values v WHERE v.school_id = s.id
+     ) ls ON true
+     WHERE s.ghl_pit_encrypted IS NOT NULL
+     ORDER BY ls.last_sync ASC NULLS FIRST, s.name`,
   );
+  const BUDGET_MS = (maxDuration - 90) * 1000; // leave headroom for the school in flight
 
   const results: PerSchoolResult[] = [];
   let okCount = 0;
   let failCount = 0;
+  const deferred: string[] = [];
 
   for (const s of schools) {
     if (s.sync_mode === 'off') continue;
+    if (Date.now() - started > BUDGET_MS) { deferred.push(s.name); continue; }
     const t0 = Date.now();
     try {
       // Snapshot mode: full destructive family-graph rebuild from GHL.
@@ -265,9 +278,12 @@ async function runForAll(): Promise<NextResponse> {
     started_at: new Date(started).toISOString(),
     finished_at: new Date().toISOString(),
     duration_ms: Date.now() - started,
-    schools_processed: schools.length,
+    schools_processed: schools.length - deferred.length,
     successes: okCount,
     failures: failCount,
+    // Ran out of time budget — the stalest-first ordering picks these up
+    // at the head of the next run.
+    deferred,
     results,
   }, { status: failCount === 0 ? 200 : 207 /* multi-status */ });
 }
