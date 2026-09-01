@@ -1327,6 +1327,24 @@ export async function runGhlSync(schoolId: string): Promise<SyncResult> {
       [schoolId],
     );
 
+    // Preserve Stripe customer mappings across the rebuild. The parent
+    // portal caches each family's Stripe Customer id on
+    // families.stripe_customer_ids; the re-insert below only carries
+    // synced fields, so every rebuild wiped the cache — and the
+    // payment_method.attached webhook then dropped the parent's saved
+    // card/bank as "unknown customer" (Hope Mehlhoff's bank, 2026-08-31,
+    // discovered the day before her autopay was due). Family ids are
+    // preserved via reuseFamilyId, so stash-by-id + restore works.
+    await q(
+      `CREATE TEMP TABLE _cus_preserve ON COMMIT DROP AS
+         SELECT id, stripe_customer_ids
+           FROM families
+          WHERE school_id = $1
+            AND stripe_customer_ids IS NOT NULL
+            AND stripe_customer_ids <> '{}'::jsonb`,
+      [schoolId],
+    );
+
     // Preserve immunization records across the snapshot rebuild. These
     // tables FK to students(id) ON DELETE CASCADE, so the DELETE below
     // wipes them — but student ids are preserved (reuseStudentId), so we
@@ -1592,6 +1610,16 @@ export async function runGhlSync(schoolId: string): Promise<SyncResult> {
               pin_set_at = t.pin_set_at
          FROM _pw_preserve t
         WHERE p.id = t.id`,
+    );
+
+    // Restore Stripe customer mappings onto the rebuilt family rows
+    // (family ids preserved via reuseFamilyId). Merge under the existing
+    // value so a mapping written mid-transaction is never clobbered.
+    await q(
+      `UPDATE families f
+          SET stripe_customer_ids = t.stripe_customer_ids || coalesce(f.stripe_customer_ids, '{}'::jsonb)
+         FROM _cus_preserve t
+        WHERE f.id = t.id`,
     );
 
     // Restore preserved immunization records onto the rebuilt student
