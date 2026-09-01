@@ -9,6 +9,15 @@ human digest.
 
 ## August 27, 2026
 
+### Full-answers CSV export from the forms tracker
+The Portal Forms tracker's exports were status-only (family, parent,
+student, submitted-or-not). Now, when a specific form is selected in
+the tracker's filter, a green "Export full answers" button appears:
+one row per submission with EVERY question on the form as its own
+column (labels + field keys, arrays joined, renamed/removed fields
+kept). The same export has been on each form row's Submissions page
+("Export responses (CSV)") since 8/25.
+
 ### Form builder: CRM tags on submit, redone
 The "CRM tags on submit" box is now a chip editor: each tag is a chip
 with an x to remove it, an empty box explicitly says "No tags -
