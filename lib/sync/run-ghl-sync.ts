@@ -347,7 +347,11 @@ export function mapContactToFamily(
   const p2First = PARENT2.firstName ? getField(contact, PARENT2.firstName, schema) : '';
   const p2Last = PARENT2.lastName ? getField(contact, PARENT2.lastName, schema) : '';
   const p2Email = PARENT2.email ? getField(contact, PARENT2.email, schema) : '';
-  const p2Phone = PARENT2.phone ? getField(contact, PARENT2.phone, schema) : '';
+  // Phone falls back to the homePhone role — several schools (Wooster)
+  // collect the co-parent's CELL in a separate field, and a cell-only
+  // Parent 2 was syncing in phoneless.
+  const p2Phone = (PARENT2.phone ? getField(contact, PARENT2.phone, schema) : '')
+    || (PARENT2.homePhone ? getField(contact, PARENT2.homePhone, schema) : '');
   if ((p2First || p2Last || p2Email || p2Phone) && !isPlaceholderParent2(p2First, p2Last, p2Email)) {
     parents.push({
       ghl_contact_id: null,
@@ -533,7 +537,8 @@ function buildProspectiveFamily(
   const p2First = PARENT2.firstName ? getField(contact, PARENT2.firstName, schema) : '';
   const p2Last = PARENT2.lastName ? getField(contact, PARENT2.lastName, schema) : '';
   const p2Email = PARENT2.email ? getField(contact, PARENT2.email, schema) : '';
-  const p2Phone = PARENT2.phone ? getField(contact, PARENT2.phone, schema) : '';
+  const p2Phone = (PARENT2.phone ? getField(contact, PARENT2.phone, schema) : '')
+    || (PARENT2.homePhone ? getField(contact, PARENT2.homePhone, schema) : '');
 
   // Best-effort student name extraction. Many schools name the opportunity
   // after the prospective student ("Jane Smith - Fall 2026") — try to
