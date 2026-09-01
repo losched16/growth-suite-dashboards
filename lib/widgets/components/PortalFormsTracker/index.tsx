@@ -329,8 +329,19 @@ function Component({
         >
           ⬇ Export all statuses
         </a>
+        {sp.form && sp.form !== 'all' ? (
+          <a
+            href={`/api/export/form-responses/${encodeURIComponent(school.locationId)}?form_id=${encodeURIComponent(sp.form)}&embed_token=${encodeURIComponent(deriveEmbedToken(school.locationId))}`}
+            className="inline-flex items-center gap-1.5 rounded-md border border-emerald-300 bg-white px-3 py-1.5 text-xs font-medium text-emerald-700 hover:bg-emerald-50"
+            title="CSV with EVERY question on this form as its own column — one row per submission, full answers"
+          >
+            ⬇ Export full answers
+          </a>
+        ) : null}
         <span className="text-[10px] text-gray-400">
-          Columns: form, family, parent, email, phone, student, grade, status, submitted date
+          {sp.form && sp.form !== 'all'
+            ? 'Status exports: form, family, parent, email, phone, student, grade, status, date. Full answers: every question as a column.'
+            : 'Columns: form, family, parent, email, phone, student, grade, status, submitted date. Pick a specific form above to also export FULL answers (every question as a column).'}
         </span>
       </div>
 
