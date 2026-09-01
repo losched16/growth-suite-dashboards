@@ -9,6 +9,15 @@ human digest.
 
 ## August 27, 2026
 
+### Form builder: CRM tags on submit, redone
+The "CRM tags on submit" box is now a chip editor: each tag is a chip
+with an x to remove it, an empty box explicitly says "No tags -
+submitting families are not tagged", and typing suggests the school's
+EXISTING CRM tags so you pick instead of retyping (and never fork a
+tag with a typo). The old grey example text ("flag football 2026")
+that looked like a stuck default is gone - it was only a placeholder,
+but now there is nothing to mistake.
+
 ### Portal home banner: renamed + parent dismissals
 The yellow home-page box is now titled "Parent Forms" (was "Action
 Items"). And parents can now dismiss a form they're not interested in
