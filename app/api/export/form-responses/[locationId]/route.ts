@@ -77,7 +77,10 @@ export async function GET(request: NextRequest, { params }: { params: Params }) 
   const extraKeys: string[] = [];
   for (const s of subs) {
     for (const k of Object.keys(s.responses ?? {})) {
-      if (!known.has(k) && !extraKeys.includes(k) && !k.endsWith('_signed_at')) extraKeys.push(k);
+      // _signed_at timestamps and _drawn signature image blobs are
+      // metadata, not answers — a base64 signature is ~24k chars, which
+      // blows past Excel's 32,767/cell limit and garbles the sheet.
+      if (!known.has(k) && !extraKeys.includes(k) && !k.endsWith('_signed_at') && !k.endsWith('_drawn')) extraKeys.push(k);
     }
   }
 
@@ -86,7 +89,14 @@ export async function GET(request: NextRequest, { params }: { params: Params }) 
     if (Array.isArray(v)) return v.map(String).join('; ');
     if (typeof v === 'boolean') return v ? 'Yes' : 'No';
     if (typeof v === 'object') return JSON.stringify(v);
-    return String(v);
+    const str = String(v);
+    // Embedded signature images: keep the cell readable + under
+    // Excel's per-cell limit.
+    if (str.startsWith('data:image')) return '[signature image]';
+    // Multi-line answers display as ONLY their first line in Excel's
+    // collapsed rows — which reads as "the answer got cut off". Flatten
+    // to one line so the full answer is always visible.
+    return str.replace(/\r?\n+/g, ' / ').trim();
   };
 
   type Row = Record<string, string>;

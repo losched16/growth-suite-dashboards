@@ -35,6 +35,49 @@ async function addContactTags(client: GhlClient, contactId: string, tags: string
   await client.axios.post(`/contacts/${contactId}/tags`, { tags });
 }
 
+// Co-parent identity fields stamped onto the P2 contact (Clint 8/28:
+// "the other parent also needs to be in the contact record, not just
+// the association"). Parent CONTACT info only — the no-student-data
+// policy for P2 contacts is unchanged. Field keys are GHL's slugs for
+// "Co-Parent Name" / "Co-Parent Email"; schools without those fields
+// simply skip (ids resolve to nothing).
+const COPARENT_NAME_KEY = 'coparent_name';
+const COPARENT_EMAIL_KEY = 'coparent_email';
+
+async function loadCoParentFieldIds(
+  client: GhlClient,
+): Promise<{ nameId: string | null; emailId: string | null }> {
+  try {
+    const { data } = await client.axios.get<{ customFields?: Array<{ id: string; fieldKey?: string }> }>(
+      `/locations/${client.locationId}/customFields`,
+    );
+    let nameId: string | null = null;
+    let emailId: string | null = null;
+    for (const f of data.customFields ?? []) {
+      const k = (f.fieldKey ?? '').replace(/^contact\./, '');
+      if (k === COPARENT_NAME_KEY) nameId = f.id;
+      if (k === COPARENT_EMAIL_KEY) emailId = f.id;
+    }
+    return { nameId, emailId };
+  } catch {
+    return { nameId: null, emailId: null };
+  }
+}
+
+async function stampCoParentFields(
+  client: GhlClient,
+  ids: { nameId: string | null; emailId: string | null },
+  p2ContactId: string,
+  p1Name: string,
+  p1Email: string | null,
+): Promise<void> {
+  const customFields: Array<{ id: string; field_value: string }> = [];
+  if (ids.nameId && p1Name.trim()) customFields.push({ id: ids.nameId, field_value: p1Name.trim() });
+  if (ids.emailId && p1Email?.trim()) customFields.push({ id: ids.emailId, field_value: p1Email.trim() });
+  if (customFields.length === 0) return;
+  await client.axios.put(`/contacts/${p2ContactId}`, { customFields });
+}
+
 export interface PromoteResult {
   total_families: number;
   already_promoted: number;
@@ -82,6 +125,9 @@ export async function promoteParent2sForSchool(
     ? `AND f.id = ANY($2::uuid[])`
     : '';
   const params: unknown[] = opts?.familyIds?.length ? [schoolId, opts.familyIds] : [schoolId];
+
+  // Lazily resolved once per run (see stampCoParentFields).
+  let coParentIds: { nameId: string | null; emailId: string | null } | null = null;
 
   const { rows: families } = await query<FamilyParents>(
     `SELECT
@@ -268,6 +314,18 @@ export async function promoteParent2sForSchool(
         console.warn(`[promote-p2] ${famName} tagging failed:`, coErr instanceof Error ? coErr.message : String(coErr));
       }
 
+      // Who-is-Parent-1 fields on the new P2 contact (see helpers above).
+      try {
+        coParentIds ??= await loadCoParentFieldIds(client);
+        await stampCoParentFields(
+          client, coParentIds, p2.id,
+          `${fam.p1_first_name ?? ''} ${fam.p1_last_name ?? ''}`.trim(),
+          fam.p1_email,
+        );
+      } catch (cfErr) {
+        console.warn(`[promote-p2] ${famName} co-parent field stamp failed:`, cfErr instanceof Error ? cfErr.message : String(cfErr));
+      }
+
       result.promoted_now++;
       const noteParts: string[] = [];
       noteParts.push(created ? 'created new contact' : 'reused existing contact');
@@ -306,6 +364,48 @@ export async function promoteParent2sForSchool(
         error: msg,
       });
       console.error(`[promote-p2] ${famName} failed:`, msg);
+    }
+  }
+
+  // ── Daily co-parent field refresh ────────────────────────────────
+  // Re-stamp Parent 1's name/email onto EVERY promoted P2 contact so
+  // renames, email changes, and hand-edits self-heal within a day.
+  // Idempotent PUTs (~200 for DGM), skipped on dry runs. Split-household
+  // contacts (primary anywhere) are excluded — they're real family
+  // records, not shells.
+  if (!opts?.dryRun && !opts?.familyIds?.length) {
+    try {
+      const { rows: pairs } = await query<{
+        p2_cid: string; p1_name: string; p1_email: string | null;
+      }>(
+        `SELECT p2.ghl_contact_id AS p2_cid,
+                TRIM(p1.first_name || ' ' || p1.last_name) AS p1_name,
+                p1.email AS p1_email
+           FROM families f
+           JOIN parents p1 ON p1.family_id = f.id AND p1.is_primary AND p1.status = 'active' AND p1.ghl_contact_id IS NOT NULL
+           JOIN parents p2 ON p2.family_id = f.id AND NOT p2.is_primary AND p2.status = 'active' AND p2.ghl_contact_id IS NOT NULL
+          WHERE f.school_id = $1 AND p2.ghl_contact_id <> p1.ghl_contact_id
+            AND NOT EXISTS (SELECT 1 FROM parents px
+                             WHERE px.ghl_contact_id = p2.ghl_contact_id
+                               AND px.school_id = p2.school_id AND px.is_primary)`,
+        [schoolId],
+      );
+      if (pairs.length > 0) {
+        const client = await loadGhlClient(schoolId);
+        coParentIds ??= await loadCoParentFieldIds(client);
+        if (coParentIds.nameId || coParentIds.emailId) {
+          for (const p of pairs) {
+            try {
+              await stampCoParentFields(client, coParentIds, p.p2_cid, p.p1_name, p.p1_email);
+            } catch {
+              // individual failures are non-fatal; next daily pass retries
+            }
+            await new Promise((r) => setTimeout(r, 120));
+          }
+        }
+      }
+    } catch (refreshErr) {
+      console.warn('[promote-p2] co-parent field refresh failed:', refreshErr instanceof Error ? refreshErr.message : String(refreshErr));
     }
   }
 
