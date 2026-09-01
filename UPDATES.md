@@ -9,6 +9,25 @@ human digest.
 
 ## August 27, 2026
 
+### Parent 2 contacts now show who Parent 1 is
+Every Parent 2 contact carries two new fields: Co-Parent Name and
+Co-Parent Email, holding the primary parent's info - open any Parent 2
+record and you immediately see whose partner they are, no digging in
+the Associations panel. All 197 Parent 2 contacts filled in, new ones
+get it automatically, and the values refresh nightly (so a renamed or
+re-emailed Parent 1 self-corrects within a day). Also found and
+restored 2 families whose co-parent link had been lost (Walker-Friend,
+Heiskell-Lynch); the other 197 were intact.
+
+### Form-responses CSV: Excel-friendly answers
+Answers looked "cut off" in Excel for two reasons, both fixed: 1)
+multi-line answers only show their first line in a collapsed Excel row
+- the export now flattens them to one line (segments joined with " / ")
+so the full answer is always visible; 2) drawn-signature image blobs
+(~24,000 characters, past Excel's 32,767 cell limit) were exported as
+a column and could garble the sheet - they're excluded now. The data
+was never actually missing from the files.
+
 ### Full-answers CSV export from the forms tracker
 The Portal Forms tracker's exports were status-only (family, parent,
 student, submitted-or-not). Now, when a specific form is selected in
