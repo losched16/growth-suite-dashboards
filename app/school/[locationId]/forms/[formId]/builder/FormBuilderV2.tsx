@@ -1262,6 +1262,72 @@ function TagChecklist({ options, selected, onToggle, checkboxClass }: {
   );
 }
 
+// Chip-style editor for submit_tags. The old comma-separated input's
+// grey placeholder ("flag football 2026") looked like a default tag
+// that couldn't be removed (Clint, 8/28). Chips make the empty state
+// explicit, x removes a tag, and the datalist suggests the school's
+// EXISTING CRM tags so the office doesn't retype (and mistype) them.
+function SubmitTagsEditor({ tags, tagOptions, onChange }: {
+  tags: string[];
+  tagOptions: string[];
+  onChange: (tags: string[]) => void;
+}) {
+  const [draft, setDraft] = useState('');
+  const add = (raw: string) => {
+    const v = raw.trim().replace(/,+$/, '');
+    if (!v) return;
+    if (!tags.some((x) => x.toLowerCase() === v.toLowerCase())) onChange([...tags, v]);
+    setDraft('');
+  };
+  return (
+    <div>
+      {tags.length === 0 ? (
+        <p className="mb-1.5 text-[11px] italic text-slate-500">
+          No tags — submitting families are not tagged. Add one below only if you want a sign-up list.
+        </p>
+      ) : (
+        <div className="mb-1.5 flex flex-wrap gap-1.5">
+          {tags.map((t) => (
+            <span key={t} className="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-xs text-blue-800">
+              {t}
+              <button
+                type="button"
+                onClick={() => onChange(tags.filter((x) => x !== t))}
+                className="font-bold leading-none text-blue-500 hover:text-blue-900"
+                title={`Remove “${t}”`}
+              >
+                &times;
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+      <input
+        className="w-full rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
+        list="submit-tag-options"
+        value={draft}
+        onChange={(e) => {
+          const v = e.target.value;
+          // Picking a datalist suggestion fires onChange with the full
+          // value — add it immediately so one click is enough.
+          if (tagOptions.includes(v)) add(v);
+          else setDraft(v);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); add(draft); }
+        }}
+        onBlur={() => add(draft)}
+        placeholder="Type to add a tag — existing tags are suggested"
+      />
+      <datalist id="submit-tag-options">
+        {tagOptions.filter((t) => !tags.some((x) => x.toLowerCase() === t.toLowerCase())).slice(0, 400).map((t) => (
+          <option key={t} value={t} />
+        ))}
+      </datalist>
+    </div>
+  );
+}
+
 function FormSettingsPanel({ settings, onPatch, programOptions, gradeOptions, tagOptions, studentOptions, submissionCount = 0 }: {
   settings: FormSettings; onPatch: (patch: Partial<FormSettings>) => void;
   submissionCount?: number;
@@ -1308,11 +1374,14 @@ function FormSettingsPanel({ settings, onPatch, programOptions, gradeOptions, ta
       </div>
       <div>
         <label className={lbl}>CRM tags on submit</label>
-        <input className={input} value={settings.submit_tags.join(', ')} placeholder="flag football 2026"
-          onChange={(e) => onPatch({ submit_tags: e.target.value.split(',').map((s) => s.trim()).filter(Boolean) })} />
+        <SubmitTagsEditor
+          tags={settings.submit_tags}
+          tagOptions={tagOptions}
+          onChange={(t) => onPatch({ submit_tags: t })}
+        />
         <p className="mt-1 text-[11px] text-slate-400">
           Each family that submits gets these tags on their CRM contacts — build a smart list on the tag to
-          email everyone who signed up, any time. Saving also tags families that already submitted. Comma-separated.
+          email everyone who signed up, any time. Saving also tags families that already submitted.
         </p>
       </div>
       <label className={toggle}>One form per student<input type="checkbox" checked={settings.per_student} onChange={(e) => onPatch({ per_student: e.target.checked })} className={cb} /></label>
