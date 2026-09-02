@@ -248,6 +248,36 @@ export default async function FamilyFormsPage({
       ORDER BY display_name`,
     [school.id],
   );
+
+  // Emergency contacts + authorized pickups, inline. The office hunts for
+  // a family's pickup list from THIS page (Wooster, 2026-09-02) — pickups
+  // live in pickup_persons (parent-managed, Family tab), emergency
+  // contacts in the family's latest emergency-medical submission. Show
+  // both here so "where are her pickups?" has one answer.
+  const { rows: pickupRows } = await query<{ name: string; relationship: string | null; phone: string | null }>(
+    `SELECT name, relationship, phone FROM pickup_persons
+      WHERE school_id = $1 AND family_id = $2 AND active = true
+      ORDER BY name`,
+    [school.id, familyId],
+  );
+  const { rows: emRows } = await query<{ responses: Record<string, unknown> }>(
+    `SELECT ps.responses
+       FROM portal_form_submissions ps
+       JOIN portal_form_definitions d ON d.id = ps.form_definition_id
+      WHERE ps.school_id = $1 AND ps.family_id = $2 AND d.slug = 'emergency-medical'
+        AND ps.status IN ('submitted', 'paid', 'legacy_imported')
+      ORDER BY (ps.status <> 'legacy_imported') DESC, ps.created_at DESC
+      LIMIT 1`,
+    [school.id, familyId],
+  );
+  const emResp = (emRows[0]?.responses ?? {}) as Record<string, unknown>;
+  const emergencyContacts = [1, 2, 3, 4, 5]
+    .map((n) => ({
+      name: String(emResp[`ec${n}_name`] ?? '').trim(),
+      relationship: String(emResp[`ec${n}_relationship`] ?? '').trim(),
+      phone: String(emResp[`ec${n}_phone`] ?? '').trim(),
+    }))
+    .filter((c) => c.name);
   const submittedFormIds = new Set(Array.from(byForm.keys()));
   const stillNeeded = requiredForms.filter((f) => !submittedFormIds.has(f.id));
 
@@ -272,15 +302,42 @@ export default async function FamilyFormsPage({
                 {submissions.filter((s) => !s.is_test).length} submission{submissions.filter((s) => !s.is_test).length === 1 ? '' : 's'}
               </p>
             </div>
-            <a
-              href={viewAsParentHref}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 rounded-md border border-blue-300 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-800 hover:bg-blue-100 print:hidden"
-              title="Sign in as this family's primary parent. Verify prefill and see what they see."
-            >
-              👤 View as parent
-            </a>
+            <div className="flex items-center gap-2 print:hidden">
+              <Link
+                href={`/school/${locationId}/families/${familyId}/pickups?chrome=none`}
+                className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                title="Office management of this family's authorized pickup people."
+              >
+                🚗 Manage pickups
+              </Link>
+              <a
+                href={viewAsParentHref}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 rounded-md border border-blue-300 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-800 hover:bg-blue-100"
+                title="Sign in as this family's primary parent. Verify prefill and see what they see."
+              >
+                👤 View as parent
+              </a>
+            </div>
+          </div>
+          <div className="mt-3 grid gap-3 sm:grid-cols-2 text-xs">
+            <div className="rounded-md border border-slate-200 bg-white p-3">
+              <div className="font-semibold text-slate-700 mb-1">Authorized pickups <span className="font-normal text-slate-400">(parent-managed, Family tab)</span></div>
+              {pickupRows.length === 0
+                ? <p className="text-slate-400">None added yet.</p>
+                : <ul className="space-y-0.5">{pickupRows.map((p, i) => (
+                    <li key={i} className="text-slate-700">{p.name}{p.relationship ? <span className="text-slate-500"> · {p.relationship}</span> : null}{p.phone ? <span className="text-slate-500"> · {p.phone}</span> : null}</li>
+                  ))}</ul>}
+            </div>
+            <div className="rounded-md border border-slate-200 bg-white p-3">
+              <div className="font-semibold text-slate-700 mb-1">Emergency contacts <span className="font-normal text-slate-400">(latest Emergency Medical form)</span></div>
+              {emergencyContacts.length === 0
+                ? <p className="text-slate-400">No emergency-medical submission on file.</p>
+                : <ul className="space-y-0.5">{emergencyContacts.map((c, i) => (
+                    <li key={i} className="text-slate-700">{c.name}{c.relationship ? <span className="text-slate-500"> · {c.relationship}</span> : null}{c.phone ? <span className="text-slate-500"> · {c.phone}</span> : null}</li>
+                  ))}</ul>}
+            </div>
           </div>
           {parents.length > 0 ? (
             <div className="mt-2 flex flex-wrap gap-3 text-xs text-slate-600">
