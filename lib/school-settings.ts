@@ -21,6 +21,14 @@ export interface SchoolSettings {
   // When non-empty: only contacts carrying one of these tags become roster
   // families ("withdrawn" keeps the family but marks students withdrawn).
   roster_tag_filter: string[];
+  // Per-student enrollment status for tag-filtered rosters (opt-in). When
+  // true, each student's OWN "Student N Enrollment Status" field decides:
+  // "Enrolled" -> enrolled, "Withdrawn" -> withdrawn, anything else (incl.
+  // blank) -> not counted. Blank deliberately does NOT mean enrolled — the
+  // office marks every student explicitly, so one child can withdraw while a
+  // sibling stays enrolled. When false, the roster tag alone marks every
+  // student on the contact enrolled (the original all-or-nothing behavior).
+  per_student_enrollment_status: boolean;
   // CRM sidebar items to hide for this school's sub-account (GHL has no
   // native per-location menu toggle). Values are GHL sidebar element ids
   // without the "sb_" prefix (e.g. 'payments', 'opportunities'). Applied by
@@ -87,6 +95,7 @@ export const SCHOOL_SETTINGS_DEFAULTS: SchoolSettings = {
   auto_student_ids: false,
   promote_parent2: false,
   roster_tag_filter: [],
+  per_student_enrollment_status: false,
   ghl_hidden_menu: [],
   merge_coparent_students: false,
   coparent_household_field: null,
@@ -107,6 +116,7 @@ export function normalizeSchoolSettings(raw: unknown): SchoolSettings {
     roster_tag_filter: Array.isArray(r.roster_tag_filter)
       ? r.roster_tag_filter.map((t) => String(t ?? '').trim()).filter(Boolean)
       : [],
+    per_student_enrollment_status: r.per_student_enrollment_status === true,
     ghl_hidden_menu: Array.isArray(r.ghl_hidden_menu)
       ? r.ghl_hidden_menu.map((t) => String(t ?? '').trim().toLowerCase()).filter(Boolean)
       : [],

@@ -1128,14 +1128,28 @@ export async function runGhlSync(schoolId: string): Promise<SyncResult> {
       if (isWithdrawn(c)) {
         for (const s of family.students) s.enrollment_status = 'withdrawn';
       } else if (rosterTags.length > 0) {
-        // Tag-filtered rosters (settings.roster_tag_filter): the roster tag
-        // itself (e.g. "2026-27 stms") IS the enrolled-class marker — these
-        // schools have no separate enrollment-status field to map, so each
-        // student otherwise defaults to the placeholder "unknown" and never
-        // gets an enrollment row. Force non-withdrawn tagged students to
-        // enrolled so they land on the Student Roster / Family Hub, which
-        // default to the enrolled-only scope.
-        for (const s of family.students) s.enrollment_status = 'enrolled';
+        if (schoolSettings.per_student_enrollment_status) {
+          // Per-student status (settings.per_student_enrollment_status): each
+          // student's OWN "Student N Enrollment Status" field decides —
+          // "Enrolled" -> enrolled, "Withdrawn" -> withdrawn, anything else
+          // (incl. blank) -> no enrollment row, so the student is NOT counted.
+          // Blank deliberately does NOT default to enrolled: the office marks
+          // every student explicitly, which is what lets one child withdraw
+          // while a sibling on the same contact stays enrolled.
+          for (const s of family.students) {
+            const own = normalizeEnrollmentStatus(s.enrollment_status, []);
+            s.enrollment_status = own === 'withdrawn' ? 'withdrawn' : own === 'enrolled' ? 'enrolled' : '';
+          }
+        } else {
+          // Tag-filtered rosters (settings.roster_tag_filter): the roster tag
+          // itself (e.g. "2026-27 stms") IS the enrolled-class marker — these
+          // schools have no separate enrollment-status field to map, so each
+          // student otherwise defaults to the placeholder "unknown" and never
+          // gets an enrollment row. Force non-withdrawn tagged students to
+          // enrolled so they land on the Student Roster / Family Hub, which
+          // default to the enrolled-only scope.
+          for (const s of family.students) s.enrollment_status = 'enrolled';
+        }
       }
       if (coparentHouseholdField) family.household_link_id = getField(c, coparentHouseholdField, schema);
       withHouseholdId++;
