@@ -60,6 +60,15 @@ export async function PaymentsHubInvoices({
   const invoices = allInvoices.filter((inv) => {
     if (needle && !(`${inv.invoice_number} ${inv.family_label} ${inv.student_label ?? ''} ${inv.title}`.toLowerCase().includes(needle))) return false;
     if (statusFilter === 'overdue') return isOverdue(inv);
+    // "Payment sent" = money is clearing; "Awaiting payment" = the
+    // family has sent nothing. Splitting these is the whole point —
+    // both used to read as plain "Open".
+    if (statusFilter === 'pending_payment') {
+      return (inv.status === 'open' || inv.status === 'partially_paid') && inv.has_pending_payment;
+    }
+    if (statusFilter === 'awaiting_payment') {
+      return (inv.status === 'open' || inv.status === 'partially_paid') && !inv.has_pending_payment;
+    }
     if (statusFilter && inv.status !== statusFilter) return false;
     return true;
   });
@@ -106,12 +115,16 @@ export async function PaymentsHubInvoices({
     if (inv.status === 'draft') { acc.draftN += 1; acc.draftTotal += inv.total_cents; }
     else if (inv.status === 'open' || inv.status === 'partially_paid') {
       acc.dueN += 1; acc.dueTotal += owed;
+      // In flight = the family has paid, the money just hasn't cleared
+      // yet (bank transfers take 3-5 business days). Counted separately
+      // from overdue so the office doesn't chase families who already paid.
+      if (inv.has_pending_payment) { acc.pendingN += 1; acc.pendingTotal += owed; }
       if (new Date(inv.due_at) < new Date() && !inv.has_pending_payment) { acc.overdueN += 1; acc.overdueTotal += owed; }
     } else if (inv.status === 'paid') {
       acc.paidN += 1; acc.paidTotal += inv.amount_paid_cents;
     }
     return acc;
-  }, { draftN: 0, draftTotal: 0, dueN: 0, dueTotal: 0, paidN: 0, paidTotal: 0, overdueN: 0, overdueTotal: 0 });
+  }, { draftN: 0, draftTotal: 0, dueN: 0, dueTotal: 0, paidN: 0, paidTotal: 0, overdueN: 0, overdueTotal: 0, pendingN: 0, pendingTotal: 0 });
 
   return (
     <div className="space-y-4">
@@ -142,17 +155,21 @@ export async function PaymentsHubInvoices({
         defaultOpen={false}
         steps={[
           <>Invoices are created automatically when a tuition plan starts (one per installment) or manually via <strong>New invoice</strong>.</>,
-          <>The four cards across the top tally <strong>drafts</strong>, <strong>amount due</strong>, <strong>amount received</strong>, and anything <strong>overdue</strong>. Overdue is calculated against each invoice&apos;s due date.</>,
+          <>The cards across the top tally <strong>drafts</strong>, <strong>amount due</strong>, <strong>amount received</strong>, payments <strong>clearing</strong>, and anything <strong>overdue</strong>.</>,
+          <><strong>&ldquo;Payment sent&rdquo; means the family has paid and the money is still clearing</strong> &mdash; bank transfers take 3&ndash;5 business days to land. Those invoices stay Open until the funds arrive, and they are deliberately kept out of the Overdue count, so don&apos;t chase them. <strong>Overdue</strong> means nothing has been sent at all.</>,
           <>Use the search box to find an invoice by number, family name, or parent name. Click any invoice number to view it.</>,
           <>The <strong>Source</strong> column tells you where the invoice came from: a tuition plan, a manual create, an enrollment deposit, or an autopay run.</>,
         ]}
       />
 
       {/* GHL-style KPI strip */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
         <KPICard label={`${kpi.draftN} Invoice(s) in Draft`}    value={fmt(kpi.draftTotal)} />
         <KPICard label={`${kpi.dueN} Invoice(s) in Due`}        value={fmt(kpi.dueTotal)} />
         <KPICard label={`${kpi.paidN} Invoice(s) received`}     value={fmt(kpi.paidTotal)} />
+        <Link href={`/school/${locationId}/payments?tab=invoices&status=pending_payment`} className="block">
+          <KPICard label={`${kpi.pendingN} Payment(s) clearing`} value={fmt(kpi.pendingTotal)} />
+        </Link>
         <Link href={`/school/${locationId}/payments?tab=invoices&status=overdue`} className="block">
           <KPICard label={`${kpi.overdueN} Invoice(s) Overdue`}   value={fmt(kpi.overdueTotal)} tone={kpi.overdueN > 0 ? 'warn' : undefined} />
         </Link>
@@ -170,7 +187,9 @@ export async function PaymentsHubInvoices({
         </div>
         <select name="status" defaultValue={statusFilter} className="rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm">
           <option value="">All statuses</option>
-          <option value="overdue">⚠ Overdue</option>
+          <option value="overdue">⚠ Overdue (nothing received)</option>
+          <option value="pending_payment">⏳ Payment sent — clearing</option>
+          <option value="awaiting_payment">Awaiting payment — nothing sent</option>
           <option value="open">Open</option>
           <option value="partially_paid">Partially paid</option>
           <option value="paid">Paid</option>
@@ -225,7 +244,7 @@ export async function PaymentsHubInvoices({
                   ) : null}
                 </td>
                 <td className="px-4 py-2 text-slate-700">{inv.title}</td>
-                <td className="px-4 py-2 text-center"><StatusPill status={inv.status} /></td>
+                <td className="px-4 py-2 text-center"><StatusPill status={inv.status} pending={inv.has_pending_payment} /></td>
                 <td className="px-4 py-2 text-right font-mono">
                   ${(inv.total_cents / 100).toFixed(2)}
                   {inv.amount_paid_cents > 0 && inv.amount_paid_cents < inv.total_cents ? (
@@ -305,7 +324,23 @@ function KPICard({ label, value, tone }: { label: string; value: string; tone?: 
   );
 }
 
-function StatusPill({ status }: { status: string }) {
+function StatusPill({ status, pending }: { status: string; pending?: boolean }) {
+  // A bank (ACH) payment sits in flight for 3-5 business days before it
+  // settles, during which the invoice is still 'open'. Showing plain
+  // "Open" made a family who HAD paid look identical to one who never
+  // tried, so the office chased people who were already paying
+  // (Rachael, 2026-09-04). Surface the in-flight state on the status
+  // column itself — that's the column the office actually scans.
+  if (pending && (status === 'open' || status === 'partially_paid')) {
+    return (
+      <span
+        className="rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-sky-800"
+        title="A payment has been submitted and is clearing. Bank transfers take 3-5 business days to settle."
+      >
+        Payment sent
+      </span>
+    );
+  }
   const map: Record<string, { bg: string; fg: string; label: string }> = {
     draft:              { bg: 'bg-slate-100',    fg: 'text-slate-700',    label: 'Draft' },
     open:               { bg: 'bg-amber-100',    fg: 'text-amber-800',    label: 'Open' },
