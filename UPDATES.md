@@ -7,6 +7,23 @@ human digest.
 
 ---
 
+## September 4, 2026
+
+### Maelynn Walker kiosk outage (fixed same morning)
+Restoring the Friend/Walker co-parent link on 8/28 caused this
+morning's sync to merge the family's two records into one household.
+The merge preserved attendance history and most logins, but it dropped
+Bridgette Friend's kiosk PIN, Ian Walker's credentials, and the
+blended family's per-parent visibility rules - so the family could not
+be pulled up at the kiosk and Maelynn appeared "missing." Fixed within
+the hour: new PINs issued for Bridgette and Ian (given to the office
+directly), per-parent scoping restored (Bridgette sees all three kids;
+Ian sees only Maelynn; Patrick sees only Lola + Tristan), and both
+PINs verified against the live kiosk showing the right children.
+Attendance history was never lost. Lesson recorded: never restore a
+co-parent link on a blended family without snapshotting credentials
+and scoping first - the link can trigger a household merge.
+
 ## August 27, 2026
 
 ### Parent 2 contacts now show who Parent 1 is
