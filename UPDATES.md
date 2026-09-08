@@ -7,6 +7,22 @@ human digest.
 
 ---
 
+## September 8, 2026
+
+### Maelynn Walker showed in CR12 with Lower El data (fixed + root-caused)
+Follow-on from the 9/4 Friend/Walker family merge: Maelynn (MYHS,
+Suite 100) appeared in Classroom 12 with her step-siblings, carrying
+Lola's grade/program/teacher — and even Lola's tuition attributes.
+Root cause: in a merged blended family, two children can share a slot
+number on different parents' contacts, and the real-time sync applied
+slot values by number alone, so updates to one parent's contact
+overwrote the other parent's child. Fixed in the sync (slot values now
+only apply to the child sourced from that same contact), Maelynn's
+record corrected from her true source (Suite 100 / D1 / MYHS /
+Ms. Nova, correct tuition), and verified stable through a full sync
+rebuild: she now shows in Suite 100, not CR12, and Lola/Tristan are
+untouched. Her PINs/scoping from the 9/4 fix also verified intact.
+
 ## September 4, 2026
 
 ### Maelynn Walker kiosk outage (fixed same morning)
