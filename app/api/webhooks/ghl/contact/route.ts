@@ -388,7 +388,7 @@ async function applyFullSync(
     //    already synced above, so a failure here never fails the webhook.
     try {
       const meta = await propagateContactFieldsToFamilyMetadata(
-        q, schoolId, familyId, idByKey, cfById,
+        q, schoolId, familyId, idByKey, cfById, contactId,
       );
       rowsAffected += meta.students_updated + meta.enrollments_reconciled;
     } catch (e) {

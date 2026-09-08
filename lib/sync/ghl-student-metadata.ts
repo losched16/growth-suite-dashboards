@@ -101,6 +101,7 @@ export async function propagateContactFieldsToFamilyMetadata(
   familyId: string,
   idByKey: Map<string, string>,    // field_key  → field_id
   cfById: Map<string, unknown>,    // field_id   → value
+  sourceContactId?: string,        // which contact these values came from
 ): Promise<{ students_updated: number; keys_updated: number; enrollments_reconciled: number }> {
   // Build slot → base → value from the live contact's fields.
   const bySlot = new Map<number, Map<string, string>>();
@@ -129,6 +130,15 @@ export async function propagateContactFieldsToFamilyMetadata(
     const md = s.metadata ?? {};
     const slot = parseInt(String(md.ghl_slot ?? ''), 10);
     if (!Number.isInteger(slot) || slot < 1 || slot > 4) continue;
+    // Slot numbers are per-CONTACT, not per-family: in a merged blended
+    // family two children can share a slot number on different parents'
+    // contacts (Friend/Walker: Lola = Bridgette's slot 1, Maelynn = Ian's
+    // slot 1). Only apply this contact's values to students SOURCED from
+    // it — otherwise a webhook on one parent's contact overwrites the
+    // other parent's child with a sibling's classroom/grade/program
+    // (how Maelynn ended up in CR12, 9/4).
+    const srcContact = String(md.ghl_contact_id ?? '');
+    if (sourceContactId && srcContact && srcContact !== sourceContactId) continue;
     const bases = bySlot.get(slot);
     if (!bases) continue;
 
@@ -241,9 +251,17 @@ export async function refreshStudentMetadataFromGhl(schoolId: string): Promise<M
     // matters when the school edited just one contact). perBase also
     // tracks every distinct value per field so we can flag co-parent
     // contacts that DISAGREE (e.g. one says Enrolled, the other Accepted).
+    // Same per-contact slot rule as the webhook path: when the student
+    // row records which contact it came from, read that contact's slot
+    // ONLY — family-wide first-non-empty is just the legacy fallback for
+    // rows without a recorded source.
+    const srcContact = String((md as Record<string, unknown>).ghl_contact_id ?? '');
+    const contactPool = srcContact && (bySlot.get(srcContact)?.get(slot))
+      ? [srcContact]
+      : (contactsByFamily.get(s.family_id) ?? []);
     const merged = new Map<string, string>();
     const perBase = new Map<string, Set<string>>();
-    for (const contactId of contactsByFamily.get(s.family_id) ?? []) {
+    for (const contactId of contactPool) {
       const bases = bySlot.get(contactId)?.get(slot);
       if (!bases) continue;
       for (const [base, v] of bases) {
