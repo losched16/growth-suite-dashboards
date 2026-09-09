@@ -18,6 +18,8 @@ import { loadSchoolByLocationId } from '@/lib/dashboards/loader';
 import { SCHOOL_SESSION_COOKIE, verifySchoolSession } from '@/lib/auth/school';
 import { ClassroomTopNav } from '@/components/ClassroomTopNav';
 import { PrintButton } from '@/lib/widgets/components/_shared/PrintButton';
+import { deriveEmbedToken } from '@/lib/auth/embed';
+import { Paperclip } from 'lucide-react';
 import { getTeacherIdentity } from '@/lib/auth/teacher-identity';
 import { getStaffDirectory } from '@/lib/auth/staff-directory';
 import { IdentityPicker } from '../staff-requests/IdentityPicker';
@@ -185,6 +187,31 @@ export default async function TeacherFormsPage({
     [school.id, classroomLabel, formSlugs],
   );
 
+  // Uploaded files (birth certificates etc.) live in
+  // portal_form_submission_files, NOT in responses — without this the
+  // viewer silently hid every file-upload answer (how SST "couldn't
+  // see" flag-football birth certificates, 9/9). Served by the existing
+  // staff-requests file route (school session or embed token).
+  const subIds = rows.map((r) => r.submission_id);
+  const filesBySub = new Map<string, Array<{ id: string; display_name: string; original_filename: string; size_bytes: number }>>();
+  if (subIds.length > 0) {
+    const { rows: fileRows } = await query<{
+      id: string; submission_id: string; display_name: string;
+      original_filename: string; size_bytes: number;
+    }>(
+      `SELECT id, submission_id, display_name, original_filename, size_bytes
+         FROM portal_form_submission_files
+        WHERE submission_id = ANY($1::uuid[])
+        ORDER BY display_name`,
+      [subIds],
+    );
+    for (const f of fileRows) {
+      if (!filesBySub.has(f.submission_id)) filesBySub.set(f.submission_id, []);
+      filesBySub.get(f.submission_id)!.push(f);
+    }
+  }
+  const fileToken = deriveEmbedToken(locationId);
+
   // Group by form; keep only the NEWEST submission per (form, student).
   const byForm = new Map<string, { name: string; subs: SubRow[] }>();
   const seen = new Set<string>();
@@ -264,6 +291,24 @@ export default async function TeacherFormsPage({
                                 </div>
                               ))}
                             </dl>
+                            {(filesBySub.get(sub.submission_id) ?? []).length > 0 ? (
+                              <div className="mt-2 space-y-1">
+                                {(filesBySub.get(sub.submission_id) ?? []).map((f) => (
+                                  <a
+                                    key={f.id}
+                                    href={`/api/school/staff-requests/files/${f.id}?embed_token=${encodeURIComponent(fileToken)}`}
+                                    target="_blank"
+                                    rel="noopener"
+                                    className="flex items-center gap-1.5 text-xs text-blue-700 hover:underline print:text-slate-700"
+                                  >
+                                    <Paperclip className="h-3 w-3 shrink-0" />
+                                    <span className="font-medium">{f.display_name}:</span>
+                                    <span>{f.original_filename}</span>
+                                    <span className="text-slate-400">({Math.max(1, Math.round(f.size_bytes / 1024))} KB)</span>
+                                  </a>
+                                ))}
+                              </div>
+                            ) : null}
                           </div>
                         </details>
                       </li>
