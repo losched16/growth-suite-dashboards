@@ -741,17 +741,23 @@ export async function POST(request: NextRequest, { params }: { params: Params })
             );
             await rewriteSingleLine(ins.rows[0].id, title, cents, enr.student_id, q);
           }
+          // The enrollment id is compared as TEXT in the subquery and as UUID
+          // in the outer WHERE. Postgres gives a parameter exactly one type,
+          // so sharing $2 across both made it `text = uuid` and the whole
+          // reschedule rolled back with "operator does not exist" — this
+          // action had never once succeeded. Pass the id twice, as the other
+          // actions in this file already do (see record_payment).
           await q(
             `UPDATE family_tuition_enrollments
                 SET installment_count = (
                   SELECT COUNT(*) FROM invoices
                    WHERE school_id = $1 AND source = 'tuition_plan'
-                     AND source_ref->>'enrollment_id' = $2
+                     AND source_ref->>'enrollment_id' = $3
                      AND status NOT IN ('voided')
                 ),
                 updated_at = now()
               WHERE id = $2`,
-            [schoolId, enrollmentId],
+            [schoolId, enrollmentId, enrollmentId],
           );
         });
 
