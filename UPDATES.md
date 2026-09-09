@@ -7,6 +7,21 @@ human digest.
 
 ---
 
+## September 9, 2026
+
+### SST can now see flag-football birth certificates
+Gautham couldn't see registrants' birth certificates for three stacked
+reasons, all fixed: 1) the certificates arrive on the separate "Flag
+Football Verification to Play Form" (the registration form has no
+upload question); 2) his email wasn't on either form's Notify list
+(only athletics@ / frontdesk@), so the My Forms view showed him
+neither — he's now on both lists and in the staff name picker; 3) the
+Form Submissions viewer only displayed typed answers — uploaded FILES
+were invisible on every form. The viewer now shows each submission's
+uploads as download links (question label, filename, size). Verified
+end-to-end as Gautham: both forms visible, all 3 birth certificates
+listed, file download byte-exact.
+
 ## September 8, 2026
 
 ### Maelynn Walker showed in CR12 with Lower El data (fixed + root-caused)
