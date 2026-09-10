@@ -7,6 +7,31 @@ human digest.
 
 ---
 
+## September 10, 2026
+
+### Enrollment agreement now appears automatically for Pending students
+Adding a sibling to a family contact and marking them Pending is now
+all it takes - the enrollment agreement shows up in that family's
+portal on its own. Previously the form ALSO required a "pending" tag
+on the family contact, and if the office missed that step the form
+silently never appeared (this is what happened with Sofia Palma on the
+Cortez record).
+
+The old tag path still works as a fallback, because 27 active students
+currently have a BLANK enrollment status and several prospective
+families rely on the tag today - switching to status alone would have
+cut off 5 students mid-enrollment, 2 of whom hadn't submitted yet.
+Nobody lost access in this change.
+
+Verified in three real portals: the Cortez family sees the agreement
+for Sofia only (with NO tag - purely status-driven) and not for her
+enrolled brother Emmett; the Rankin family (blank status, tagged)
+still sees it for both children; a fully-enrolled family sees nothing.
+
+Office follow-up worth doing: fill in the 27 blank enrollment statuses.
+Once those are set, the tag step can be retired completely and student
+status becomes the single source of truth.
+
 ## September 9, 2026
 
 ### SST can now see flag-football birth certificates
