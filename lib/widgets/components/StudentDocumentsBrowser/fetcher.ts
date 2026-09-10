@@ -22,6 +22,13 @@ export interface DocumentRow {
   visible_to_teacher: boolean;
   visible_to_parent: boolean;
   expires_at: string | null;
+  // Where the file lives. 'document' = office/teacher upload in
+  // student_documents. 'parent_upload' = a file a PARENT attached to a
+  // portal form (birth certificate, insurance card). Parent uploads are
+  // surfaced read-only here so staff stop having to hunt through form
+  // submissions for them (Sonia, 9/9 call).
+  source: 'document' | 'parent_upload';
+  form_name: string | null;
 }
 
 export interface StudentOption {
@@ -58,6 +65,7 @@ export const PRESET_CATEGORIES: ReadonlyArray<{ key: string; label: string }> = 
   { key: 'immunization', label: 'Immunization' },
   { key: 'enrollment', label: 'Enrollment' },
   { key: 'transcript', label: 'Transcript' },
+  { key: 'parent', label: 'Parent uploads' },
 ];
 
 export async function fetcher(
@@ -143,8 +151,86 @@ export async function fetcher(
       visible_to_teacher: r.visible_to_teacher,
       visible_to_parent: r.visible_to_parent,
       expires_at: r.expires_at ? (typeof r.expires_at === 'string' ? r.expires_at : new Date(r.expires_at).toISOString().slice(0, 10)) : null,
+      source: 'document' as const,
+      form_name: null,
     };
   });
+
+  // ── Parent form uploads ────────────────────────────────────────────
+  // Files parents attached to portal forms, shown as read-only rows in
+  // the same list (category "parent"). No copying: they stream from the
+  // same submission-files route, so nothing can drift out of sync.
+  const { rows: rawParentFiles } = await query<{
+    id: string;
+    student_id: string;
+    student_first: string;
+    student_last: string;
+    student_preferred: string | null;
+    classroom_name: string | null;
+    display_name: string | null;
+    original_filename: string;
+    mime_type: string;
+    size_bytes: number;
+    uploaded_at: string;
+    form_name: string;
+    parent_name: string | null;
+  }>(
+    `SELECT
+       pf.id,
+       sub.student_id,
+       s.first_name     AS student_first,
+       s.last_name      AS student_last,
+       s.preferred_name AS student_preferred,
+       c.name           AS classroom_name,
+       pf.display_name, pf.original_filename, pf.mime_type, pf.size_bytes,
+       pf.uploaded_at,
+       d.display_name   AS form_name,
+       NULLIF(TRIM(CONCAT_WS(' ', p.first_name, p.last_name)), '') AS parent_name
+     FROM portal_form_submission_files pf
+     JOIN portal_form_submissions sub ON sub.id = pf.submission_id
+     JOIN portal_form_definitions d   ON d.id = sub.form_definition_id
+     JOIN students s ON s.id = sub.student_id AND s.status = 'active'
+     LEFT JOIN parents p ON p.id = pf.uploaded_by_parent_id
+     LEFT JOIN LATERAL (
+       SELECT classroom_id FROM enrollments
+        WHERE student_id = s.id
+        ORDER BY created_at DESC LIMIT 1
+     ) e ON true
+     LEFT JOIN classrooms c ON c.id = e.classroom_id
+     WHERE pf.school_id = $1
+       AND COALESCE(sub.is_test, false) = false
+       AND sub.status IN ('submitted', 'paid', 'pending_payment', 'legacy_imported')
+     ORDER BY pf.uploaded_at DESC`,
+    [school.schoolId],
+  );
+
+  const parentRows: DocumentRow[] = rawParentFiles.map((r) => {
+    const displayFirst = (r.student_preferred?.trim() || r.student_first || '').trim();
+    return {
+      id: r.id,
+      student_id: r.student_id,
+      student_label: `${(r.student_last || '').toLowerCase()},${displayFirst.toLowerCase()}`,
+      student_display: `${displayFirst} ${r.student_last ?? ''}`.trim(),
+      classroom_name: r.classroom_name,
+      title: (r.display_name || '').trim() || r.original_filename,
+      category: 'parent',
+      description: `Uploaded by parent on "${r.form_name}"`,
+      file_name: r.original_filename,
+      mime_type: r.mime_type,
+      size_bytes: r.size_bytes,
+      uploaded_by: r.parent_name,
+      uploaded_at: typeof r.uploaded_at === 'string' ? r.uploaded_at : new Date(r.uploaded_at).toISOString(),
+      // Parents submitted these themselves, and staff need them — the
+      // whole point of surfacing them here.
+      visible_to_teacher: true,
+      visible_to_parent: true,
+      expires_at: null,
+      source: 'parent_upload' as const,
+      form_name: r.form_name,
+    };
+  });
+  allRows.push(...parentRows);
+  allRows.sort((a, b) => (a.uploaded_at < b.uploaded_at ? 1 : a.uploaded_at > b.uploaded_at ? -1 : 0));
 
   // ── Filters ────────────────────────────────────────────────────────
   // Standard filters:

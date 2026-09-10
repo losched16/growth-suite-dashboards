@@ -229,14 +229,16 @@ function Row({ d, dlToken }: { d: DocumentRow; dlToken: string }) {
       <td className="px-3 py-2 align-top text-right whitespace-nowrap">
         <div className="inline-flex items-center gap-1">
           <a
-            href={`/api/school/documents/${d.id}/download?embed_token=${encodeURIComponent(dlToken)}`}
+            href={d.source === 'parent_upload'
+              ? `/api/school/staff-requests/files/${d.id}?embed_token=${encodeURIComponent(dlToken)}`
+              : `/api/school/documents/${d.id}/download?embed_token=${encodeURIComponent(dlToken)}`}
             target="_blank" rel="noopener"
             className="inline-flex items-center gap-1 rounded border border-slate-300 bg-white px-2 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-50"
             title={`Download ${d.file_name}`}
           >
             <Download className="h-3 w-3" /> Open
           </a>
-          <DeleteDocumentButton id={d.id} />
+          {d.source === 'parent_upload' ? null : <DeleteDocumentButton id={d.id} />}
         </div>
       </td>
     </tr>

@@ -14,6 +14,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ArrowLeft, Paperclip, Printer, Image as ImageIcon } from 'lucide-react';
 import { loadSchoolByLocationId } from '@/lib/dashboards/loader';
+import { deriveEmbedToken } from '@/lib/auth/embed';
 import { query } from '@/lib/db';
 import { PrintSubmissionButton } from './PrintSubmissionButton';
 import { VoidSubmissionButton } from './VoidSubmissionButton';
@@ -100,6 +101,11 @@ export default async function SubmissionDetail({
   const autoPrint = sp.print === '1';
 
   const school = await loadSchoolByLocationId(locationId);
+  // File links open in a NEW TAB, where the CRM iframe's partitioned
+  // session cookie doesn't follow — without this token every parent
+  // attachment 404s as "unauthorized" (seen live on the 9/9 call when
+  // opening a flag-football birth certificate).
+  const fileToken = deriveEmbedToken(locationId);
   if (!school) notFound();
 
   const { rows: defRows } = await query<FormDef>(
@@ -298,6 +304,7 @@ export default async function SubmissionDetail({
                 && (block as { hide_on_review?: boolean }).hide_on_review !== true)
               .map((block, i) => (
               <BlockView
+                fileToken={fileToken}
                 key={i}
                 block={block}
                 responses={sub.responses}
@@ -314,7 +321,7 @@ export default async function SubmissionDetail({
             <h2 className="text-sm font-semibold text-slate-700 uppercase tracking-wide mb-3">Other attachments</h2>
             <ul className="space-y-1.5">
               {files.filter((f) => !blocks.some((b) => b.key === f.field_key)).map((f) => (
-                <li key={f.id}><FileLink file={f} /></li>
+                <li key={f.id}><FileLink file={f} token={fileToken} /></li>
               ))}
             </ul>
           </section>
@@ -340,10 +347,10 @@ function Field({ label, value, mono }: { label: string; value: string; mono?: bo
 // Download link for a parent-attached file. Streams through the existing
 // school-scoped route (it serves any portal_form_submission_files row for
 // the session's school, despite the staff-requests path segment).
-function FileLink({ file }: { file: SubmissionFile }) {
+function FileLink({ file, token }: { file: SubmissionFile; token: string }) {
   return (
     <a
-      href={`/api/school/staff-requests/files/${file.id}`}
+      href={`/api/school/staff-requests/files/${file.id}?embed_token=${encodeURIComponent(token)}`}
       target="_blank"
       rel="noopener noreferrer"
       className="inline-flex items-center gap-1.5 text-sm text-blue-700 underline hover:text-blue-900 print:no-underline print:text-slate-900"
@@ -356,8 +363,9 @@ function FileLink({ file }: { file: SubmissionFile }) {
 }
 
 function BlockView({
-  block, responses, files,
+  block, responses, files, fileToken,
 }: {
+  fileToken: string;
   block: FormDef['field_schema'][number];
   responses: Record<string, unknown>;
   files: SubmissionFile[];
@@ -392,7 +400,7 @@ function BlockView({
             <em className="text-slate-400">no file uploaded</em>
           ) : (
             <ul className="space-y-1">
-              {files.map((f) => <li key={f.id}><FileLink file={f} /></li>)}
+              {files.map((f) => <li key={f.id}><FileLink file={f} token={fileToken} /></li>)}
             </ul>
           )}
         </dd>
