@@ -29,12 +29,13 @@
 // Otherwise drafts (review, then send individually or go bulk again).
 
 import { randomBytes } from 'node:crypto';
-import { NextResponse } from 'next/server';
+import { NextResponse, after } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { query, withTransaction } from '@/lib/db';
 import { authorizeOperatorOrSchool } from '@/lib/auth/dual';
 import { sendInvoiceEmail } from '@/lib/billing/send-invoice-email';
 import { scheduleOneoffAutopay } from '@/lib/billing/oneoff-autopay';
+import { billableStudentSql, billableFamilySql } from '@/lib/billing/billable-students';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -96,6 +97,28 @@ export async function POST(request: NextRequest, { params }: { params: Params })
   }
   if (lines.length === 0) return back(request, schoolId, { err: 'Add at least one line item.' }, returnTo);
   const subtotalCents = lines.reduce((a, l) => a + l.amount_cents, 0);
+  const eachLabel = (subtotalCents / 100).toLocaleString('en-US', { style: 'currency', currency: 'USD' });
+
+  // Repeat-send guard. The same bulk (title + amount + due date) created
+  // minutes ago is the office pressing the button again because nothing
+  // seemed to happen — not a second fee. NLMA's first two sends came out
+  // at 116 and 246 invoices for ~34 students that way. Bounce it with a
+  // plain message; a genuinely separate charge gets a different title.
+  const { rows: recent } = await query<{ n: string; ago: number | null }>(
+    `SELECT COUNT(*)::text AS n,
+            EXTRACT(EPOCH FROM (now() - MAX(created_at)))::int AS ago
+       FROM invoices
+      WHERE school_id = $1 AND source = 'bulk' AND status <> 'voided'
+        AND title = $2 AND total_cents = $3 AND due_at::date = $4::date
+        AND created_at > now() - interval '15 minutes'`,
+    [schoolId, title, subtotalCents, dueDate],
+  );
+  if (Number(recent[0]?.n ?? 0) > 0) {
+    const mins = Math.max(1, Math.round((recent[0].ago ?? 0) / 60));
+    return back(request, schoolId, {
+      err: `"${title}" for ${eachLabel} was already sent ${mins} minute(s) ago (${recent[0].n} invoices). Nothing was sent again — check the Invoices tab. If this really is a separate charge, give it a different title.`,
+    }, returnTo);
+  }
 
   // Resolve targets. Family mode → one row per family (student_id
   // null). Student mode → one row per matching active student; for
@@ -110,10 +133,12 @@ export async function POST(request: NextRequest, { params }: { params: Params })
       perStudent
         ? `SELECT s.family_id, s.id AS student_id FROM students s JOIN families f ON f.id = s.family_id
             WHERE s.school_id = $1 AND s.status = 'active' AND f.status = 'active'
+              AND ${billableStudentSql('s')}
               AND (s.metadata->>'program' = $2 OR s.metadata->>'homeroom' = $2)
             ORDER BY s.first_name`
         : `SELECT DISTINCT s.family_id, NULL::uuid AS student_id FROM students s JOIN families f ON f.id = s.family_id
             WHERE s.school_id = $1 AND s.status = 'active' AND f.status = 'active'
+              AND ${billableStudentSql('s')}
               AND (s.metadata->>'program' = $2 OR s.metadata->>'homeroom' = $2)`,
       [schoolId, audienceValue],
     ));
@@ -122,10 +147,12 @@ export async function POST(request: NextRequest, { params }: { params: Params })
       perStudent
         ? `SELECT s.family_id, s.id AS student_id FROM students s JOIN families f ON f.id = s.family_id
             WHERE s.school_id = $1 AND s.status = 'active' AND f.status = 'active'
+              AND ${billableStudentSql('s')}
               AND s.metadata->>'homeroom' = $2
             ORDER BY s.first_name`
         : `SELECT DISTINCT s.family_id, NULL::uuid AS student_id FROM students s JOIN families f ON f.id = s.family_id
             WHERE s.school_id = $1 AND s.status = 'active' AND f.status = 'active'
+              AND ${billableStudentSql('s')}
               AND s.metadata->>'homeroom' = $2`,
       [schoolId, audienceValue],
     ));
@@ -135,7 +162,8 @@ export async function POST(request: NextRequest, { params }: { params: Params })
     ({ rows: targets } = await query<{ family_id: string; student_id: string | null }>(
       perStudent
         ? `SELECT s.family_id, s.id AS student_id FROM students s
-            WHERE s.school_id = $1 AND s.status = 'active' AND s.family_id IN (
+            WHERE s.school_id = $1 AND s.status = 'active' AND ${billableStudentSql('s')}
+              AND s.family_id IN (
               SELECT DISTINCT p.family_id
                 FROM ghl_contact_tags t
                 JOIN parents p ON p.ghl_contact_id = t.ghl_contact_id AND p.school_id = t.school_id
@@ -148,7 +176,8 @@ export async function POST(request: NextRequest, { params }: { params: Params })
              JOIN parents p ON p.ghl_contact_id = t.ghl_contact_id AND p.school_id = t.school_id
              JOIN families f ON f.id = p.family_id
             WHERE t.school_id = $1 AND lower(t.tag) = lower($2)
-              AND p.status = 'active' AND p.is_primary = true AND f.status = 'active'`,
+              AND p.status = 'active' AND p.is_primary = true AND f.status = 'active'
+              AND ${billableFamilySql('f.id')}`,
       [schoolId, audienceValue],
     ));
   } else if (audienceType === 'pick') {
@@ -161,11 +190,13 @@ export async function POST(request: NextRequest, { params }: { params: Params })
     ({ rows: targets } = await query<{ family_id: string; student_id: string | null }>(
       perStudent
         ? `SELECT s.family_id, s.id AS student_id FROM students s
-            WHERE s.school_id = $1 AND s.status = 'active' AND s.family_id IN (
+            WHERE s.school_id = $1 AND s.status = 'active' AND ${billableStudentSql('s')}
+              AND s.family_id IN (
               SELECT id FROM families WHERE school_id = $1 AND status = 'active' AND id = ANY($2::uuid[]))
             ORDER BY s.first_name`
         : `SELECT id AS family_id, NULL::uuid AS student_id FROM families
-            WHERE school_id = $1 AND status = 'active' AND id = ANY($2::uuid[])`,
+            WHERE school_id = $1 AND status = 'active' AND id = ANY($2::uuid[])
+              AND ${billableFamilySql('families.id')}`,
       [schoolId, picked],
     ));
   } else {
@@ -173,9 +204,11 @@ export async function POST(request: NextRequest, { params }: { params: Params })
       perStudent
         ? `SELECT s.family_id, s.id AS student_id FROM students s JOIN families f ON f.id = s.family_id
             WHERE s.school_id = $1 AND s.status = 'active' AND f.status = 'active'
+              AND ${billableStudentSql('s')}
             ORDER BY s.first_name`
         : `SELECT DISTINCT s.family_id, NULL::uuid AS student_id FROM students s JOIN families f ON f.id = s.family_id
-            WHERE s.school_id = $1 AND s.status = 'active' AND f.status = 'active'`,
+            WHERE s.school_id = $1 AND s.status = 'active' AND f.status = 'active'
+              AND ${billableStudentSql('s')}`,
       [schoolId],
     ));
   }
@@ -242,21 +275,31 @@ export async function POST(request: NextRequest, { params }: { params: Params })
       createdIds.push(invoiceId);
     }
 
-    // Delivery — best-effort per invoice; failures don't abort the batch.
-    let emailed = 0;
+    // Delivery runs AFTER the redirect goes out. Emailing every family one
+    // at a time through GHL held the click open for ~2 minutes with no
+    // feedback, and the office pressed the button again and again. The
+    // invoices exist the moment we respond; emails follow within the
+    // route's maxDuration. Best-effort per invoice, as before.
     if (sendNow) {
-      for (const id of createdIds) {
-        try {
-          const r = await sendInvoiceEmail({ invoiceId: id });
-          if (r.ghl_notified || r.sent_to.length > 0) emailed++;
-        } catch { /* per-invoice best-effort */ }
-      }
+      const ids = [...createdIds];
+      after(async () => {
+        let emailed = 0;
+        for (const id of ids) {
+          try {
+            const r = await sendInvoiceEmail({ invoiceId: id });
+            if (r.ghl_notified || r.sent_to.length > 0) emailed++;
+          } catch (e) {
+            console.error('[bulk-invoice] email failed for', id, e instanceof Error ? e.message : String(e));
+          }
+        }
+        console.log(`[bulk-invoice] school ${schoolId}: delivered ${emailed}/${ids.length}`);
+      });
     }
 
     const unit = perStudent ? 'per-student invoices' : 'invoices';
     const msg = sendNow
-      ? `Bulk invoice sent: ${createdIds.length} ${unit} created, ${emailed} delivered (${(subtotalCents / 100).toLocaleString('en-US', { style: 'currency', currency: 'USD' })} each).`
-      : `Bulk invoice: ${createdIds.length} DRAFT ${unit} created (${(subtotalCents / 100).toLocaleString('en-US', { style: 'currency', currency: 'USD' })} each). Review them in the Invoices tab, then send.`;
+      ? `Bulk invoice sent: ${createdIds.length} ${unit} created (${eachLabel} each). Emails are going out now — allow a couple of minutes.`
+      : `Bulk invoice: ${createdIds.length} DRAFT ${unit} created (${eachLabel} each). Review them in the Invoices tab, then send.`;
     return back(request, schoolId, { msg }, returnTo);
   } catch (err) {
     const m = err instanceof Error ? err.message : String(err);

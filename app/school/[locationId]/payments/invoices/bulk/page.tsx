@@ -11,6 +11,8 @@ import { loadSchoolByLocationId } from '@/lib/dashboards/loader';
 import { LineItemsEditor } from '@/app/admin/[schoolId]/payments/invoices/new/LineItemsEditor';
 import { loadInvoiceCatalog } from '@/lib/billing/invoice-catalog';
 import { FamilyPicker } from './FamilyPicker';
+import { BulkSubmitButton } from './BulkSubmitButton';
+import { billableStudentSql, billableFamilySql } from '@/lib/billing/billable-students';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 30;
@@ -31,6 +33,7 @@ export default async function BulkInvoicePage({ params, searchParams }: { params
     `SELECT s.metadata->>'program' v, COUNT(DISTINCT s.family_id)::int families, COUNT(*)::int students
        FROM students s JOIN families f ON f.id = s.family_id
       WHERE s.school_id = $1 AND s.status = 'active' AND f.status = 'active' AND s.metadata->>'program' IS NOT NULL
+        AND ${billableStudentSql('s')}
       GROUP BY 1 ORDER BY 1`,
     [schoolId],
   );
@@ -38,13 +41,15 @@ export default async function BulkInvoicePage({ params, searchParams }: { params
     `SELECT s.metadata->>'homeroom' v, COUNT(DISTINCT s.family_id)::int families, COUNT(*)::int students
        FROM students s JOIN families f ON f.id = s.family_id
       WHERE s.school_id = $1 AND s.status = 'active' AND f.status = 'active' AND s.metadata->>'homeroom' IS NOT NULL
+        AND ${billableStudentSql('s')}
       GROUP BY 1 ORDER BY 1`,
     [schoolId],
   );
   const { rows: allCount } = await query<{ families: number; students: number }>(
     `SELECT COUNT(DISTINCT s.family_id)::int families, COUNT(*)::int students
        FROM students s JOIN families f ON f.id = s.family_id
-      WHERE s.school_id = $1 AND s.status = 'active' AND f.status = 'active'`,
+      WHERE s.school_id = $1 AND s.status = 'active' AND f.status = 'active'
+        AND ${billableStudentSql('s')}`,
     [schoolId],
   );
 
@@ -55,6 +60,7 @@ export default async function BulkInvoicePage({ params, searchParams }: { params
        JOIN parents p ON p.ghl_contact_id = t.ghl_contact_id AND p.school_id = t.school_id
        JOIN families f ON f.id = p.family_id
       WHERE t.school_id = $1 AND p.status = 'active' AND f.status = 'active'
+        AND ${billableFamilySql('f.id')}
       GROUP BY 1 ORDER BY families DESC, 1`,
     [schoolId],
   );
@@ -66,6 +72,7 @@ export default async function BulkInvoicePage({ params, searchParams }: { params
             COALESCE(string_agg(s.first_name, ', ' ORDER BY s.first_name), '') AS students
        FROM families f
        LEFT JOIN students s ON s.family_id = f.id AND s.status = 'active'
+                            AND ${billableStudentSql('s')}
       WHERE f.school_id = $1 AND f.status = 'active'
       GROUP BY f.id
      HAVING COUNT(s.id) > 0
@@ -213,9 +220,7 @@ export default async function BulkInvoicePage({ params, searchParams }: { params
           </div>
 
           <div className="flex gap-2">
-            <button type="submit" className="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">
-              Create bulk invoices
-            </button>
+            <BulkSubmitButton />
             <Link href={returnTo} className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm text-slate-700 hover:bg-slate-50">
               Cancel
             </Link>
