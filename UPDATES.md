@@ -7,6 +7,33 @@ human digest.
 
 ---
 
+## September 10, 2026 (afternoon) — items from the 9/9 call
+
+### Parent-uploaded documents are now visible to staff
+Three separate problems were stopping SST and teachers from seeing
+files parents upload on forms (birth certificates, insurance cards):
+1. Opening an attachment from a form submission returned
+   "unauthorized" (the exact error seen live on the call). Download
+   links opened in a new tab, where the CRM session doesn't follow.
+   Fixed - verified by downloading a birth certificate byte-for-byte.
+2. Parent uploads never appeared in Student Records at all. They now
+   show in the same list as office documents, under a new "Parent
+   uploads" category, labelled with the form they came from, scoped to
+   the teacher's own classroom. Nothing is copied - the file streams
+   from the original submission, so it can't drift out of sync. Staff
+   can't delete them from here (they belong to the submission).
+3. Gautham's access (fixed 9/9): he is on both flag-football forms'
+   notify lists and in the staff picker.
+
+This also unblocks Sonia's campout form - insurance-card uploads will
+be visible to teachers the same way.
+
+### Medication form no longer overwrites
+The OTC Medication Administration Form was replacing the previous
+submission instead of filing a new one. It now allows multiple
+independent submissions (one per medication), and prior submissions
+are kept.
+
 ## September 10, 2026
 
 ### Enrollment agreement now appears automatically for Pending students
