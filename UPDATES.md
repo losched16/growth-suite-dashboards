@@ -36,6 +36,39 @@ are kept.
 
 ## September 11, 2026
 
+### Enrollment Amendment: Sonia + Kim's review notes applied
+Four of the items from the review are fixed and verified in the live form:
+
+1. **Grade is now locked.** Root cause found: the portal was stripping
+   read-only locks for any family without a platform tuition-plan record,
+   and every DGM family qualifies (DGM bills through FACTS). Grade now
+   locks whenever the office has set the student's program, so a parent
+   can no longer change L1 to Toddler.
+2. **Parent/Guardian section replaced** with the full section copied from
+   the Enrollment Agreement - address, city, state, zip, mobile, email,
+   employer and position for both guardians, relationship as a dropdown
+   instead of free text, plus the "second guardian" checkbox. The
+   office-owned fields are locked rather than editable, matching how the
+   agreement intends them.
+3. **Extended Day can no longer be chosen by a Half Day student.** It now
+   reads the student's actual program straight from their record, so the
+   11 Half Day students never see it (the 283 School Day students are
+   unaffected). Changing schedule and Extended Day in one submission is
+   also blocked, with an on-screen note explaining to do it in two steps -
+   previously the form silently allowed an invalid combination.
+4. **Section wording is now the Enrollment Agreement's verbatim text** for
+   Schedule/Annual Tuition, Extended Day, Organic Lunch and Payment Plans.
+   The invented "PLEASE NOTE: Changes to X made by the 15th..." sentences
+   are gone, and Schedule/Annual Tuition - which previously contained ONLY
+   that invented sentence - now carries the real schedule table and
+   proration language.
+
+Still open, needs a school decision: whether a Half Day student may take
+Organic Lunch. Lunch is currently offered by grade only, in both this form
+and the Enrollment Agreement, so "Half Day means no Organic Lunch" would
+be a new rule that has to be added to both.
+
+
 ### Enrollment Amendment is live and ready for the office to push
 The amendment form was built and working but had been left pinned to a
 single test student from August testing, so it was effectively unusable.
