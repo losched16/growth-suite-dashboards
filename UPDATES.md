@@ -36,6 +36,46 @@ are kept.
 
 ## September 11, 2026
 
+### Amendment trimmed back to match Kim's document
+Kim's PDF turned out to be much leaner than what the form had grown into,
+so the form now follows it. Removed: the "Draft - pending school review"
+banner, the Current Schedule field, the whole Physical Custody section,
+and every Parent/Guardian field except name and relationship (address,
+phone, email, employer and position are gone for both guardians). The
+write-back rules for all of those went with them, so the form no longer
+touches the contact's address or custody fields at all.
+
+Wording fixes: "for the student named below" now says "above" (the child
+is named at the top of the form); the LDMA question no longer repeats the
+paragraph directly above it word for word; the documentation request and
+the upload field are about Legal Decision-Making Authority only, not
+custody; "Childcare Days (see below)" no longer points at a section that
+doesn't exist on this form; and the Payment Plans section no longer
+carries the "email finance@ at least 7 business days ahead" line, which
+isn't in Kim's document and contradicted the rule below.
+
+**The dropdowns now offer every choice.** Two real problems:
+1. Saying yes to Schedule/Annual Tuition only offered the options for the
+   child's current grade - Clint saw just the two Toddler/Primary rows.
+   All six programs are now listed.
+2. Organic Lunch was missing "$2,100 - Vegan" entirely, so an Elementary
+   or Middle Years family could not choose it. All seven options are now
+   there, matching the Enrollment Agreement exactly.
+
+**Amending LDMA now asks for the new selection.** Previously the only
+dropdown was the one showing the current value, so saying "yes, I'm
+amending it" gave the parent nothing to change. There is now a second
+dropdown that appears on yes, and it is the one that updates the record.
+
+**Restored:** the "PLEASE NOTE: changes made by the 15th day of the month
+take effect on the first of the following month" line in all four
+sections. These are in Kim's document and had been removed in error.
+
+Verified live on the test family: an amendment changing only lunch
+changed only the lunch choice and its fee (including the new Vegan
+option); an amendment changing only LDMA changed only that. Everything
+else on the contact was byte-identical, and the test data was restored.
+
 ### Enrollment Amendment: Sonia + Kim's review notes applied
 Four of the items from the review are fixed and verified in the live form:
 
