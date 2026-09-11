@@ -34,6 +34,25 @@ submission instead of filing a new one. It now allows multiple
 independent submissions (one per medication), and prior submissions
 are kept.
 
+## September 11, 2026
+
+### Enrollment Amendment is live and ready for the office to push
+The amendment form was built and working but had been left pinned to a
+single test student from August testing, so it was effectively unusable.
+That pin is cleared. It stays invisible to every family until the office
+pushes it (Forms & enrollment -> the amendment's row -> Send -> pick the
+family) - confirmed: with no push it appears in neither the home banner
+nor the forms list; after a push it appears in both.
+
+Re-proved end to end today, since the forms system changed a lot since
+August: pushed to a test family, opened it as the parent, changed ONLY
+the lunch selection, and confirmed the contact record updated only the
+lunch choice and its fee. Tuition, extended day, payment plan, legal
+decision-making and parent details were all left exactly as they were -
+which is the whole point of an amendment. Joint legal decision-making
+still correctly requires a co-signer before it will submit. All test
+data was restored afterward.
+
 ## September 10, 2026
 
 ### Enrollment agreement now appears automatically for Pending students
