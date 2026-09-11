@@ -91,6 +91,12 @@ the few that must be typed are captured on the submission WITHOUT
 overwriting the CRM. Re-verified end to end afterwards: an amendment
 changing only lunch still changes only the lunch fields.
 
+**Submissions list cleaned up before the office reviews it.** A June
+test submission on the Zack test family (submitted from finance@ on the
+day the form was built) was never flagged as a test, so it showed in
+Forms & enrollment -> Submissions as though a real family had amended.
+It is now flagged. The amendment's submission list is empty, which is
+accurate: no family has ever submitted one.
 
 ### Enrollment Amendment is live and ready for the office to push
 The amendment form was built and working but had been left pinned to a
