@@ -63,10 +63,33 @@ Four of the items from the review are fixed and verified in the live form:
    that invented sentence - now carries the real schedule table and
    proration language.
 
-Still open, needs a school decision: whether a Half Day student may take
-Organic Lunch. Lunch is currently offered by grade only, in both this form
-and the Enrollment Agreement, so "Half Day means no Organic Lunch" would
-be a new rule that has to be added to both.
+**Resolved (Clint: "it just needs to match the enrollment agreement"):**
+Organic Lunch stays offered by grade only, exactly as the Enrollment
+Agreement does it - no half-day restriction invented. Employer/position
+stay required, as they are on the Agreement.
+
+### Amendment brought fully in line with the Enrollment Agreement
+Following that rule, the remaining gaps were closed:
+- **Physical Custody** section added (the Agreement collects it, the
+  amendment had no way to change it), with its own "are you amending
+  this?" question and write-back to the contact.
+- **The joint-custody signature notice** from the Agreement now appears
+  under the LDMA question, so parents are told up front that a shared
+  arrangement sends the Amendment to Guardian 2 to sign.
+- **Custody/LDMA documentation upload** added, same as the Agreement.
+- **Write-back rules expanded** to cover the fields the amendment now
+  has, including the daily-schedule updates that were previously missed
+  when a family changed schedule or Extended Day.
+
+One deliberate difference, to protect data: the Agreement's parent
+address/employer fields are collected fresh at enrollment and are blank
+for all 328 students. Copying that literally would have made a parent
+retype roughly twenty required fields to change a lunch choice - and
+whatever they retyped would overwrite the office's contact record. So
+those fields are pre-filled and locked wherever the value is known, and
+the few that must be typed are captured on the submission WITHOUT
+overwriting the CRM. Re-verified end to end afterwards: an amendment
+changing only lunch still changes only the lunch fields.
 
 
 ### Enrollment Amendment is live and ready for the office to push
