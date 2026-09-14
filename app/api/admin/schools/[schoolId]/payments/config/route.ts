@@ -63,6 +63,21 @@ export async function POST(request: NextRequest, { params }: { params: Params })
     const days = parseDays(String(fd.get('autopay_days') ?? '1, 15'));
     const lateFeeCents = dollarsToCents(String(fd.get('late_fee_amount') ?? '0'));
     const graceDays = parseInt(String(fd.get('late_fee_grace_days') ?? '3'), 10) || 0;
+    // Late-fee escalation tiers. Only the Settings form sends
+    // `late_fee_steps_present=1`; other forms omit it and keep the stored
+    // value (CASE below). Each tier: once an invoice is `after_days` late
+    // its late fee TOTAL becomes `total_cents` — cumulative, not an extra
+    // charge. Blank rows are dropped; tiers are kept in day order.
+    const stepsPresent = fd.get('late_fee_steps_present') === '1';
+    const steps: Array<{ after_days: number; total_cents: number }> = [];
+    if (stepsPresent) {
+      for (let i = 0; i < 4; i++) {
+        const d = parseInt(String(fd.get(`late_fee_step_days_${i}`) ?? ''), 10);
+        const cents = dollarsToCents(String(fd.get(`late_fee_step_total_${i}`) ?? ''));
+        if (Number.isFinite(d) && d > 0 && cents > 0) steps.push({ after_days: d, total_cents: cents });
+      }
+      steps.sort((a, b) => a.after_days - b.after_days);
+    }
     const invoicePrefix = String(fd.get('invoice_number_prefix') ?? 'INV').trim().toUpperCase().slice(0, 8) || 'INV';
     // GHL receipt webhook URL — accept only https GHL-ish URLs; blank
     // clears it (back to Resend fallback). We don't hard-require the
@@ -96,8 +111,9 @@ export async function POST(request: NextRequest, { params }: { params: Params })
          (school_id, pass_card_fee, pass_ach_fee, processing_fee_label,
           autopay_days, late_fee_amount_cents, late_fee_grace_days,
           card_enabled, ach_enabled, invoice_number_prefix,
-          ghl_receipt_webhook_url, default_currency, autopay_oneoff_after_days)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, COALESCE($12, 'usd'), $14)
+          ghl_receipt_webhook_url, default_currency, autopay_oneoff_after_days,
+          late_fee_escalations)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, COALESCE($12, 'usd'), $14, $16::jsonb)
        ON CONFLICT (school_id) DO UPDATE SET
          pass_card_fee = EXCLUDED.pass_card_fee,
          pass_ach_fee = EXCLUDED.pass_ach_fee,
@@ -112,10 +128,12 @@ export async function POST(request: NextRequest, { params }: { params: Params })
          default_currency = COALESCE($12, school_payment_config.default_currency),
          autopay_oneoff_after_days = CASE WHEN $13::boolean
            THEN $14::int ELSE school_payment_config.autopay_oneoff_after_days END,
+         late_fee_escalations = CASE WHEN $15::boolean
+           THEN $16::jsonb ELSE school_payment_config.late_fee_escalations END,
          updated_at = now()`,
       [schoolId, passCard, passAch, feeLabel, days, lateFeeCents, graceDays,
        cardEnabled, achEnabled, invoicePrefix, ghlWebhookUrl, currency,
-       oneoffPresent, oneoffValue],
+       oneoffPresent, oneoffValue, stepsPresent, JSON.stringify(steps)],
     );
 
     return back(request, schoolId, { msg: 'Billing config saved.' }, returnTo);

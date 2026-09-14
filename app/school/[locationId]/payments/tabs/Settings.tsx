@@ -32,6 +32,8 @@ interface ConfigRow {
   autopay_days: number[];
   late_fee_amount_cents: number;
   late_fee_grace_days: number;
+  // Later tiers: once `after_days` late the late fee TOTAL becomes `total_cents`.
+  late_fee_escalations: Array<{ after_days: number; total_cents: number }> | null;
   // One-off invoice auto-bill window (NULL = off).
   autopay_oneoff_after_days: number | null;
 }
@@ -44,7 +46,7 @@ export async function PaymentsHubSettings({
             card_enabled, ach_enabled, invoice_number_prefix,
             ghl_receipt_webhook_url, default_currency,
             autopay_days, late_fee_amount_cents, late_fee_grace_days,
-            autopay_oneoff_after_days
+            late_fee_escalations, autopay_oneoff_after_days
        FROM school_payment_config WHERE school_id = $1`,
     [schoolId],
   );
@@ -56,6 +58,7 @@ export async function PaymentsHubSettings({
     ghl_receipt_webhook_url: null,
     default_currency: 'usd',
     autopay_days: [1, 15], late_fee_amount_cents: 0, late_fee_grace_days: 3,
+    late_fee_escalations: null,
     autopay_oneoff_after_days: null,
   };
 
@@ -169,7 +172,8 @@ export async function PaymentsHubSettings({
 
           <SettingsGroup
             title="Late fees"
-            description="Optional. When set, an overdue tuition invoice is charged this flat late fee once, after the grace period passes. Set the amount to $0 to turn late fees off entirely.">
+            description="Optional. Once the grace period passes, an overdue tuition invoice is charged the late fee. Add escalation steps to raise it the longer the invoice stays unpaid — each step is the TOTAL late fee at that point, not an extra charge on top. An invoice with a payment already clearing is never charged. Set the amount to $0 to turn late fees off entirely.">
+            <input type="hidden" name="late_fee_steps_present" value="1" />
             <div className="flex flex-wrap items-end gap-4">
               <Field label="Late fee amount ($)">
                 <input
@@ -185,6 +189,31 @@ export async function PaymentsHubSettings({
                   className={inputCls + ' w-24 text-right tabular-nums'}
                 />
               </Field>
+            </div>
+            <div className="mt-3 space-y-2">
+              <div className="text-[11px] font-medium uppercase tracking-wide text-slate-600">Escalation (optional)</div>
+              {[0, 1, 2].map((i) => {
+                const step = cfg.late_fee_escalations?.[i];
+                return (
+                  <div key={i} className="flex flex-wrap items-center gap-2 text-sm text-slate-700">
+                    <span>After</span>
+                    <input
+                      type="number" min="1" max="120" name={`late_fee_step_days_${i}`}
+                      defaultValue={step ? String(step.after_days) : ''} placeholder="15"
+                      className={inputCls + ' w-20 text-right tabular-nums'}
+                    />
+                    <span>days overdue, the total late fee becomes $</span>
+                    <input
+                      type="number" step="0.01" min="0" name={`late_fee_step_total_${i}`}
+                      defaultValue={step ? (step.total_cents / 100).toFixed(2) : ''} placeholder="75.00"
+                      className={inputCls + ' w-28 text-right font-mono tabular-nums'}
+                    />
+                  </div>
+                );
+              })}
+              <p className="text-[11px] text-slate-500">
+                Example: $50 after a 10-day grace period, then $75 total after 15 days, then $100 total after 20 days. Leave a row blank to skip it.
+              </p>
             </div>
           </SettingsGroup>
 
