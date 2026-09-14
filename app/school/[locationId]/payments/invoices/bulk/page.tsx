@@ -122,14 +122,32 @@ export default async function BulkInvoicePage({ params, searchParams }: { params
             <div className="flex items-center gap-2 text-sm">
               <input type="radio" name="audience_type" value="program" id="aud-program" />
               <label htmlFor="aud-program">By program / homeroom:</label>
+              {/* Programs and homerooms share one dropdown because the
+                  route matches the chosen value against either field. At
+                  schools where a homeroom is named after its program
+                  ("EC" is both), the same value appeared twice with
+                  different counts and read as a duplicate. A homeroom
+                  whose name is already a program adds nothing — the
+                  program entry already matches it — so it is dropped, and
+                  the two kinds are labelled. */}
               <select name="audience_value" className="rounded border border-slate-300 px-2 py-1 text-sm" defaultValue="">
                 <option value="">— pick —</option>
-                {programs.map((p) => (
-                  <option key={`p-${p.v}`} value={p.v}>{p.v} ({p.families} families · {p.students} students)</option>
-                ))}
-                {homerooms.map((h) => (
-                  <option key={`h-${h.v}`} value={h.v}>{h.v} ({h.families} families · {h.students} students)</option>
-                ))}
+                <optgroup label="Programs">
+                  {programs.map((p) => (
+                    <option key={`p-${p.v}`} value={p.v}>{p.v} ({p.families} families · {p.students} students)</option>
+                  ))}
+                </optgroup>
+                {(() => {
+                  const programValues = new Set(programs.map((p) => p.v));
+                  const rooms = homerooms.filter((h) => !programValues.has(h.v));
+                  return rooms.length > 0 ? (
+                    <optgroup label="Homerooms">
+                      {rooms.map((h) => (
+                        <option key={`h-${h.v}`} value={h.v}>{h.v} ({h.families} families · {h.students} students)</option>
+                      ))}
+                    </optgroup>
+                  ) : null;
+                })()}
               </select>
             </div>
             {tags.length > 0 ? (
