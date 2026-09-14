@@ -7,6 +7,27 @@ human digest.
 
 ---
 
+## September 14, 2026
+
+### Form uploads now show on the Student Roster's Documents column
+Files parents attach to forms (birth certificates, insurance cards) were
+already listed on the Documents page, but the **Documents column on the
+Student Roster** - the little count chip on each student's row, and the
+popup it opens - still only counted files the office uploaded. So a
+birth certificate from the flag football form was invisible from the
+student's own row. Both the count and the popup now include form
+uploads, labelled "Parent upload" with the form they came from, and
+Open works from inside Growth Suite.
+
+Verified live on the three flag-football birth certificates (Kjor
+Montano, Ly'ricc Ellis-Williams, Atlas Lucas): each student's row count
+went up by one, the popup lists the certificate, and Open delivers the
+file. Same on the classroom hub rosters for teachers.
+
+Also: a photo attached by staff to the SST Accident/Incident form was
+labelled "Uploaded by parent" on the Documents page. It now reads
+"Attached by staff".
+
 ## September 10, 2026 (afternoon) — items from the 9/9 call
 
 ### Parent-uploaded documents are now visible to staff
