@@ -173,6 +173,7 @@ export async function fetcher(
     size_bytes: number;
     uploaded_at: string;
     form_name: string;
+    form_audience: string;
     parent_name: string | null;
   }>(
     `SELECT
@@ -185,6 +186,7 @@ export async function fetcher(
        pf.display_name, pf.original_filename, pf.mime_type, pf.size_bytes,
        pf.uploaded_at,
        d.display_name   AS form_name,
+       COALESCE(d.audience, 'parents') AS form_audience,
        NULLIF(TRIM(CONCAT_WS(' ', p.first_name, p.last_name)), '') AS parent_name
      FROM portal_form_submission_files pf
      JOIN portal_form_submissions sub ON sub.id = pf.submission_id
@@ -214,7 +216,10 @@ export async function fetcher(
       classroom_name: r.classroom_name,
       title: (r.display_name || '').trim() || r.original_filename,
       category: 'parent',
-      description: `Uploaded by parent on "${r.form_name}"`,
+      // Staff forms (e.g. an incident-report photo) aren't parent uploads.
+      description: r.form_audience === 'staff'
+        ? `Attached by staff on "${r.form_name}"`
+        : `Uploaded by parent on "${r.form_name}"`,
       file_name: r.original_filename,
       mime_type: r.mime_type,
       size_bytes: r.size_bytes,

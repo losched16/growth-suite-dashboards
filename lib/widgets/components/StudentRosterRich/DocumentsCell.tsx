@@ -23,6 +23,11 @@ interface Doc {
   expires_at: string | null;
   visible_to_teacher: boolean;
   visible_to_parent: boolean;
+  // 'form_upload' = attached to a portal form for this child (birth
+  // certificate etc.) — opened through the submission-files route.
+  source?: 'document' | 'form_upload';
+  form_name?: string | null;
+  uploader_kind?: 'parent' | 'staff' | null;
 }
 
 function fmtBytes(b: number): string {
@@ -157,16 +162,25 @@ export function DocumentsCell({
                       <div className="min-w-0 flex-1">
                         <div className="text-sm font-medium text-slate-900 truncate" title={d.title}>{d.title}</div>
                         <div className="text-[10px] text-slate-500 flex items-center gap-2 mt-0.5">
-                          {d.category ? (
+                          {d.source === 'form_upload' ? (
+                            <span className="inline-block rounded bg-violet-100 px-1 py-0.5 uppercase tracking-wide text-violet-800">
+                              {d.uploader_kind === 'staff' ? 'Staff form' : 'Parent upload'}
+                            </span>
+                          ) : d.category ? (
                             <span className="inline-block rounded bg-slate-100 px-1 py-0.5 uppercase tracking-wide">{d.category}</span>
                           ) : null}
                           <span>{fmtBytes(d.size_bytes)}</span>
                           <span>{fmtDate(d.uploaded_at)}</span>
                           {d.expires_at ? <span className="text-amber-700">exp. {d.expires_at}</span> : null}
                         </div>
+                        {d.source === 'form_upload' && d.form_name ? (
+                          <div className="text-[10px] text-slate-500 truncate mt-0.5" title={d.form_name}>
+                            From: {d.form_name}{d.uploaded_by ? ` · ${d.uploaded_by}` : ''}
+                          </div>
+                        ) : null}
                       </div>
                       <a
-                        href={downloadHref(d.id, embedToken)}
+                        href={d.source === 'form_upload' ? formFileHref(d.id, embedToken) : downloadHref(d.id, embedToken)}
                         target="_blank" rel="noopener"
                         className="inline-flex items-center gap-1 rounded border border-slate-300 bg-white px-2 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-50 shrink-0"
                         title={`Download ${d.file_name}`}
@@ -225,6 +239,13 @@ function docsHref(studentId: string, embedToken?: string): string {
 function downloadHref(docId: string, embedToken?: string): string {
   const et = embedToken || urlParam('embed_token');
   return `/api/school/documents/${docId}/download${et ? `?embed_token=${encodeURIComponent(et)}` : ''}`;
+}
+
+// Form uploads live on the submission, not in student_documents — same
+// route (and embed-token auth) the Documents dashboard uses for them.
+function formFileHref(fileId: string, embedToken?: string): string {
+  const et = embedToken || urlParam('embed_token');
+  return `/api/school/staff-requests/files/${fileId}${et ? `?embed_token=${encodeURIComponent(et)}` : ''}`;
 }
 
 function urlParam(key: string): string | null {

@@ -114,7 +114,8 @@ export interface RosterStudent {
   five04_plan: string | null;
   has_allergy: boolean;
   has_iep_or_504: boolean;
-  // Lightweight count for the inline Documents cell on the roster. The
+  // Lightweight count for the inline Documents cell on the roster — office
+  // documents plus files attached to this child's portal forms. The
   // actual list is fetched lazily via /api/school/documents/list when
   // the operator clicks the cell.
   documents_count: number;
@@ -312,7 +313,7 @@ export async function fetcher(
        c.lead_teacher_name,
        e.schedule,
        s.metadata,
-       COALESCE(dc.n, 0) AS documents_count,
+       COALESCE(dc.n, 0) + COALESCE(pu.n, 0) AS documents_count,
        COALESCE(dc.iep_docs, 0) AS iep_documents_count,
        da.status              AS attendance_status,
        da.first_check_in_at   AS attendance_first_check_in_at,
@@ -345,6 +346,18 @@ export async function fetcher(
               COUNT(*) FILTER (WHERE sd.category IN ('iep_504', 'iep'))::int AS iep_docs
          FROM student_documents sd WHERE sd.student_id = s.id AND sd.is_complete = true
      ) dc ON true
+     LEFT JOIN (
+       -- Files attached to portal forms filled out for this child (birth
+       -- certificates, insurance cards). Same rules as the Documents
+       -- dashboard, so the roster count and that list always agree.
+       SELECT sub.student_id, COUNT(*)::int AS n
+         FROM portal_form_submission_files pf
+         JOIN portal_form_submissions sub ON sub.id = pf.submission_id
+        WHERE pf.school_id = $1 AND sub.student_id IS NOT NULL
+          AND COALESCE(sub.is_test, false) = false
+          AND sub.status IN ('submitted', 'paid', 'pending_payment', 'legacy_imported')
+        GROUP BY sub.student_id
+     ) pu ON pu.student_id = s.id
      LEFT JOIN daily_attendance da
        ON da.student_id = s.id
       AND da.school_id  = s.school_id
