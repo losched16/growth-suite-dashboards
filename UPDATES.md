@@ -9,6 +9,36 @@ human digest.
 
 ## September 15, 2026
 
+### Grade Level now shows the real grade; the old field is labelled Program
+Kim's test: the Enrollment Agreement's "2026-27 Grade Level" prefilled
+"Toddler" for a student whose contact says grade T1. That field was
+always the Program (its choices are Infant / Toddler / Primary / …, and
+tuition and lunch options key off it) - it was just mislabelled. On both
+the Agreement and the Amendment it is now labelled **Program**, and a
+new locked **Grade Level** field above it shows the grade code from the
+student's contact (T1, P2, L1 …). The office owns that value, so the
+form never writes it back. Verified live on the test family: Grade
+Level T1 / Program Toddler for the Toddler test student.
+
+### Amendment: Parent/Guardian 1 is now the family's primary contact
+The Amendment filled Parent/Guardian 1 with whoever was logged in. Both
+parents can log in for 202 DGM families, so a co-parent opening it saw
+themselves as Parent 1 AND Parent 2. It now fills Parent 1 from the
+contact's primary parent and Parent 2 from the co-parent - the same way
+the Enrollment Agreement already worked - so "parent 1 or parent 2"
+reads the same no matter who opens it. Verified live: Kim Zack as
+Parent 1, Paul Zack as Parent 2 on the test family.
+
+Also: the helper line under the tuition dropdown said "Options shown
+match the grade level you selected above." On the Agreement it now says
+"program"; on the Amendment, where every option is offered, the sentence
+is gone.
+
+**Still parked, on purpose:** Kim's "when does the change take effect"
+question from the 9/11 call (parents sometimes mean "starting October").
+She asked to leave it for now. A "requested effective date" box is a
+five-minute add when she wants it.
+
 ### Relationship dropdown is now Mother / Father / Legal Guardian
 On both the Enrollment Agreement and the Amendment, the Parent/Guardian
 "Relationship to the child" dropdown offered six choices (Mother,
