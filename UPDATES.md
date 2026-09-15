@@ -34,10 +34,24 @@ match the grade level you selected above." On the Agreement it now says
 "program"; on the Amendment, where every option is offered, the sentence
 is gone.
 
-**Still parked, on purpose:** Kim's "when does the change take effect"
-question from the 9/11 call (parents sometimes mean "starting October").
-She asked to leave it for now. A "requested effective date" box is a
-five-minute add when she wants it.
+### Amendment: effective-date box added; every Yes now opens its dropdown
+Two more from Clint, same day:
+- **"When would you like this change to take effect?"** - a new optional
+  box in its own Effective Date section just above Signatures, so the
+  office no longer has to guess whether "I'm changing lunch" means now
+  or October. The helper text repeats the 15th-of-the-month rule. The
+  answer is on the submission; nothing writes to the contact.
+- **Saying Yes to Extended Day always opens the dropdown now.** Until
+  today a Half Day student (and anyone amending Schedule at the same
+  time) saw nothing there, by design from June. Clint's rule: "if
+  someone says yes to a dropdown, it has to open up the respective
+  option." So the block is gone, along with the two notes that explained
+  it. The helper line still says Extended Day is available with a School
+  Day program - the office is now the check, same as tuition.
+
+Verified live on the Half Day test student (Armaan): all five Yes
+questions - Schedule, Extended Day, Organic Lunch, Payment Plan, LDMA -
+open their dropdown with the full list of choices. No submission made.
 
 ### Relationship dropdown is now Mother / Father / Legal Guardian
 On both the Enrollment Agreement and the Amendment, the Parent/Guardian
