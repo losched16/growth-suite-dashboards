@@ -7,6 +7,18 @@ human digest.
 
 ---
 
+## September 15, 2026
+
+### Relationship dropdown is now Mother / Father / Legal Guardian
+On both the Enrollment Agreement and the Amendment, the Parent/Guardian
+"Relationship to the child" dropdown offered six choices (Mother,
+Father, Stepparent, Grandparent, Legal Guardian, Other). Per Clint, it
+is now the three the school actually uses: Mother, Father, Legal
+Guardian. Nothing else on either form depends on the removed choices,
+and no other form uses the list. Families who already signed are
+unaffected - their answers stay as submitted (one family had chosen
+Stepparent).
+
 ## September 14, 2026
 
 ### Form uploads now show on the Student Roster's Documents column
