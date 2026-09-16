@@ -7,6 +7,36 @@ human digest.
 
 ---
 
+## September 16, 2026
+
+### Attendance & Curbside board: enrolled students with a classroom, only
+The office asked why Sailor and Rumi Rankin were on the attendance
+board all year when they'd been removed everywhere else. Root cause:
+the board and the classroom hubs used different rules. Classroom hubs
+show Enrolled students only. The attendance board showed every active
+student whose status wasn't Hold / Withdrawn / Graduated / Declined /
+Alumni - so a **Pending** student passed. Sailor's contact still says
+Pending (his admissions card was marked Lost, but that never changes
+the Student Enrollment Status field, and the family is still tagged
+`pending`). Rumi is Alumni and had already dropped off.
+
+New rule, per Clint: **Enrolled + has a classroom.** "Enrolled" reads
+the same signal the classroom hubs use, so the two screens now agree by
+construction. Verified: DGM's board goes from 317 rows to 280, every
+one with a classroom; no enrolled student lost a row.
+
+**37 students dropped off the board**, all non-enrolled. 35 are
+prospects who never started (blank status, no homeroom, no start date,
+never checked in) that had been sitting under "No classroom" at the
+bottom of the board every day. **Two are real and the office needs to
+act:** Andrew Locke (attending 7 of the last 30 days, status blank) and
+Sofia Palma (attending, still Pending, no homeroom). Mark them Enrolled
+and give Sofia a homeroom and they reappear within 15 minutes. Until
+then they can still check in at the kiosk but won't be on this board.
+
+To take Sailor off the books properly: set Student 1 Enrollment Status
+to Withdrawn on Camille Rankin's contact and remove the `pending` tag.
+
 ## September 15, 2026
 
 ### Grade Level now shows the real grade; the old field is labelled Program
