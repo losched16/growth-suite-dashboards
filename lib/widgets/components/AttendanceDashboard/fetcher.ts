@@ -178,9 +178,9 @@ export async function fetcher(
   const curbsideFilter = (sp.curbside ?? '').trim();   // 'yes' | 'no' | ''
   const search = (sp.q ?? '').trim().toLowerCase();
 
-  // One row per active student with their daily_attendance for the
-  // selected date. Students with no daily_attendance row default to
-  // 'not_yet'.
+  // One row per enrolled student with a classroom (see WHERE), with their
+  // daily_attendance for the selected date. Students with no
+  // daily_attendance row default to 'not_yet'.
   const { rows: studentRows } = await query<DbStudentRow>(
     `WITH today_evs AS (
        SELECT * FROM attendance_events
@@ -285,10 +285,19 @@ export async function fetcher(
         WHERE r2.student_id = s.id AND r2.active = true
      ) restr ON true
      WHERE s.school_id = $1 AND s.status = 'active'
-       -- Hold / withdrawn students aren't attending — keep them off the
-       -- daily ops board entirely (they still exist in the roster's
-       -- Withdrawn scope). Metadata-driven so it works even before an
-       -- enrollment row exists for the status.
+       -- Enrolled students with a classroom, only (office rule, Sept 2026).
+       -- This is a daily-ops board, so it shows exactly who the classroom
+       -- hubs show: "enrolled" is the latest enrollment row — the same
+       -- signal the Student Roster's default scope reads — and the
+       -- classroom is the homeroom on the contact. Prospects, pending
+       -- students without a room, and hold/withdrawn/alumni stay off it.
+       -- (Pending students were showing here for a year because the old
+       -- rule only excluded the "not attending" statuses.)
+       AND (SELECT e2.status FROM enrollments e2
+             WHERE e2.student_id = s.id
+             ORDER BY e2.created_at DESC LIMIT 1) = 'enrolled'
+       AND COALESCE(NULLIF(btrim(s.metadata->>'homeroom'), ''),
+                    NULLIF(btrim(s.metadata->>'classroom_name'), '')) IS NOT NULL
        AND lower(coalesce(s.metadata->>'enrollment_status', ''))
            NOT IN ('hold', 'on hold', 'on_hold', 'withdrawn', 'withdrew', 'graduated', 'declined', 'alumni', 'alum')
      ORDER BY classroom NULLS LAST, s.first_name`,
