@@ -7,6 +7,27 @@ human digest.
 
 ---
 
+## September 18, 2026
+
+### Admissions cards named after the parent -> renamed to the student
+Audited all 72 cards in the Admissions Pipeline. 64 were already named
+for the student. 6 were named for the parent - all open tour cards (the
+tour-booking automation names a new card after the contact). Five were
+renamed to the student after checking the name against the live contact:
+Jordan Walters (was Shetal Walters), Perry Hunter (was Meredith Hunter),
+Owen Powell (was Megan Powell), Aspen Mitchell (was Kourtney Knox), and
+the office test card. The first rename was done alone and watched for 45
+seconds: stage, status, tags, fields and message history all unchanged,
+so renaming a card does not set off any automation.
+
+**One left for the office:** Candice Mariano's tour card. Her contact has
+the student's first name (Katherine) but no last name, and parents and
+children often have different surnames, so it was not guessed.
+
+**To stop new ones:** in the "Tour Scheduled - Opportunity" workflow, set
+the opportunity name to the Student 1 first + last name fields instead
+of the contact name. Until then each new tour card arrives parent-named.
+
 ## September 16, 2026
 
 ### Attendance & Curbside board: enrolled students with a classroom, only
