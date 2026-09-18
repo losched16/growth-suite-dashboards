@@ -45,6 +45,10 @@ interface StudentRow {
 const norm = (s: unknown): string =>
   String(s ?? '').toLowerCase().replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim();
 
+// Synced dates are ISO datetimes ("2019-04-28T00:00:00.000Z"); the card
+// wants and reports a plain date. Non-dates pass through untouched.
+const dateOnly = (v: string): string => (/^\d{4}-\d{2}-\d{2}T/.test(v) ? v.slice(0, 10) : v);
+
 function nameMatches(k: StudentRow, n: string): boolean {
   if (norm(`${k.first_name ?? ''} ${k.last_name ?? ''}`) === n) return true;
   return !!k.preferred_name && norm(`${k.preferred_name} ${k.last_name ?? ''}`) === n;
@@ -98,10 +102,14 @@ export async function syncOpportunityStudentFields(schoolId: string): Promise<Op
 
     const writes: Array<{ id: string; field_value: string }> = [];
     for (const [metaKey, fieldId] of fieldMap) {
-      const desired = String(kid.metadata?.[metaKey] ?? '').trim();
+      const desired = dateOnly(String(kid.metadata?.[metaKey] ?? '').trim());
       if (!desired) continue; // never clear — a blank on the contact leaves the card alone
       const cur = (o.customFields ?? []).find((f) => f.id === fieldId);
-      const current = String(cur?.fieldValueString ?? cur?.fieldValue ?? '').trim();
+      // DATE fields come back from search as epoch ms, not a string. Compare
+      // both sides as YYYY-MM-DD or every card looks "changed" every cycle.
+      const current = typeof cur?.fieldValueDate === 'number'
+        ? new Date(cur.fieldValueDate).toISOString().slice(0, 10)
+        : dateOnly(String(cur?.fieldValueString ?? cur?.fieldValue ?? '').trim());
       if (current !== desired) writes.push({ id: fieldId, field_value: desired });
     }
     if (writes.length === 0) continue;

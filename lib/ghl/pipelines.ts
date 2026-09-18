@@ -24,9 +24,11 @@ export interface Opportunity {
   createdAt?: string;
   updatedAt?: string;
   // Present on /opportunities/search results. The search endpoint reports
-  // a custom field's value as `fieldValueString`; GET-by-id uses `fieldValue`.
+  // a custom field's value by type — `fieldValueString` for text/dropdowns,
+  // `fieldValueDate` (epoch ms, midnight UTC) for DATE fields — while
+  // GET-by-id uses a plain `fieldValue` ("2020-01-15" for dates).
   contact?: { id?: string; name?: string };
-  customFields?: Array<{ id: string; fieldValueString?: string; fieldValue?: unknown }>;
+  customFields?: Array<{ id: string; fieldValueString?: string; fieldValueDate?: number; fieldValue?: unknown }>;
 }
 
 export async function fetchPipelines(client: GhlClient): Promise<Pipeline[]> {
