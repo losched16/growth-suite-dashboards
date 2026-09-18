@@ -9,6 +9,32 @@ human digest.
 
 ## September 18, 2026
 
+### Admissions pipeline can now be filtered by Grade Level
+The school wanted to filter opportunity cards by grade, but grade lives
+on the contact and pipeline filters only see fields on the card itself.
+So:
+- **New "Grade Level" field on opportunity cards** - a dropdown with the
+  same 18 grade codes as the contact, in school order (IN, T1 ... D2).
+  Filter by it in the pipeline's Advanced Filters.
+- **Every existing card filled in**: 45 cards now carry their student's
+  grade, copied from Student N Grade Level on the contact.
+- **Automatic from here on.** Every sync (about every 5 minutes) the
+  platform matches each card to its student and copies the grade across,
+  so a new student's card fills in on its own shortly after the office
+  sets the grade on the contact - and it follows later changes, like the
+  yearly grade rollover. The contact stays the source of truth; nothing
+  is ever written back to it, and a blank grade never clears a card.
+
+**26 cards have no grade, because the contact has none.** They are
+nearly all tour and application prospects - the office hasn't assigned a
+grade yet. They fill in automatically the moment it does. To have them
+filterable from day one, capture "grade applying for" on the tour
+booking / application and map it to Student 1 Grade Level.
+
+Safety: the first update was made on the office test card alone and
+watched - name, stage, status, tags, fields and message history all
+unchanged, so setting this field does not trigger any automation.
+
 ### Admissions cards named after the parent -> renamed to the student
 Audited all 72 cards in the Admissions Pipeline. 64 were already named
 for the student. 6 were named for the parent - all open tour cards (the
