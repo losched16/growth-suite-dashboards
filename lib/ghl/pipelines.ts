@@ -23,6 +23,10 @@ export interface Opportunity {
   lastStageChangeAt?: string;
   createdAt?: string;
   updatedAt?: string;
+  // Present on /opportunities/search results. The search endpoint reports
+  // a custom field's value as `fieldValueString`; GET-by-id uses `fieldValue`.
+  contact?: { id?: string; name?: string };
+  customFields?: Array<{ id: string; fieldValueString?: string; fieldValue?: unknown }>;
 }
 
 export async function fetchPipelines(client: GhlClient): Promise<Pipeline[]> {

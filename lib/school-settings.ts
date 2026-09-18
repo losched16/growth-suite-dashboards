@@ -67,6 +67,11 @@ export interface SchoolSettings {
   // (the status ledger is still maintained so enabling later never
   // back-blasts old enrollments).
   enrollment_notification_emails: string[];
+  // Student data mirrored onto the student's opportunity card each sync so
+  // the pipeline can be filtered by it (lib/sync/opportunity-student-fields).
+  // Map of student metadata key → opportunity custom field id, e.g.
+  // { "grade_level": "<field id>" }. Empty = feature off.
+  opportunity_student_fields: Record<string, string>;
 }
 
 // GHL sidebar items the Custom JS snippet can hide (docs/ghl-menu-snippet.js).
@@ -102,6 +107,7 @@ export const SCHOOL_SETTINGS_DEFAULTS: SchoolSettings = {
   ghl_documents_sync: false,
   derive_program_from_grade: false,
   enrollment_notification_emails: [],
+  opportunity_student_fields: {},
 };
 
 export function normalizeSchoolSettings(raw: unknown): SchoolSettings {
@@ -128,6 +134,14 @@ export function normalizeSchoolSettings(raw: unknown): SchoolSettings {
     enrollment_notification_emails: Array.isArray(r.enrollment_notification_emails)
       ? r.enrollment_notification_emails.map((e) => String(e ?? '').trim().toLowerCase()).filter(Boolean)
       : [],
+    opportunity_student_fields:
+      r.opportunity_student_fields && typeof r.opportunity_student_fields === 'object' && !Array.isArray(r.opportunity_student_fields)
+        ? Object.fromEntries(
+            Object.entries(r.opportunity_student_fields as Record<string, unknown>)
+              .map(([k, v]) => [k.trim(), String(v ?? '').trim()] as [string, string])
+              .filter(([k, v]) => k !== '' && v !== ''),
+          )
+        : {},
   };
 }
 
