@@ -192,6 +192,13 @@ export async function syncGhlAttributes(schoolId: string): Promise<AttributeSync
     }
   }
 
+  // Same idea for pipeline stages: capture the old opportunity snapshot so
+  // stage moves can be logged after the refresh (see step 6b).
+  const { rows: oldOppRows } = await query<{ id: string; stage_name: string | null }>(
+    `SELECT id, stage_name FROM ghl_opportunities WHERE school_id = $1`,
+    [schoolId],
+  );
+
   await withTransaction(async (q) => {
     for (let i = 0; i < tagChanges.length; i += 300) {
       const chunk = tagChanges.slice(i, i + 300);
@@ -244,6 +251,15 @@ export async function syncGhlAttributes(schoolId: string): Promise<AttributeSync
     }
   });
 
+  // 6b. Contact-record mirror + opportunity stage-change log (admissions
+  // analytics). Best-effort and outside the main transaction: a failure
+  // here must never fail the attribute sync itself.
+  try {
+    await persistContactsAndStageChanges(schoolId, contacts, opps, stageLookup, oldOppRows);
+  } catch (err) {
+    console.warn('[ghl-attributes] contact mirror / stage log failed:', err instanceof Error ? err.message : String(err));
+  }
+
   // 7. Propagate per-student slot fields (student_<base> /
   // student_<2-4>_<base>) from the freshly synced field values into
   // students.metadata — the read-model the roster/finance widgets use.
@@ -266,4 +282,64 @@ export async function syncGhlAttributes(schoolId: string): Promise<AttributeSync
     catalog_attributes: catalog.length,
     student_metadata_updated: metadataUpdated,
   };
+}
+
+async function persistContactsAndStageChanges(
+  schoolId: string,
+  contacts: GhlContact[],
+  opps: Awaited<ReturnType<typeof fetchAllOpportunities>>,
+  stageLookup: Map<string, { stageName: string; pipelineName: string; pipelineId: string }>,
+  oldOppRows: Array<{ id: string; stage_name: string | null }>,
+): Promise<void> {
+  const ts = (v?: string | null) => (v && !Number.isNaN(Date.parse(v)) ? v : null);
+  const contactRows = contacts.map((c) => [
+    c.id, c.firstName ?? null, c.lastName ?? null, c.email ?? null, c.phone ?? null,
+    c.source ?? null, c.type ?? null, ts(c.dateAdded), ts(c.dateUpdated),
+  ]);
+
+  // Stage moves since the last snapshot. Skipped when the old snapshot is
+  // empty (first sync would log every card as "moved" — noise, not history).
+  const oldStage = new Map(oldOppRows.map((r) => [r.id, r.stage_name]));
+  const stageChanges: unknown[][] = [];
+  if (oldOppRows.length > 0) {
+    for (const o of opps) {
+      const info = stageLookup.get(o.pipelineStageId);
+      const to = info?.stageName ?? null;
+      const known = oldStage.has(o.id);
+      if (known && oldStage.get(o.id) === to) continue;
+      stageChanges.push([
+        o.id, o.contactId ?? null, info?.pipelineName ?? null,
+        known ? oldStage.get(o.id) ?? null : null, to,
+        ts(o.lastStageChangeAt) ?? ts(o.createdAt),
+      ]);
+    }
+  }
+
+  await withTransaction(async (q) => {
+    await q(`DELETE FROM ghl_contacts WHERE school_id = $1`, [schoolId]);
+    for (let i = 0; i < contactRows.length; i += 200) {
+      const chunk = contactRows.slice(i, i + 200);
+      const placeholders = chunk
+        .map((_, j) => `($1, ${Array.from({ length: 9 }, (__, k) => `$${j * 9 + k + 2}`).join(', ')})`)
+        .join(',');
+      await q(
+        `INSERT INTO ghl_contacts (school_id, ghl_contact_id, first_name, last_name, email, phone, source,
+                                   contact_type, date_added, date_updated)
+         VALUES ${placeholders} ON CONFLICT DO NOTHING`,
+        [schoolId, ...chunk.flat()],
+      );
+    }
+    for (let i = 0; i < stageChanges.length; i += 200) {
+      const chunk = stageChanges.slice(i, i + 200);
+      const placeholders = chunk
+        .map((_, j) => `($1, ${Array.from({ length: 6 }, (__, k) => `$${j * 6 + k + 2}`).join(', ')})`)
+        .join(',');
+      await q(
+        `INSERT INTO ghl_opportunity_stage_changes
+           (school_id, opportunity_id, ghl_contact_id, pipeline_name, from_stage, to_stage, stage_changed_at)
+         VALUES ${placeholders}`,
+        [schoolId, ...chunk.flat()],
+      );
+    }
+  });
 }

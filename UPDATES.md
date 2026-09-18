@@ -54,6 +54,61 @@ children often have different surnames, so it was not guessed.
 the opportunity name to the Student 1 first + last name fields instead
 of the contact name. Until then each new tour card arrives parent-named.
 
+### New school: Nativity Preparatory School (Boston)
+Nativity is connected to Growth Suite. Their CRM is an **admissions**
+account: next year's applicants, inquiries and open house signups, and
+none of their current students yet. So for now it runs in the
+read-only sync mode. The platform copies their contacts, tags and
+fields every 15 minutes but does **not** build families from them. (69
+of their contacts are teachers who sent recommendations, and would
+otherwise turn up as fake families.) Billing is off.
+
+Portal: only a family with an **Enrolled** student (or a pipeline card
+at Enrolled) can create a login. Nobody qualifies yet, so no parent can
+sign in until the enrollment status fields are set up and filled in.
+
+Dashboards: Family Hub, Student Roster, Enrollment Hub, Portal Forms
+(these stay empty until enrolled students exist), plus the new
+Admissions Analytics below.
+
+### New dashboard: Admissions Analytics
+A recruitment-funnel report for admissions teams and boards, built for
+Nativity but usable by any school:
+- **Funnel:** inquiries → open house → applications → completed
+  applications → offers → acceptances → enrollments, with the
+  conversion rate between each stage. That shows where families drop
+  out.
+- **Open house:** registrations, attendance, no-shows, and how many
+  went on to apply.
+- **Yield:** offer acceptance rate and enrollment yield.
+- **Time between stages,** including inquiry to completed application.
+- **Sources:** how families heard about the school, and which entry
+  channel brought in applications.
+- **Who is applying:** neighborhood (Boston ZIPs are mapped to
+  neighborhoods), ZIP, current school (spelling variants merged),
+  grade, household income and size, languages spoken at home.
+- **Missing documents:** which applications are incomplete and what's
+  missing, each with an "Open in Growth Suite" link.
+- **Compared with prior cycles,** with a cycle picker and room for
+  totals the school reports from before the CRM.
+
+Each applicant is counted once, even when a family came in through
+several contacts (for example, the application form plus a calendar
+booking). Teachers, test and example contacts are left out.
+
+Nativity today (2026-27 entry cycle): 100 inquiries, 62 applications,
+32 complete. The 1040 is the most common missing document (24
+families). Offers, acceptances, enrollments, open house attendance and
+recruitment source aren't recorded in their CRM yet, and the dashboard
+says so in a yellow "Not captured yet" box instead of showing a
+misleading 0%. They fill in once Nativity adds pipeline cards and the
+new fields.
+
+Behind the scenes, the 15-minute sync now also keeps each contact's
+name, email, created date and source, and logs every pipeline stage
+move. That is what makes "time in each stage" measurable from here on,
+for every school.
+
 ## September 16, 2026
 
 ### Attendance & Curbside board: enrolled students with a classroom, only

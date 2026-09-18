@@ -15,6 +15,8 @@ export interface GhlContact {
   tags?: string[];
   dateAdded?: string;
   dateUpdated?: string;
+  source?: string | null;
+  type?: string | null;
 }
 
 // Fetch one contact's full record by id. Returns null when not found
