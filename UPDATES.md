@@ -35,6 +35,13 @@ Safety: the first update was made on the office test card alone and
 watched - name, stage, status, tags, fields and message history all
 unchanged, so setting this field does not trigger any automation.
 
+**Student DOB added the same way (later the same day).** A second
+opportunity field, "Student DOB" (a date), is copied from the student's
+birth date on the contact and kept current by the same sync. Birth date
+is on file for 310 of 336 students. Since the tour/application form
+asks for both Student 1 Grade Level and DOB, new prospects' cards fill
+in with both on their own within a few minutes of the form coming in.
+
 ### Admissions cards named after the parent -> renamed to the student
 Audited all 72 cards in the Admissions Pipeline. 64 were already named
 for the student. 6 were named for the parent - all open tour cards (the
