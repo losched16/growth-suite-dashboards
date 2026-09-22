@@ -21,7 +21,7 @@ import { mirrorP2Tags } from '@/lib/sync/mirror-p2-tags';
 import { importGhlDocuments } from '@/lib/sync/import-ghl-documents';
 import { backfillProgramFromGrade } from '@/lib/sync/program-from-grade';
 import { syncOpportunityStudentFields } from '@/lib/sync/opportunity-student-fields';
-import { runGhlSync, type SyncResult } from '@/lib/sync/run-ghl-sync';
+import { runGhlSync, SyncSkippedError, type SyncResult } from '@/lib/sync/run-ghl-sync';
 import { backfillStudentIds } from '@/lib/sync/student-id-backfill';
 import { syncGhlAttributes } from '@/lib/sync/ghl-attributes';
 import { createMissingEnrolledFamilies } from '@/lib/sync/create-family-from-contact';
@@ -244,8 +244,20 @@ async function runForAll(): Promise<NextResponse> {
       ).catch(() => undefined);
       okCount++;
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
       const dur = Date.now() - t0;
+      if (err instanceof SyncSkippedError) {
+        // A previous invocation is still mid-rebuild on this school (the
+        // 5-minute cadence overlaps any run longer than 5 minutes). Not a
+        // failure and not a success — that run reports its own outcome —
+        // so it stays out of `results` and out of the health tracker.
+        await query(
+          `INSERT INTO widget_fetch_log (school_id, dashboard_slug, widget_id, duration_ms, error)
+           VALUES ($1, '_sync', 'cron', $2, $3)`,
+          [s.id, dur, `Skipped: ${err.message}.`],
+        ).catch(() => undefined);
+        continue;
+      }
+      const msg = err instanceof Error ? err.message : String(err);
       results.push({
         school_id: s.id,
         name: s.name,

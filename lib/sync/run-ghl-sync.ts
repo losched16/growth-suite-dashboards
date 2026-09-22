@@ -1074,6 +1074,12 @@ export interface SyncResult {
   warnings: string[];
 }
 
+// Thrown (and rolled back) when a rebuild for the same school is already in
+// flight. Callers treat it as "skipped this cycle", not as a failure.
+export class SyncSkippedError extends Error {
+  constructor(message: string) { super(message); this.name = 'SyncSkippedError'; }
+}
+
 export async function runGhlSync(schoolId: string): Promise<SyncResult> {
   const client = await loadGhlClient(schoolId);
   const config = await loadSchoolFieldSchema(schoolId);
@@ -1250,6 +1256,20 @@ export async function runGhlSync(schoolId: string): Promise<SyncResult> {
   }
 
   const result = await withTransaction(async (q) => {
+    // One rebuild per school at a time. The 5-minute cron starts a new
+    // fleet run while a slow school is still mid-rebuild, and two rebuilds
+    // of the same school then double the I/O and contend for the same
+    // rows (DGM, 2026-09-22: 17 straight statement timeouts). Transaction-
+    // scoped, so it releases on COMMIT/ROLLBACK or if the function dies.
+    const { rows: lockRows } = await q<{ locked: boolean }>(
+      `SELECT pg_try_advisory_xact_lock(hashtext($1)) AS locked`, [schoolId]);
+    if (!lockRows[0]?.locked) throw new SyncSkippedError('another sync for this school is still running');
+    // The rebuild copies every preserved table out and back inside this
+    // transaction; the largest (attendance_events, with signature PNGs in
+    // TOAST) outgrew the DB-wide 2-minute statement timeout. Transaction-
+    // local, so nothing outside the rebuild changes.
+    await q(`SET LOCAL statement_timeout = '10min'`);
+
     // Carry forward P2 ghl_contact_id across the snapshot. Once Parent 2 is
     // promoted to a standalone GHL contact, we don't want a subsequent sync
     // to clear the link just because the snapshot rebuilds rows. Index by
