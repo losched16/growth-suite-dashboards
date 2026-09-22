@@ -44,6 +44,19 @@ Nothing is lost: every signature still opens from Attendance History.
 for ~20 minutes (tags, fields and pipeline cards kept syncing) so the
 copy could finish without competing with it, then switched back.
 
+**Outcome.** Column dropped and full sync restored at 19:11 UTC; the
+first complete DGM sync since 16:47 finished at 19:25 (5m53s, with the
+database still recovering from hours of heavy I/O — it should settle
+back toward a minute). Every contact edit made during the outage,
+including Andrew Locke's name, is now on the platform. Verified after
+the drop: a backfilled signature and a brand-new kiosk signature both
+open from Attendance History.
+
+**Same risk elsewhere, noted for later:** parent uploads and student
+documents (files stored inline) are copied out and back by every
+school's sync the same way. They're small today; they'll need the same
+treatment before they aren't.
+
 ### Andrew Locke: name written to Diana Locke's contact
 Diana's Student 1 slot had Andrew's DOB, gender, program, start date,
 enrollment selections and AZ card — but no first or last name. The
