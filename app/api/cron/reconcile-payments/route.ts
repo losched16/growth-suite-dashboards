@@ -183,14 +183,31 @@ async function run(request: NextRequest) {
         } else if (stripeStatus === 'processing') {
           action = 'leave_pending (ACH clearing)';
         } else if (DEAD.has(stripeStatus)) {
-          action = 'mark_failed';
-          if (apply && r.our_status === 'pending') {
-            await query(
-              `UPDATE payments SET status='failed',
-                      failure_message = COALESCE(failure_message, $2), updated_at = now()
-                WHERE id = $1 AND status = 'pending'`,
-              [r.id, `Reconciled: Stripe status ${stripeStatus}`],
-            );
+          // Two very different things end up here. A PaymentIntent that
+          // carries last_payment_error was presented to a bank and refused
+          // — that is a failed payment, and the office should see why. One
+          // without it was never confirmed at all (the parent closed the
+          // bank-login window, or tried again a minute later on a fresh
+          // intent) — nothing was charged and nothing was declined. Writing
+          // those as 'failed' had NLMA's office reading a wall of failures
+          // on 2026-09-21 that were parents retrying. Drop them instead.
+          const declineMsg = pi.last_payment_error?.message ?? null;
+          if (declineMsg) {
+            action = 'mark_failed (bank declined)';
+            if (apply && r.our_status === 'pending') {
+              await query(
+                `UPDATE payments SET status='failed',
+                        failure_code = COALESCE(failure_code, $3),
+                        failure_message = COALESCE(failure_message, $2), updated_at = now()
+                  WHERE id = $1 AND status = 'pending'`,
+                [r.id, declineMsg, pi.last_payment_error?.code ?? null],
+              );
+            }
+          } else {
+            action = 'drop (checkout never confirmed — nothing charged)';
+            if (apply && r.our_status === 'pending') {
+              await query(`DELETE FROM payments WHERE id = $1 AND status = 'pending'`, [r.id]);
+            }
           }
         } else {
           action = 'leave (unhandled status)';
