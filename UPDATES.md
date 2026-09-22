@@ -7,6 +7,59 @@ human digest.
 
 ---
 
+## September 22, 2026
+
+### DGM sync outage (17:02–~18:35 UTC) — cause found and fixed for good
+DGM's sync failed every run for about 90 minutes: no contact edits
+reached the dashboards or portal (the Andrew Locke name fix below sat
+in the queue the whole time). This is the same "statement timeout"
+that had been intermittent since 9/10, now permanent.
+
+**Cause.** Every sync rebuilds the school's records inside one
+database transaction and, to protect data the office and parents
+created, copies several tables out and back. One of them,
+attendance_events, had grown to 391 MB — 12 MB of actual check-in
+rows and 382 MB of the signature images drawn on the kiosk, stored
+inline. The database allows any single statement 2 minutes; copying
+382 MB of images no longer fit, and because the copy ran every 5
+minutes the database was permanently vacuuming the leftovers, which
+made the next copy slower still. On top of that, the 5-minute schedule
+could start a second rebuild of DGM while the first was still running.
+
+**Restored service first (18:32).** Only one rebuild per school can run
+at a time now (a second one logs "Skipped", not a failure), and the
+rebuild transaction gets a 10-minute allowance instead of 2. The first
+run under that rule completed its rebuild.
+
+**Then the real fix.** Signature images now live in their own table,
+which the rebuild never has to copy. Kiosk and portal check-ins write
+there as of 18:40 (verified on a live pick-up); the 14,663 existing
+signatures were copied over and checked row-for-row; the dashboards,
+exports and the sync were switched to the new table; and the old
+image column was dropped. That takes the rebuild's copy from 391 MB
+to about 12 MB — back to where it was before signatures existed.
+Nothing is lost: every signature still opens from Attendance History.
+
+**While this was in progress** DGM's destructive rebuild was paused
+for ~20 minutes (tags, fields and pipeline cards kept syncing) so the
+copy could finish without competing with it, then switched back.
+
+### Andrew Locke: name written to Diana Locke's contact
+Diana's Student 1 slot had Andrew's DOB, gender, program, start date,
+enrollment selections and AZ card — but no first or last name. The
+platform only knew him as "Andrew Locke" because it borrowed the name
+from the pipeline card. Name written; still blank for the office:
+enrollment status (he's attending — 11 days — and signed 9/8), grade
+level and homeroom. Only ONE Andrew Locke pipeline card exists; the
+"listed twice" report could not be reproduced in the CRM.
+
+**Root cause is the application form.** Its "Student 1 First Name" and
+"Student 1 Last Name" questions have never saved — all five
+applications since 9/5 arrived with the child's DOB, gender, school and
+language filled in and the name blank. Those two questions need to be
+re-mapped in the survey builder. Frank Navarro and Luca Hoyt are in
+the same state today.
+
 ## September 18, 2026
 
 ### Admissions pipeline can now be filtered by Grade Level
