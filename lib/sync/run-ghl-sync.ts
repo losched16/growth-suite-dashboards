@@ -1698,7 +1698,7 @@ export async function runGhlSync(schoolId: string): Promise<SyncResult> {
       `INSERT INTO attendance_events
          (id, school_id, student_id, event_type, performed_by_parent_id, performed_by_admin_email,
           picked_up_by_parent_id, picked_up_by_pickup_person_id, picked_up_by_name_snapshot,
-          performed_at, signature_png, curbside, notes, ip_address, user_agent, created_at,
+          performed_at, curbside, notes, ip_address, user_agent, created_at,
           curbside_slot, pickup_time, source, performed_by_pickup_person_id, performed_by_name_snapshot,
           voided_at, voided_by_admin_email)
        SELECT p.id, p.school_id, p.student_id, p.event_type,
@@ -1707,7 +1707,7 @@ export async function runGhlSync(schoolId: string): Promise<SyncResult> {
               CASE WHEN EXISTS (SELECT 1 FROM parents x WHERE x.id = p.picked_up_by_parent_id) THEN p.picked_up_by_parent_id END,
               CASE WHEN EXISTS (SELECT 1 FROM pickup_persons x WHERE x.id = p.picked_up_by_pickup_person_id) THEN p.picked_up_by_pickup_person_id END,
               p.picked_up_by_name_snapshot,
-              p.performed_at, p.signature_png, p.curbside, p.notes, p.ip_address, p.user_agent, p.created_at,
+              p.performed_at, p.curbside, p.notes, p.ip_address, p.user_agent, p.created_at,
               p.curbside_slot, p.pickup_time, p.source,
               CASE WHEN EXISTS (SELECT 1 FROM pickup_persons x WHERE x.id = p.performed_by_pickup_person_id) THEN p.performed_by_pickup_person_id END,
               p.performed_by_name_snapshot,
@@ -1715,6 +1715,16 @@ export async function runGhlSync(schoolId: string): Promise<SyncResult> {
          FROM _att_preserve p
         WHERE EXISTS (SELECT 1 FROM students s WHERE s.id = p.student_id)
        ON CONFLICT DO NOTHING`,
+    );
+    // Signatures live in attendance_signatures (migration 108) with no FK,
+    // so the rebuild never moves them — the 382 MB of PNGs that used to be
+    // copied out and back on every sync. Only orphans (events dropped above
+    // because their student left GHL) are cleared.
+    await q(
+      `DELETE FROM attendance_signatures g
+        WHERE g.school_id = $1
+          AND NOT EXISTS (SELECT 1 FROM attendance_events e WHERE e.id = g.event_id)`,
+      [schoolId],
     );
     const attKept = (attRestored.rowCount ?? 0) + (pickupsRestored.rowCount ?? 0);
     if (attKept > 0) warnings.push(`Preserved ${attRestored.rowCount ?? 0} attendance event(s) + ${pickupsRestored.rowCount ?? 0} pickup person(s) across the sync.`);

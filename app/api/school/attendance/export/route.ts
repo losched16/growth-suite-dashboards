@@ -138,7 +138,7 @@ async function buildEventsCsv(
             e.performed_by_admin_email,
             e.picked_up_by_name_snapshot,
             e.curbside,
-            (e.signature_png IS NOT NULL AND length(e.signature_png) > 0) AS has_signature,
+            EXISTS (SELECT 1 FROM attendance_signatures g WHERE g.event_id = e.id) AS has_signature,
             e.notes
      FROM attendance_events e
      JOIN students s ON s.id = e.student_id

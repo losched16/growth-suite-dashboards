@@ -23,9 +23,13 @@ export async function GET(request: NextRequest, { params }: { params: Params }) 
     return NextResponse.json({ error: 'bad_id' }, { status: 400 });
   }
 
-  const { rows } = await query<{ signature_png: string | null; school_id: string; ghl_location_id: string | null }>(
-    `SELECT ae.signature_png, ae.school_id, s.ghl_location_id
-       FROM attendance_events ae JOIN schools s ON s.id = ae.school_id
+  // Signatures live in attendance_signatures (migration 108), keyed by
+  // event id — the event row itself only proves the id is real.
+  const { rows } = await query<{ png: string | null; school_id: string; ghl_location_id: string | null }>(
+    `SELECT g.png, ae.school_id, s.ghl_location_id
+       FROM attendance_events ae
+       JOIN schools s ON s.id = ae.school_id
+       LEFT JOIN attendance_signatures g ON g.event_id = ae.id
       WHERE ae.id = $1`,
     [eventId],
   );
@@ -41,7 +45,7 @@ export async function GET(request: NextRequest, { params }: { params: Params }) 
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   }
 
-  const m = /^data:(image\/[\w.+-]+);base64,(.+)$/.exec(ev.signature_png ?? '');
+  const m = /^data:(image\/[\w.+-]+);base64,(.+)$/.exec(ev.png ?? '');
   if (!m) return NextResponse.json({ error: 'no_signature' }, { status: 404 });
 
   return new NextResponse(Buffer.from(m[2], 'base64'), {

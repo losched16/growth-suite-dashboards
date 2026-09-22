@@ -104,7 +104,7 @@ export default async function AttendanceHistoryPage({
             performed_by_name_snapshot, performed_by_admin_email,
             picked_up_by_name_snapshot, source, curbside, curbside_slot,
             pickup_time, notes,
-            signature_png IS NOT NULL AND signature_png <> '' AS has_signature
+            EXISTS (SELECT 1 FROM attendance_signatures g WHERE g.event_id = attendance_events.id) AS has_signature
        FROM attendance_events
       WHERE student_id = $1 AND school_id = $2
         AND voided_at IS NULL
