@@ -991,15 +991,25 @@ const DATA_PRESERVE: Array<{
   snapshot?: string; // default: SELECT * FROM <table> WHERE school_id = $1
   nullFks?: Array<{ col: string; ref: string }>;
   requireFks: Array<{ col: string; ref: string }>;
+  // Tables that carry file bytes stay in place instead of being copied out
+  // and back (migration 110 made their FKs to students/parents/families
+  // DEFERRABLE INITIALLY DEFERRED with NO ACTION, so the rebuild's deletes
+  // neither cascade into them nor null their links; the check runs at
+  // COMMIT, after every surviving anchor is re-inserted under its old id).
+  // nullFks / requireFks are then applied to the LIVE rows before commit —
+  // same outcome as the old restore for anchors that genuinely left the CRM.
+  // Honored only when the runtime FK check below confirms migration 110 is
+  // in place; until then the table takes the legacy round-trip.
+  keepInPlace?: boolean;
 }> = [
-  { table: 'student_documents', temp: '_docs_preserve',
+  { table: 'student_documents', temp: '_docs_preserve', keepInPlace: true,
     requireFks: [{ col: 'student_id', ref: 'students' }] },
   { table: 'student_pickup_restrictions', temp: '_restr_preserve',
     requireFks: [{ col: 'student_id', ref: 'students' }] },
   { table: 'student_health_profiles', temp: '_health_preserve',
     nullFks: [{ col: 'reviewed_by_parent_id', ref: 'parents' }],
     requireFks: [{ col: 'student_id', ref: 'students' }] },
-  { table: 'parent_uploads', temp: '_puploads_preserve',
+  { table: 'parent_uploads', temp: '_puploads_preserve', keepInPlace: true,
     nullFks: [{ col: 'parent_id', ref: 'parents' }, { col: 'student_id', ref: 'students' }],
     requireFks: [{ col: 'family_id', ref: 'families' }] },
   { table: 'enrollment_invites', temp: '_einv_preserve',
@@ -1080,7 +1090,26 @@ export class SyncSkippedError extends Error {
   constructor(message: string) { super(message); this.name = 'SyncSkippedError'; }
 }
 
-export async function runGhlSync(schoolId: string): Promise<SyncResult> {
+// Dry-run sentinel: thrown at the end of the rebuild transaction so
+// withTransaction rolls everything back; carries the would-be result.
+class DryRunRollback extends Error {
+  constructor(public readonly inner: {
+    familiesCreated: number; parentsCreated: number; studentsCreated: number;
+    enrollmentsCreated: number; classroomsCreated: number; p2ContactIdCarriedForward: number;
+  }) { super('dry run — rolled back'); this.name = 'DryRunRollback'; }
+}
+
+export interface RunGhlSyncOptions {
+  // Run the whole rebuild, force the deferred FK checks, then ROLL BACK.
+  // Nothing persists and no post-commit side effects fire. For rehearsing
+  // changes to this file against production data.
+  dryRun?: boolean;
+  // Statements executed inside the rebuild transaction before anything
+  // else — e.g. a pending migration, so a dry run tests the real end state.
+  preSql?: string[];
+}
+
+export async function runGhlSync(schoolId: string, opts: RunGhlSyncOptions = {}): Promise<SyncResult> {
   const client = await loadGhlClient(schoolId);
   const config = await loadSchoolFieldSchema(schoolId);
   const schema = await fetchFieldSchema(client);
@@ -1255,7 +1284,9 @@ export async function runGhlSync(schoolId: string): Promise<SyncResult> {
     }
   }
 
-  const result = await withTransaction(async (q) => {
+  let result: DryRunRollback['inner'];
+  try {
+    result = await withTransaction(async (q) => {
     // One rebuild per school at a time. The 5-minute cron starts a new
     // fleet run while a slow school is still mid-rebuild, and two rebuilds
     // of the same school then double the I/O and contend for the same
@@ -1269,6 +1300,30 @@ export async function runGhlSync(schoolId: string): Promise<SyncResult> {
     // TOAST) outgrew the DB-wide 2-minute statement timeout. Transaction-
     // local, so nothing outside the rebuild changes.
     await q(`SET LOCAL statement_timeout = '10min'`);
+    // Rehearsal hook: statements (e.g. a pending migration) applied inside
+    // this same transaction so a dry run exercises the exact end state.
+    for (const sql of opts.preSql ?? []) await q(sql);
+
+    // Are migration 110's deferred NO ACTION FKs in place? Only then can the
+    // keepInPlace tables skip the round-trip (with the old CASCADE/SET NULL
+    // FKs the students DELETE below would silently destroy their rows).
+    const { rows: fkRows } = await q<{ ok: boolean }>(
+      `SELECT bool_and(c.condeferrable AND c.condeferred AND c.confdeltype = 'a') AS ok
+         FROM pg_constraint c
+        WHERE c.contype = 'f'
+          AND ((c.conrelid = 'student_documents'::regclass AND c.conname = 'student_documents_student_id_fkey')
+            OR (c.conrelid = 'parent_uploads'::regclass AND c.conname IN
+                ('parent_uploads_family_id_fkey', 'parent_uploads_parent_id_fkey', 'parent_uploads_student_id_fkey')))`,
+    );
+    const { rows: fkCount } = await q<{ n: number }>(
+      `SELECT count(*)::int AS n FROM pg_constraint c
+        WHERE c.contype = 'f' AND (
+          (c.conrelid = 'student_documents'::regclass AND c.conname = 'student_documents_student_id_fkey')
+          OR (c.conrelid = 'parent_uploads'::regclass AND c.conname IN
+              ('parent_uploads_family_id_fkey', 'parent_uploads_parent_id_fkey', 'parent_uploads_student_id_fkey')))`,
+    );
+    const keepInPlaceReady = fkRows[0]?.ok === true && fkCount[0]?.n === 4;
+    const keepsInPlace = (p: (typeof DATA_PRESERVE)[number]) => p.keepInPlace === true && keepInPlaceReady;
 
     // Carry forward P2 ghl_contact_id across the snapshot. Once Parent 2 is
     // promoted to a standalone GHL contact, we don't want a subsequent sync
@@ -1432,6 +1487,7 @@ export async function runGhlSync(schoolId: string): Promise<SyncResult> {
     // FK guards (see the restore loop below). Order matters on restore:
     // parents before their children (invoices → line items, etc.).
     for (const p of DATA_PRESERVE) {
+      if (keepsInPlace(p)) continue; // stays put; cleaned in place after the rebuild
       await q(
         `CREATE TEMP TABLE ${p.temp} ON COMMIT DROP AS ${p.snapshot ?? `SELECT * FROM ${p.table} WHERE school_id = $1`}`,
         [schoolId],
@@ -1758,7 +1814,33 @@ export async function runGhlSync(schoolId: string): Promise<SyncResult> {
     // NULL-tolerant require guard keeps rows whose optional anchor
     // column is simply empty.
     let dataKept = 0;
+    let dataInPlace = 0;
     for (const p of DATA_PRESERVE) {
+      if (keepsInPlace(p)) {
+        // Rows never moved. Apply the same anchor rules to the live table
+        // that the restore applies to the copy: null optional links whose
+        // target left the CRM, drop rows whose required anchor did. The
+        // deferred FKs then verify the remainder at COMMIT.
+        for (const nf of p.nullFks ?? []) {
+          await q(
+            `UPDATE ${p.table} SET ${nf.col} = NULL
+              WHERE school_id = $1 AND ${nf.col} IS NOT NULL
+                AND NOT EXISTS (SELECT 1 FROM ${nf.ref} r WHERE r.id = ${p.table}.${nf.col})`,
+            [schoolId],
+          );
+        }
+        for (const rf of p.requireFks) {
+          await q(
+            `DELETE FROM ${p.table}
+              WHERE school_id = $1 AND ${rf.col} IS NOT NULL
+                AND NOT EXISTS (SELECT 1 FROM ${rf.ref} r WHERE r.id = ${p.table}.${rf.col})`,
+            [schoolId],
+          );
+        }
+        const { rows: cnt } = await q<{ n: number }>(`SELECT count(*)::int AS n FROM ${p.table} WHERE school_id = $1`, [schoolId]);
+        dataInPlace += cnt[0]?.n ?? 0;
+        continue;
+      }
       for (const nf of p.nullFks ?? []) {
         await q(
           `UPDATE ${p.temp} SET ${nf.col} = NULL
@@ -1777,7 +1859,8 @@ export async function runGhlSync(schoolId: string): Promise<SyncResult> {
       );
       dataKept += res.rowCount ?? 0;
     }
-    if (dataKept > 0) warnings.push(`Preserved ${dataKept} data row(s) (documents, invoices, uploads, tokens, …) across the sync.`);
+    if (dataKept > 0) warnings.push(`Preserved ${dataKept} data row(s) (invoices, tokens, …) across the sync.`);
+    if (dataInPlace > 0) warnings.push(`${dataInPlace} document/upload row(s) kept in place (not copied).`);
 
     // Classroom lead teacher by MAJORITY VOTE of its students' own teacher
     // fields. The insert loop above stamps whichever student creates the
@@ -1851,18 +1934,30 @@ export async function runGhlSync(schoolId: string): Promise<SyncResult> {
       warnings.push(`Relinked ${relinked.rowCount} portal submission(s) to their family by submitter email.`);
     }
 
-    return {
+    const inner = {
       familiesCreated, parentsCreated, studentsCreated,
       enrollmentsCreated, classroomsCreated,
       p2ContactIdCarriedForward,
     };
-  });
+    if (opts.dryRun) {
+      // Deferred constraints are only checked at COMMIT — which a rollback
+      // never reaches. Force them now so a violation surfaces in rehearsal.
+      await q('SET CONSTRAINTS ALL IMMEDIATE');
+      throw new DryRunRollback(inner);
+    }
+    return inner;
+    });
+  } catch (err) {
+    if (!(err instanceof DryRunRollback)) throw err;
+    result = err.inner;
+    warnings.push('DRY RUN: rebuild rolled back — nothing persisted, no notifications sent.');
+  }
 
   // Self-adapting data layer, Phase 1: discover the location's fields + tags
   // into the per-school catalog. Best-effort — discovery must never fail the
   // sync. Runs after the rebuild commits so tag discovery sees the fresh
   // ghl_contact_tags. Reads GHL + writes only our catalog tables.
-  try {
+  if (!opts.dryRun) try {
     const { refreshFieldCatalog } = await import('./field-catalog');
     const cat = await refreshFieldCatalog(schoolId);
     for (const r of cat.renamedOptions) {
@@ -1882,7 +1977,7 @@ export async function runGhlSync(schoolId: string): Promise<SyncResult> {
   // "Moved to Enrolled" office notifications (migration 098 ledger).
   // Best-effort — must never fail the sync. Runs after the rebuild
   // commits so the diff sees the fresh roster.
-  try {
+  if (!opts.dryRun) try {
     const { fireEnrollmentNotifications } = await import('./enrollment-notifications');
     const en = await fireEnrollmentNotifications(schoolId);
     if (en.seeded) warnings.push('enrollment-status ledger seeded (baseline, no notifications).');
