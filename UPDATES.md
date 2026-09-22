@@ -52,10 +52,24 @@ including Andrew Locke's name, is now on the platform. Verified after
 the drop: a backfilled signature and a brand-new kiosk signature both
 open from Attendance History.
 
-**Same risk elsewhere, noted for later:** parent uploads and student
-documents (files stored inline) are copied out and back by every
-school's sync the same way. They're small today; they'll need the same
-treatment before they aren't.
+**Second fix, same afternoon.** Runs were still taking about six
+minutes, so I profiled one: student documents and parent uploads — the
+files themselves, stored inline — were being copied out and back on
+every rebuild too (about 140 MB for DGM, written three times per run,
+and 87 of the rebuild's 141 seconds). Those two tables now stay put
+during the rebuild: their links to students, parents and families are
+checked at the end of the rebuild instead of being cut mid-way, and the
+sync tidies any link whose contact genuinely left the CRM exactly as it
+did before. Rehearsed first on DGM's real data inside a transaction that
+was rolled back — document and upload counts identical before and after,
+no link violations — then deployed at 20:01 UTC. Deploy order can't lose
+data: the sync only stops copying once it confirms the new link rules
+are in place.
+
+**Result:** the next two DGM syncs completed in **47 s and 43 s** (from
+353–392 s an hour earlier and 17 straight failures before that), every
+5 minutes again, with document and upload counts unchanged. The
+rebuild now moves ~12 MB per run instead of ~530 MB.
 
 ### Andrew Locke: name written to Diana Locke's contact
 Diana's Student 1 slot had Andrew's DOB, gender, program, start date,
