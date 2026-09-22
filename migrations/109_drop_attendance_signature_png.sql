@@ -1,0 +1,13 @@
+-- Drop the old inline signature column.
+--
+-- Signatures live in attendance_signatures since migration 108, and the
+-- backfill was verified row-for-row (every event with a signature has a
+-- matching side-table row, byte-identical spot checks) before this ran.
+-- Dropping the column is an instant catalog change: the column's TOAST
+-- data is simply no longer read, which is what takes the sync's
+-- attendance_events copy from ~391 MB back to ~12 MB. The disk itself is
+-- reclaimed later by an optional VACUUM FULL attendance_events.
+--
+-- Apply only AFTER the dashboards build that stops referencing the
+-- column is live (the sync's re-insert used to list it).
+ALTER TABLE attendance_events DROP COLUMN IF EXISTS signature_png;
