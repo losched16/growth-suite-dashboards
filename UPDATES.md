@@ -7,6 +7,42 @@ human digest.
 
 ---
 
+## September 23, 2026
+
+### INCIDENT: kiosk check-in / check-out down 12:36 PM Sept 22 → 7:17 AM Sept 23 (Arizona)
+**What families saw:** the kiosk accepted the PIN, then failed on the
+sign-in / sign-out itself. 148 families hit it at pick-up yesterday
+afternoon (the office force-checked-out ~24 kids by hand), and 17
+families hit it at this morning's drop-off before it was fixed. 1,566
+failed requests in total.
+
+**Cause — a deployment mix-up on our side, not the school's.** Yesterday's
+signature fix changed the kiosk's write path and then removed the old
+signature column. The new write path was deployed at 11:39 AM, but from
+a working branch rather than master. At 12:36 PM a routine portal deploy
+went out from master — which didn't have the change — so the old write
+path came back, pointing at a column that no longer existed. Every
+check-in and check-out failed from that moment.
+
+**Fix (7:17 AM):** the correct portal build redeployed; check-ins with
+signatures resumed immediately (8 in the first two minutes). The change
+is now on master as well, so it cannot be reverted by the next deploy.
+
+**Office clean-up:**
+- **This morning:** 15 families whose kids are at school with no
+  check-in on record — Attridge, Augustine, Ayala, Bray, C Lessard,
+  Duffek-Krueger, Ehrler, Ellis, Hardy, Keller, Rosales, Rosenberg,
+  Ryan, Travis, Traylor. Force check-in from the Attendance board (the
+  time they tried is in the accompanying list).
+- **Yesterday's pick-ups:** the 148 families' children were physically
+  picked up but most have no check-out record. Either leave the gap, or
+  have the records back-filled as office check-outs stamped at each
+  family's kiosk login time (offered; not done without a yes).
+
+**Process rule adopted:** production deploys are built only from
+commits already on master, and before a database column is removed the
+live deployment is verified to contain the code that stopped using it.
+
 ## September 22, 2026
 
 ### DGM sync outage (17:02–~18:35 UTC) — cause found and fixed for good
