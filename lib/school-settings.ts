@@ -72,6 +72,16 @@ export interface SchoolSettings {
   // Map of student metadata key → opportunity custom field id, e.g.
   // { "grade_level": "<field id>" }. Empty = feature off.
   opportunity_student_fields: Record<string, string>;
+  // Keep a frozen (attributes_only) family graph current WITHOUT a rebuild:
+  // every cron tick, each open card at an Enrolled stage is checked against
+  // the roster and the sync adds what's missing — a new family, a newly
+  // enrolled sibling, a co-parent entered in the Parent 2 fields — and
+  // upgrades a prospect whose card reached Enrolled. Insert/upgrade only;
+  // nothing is ever deleted or rebuilt. Anything it can't resolve safely
+  // (bad source data, ambiguous matches) is alerted, not guessed
+  // (lib/sync/enrolled-family-sync). Off = the enrollment trigger runs only
+  // for billing-active schools, as before.
+  auto_create_enrolled_families: boolean;
 }
 
 // GHL sidebar items the Custom JS snippet can hide (docs/ghl-menu-snippet.js).
@@ -108,6 +118,7 @@ export const SCHOOL_SETTINGS_DEFAULTS: SchoolSettings = {
   derive_program_from_grade: false,
   enrollment_notification_emails: [],
   opportunity_student_fields: {},
+  auto_create_enrolled_families: false,
 };
 
 export function normalizeSchoolSettings(raw: unknown): SchoolSettings {
@@ -142,6 +153,7 @@ export function normalizeSchoolSettings(raw: unknown): SchoolSettings {
               .filter(([k, v]) => k !== '' && v !== ''),
           )
         : {},
+    auto_create_enrolled_families: r.auto_create_enrolled_families === true,
   };
 }
 

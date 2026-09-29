@@ -2043,49 +2043,65 @@ export async function insertOneFamily(
   }
 
   for (const s of fam.students) {
-    const { rows: stuRows } = await q<{ id: string }>(
-      `INSERT INTO students
-         (family_id, school_id, first_name, last_name, preferred_name,
-          date_of_birth, gender, status, metadata)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, 'active', $8::jsonb)
-       RETURNING id`,
-      [familyId, schoolId, s.first_name, s.last_name, s.preferred_name, s.date_of_birth, s.gender, JSON.stringify(s.metadata)],
-    );
-    const studentId = stuRows[0].id;
+    const r = await insertStudentRow(q, schoolId, familyId, s, warnings);
     studentsCreated++;
-
-    // Reuse an existing classroom (non-destructive) or create it.
-    let classroomId: string | null = null;
-    if (s.classroom_name) {
-      const { rows: ex } = await q<{ id: string }>(
-        `SELECT id FROM classrooms WHERE school_id = $1 AND name = $2 AND academic_year = $3 LIMIT 1`,
-        [schoolId, s.classroom_name, s.academic_year],
-      );
-      if (ex[0]) {
-        classroomId = ex[0].id;
-      } else {
-        const { rows: cRows } = await q<{ id: string }>(
-          `INSERT INTO classrooms (school_id, name, grade_level, academic_year, target_seats, lead_teacher_name)
-           VALUES ($1, $2, $3, $4, 0, $5) RETURNING id`,
-          [schoolId, s.classroom_name, s.grade_level, s.academic_year, s.lead_teacher_name],
-        );
-        classroomId = cRows[0].id;
-      }
-    }
-
-    const normalizedStatus = normalizeEnrollmentStatus(s.enrollment_status, warnings);
-    if (normalizedStatus) {
-      await q(
-        `INSERT INTO enrollments
-           (student_id, school_id, classroom_id, academic_year, status, enrolled_at, schedule)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-        [studentId, schoolId, classroomId, s.academic_year, normalizedStatus, s.enrolled_at, s.schedule],
-      );
-      enrollmentsCreated++;
-    } else if (!s.enrollment_status.trim()) {
-      warnings.push(`no enrollment status on the GHL contact for ${s.first_name} ${s.last_name} — not counted in any roster until it's set`);
-    }
+    if (r.enrollmentCreated) enrollmentsCreated++;
   }
 
   return { familyId, parentsCreated, studentsCreated, enrollmentsCreated };
+}
+
+// One student + (non-destructively reused or created) classroom + enrollment,
+// into an existing family. Shared by insertOneFamily and the enrolled-family
+// sync's sibling adds so both write students identically.
+export async function insertStudentRow(
+  q: QueryFn,
+  schoolId: string,
+  familyId: string,
+  s: MappedFamily['students'][number],
+  warnings: string[],
+): Promise<{ studentId: string; enrollmentCreated: boolean }> {
+  const { rows: stuRows } = await q<{ id: string }>(
+    `INSERT INTO students
+       (family_id, school_id, first_name, last_name, preferred_name,
+        date_of_birth, gender, status, metadata)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, 'active', $8::jsonb)
+     RETURNING id`,
+    [familyId, schoolId, s.first_name, s.last_name, s.preferred_name, s.date_of_birth, s.gender, JSON.stringify(s.metadata)],
+  );
+  const studentId = stuRows[0].id;
+
+  // Reuse an existing classroom (non-destructive) or create it.
+  let classroomId: string | null = null;
+  if (s.classroom_name) {
+    const { rows: ex } = await q<{ id: string }>(
+      `SELECT id FROM classrooms WHERE school_id = $1 AND name = $2 AND academic_year = $3 LIMIT 1`,
+      [schoolId, s.classroom_name, s.academic_year],
+    );
+    if (ex[0]) {
+      classroomId = ex[0].id;
+    } else {
+      const { rows: cRows } = await q<{ id: string }>(
+        `INSERT INTO classrooms (school_id, name, grade_level, academic_year, target_seats, lead_teacher_name)
+         VALUES ($1, $2, $3, $4, 0, $5) RETURNING id`,
+        [schoolId, s.classroom_name, s.grade_level, s.academic_year, s.lead_teacher_name],
+      );
+      classroomId = cRows[0].id;
+    }
+  }
+
+  const normalizedStatus = normalizeEnrollmentStatus(s.enrollment_status, warnings);
+  if (normalizedStatus) {
+    await q(
+      `INSERT INTO enrollments
+         (student_id, school_id, classroom_id, academic_year, status, enrolled_at, schedule)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      [studentId, schoolId, classroomId, s.academic_year, normalizedStatus, s.enrolled_at, s.schedule],
+    );
+    return { studentId, enrollmentCreated: true };
+  }
+  if (!s.enrollment_status.trim()) {
+    warnings.push(`no enrollment status on the GHL contact for ${s.first_name} ${s.last_name} — not counted in any roster until it's set`);
+  }
+  return { studentId, enrollmentCreated: false };
 }

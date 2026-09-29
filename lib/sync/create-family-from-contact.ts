@@ -25,6 +25,8 @@ import { withTransaction, query } from '@/lib/db';
 import { loadGhlClient, type GhlClient } from '@/lib/ghl/client';
 import { getContact } from '@/lib/ghl/contacts';
 import { loadSchoolFieldSchema, type SchoolFieldSchema } from './schema-loader';
+import { loadSchoolSettings } from '@/lib/school-settings';
+import { syncEnrolledFamilies } from './enrolled-family-sync';
 import { pipelineStageToFunnelStatus } from './pipeline-stage-map';
 import {
   fetchFieldSchema,
@@ -115,15 +117,36 @@ export interface EnrollSweepResult {
   skipped: number;
   errors: number;
   details: string[];
+  summary?: string;
 }
 
-// Cron entry point. Idempotent + safe to run every tick. Only fires for a
-// LIVE (billing_active) attributes_only school — i.e. DGM today. Snapshot
-// schools already auto-create families on their full sync, so they're
+// Cron entry point. Idempotent + safe to run every tick. Fires for a LIVE
+// (billing_active) attributes_only school — DGM — or any school that opted
+// into settings.auto_create_enrolled_families, which routes to the fuller
+// enrolled-family sync (siblings, co-parents, prospect→enrolled, alerts).
+// Snapshot schools already create families on their full sync, so they're
 // intentionally excluded (the cron passes attributes-only schools here).
 export async function createMissingEnrolledFamilies(
   schoolId: string,
 ): Promise<EnrollSweepResult> {
+  const settings = await loadSchoolSettings(schoolId);
+  if (settings.auto_create_enrolled_families) {
+    const r = await syncEnrolledFamilies(schoolId);
+    const changes = r.families_created + r.students_added + r.parents_added + r.emails_filled + r.enrollments_upgraded;
+    return {
+      ran: r.ran,
+      reason: r.reason,
+      checked: r.enrolled_cards,
+      created: changes,
+      skipped: r.attention.length,
+      errors: 0,
+      details: r.details,
+      summary: !r.ran
+        ? `Enrolled-family sync: ${r.reason}.`
+        : `Enrolled-family sync: ${r.enrolled_cards} enrolled cards; +${r.families_created} families, +${r.students_added} students, +${r.parents_added} co-parents, ${r.emails_filled} emails filled, ${r.enrollments_upgraded} upgraded; ${r.attention.length} need attention.`,
+    };
+  }
+
   // Gate: only live, billing-active schools. Keeps the trigger from
   // surprising a not-yet-launched import-managed school.
   const { rows: cfg } = await query<{ active: boolean }>(

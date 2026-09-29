@@ -233,13 +233,13 @@ export async function syncGhlAttributes(schoolId: string): Promise<AttributeSync
     for (const o of opps) {
       const info = stageLookup.get(o.pipelineStageId);
       await q(
-        `INSERT INTO ghl_opportunities (id, school_id, ghl_contact_id, pipeline_id, pipeline_name, stage_id, stage_name, status, monetary_value, last_stage_change_at)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+        `INSERT INTO ghl_opportunities (id, school_id, ghl_contact_id, pipeline_id, pipeline_name, stage_id, stage_name, status, monetary_value, last_stage_change_at, name)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
          ON CONFLICT (id) DO UPDATE SET stage_name = EXCLUDED.stage_name, status = EXCLUDED.status,
-           monetary_value = EXCLUDED.monetary_value, synced_at = now()`,
+           monetary_value = EXCLUDED.monetary_value, name = EXCLUDED.name, synced_at = now()`,
         [o.id, schoolId, o.contactId ?? null, o.pipelineId ?? null, info?.pipelineName ?? null,
          o.pipelineStageId ?? null, info?.stageName ?? null, o.status ?? null,
-         o.monetaryValue ?? null, o.lastStageChangeAt ?? null],
+         o.monetaryValue ?? null, o.lastStageChangeAt ?? null, o.name ?? null],
       );
     }
     for (const row of catalog) {

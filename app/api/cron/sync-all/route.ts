@@ -187,7 +187,9 @@ async function runForAll(): Promise<NextResponse> {
       if (s.sync_mode === 'attributes_only') {
         try {
           const enr = await createMissingEnrolledFamilies(s.id);
-          if (enr.ran && (enr.created > 0 || enr.errors > 0)) {
+          if (enr.summary) {
+            enrollSummary = ` ${enr.summary}`;
+          } else if (enr.ran && (enr.created > 0 || enr.errors > 0)) {
             enrollSummary = ` Enroll-trigger: +${enr.created} portals, ${enr.skipped} skipped, ${enr.errors} errors.`;
           }
         } catch (enrErr) {
