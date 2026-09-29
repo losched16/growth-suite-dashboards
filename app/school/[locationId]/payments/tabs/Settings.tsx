@@ -34,6 +34,8 @@ interface ConfigRow {
   late_fee_grace_days: number;
   // Later tiers: once `after_days` late the late fee TOTAL becomes `total_cents`.
   late_fee_escalations: Array<{ after_days: number; total_cents: number }> | null;
+  // Late fees apply to tuition installments only, never one-off charges.
+  late_fee_tuition_only: boolean | null;
   // One-off invoice auto-bill window (NULL = off).
   autopay_oneoff_after_days: number | null;
 }
@@ -46,7 +48,7 @@ export async function PaymentsHubSettings({
             card_enabled, ach_enabled, invoice_number_prefix,
             ghl_receipt_webhook_url, default_currency,
             autopay_days, late_fee_amount_cents, late_fee_grace_days,
-            late_fee_escalations, autopay_oneoff_after_days
+            late_fee_escalations, late_fee_tuition_only, autopay_oneoff_after_days
        FROM school_payment_config WHERE school_id = $1`,
     [schoolId],
   );
@@ -59,6 +61,7 @@ export async function PaymentsHubSettings({
     default_currency: 'usd',
     autopay_days: [1, 15], late_fee_amount_cents: 0, late_fee_grace_days: 3,
     late_fee_escalations: null,
+    late_fee_tuition_only: false,
     autopay_oneoff_after_days: null,
   };
 
@@ -214,6 +217,13 @@ export async function PaymentsHubSettings({
               <p className="text-[11px] text-slate-500">
                 Example: $50 after a 10-day grace period, then $75 total after 15 days, then $100 total after 20 days. Leave a row blank to skip it.
               </p>
+            </div>
+            <div className="mt-3">
+              <Toggle
+                name="late_fee_tuition_only"
+                defaultChecked={!!cfg.late_fee_tuition_only}
+                label="Tuition only — never charge late fees on one-off invoices (pizza, supplies, field trips, before care)"
+              />
             </div>
           </SettingsGroup>
 

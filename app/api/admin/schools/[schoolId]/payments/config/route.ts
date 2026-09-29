@@ -78,6 +78,10 @@ export async function POST(request: NextRequest, { params }: { params: Params })
       }
       steps.sort((a, b) => a.after_days - b.after_days);
     }
+    // "Late fees on tuition only" rides the same presence flag: it lives in
+    // the Settings form's Late fees group, and a checkbox that is unticked
+    // sends nothing, so absence only means "off" when that form sent it.
+    const tuitionOnly = stepsPresent && fd.get('late_fee_tuition_only') === '1';
     const invoicePrefix = String(fd.get('invoice_number_prefix') ?? 'INV').trim().toUpperCase().slice(0, 8) || 'INV';
     // GHL receipt webhook URL — accept only https GHL-ish URLs; blank
     // clears it (back to Resend fallback). We don't hard-require the
@@ -112,8 +116,8 @@ export async function POST(request: NextRequest, { params }: { params: Params })
           autopay_days, late_fee_amount_cents, late_fee_grace_days,
           card_enabled, ach_enabled, invoice_number_prefix,
           ghl_receipt_webhook_url, default_currency, autopay_oneoff_after_days,
-          late_fee_escalations)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, COALESCE($12, 'usd'), $14, $16::jsonb)
+          late_fee_escalations, late_fee_tuition_only)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, COALESCE($12, 'usd'), $14, $16::jsonb, $17)
        ON CONFLICT (school_id) DO UPDATE SET
          pass_card_fee = EXCLUDED.pass_card_fee,
          pass_ach_fee = EXCLUDED.pass_ach_fee,
@@ -130,10 +134,12 @@ export async function POST(request: NextRequest, { params }: { params: Params })
            THEN $14::int ELSE school_payment_config.autopay_oneoff_after_days END,
          late_fee_escalations = CASE WHEN $15::boolean
            THEN $16::jsonb ELSE school_payment_config.late_fee_escalations END,
+         late_fee_tuition_only = CASE WHEN $15::boolean
+           THEN $17::boolean ELSE school_payment_config.late_fee_tuition_only END,
          updated_at = now()`,
       [schoolId, passCard, passAch, feeLabel, days, lateFeeCents, graceDays,
        cardEnabled, achEnabled, invoicePrefix, ghlWebhookUrl, currency,
-       oneoffPresent, oneoffValue, stepsPresent, JSON.stringify(steps)],
+       oneoffPresent, oneoffValue, stepsPresent, JSON.stringify(steps), tuitionOnly],
     );
 
     return back(request, schoolId, { msg: 'Billing config saved.' }, returnTo);
