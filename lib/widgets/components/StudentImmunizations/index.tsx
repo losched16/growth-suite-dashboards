@@ -30,6 +30,14 @@ export interface ImmunizationsConfig {
   // is still an admissions pipeline use this to exclude waiting-list /
   // prospective kids. Unset/empty = show all active students.
   enrolled_stage_names?: string[];
+  // When true, restrict the tracker to students whose current-year
+  // enrollment status is 'enrolled' — hides prospective / withdrawn /
+  // declined / applicant contacts that were pulled in from the master
+  // contact list. Same scope the Student Roster's `enrolled_only` uses, so
+  // the two agree. Durable across the snapshot sync (enrollment status is
+  // rebuilt from GHL each run, unlike a one-off row delete). Default false =
+  // every active student, unchanged.
+  enrolled_only?: boolean;
 }
 
 interface StudentMeta {
@@ -57,6 +65,7 @@ async function fetcher(school: SchoolContext, config: ImmunizationsConfig): Prom
   const asOf = new Date();
   const stageFilter = (config?.enrolled_stage_names && config.enrolled_stage_names.length > 0)
     ? config.enrolled_stage_names : null;
+  const enrolledOnly = config?.enrolled_only === true;
 
   // DOB may live on the column or (for GHL-synced rows) in metadata.
   // Program/homeroom come from explicit keys OR the GHL pipeline name
@@ -72,10 +81,18 @@ async function fetcher(school: SchoolContext, config: ImmunizationsConfig): Prom
             COALESCE(s.metadata->>'grade', s.metadata->>'grade_level',
                      s.metadata->>'current_grade_level') AS grade
        FROM students s
+       LEFT JOIN LATERAL (
+         SELECT status FROM enrollments e
+          WHERE e.student_id = s.id
+          ORDER BY e.academic_year DESC, e.created_at DESC LIMIT 1
+       ) e ON true
       WHERE s.school_id = $1 AND s.status = 'active'
         AND ($2::text[] IS NULL OR s.metadata->>'ghl_stage_name' = ANY($2))
+        -- $3 = enrolled_only: keep only currently-enrolled students (the true
+        -- student body), dropping prospective / withdrawn / declined contacts.
+        AND ($3::boolean IS NOT TRUE OR e.status = 'enrolled')
       ORDER BY s.last_name, s.first_name`,
-    [school.schoolId, stageFilter],
+    [school.schoolId, stageFilter, enrolledOnly],
   );
 
   const ids = students.map((s) => s.student_id);
@@ -537,6 +554,7 @@ function StudentDetail({ data, studentId, backHref }: { data: Data; studentId: s
 const schema: ConfigSchema = {
   fields: [
     { type: 'text', key: 'default_room_filter', label: 'Default classroom filter', placeholder: '(all classrooms)' },
+    { type: 'boolean', key: 'enrolled_only', label: 'Currently-enrolled students only (hide prospective / withdrawn contacts)' },
   ],
 };
 
