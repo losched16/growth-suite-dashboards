@@ -159,6 +159,32 @@ console.log('— safety edges —');
   ok('nickname in card title matches ("Ruby Josephine “Jojo” Birke")', cardNames('Ruby Josephine “Jojo” Birke', 'Ruby', 'Birke'));
   ok("apostrophe/hyphen names match (D'Ambrosio, Arruda-Leuppert)", cardNames("Marco D'Ambrosio", 'Marco', "D'Ambrosio") && cardNames('Anton Arruda-Leuppert', 'Anton', 'Arruda-Leuppert'));
   ok('siblings told apart by first name', !cardNames('Ben Xu', 'Amy', 'Xu'));
+  ok('card title typed without a space matches ("VincentMarkopoulos", "NoraMarcello-Brown")',
+    cardNames('VincentMarkopoulos', 'Vincent', 'Markopoulos') && cardNames('NoraMarcello-Brown', 'Nora', 'Marcello-Brown'));
+  ok('no-space title still tells siblings apart ("LilyBean" ≠ Naomi, "AvalonPatel" ≠ Ava)',
+    !cardNames('LilyBean', 'Naomi', 'Bean') && !cardNames('AvalonPatel', 'Ava', 'Patel'));
+}
+{ // 29 no-space card for a child already on the roster (14 live Shrewsbury cards)
+  const p = planEnrolledFamilySync(inp({ parents: [rp('pb', 'FB', 'Kim', 'Bean', 'kim@x.com', true, 'cb')],
+    students: [rs('sl', 'FB', 'Lily', 'Bean', '2021-01-01'), rs('sn', 'FB', 'Naomi', 'Bean', '2023-11-11')],
+    candidates: [cand('cb', 'Kim Bean', M([P('Kim', 'Bean', 'kim@x.com', true, 'cb')], [S('Lily', 'Bean', '2021-01-01'), S('Naomi', 'Bean', '2023-11-11')]), [card('kl', 'LilyBean'), card('kn', 'Naomi Bean')])] }));
+  ok('no-space card, child on roster: unchanged, no alert', nothing(p) && p.attention.length === 0 && p.unchanged === 2, JSON.stringify(p.attention));
+}
+
+console.log('— misnamed child (Mehta: "Jenny" on the record, card "Julian") —');
+const mehta = { parents: [rp('pg', 'FM', 'Geneva', 'Mehta', 'g@x.com', true, 'cg')], students: [rs('sj', 'FM', 'Jenny', 'Mehta', null)] };
+{ // 30 before the office fixes the record
+  const p = planEnrolledFamilySync(inp({ ...mehta, candidates: [cand('cg', 'Geneva Mehta', M([P('Geneva', 'Mehta', 'g@x.com', true, 'cg')], [S('Jenny', 'Mehta')]), [card('kj', 'Julian Mehta')])] }));
+  ok('card names a child not on the record: alert names what the record lists', nothing(p) && p.attention.some((a) => a.key.startsWith('card:') && a.message.includes('Jenny Mehta')));
+}
+{ // 31 after the office renames Student 1 to Julian
+  const p = planEnrolledFamilySync(inp({ ...mehta, candidates: [cand('cg', 'Geneva Mehta', M([P('Geneva', 'Mehta', 'g@x.com', true, 'cg')], [S('Julian', 'Mehta')]), [card('kj', 'Julian Mehta')])] }));
+  ok('record renamed Jenny→Julian: NOT added as a 2nd child, rename alert', p.addStudents.length === 0 && has(p, 'rename:'));
+}
+{ // 32 a real new sibling while an older sibling (different DOB) is missing from the record
+  const p = planEnrolledFamilySync(inp({ parents: [rp('pr', 'FR', 'Rae', 'Oh', 'r@x.com', true, 'cr')], students: [rs('so', 'FR', 'Ola', 'Oh', '2016-05-05')],
+    candidates: [cand('cr', 'Rae Oh', M([P('Rae', 'Oh', 'r@x.com', true, 'cr')], [S('Pia', 'Oh', '2022-02-02')]), [card('kp', 'Pia Oh')])] }));
+  ok('new sibling whose DOB differs from the off-record child: added', p.addStudents.length === 1 && !has(p, 'rename:'));
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

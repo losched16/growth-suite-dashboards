@@ -99,15 +99,25 @@ function fullKey(first: string | null | undefined, last: string | null | undefin
 // A card title names a person when every token of their last name AND of
 // their first (or preferred) name appears in it — tolerates middle names and
 // nicknames in the title ("Ruby Josephine “Jojo” Birke" names Ruby Birke) while
-// still telling siblings apart by first name.
+// still telling siblings apart by first name. Titles typed without a space
+// ("VincentMarkopoulos", "NoraMarcello-Brown") match when the letters are
+// exactly first + last.
 export function cardNames(cardName: string, first: string, last: string, preferred?: string | null): boolean {
-  const c = new Set(nameTokens(cardName));
   const lastT = nameTokens(last);
-  if (lastT.length === 0 || !lastT.every((t) => c.has(t))) return false;
-  const firstT = nameTokens(first);
-  if (firstT.length > 0 && firstT.every((t) => c.has(t))) return true;
-  const prefT = nameTokens(preferred);
-  return prefT.length > 0 && prefT.every((t) => c.has(t));
+  if (lastT.length === 0) return false;
+  const c = new Set(nameTokens(cardName));
+  if (lastT.every((t) => c.has(t))) {
+    const firstT = nameTokens(first);
+    if (firstT.length > 0 && firstT.every((t) => c.has(t))) return true;
+    const prefT = nameTokens(preferred);
+    if (prefT.length > 0 && prefT.every((t) => c.has(t))) return true;
+  }
+  const compact = nameTokens(cardName).join('');
+  const lastC = lastT.join('');
+  return [first, preferred].some((f) => {
+    const firstC = nameTokens(f).join('');
+    return firstC !== '' && compact === firstC + lastC;
+  });
 }
 
 export function isEnrolledCard(k: Card): boolean {
@@ -272,10 +282,28 @@ export function planEnrolledFamilySync(input: PlanInput): Plan {
       }
       // A child not yet in F: their data is on this contact, or on F's
       // primary contact when the card sits on a secondary one.
-      const s = findOnRecord(card, c.mapped) ?? findOnRecord(card, input.primaryMappedByFamily.get(F.ref));
+      const primaryRecord = input.primaryMappedByFamily.get(F.ref);
+      const s = findOnRecord(card, c.mapped) ?? findOnRecord(card, primaryRecord);
+      const recordKids = [...(c.mapped?.students ?? []), ...(primaryRecord?.students ?? [])];
       if (!s) {
+        const listed = recordKids.length
+          ? ` (its Student fields list: ${recordKids.map((k) => `${k.first_name} ${k.last_name}`.trim()).join(', ')})`
+          : ' (its Student fields are empty)';
         attention(`card:${card.id}`,
-          `${famLabel(F)}: Enrolled card "${card.name}" has no student by that name on the family's contact record — add the child to the primary parent's Student fields in Growth Suite (or correct the card name).`);
+          `${famLabel(F)}: Enrolled card "${card.name}" has no student by that name on the family's contact record${listed} — add the child to the primary parent's Student fields in Growth Suite (or correct the card name).`);
+        continue;
+      }
+      // A roster child with the same last name who is no longer on the record
+      // is most likely THIS child under an earlier (mistyped) name — adding
+      // would leave a duplicate beside the old record and its forms.
+      const renamed = F.students.find((x) => x.id && x.enrollmentStatus === 'enrolled'
+        && fullKey(x.last, '') === fullKey(s.last_name, '')
+        && dobRelation(x.dob, s.date_of_birth) !== 'differ'
+        && !recordKids.some((k) => fullKey(k.first_name, k.last_name) === fullKey(x.first, x.last))
+        && !enrolled.some((k) => cardNames(k.name, x.first, x.last, x.preferred)));
+      if (renamed) {
+        attention(`rename:${F.ref}:${fullKey(s.first_name, s.last_name)}`,
+          `${famLabel(F)}: the contact now lists "${s.first_name} ${s.last_name}" (Enrolled card "${card.name}"), and the roster has "${renamed.first} ${renamed.last}", who is no longer on the contact — most likely the same child under an earlier name. Not added automatically, to avoid a duplicate child: rename the roster child (keeps their forms), or confirm they are two different children.`);
         continue;
       }
       const parentNames = (c.mapped?.parents ?? []).map((p) => ({ first: p.first_name, last: p.last_name }));
