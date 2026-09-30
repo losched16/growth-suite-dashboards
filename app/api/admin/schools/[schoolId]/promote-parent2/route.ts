@@ -35,7 +35,7 @@ export async function POST(request: NextRequest, { params }: { params: Params })
     const summary =
       `${verb} ${result.promoted_now}, already ${result.already_promoted}, ` +
       `no P2 ${result.skipped_no_p2}, no P2 email ${result.skipped_no_p2_email}, ` +
-      `no P1 contact ${result.skipped_no_p1_contact}, errors ${result.errors}` +
+      `no P1 contact ${result.skipped_no_p1_contact}, not at stage ${result.skipped_stage}, errors ${result.errors}` +
       ` (across ${result.total_families} families, ${(duration / 1000).toFixed(1)}s)`;
 
     // Audit log

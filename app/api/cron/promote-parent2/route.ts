@@ -93,7 +93,7 @@ async function run(request: NextRequest): Promise<NextResponse> {
       const summary =
         `${verb} ${result.promoted_now}, already ${result.already_promoted}, ` +
         `no P2 ${result.skipped_no_p2}, no P2 email ${result.skipped_no_p2_email}, ` +
-        `no P1 contact ${result.skipped_no_p1_contact}, errors ${result.errors}` +
+        `no P1 contact ${result.skipped_no_p1_contact}, not at stage ${result.skipped_stage}, errors ${result.errors}` +
         ` (across ${result.total_families} families)`;
       await query(
         `INSERT INTO widget_fetch_log (school_id, dashboard_slug, widget_id, duration_ms, error)

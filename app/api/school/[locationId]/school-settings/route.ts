@@ -44,6 +44,8 @@ export async function POST(request: NextRequest, { params }: { params: Params })
       portal_gate_stage: str('portal_gate_stage') || null,
       auto_student_ids: form.get('auto_student_ids') === 'on',
       promote_parent2: form.get('promote_parent2') === 'on',
+      promote_parent2_stages: str('promote_parent2_stages')
+        .split(',').map((t) => t.trim()).filter(Boolean),
       roster_tag_filter: str('roster_tag_filter')
         .split(',').map((t) => t.trim()).filter(Boolean),
       ghl_hidden_menu: ghlHiddenMenu,

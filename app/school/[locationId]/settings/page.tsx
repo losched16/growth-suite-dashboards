@@ -168,6 +168,14 @@ export default async function SchoolSettingsPage({
                   <span className="block text-[11px] text-slate-500">Each second parent/guardian gets their own contact record nightly, tagged and associated with the family, so you can email both parents.</span>
                 </span>
               </label>
+              <div className="pl-6">
+                <Field
+                  label="Only for families at these pipeline stages (comma-separated; blank = every family). Enrolled students always count."
+                  name="promote_parent2_stages"
+                  defaultValue={settings.promote_parent2_stages.join(', ')}
+                  placeholder="e.g. Offer Accepted, Pending, Documents Completed, Enrolled"
+                />
+              </div>
             </div>
             {/* CRM sidebar menus — hidden per sub-account via the agency
                 Custom JS snippet (docs/ghl-menu-snippet.js). Unchecked = hidden. */}

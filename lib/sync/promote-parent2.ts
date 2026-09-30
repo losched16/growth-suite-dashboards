@@ -18,6 +18,7 @@ import { query } from '@/lib/db';
 import { loadGhlClient, type GhlClient } from '@/lib/ghl/client';
 import { upsertContactByEmail } from '@/lib/ghl/contacts';
 import { linkContacts } from '@/lib/ghl/associations';
+import { loadSchoolSettings } from '@/lib/school-settings';
 
 // Schools opt into the automatic promote-parent2 pass via
 // settings.promote_parent2 (school Settings page); the cron filters on it.
@@ -85,11 +86,12 @@ export interface PromoteResult {
   skipped_no_p2: number;
   skipped_no_p2_email: number;
   skipped_no_p1_contact: number;
+  skipped_stage: number;
   errors: number;
   details: Array<{
     family_id: string;
     family_display_name: string;
-    status: 'promoted' | 'already' | 'skipped_no_p2' | 'skipped_no_p2_email' | 'skipped_no_p1_contact' | 'error';
+    status: 'promoted' | 'already' | 'skipped_no_p2' | 'skipped_no_p2_email' | 'skipped_no_p1_contact' | 'skipped_stage' | 'error';
     p2_contact_id?: string;
     p2_email?: string;
     p1_email?: string;
@@ -168,6 +170,33 @@ export async function promoteParent2sForSchool(
     params,
   );
 
+  // Stage gate (settings.promote_parent2_stages): null = every family.
+  // A family qualifies with an open/won card in a listed stage on any of
+  // its parents' contacts, or a currently-enrolled student (returning
+  // families often have no admissions card at all).
+  const { promote_parent2_stages: gateStages } = await loadSchoolSettings(schoolId);
+  let stageQualified: Set<string> | null = null;
+  if (gateStages.length > 0) {
+    const { rows: q } = await query<{ id: string }>(
+      `SELECT f.id FROM families f
+        WHERE f.school_id = $1
+          AND (EXISTS (
+                 SELECT 1 FROM parents p
+                   JOIN ghl_opportunities o
+                     ON o.ghl_contact_id = p.ghl_contact_id AND o.school_id = f.school_id
+                  WHERE p.family_id = f.id AND p.status = 'active'
+                    AND lower(btrim(o.stage_name)) = ANY($2::text[])
+                    AND lower(coalesce(o.status, 'open')) NOT IN ('lost', 'abandoned'))
+               OR EXISTS (
+                 SELECT 1 FROM students s
+                   JOIN enrollments e ON e.student_id = s.id
+                  WHERE s.family_id = f.id AND s.status = 'active' AND e.status = 'enrolled'
+                    AND (s.metadata->>'is_demo') IS DISTINCT FROM 'true'))`,
+      [schoolId, gateStages.map((s) => s.toLowerCase())],
+    );
+    stageQualified = new Set(q.map((r) => r.id));
+  }
+
   const result: PromoteResult = {
     total_families: families.length,
     already_promoted: 0,
@@ -175,6 +204,7 @@ export async function promoteParent2sForSchool(
     skipped_no_p2: 0,
     skipped_no_p2_email: 0,
     skipped_no_p1_contact: 0,
+    skipped_stage: 0,
     errors: 0,
     details: [],
   };
@@ -215,6 +245,19 @@ export async function promoteParent2sForSchool(
         status: 'already',
         p2_contact_id: fam.p2_ghl_contact_id,
         p2_email: fam.p2_email ?? undefined,
+      });
+      continue;
+    }
+
+    // Family hasn't reached a qualifying pipeline stage yet — the nightly
+    // run picks it up once it does.
+    if (stageQualified && !stageQualified.has(fam.family_id)) {
+      result.skipped_stage++;
+      result.details.push({
+        family_id: fam.family_id,
+        family_display_name: famName,
+        status: 'skipped_stage',
+        note: `Not yet at ${gateStages.join(' / ')} (and no enrolled student).`,
       });
       continue;
     }

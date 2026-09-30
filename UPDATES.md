@@ -7,6 +7,29 @@ human digest.
 
 ---
 
+## September 30, 2026
+
+### DGM: Parent 2 contacts + "Parent 1"/"Parent 2" tags only from Offer Accepted on
+**What changed:** the nightly Parent 2 run (1:00 AM Arizona) used to set
+up every family with a Parent 2 email, including tour and application
+families. It now only sets up families that have reached **Offer
+Accepted, Pending, Documents Completed or Enrolled** in the Admissions
+Pipeline (a lost card doesn't count), or that already have an enrolled
+student. A family is set up the night after it moves into Offer Accepted.
+
+**Where to change it:** School Settings → "Only for families at these
+pipeline stages" under "Create a contact for Parent 2". Leave it blank to
+go back to every family. Every school starts blank, so nothing changes
+for other schools.
+
+**Not changed:** families already set up keep their Parent 2 contact and
+tags. On today's data, 6 families at Application Submitted, 7 Withdrawn
+and 2 on Hold already have them. The dry run (no changes made) held back
+2 families that would otherwise have been set up tonight (Losch,
+McCandless).
+
+---
+
 ## September 23, 2026
 
 ### INCIDENT: kiosk check-in / check-out down 12:36 PM Sept 22 → 7:17 AM Sept 23 (Arizona)

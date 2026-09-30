@@ -18,6 +18,14 @@ export interface SchoolSettings {
   auto_student_ids: boolean;
   // Nightly Parent-2 → own-contact promotion for email marketing.
   promote_parent2: boolean;
+  // When non-empty: the promotion (Parent 2 contact + "Parent 1"/"Parent 2"
+  // tags) only runs for families with an open/won opportunity in one of
+  // these pipeline stages (case-insensitive name match) or a currently
+  // enrolled student. List every qualifying stage — "Offer Accepted and
+  // later" is spelled out because stage order also holds negative stages
+  // (rescinded, declined, wait list). Empty = every family (original
+  // behavior). Forward-only: already-promoted families are left as they are.
+  promote_parent2_stages: string[];
   // When non-empty: only contacts carrying one of these tags become roster
   // families ("withdrawn" keeps the family but marks students withdrawn).
   roster_tag_filter: string[];
@@ -109,6 +117,7 @@ export const SCHOOL_SETTINGS_DEFAULTS: SchoolSettings = {
   portal_gate_stage: null,
   auto_student_ids: false,
   promote_parent2: false,
+  promote_parent2_stages: [],
   roster_tag_filter: [],
   per_student_enrollment_status: false,
   ghl_hidden_menu: [],
@@ -130,6 +139,9 @@ export function normalizeSchoolSettings(raw: unknown): SchoolSettings {
       ? r.portal_gate_stage.trim() : null,
     auto_student_ids: r.auto_student_ids === true,
     promote_parent2: r.promote_parent2 === true,
+    promote_parent2_stages: Array.isArray(r.promote_parent2_stages)
+      ? r.promote_parent2_stages.map((t) => String(t ?? '').trim()).filter(Boolean)
+      : [],
     roster_tag_filter: Array.isArray(r.roster_tag_filter)
       ? r.roster_tag_filter.map((t) => String(t ?? '').trim()).filter(Boolean)
       : [],
