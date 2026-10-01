@@ -83,6 +83,13 @@ export function DashboardNav({ schoolName, locationId, dashboards, activeSlug, i
           <Images className="h-4 w-4 shrink-0" />
           <span className="truncate">Photo Gallery</span>
         </Link>
+        <Link
+          href={`/school/${locationId}/website-documents${linkSuffix}`}
+          className="flex items-center gap-2 rounded px-2 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
+        >
+          <FileText className="h-4 w-4 shrink-0" />
+          <span className="truncate">Newsletters &amp; Menus</span>
+        </Link>
       </div>
 
       {/* Tools — data/admin utilities. */}
