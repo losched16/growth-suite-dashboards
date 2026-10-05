@@ -7,6 +7,27 @@ human digest.
 
 ---
 
+## October 5, 2026
+
+### DGM: application "family background" answers now sit in their own fields
+**What changed:** the application asks 23 family-background questions
+("How do you define success for your child?" and so on). It saves all of
+them into one text-list field, the one labeled "Desert Garden's primary
+goal in the admission process…". Each question already had its own field
+in the Student 1 folder ("Student 1 - How do you define success for your
+child?" etc.), but nothing had ever filled them. All 224 answers from the
+10 applications so far (Locke 9/5 through Martin 9/30) were copied into
+those individual fields, each on the applicant's own contact. Only empty
+fields were filled. The original text-list field is unchanged.
+
+**Office / Clint to do:** new applications keep saving into the single
+text-list field until the application survey (in Growth Suite →
+Surveys, "Application - Edited") is changed. Swap that question for the
+23 "Student 1 - …" fields. One of them is labeled "…does your child have
+home:" and could use a wording fix when it's added.
+
+---
+
 ## September 30, 2026
 
 ### DGM: Parent 2 contacts + "Parent 1"/"Parent 2" tags only from Offer Accepted on
