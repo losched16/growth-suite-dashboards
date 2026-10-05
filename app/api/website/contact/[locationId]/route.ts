@@ -1,5 +1,10 @@
-// POST /api/website/contact/{locationId} — the contact form on a school's
-// PUBLIC marketing website.
+// POST /api/website/contact/{locationId} — the contact form and the open
+// house RSVP form on a school's PUBLIC marketing website.
+//
+// intent=open-house is an RSVP: it carries the event date and party size,
+// lands in GHL with an "Open House RSVP" tag plus one tag per event date (so a
+// GHL workflow can send the confirmation and the reminder), and its message is
+// optional.
 //
 // The enquiry is written to website_enquiries FIRST and only then pushed to
 // GoHighLevel. If the push fails the row stays, the parent still gets their
@@ -37,7 +42,22 @@ const INTENTS: Record<string, string> = {
   contact: 'Website enquiry',
   application: 'Application enquiry',
   'financial-aid': 'Financial aid enquiry',
+  'open-house': 'Open House RSVP',
 };
+
+const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December'];
+
+/** 'YYYY-MM-DD' -> 'January 23, 2027', or null. The tag text is built here
+ *  from a validated date, never taken from the page, so the public form
+ *  cannot be used to write arbitrary tags into a school's CRM. */
+function eventLabel(v: string): string | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v);
+  if (!m) return null;
+  const mo = Number(m[2]); const d = Number(m[3]);
+  if (mo < 1 || mo > 12 || d < 1 || d > 31) return null;
+  return `${MONTHS[mo - 1]} ${d}, ${m[1]}`;
+}
 
 function originsFor(row: { website_origin: string | null }): string[] {
   return (row.website_origin ?? '')
@@ -108,12 +128,27 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const program = clean(body.program, MAX_SHORT);
   const message = String(body.message ?? '').trim().slice(0, MAX_MESSAGE);
   const intent = INTENTS[clean(body.intent, 40)] ? clean(body.intent, 40) : 'contact';
+  const isRsvp = intent === 'open-house';
+
+  const event = clean(body.event, 10);
+  const label = isRsvp ? eventLabel(event) : null;
+  const party = Math.round(Number(body.party_size));
+  const childAges = clean(body.child_ages, 200);
 
   const errors: string[] = [];
   if (!firstName) errors.push('Please tell us your first name.');
   if (!EMAIL_RE.test(email)) errors.push('Please check the email address.');
-  if (!message) errors.push('Please add a message.');
+  if (isRsvp) {
+    if (!label) errors.push('Please choose which open house you are coming to.');
+    if (!Number.isFinite(party) || party < 1 || party > 20) errors.push('Please tell us how many are coming.');
+  } else if (!message) {
+    errors.push('Please add a message.');
+  }
   if (errors.length) return reply({ error: errors.join(' ') }, 400);
+
+  const details = isRsvp
+    ? { event, event_label: label, party_size: party, ...(childAges ? { child_ages: childAges } : {}) }
+    : null;
 
   const ip = (request.headers.get('x-forwarded-for') ?? '').split(',')[0].trim() || null;
   if (ip) {
@@ -131,12 +166,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const { rows: saved } = await query<{ id: string }>(
     `INSERT INTO website_enquiries
        (school_id, first_name, last_name, email, phone, program, message, intent,
-        source_origin, source_ip, user_agent)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+        details, source_origin, source_ip, user_agent)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
      RETURNING id`,
     [
       school.id, firstName, lastName || null, email, phone || null,
-      program || null, message, intent,
+      program || null, message || null, intent,
+      details ? JSON.stringify(details) : null,
       origin, ip, clean(request.headers.get('user-agent'), 300) || null,
     ],
   );
@@ -155,23 +191,29 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       ...(lastName ? { lastName } : {}),
       email,
       ...(phone ? { phone } : {}),
-      source: SOURCE,
+      source: isRsvp ? 'Website open house RSVP' : SOURCE,
     });
     const contactId = up.data?.contact?.id;
     if (!contactId) throw new Error('upsert returned no contact id');
 
     const note = [
-      INTENTS[intent].toUpperCase(),
+      isRsvp ? `OPEN HOUSE RSVP \u2014 ${label}` : INTENTS[intent].toUpperCase(),
       `From: ${firstName}${lastName ? ` ${lastName}` : ''} <${email}>`,
       phone ? `Phone: ${phone}` : null,
+      isRsvp ? `Coming: ${party} ${party === 1 ? 'person' : 'people'}` : null,
+      childAges ? `Children's ages: ${childAges}` : null,
       program ? `Programme of interest: ${program}` : null,
-      '',
-      message,
+      message ? '' : null,
+      message || null,
     ].filter((l) => l !== null).join('\n');
+
+    const tags = isRsvp
+      ? ['Open House RSVP', `Open House ${event}`]
+      : [SOURCE, INTENTS[intent]];
 
     const id = encodeURIComponent(contactId);
     await Promise.all([
-      client.axios.post(`/contacts/${id}/tags`, { tags: [SOURCE, INTENTS[intent]] }),
+      client.axios.post(`/contacts/${id}/tags`, { tags }),
       client.axios.post(`/contacts/${id}/notes`, { body: note }),
     ]);
 
