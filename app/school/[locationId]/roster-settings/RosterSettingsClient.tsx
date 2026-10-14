@@ -16,6 +16,7 @@ const TYPE_LABEL: Record<string, string> = {
   pipeline: 'Opportunities',
   custom_field: 'Contact fields',
   facts: 'FACTS billing',
+  form_answer: 'Form answers',
 };
 
 export function RosterSettingsClient({
@@ -68,7 +69,7 @@ export function RosterSettingsClient({
       byGroup.set(g, list);
     }
     // Stable group order
-    return ['Tags', 'Opportunities', 'FACTS billing', 'Contact fields', 'Other']
+    return ['Form answers', 'Tags', 'Opportunities', 'FACTS billing', 'Contact fields', 'Other']
       .filter((g) => byGroup.has(g))
       .map((g) => ({ group: g, items: byGroup.get(g)! }));
   }, [attrs, search]);
@@ -296,7 +297,7 @@ export function RosterSettingsClient({
                 <div className="min-w-0 flex-1">
                   <div className="text-sm font-medium text-slate-900 truncate">{a.label}</div>
                   <div className="text-[11px] text-slate-500 truncate">
-                    {a.value_count} contact{a.value_count === 1 ? '' : 's'}
+                    {a.value_count} {a.attr_type === 'form_answer' ? 'submission' : 'contact'}{a.value_count === 1 ? '' : 's'}
                     {a.sample_values.length > 0 ? <> · e.g. {a.sample_values.slice(0, 3).join(' · ')}</> : null}
                   </div>
                 </div>
@@ -318,6 +319,7 @@ export function RosterSettingsClient({
                   />
                   Column
                 </label>
+                {a.attr_type === 'form_answer' ? <span className="w-[4.25rem]" /> : (
                 <label className="flex items-center gap-1 text-xs text-slate-600 whitespace-nowrap" title="Show in the row dropdown when a student is expanded">
                   <input
                     type="checkbox"
@@ -327,6 +329,7 @@ export function RosterSettingsClient({
                   />
                   Details
                 </label>
+                )}
               </li>
             ))}
           </ul>

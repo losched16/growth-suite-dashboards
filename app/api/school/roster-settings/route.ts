@@ -14,6 +14,7 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { query } from '@/lib/db';
 import { AVAILABLE_COLUMNS, AVAILABLE_FILTERS, DETAIL_SECTIONS } from '@/lib/widgets/components/StudentRosterRich/config';
+import { listFormAttrs } from '@/lib/forms/form-attrs';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -50,6 +51,8 @@ export async function POST(request: NextRequest) {
     [schoolId],
   );
   const valid = new Set(cat.map((c) => c.attr_key));
+  // portal-form answers (synthesized, not in the GHL catalog)
+  for (const f of await listFormAttrs(schoolId)) valid.add(f.attr_key);
   const extraFilters = reqFilters.filter((k) => valid.has(k));
   const extraColumns = reqColumns.filter((k) => valid.has(k));
 

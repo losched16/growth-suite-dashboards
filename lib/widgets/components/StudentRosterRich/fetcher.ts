@@ -6,6 +6,7 @@ import { query } from '@/lib/db';
 import type { SchoolContext, WidgetSearchParams } from '@/lib/widgets/types';
 import type { StudentRosterConfig } from './config';
 import { ghlContactUrl } from '@/lib/ghl/contact-url';
+import { FORM_ATTR_PREFIX, listFormAttrs, resolveFormAttrValues } from '@/lib/forms/form-attrs';
 
 // Filler / no-detail values teachers commonly see in legacy GHL data.
 // Treat these as "no useful prose" — when the field is just "Yes" or
@@ -463,6 +464,8 @@ export async function fetcher(
   // student id → FACTS ledger figures in cents (charges + credits +
   // totals merged; split-household second ledgers sum together)
   const factsByStudent = new Map<string, Map<string, number>>();
+  // student id → portal-form answer values for form: attrs in play
+  let formValsByStudent = new Map<string, Record<string, string>>();
 
   if (activeAttrs.size > 0) {
     const { rows: cat } = await query<CatalogRow>(
@@ -471,6 +474,16 @@ export async function fetcher(
       [school.schoolId, [...activeAttrs]],
     );
     catalogRows = cat;
+    // Portal-form answers (form:<formId>:<key>) aren't in the GHL catalog —
+    // synthesize their rows so labels/filters work like any other attr.
+    if ([...activeAttrs].some((a) => a.startsWith(FORM_ATTR_PREFIX))) {
+      const formAttrs = await listFormAttrs(school.schoolId);
+      catalogRows = catalogRows.concat(
+        formAttrs.filter((f) => activeAttrs.has(f.attr_key))
+          .map((f) => ({ attr_key: f.attr_key, attr_type: f.attr_type, label: f.label, data_type: f.data_type, sample_values: f.sample_values })),
+      );
+      formValsByStudent = await resolveFormAttrValues(school.schoolId, [...activeAttrs]);
+    }
 
     const { rows: parentLinks } = await query<{ family_id: string; ghl_contact_id: string }>(
       `SELECT family_id, ghl_contact_id FROM parents
@@ -594,6 +607,9 @@ export async function fetcher(
       if (attr.startsWith('facts:')) {
         const cents = factsByStudent.get(studentId)?.get(attr.slice(6));
         if (cents != null) out[attr] = fmtFactsCents(cents);
+      } else if (attr.startsWith(FORM_ATTR_PREFIX)) {
+        const v = formValsByStudent.get(studentId)?.[attr];
+        if (v) out[attr] = v;
       } else if (attr === 'tag') {
         const tags = new Set<string>();
         for (const cid of contactIds) for (const t of tagsByContact.get(cid) ?? []) tags.add(t);

@@ -14,6 +14,7 @@ import { ArrowLeft, SlidersHorizontal } from 'lucide-react';
 import { query } from '@/lib/db';
 import { loadSchoolByLocationId } from '@/lib/dashboards/loader';
 import { RosterSettingsClient } from './RosterSettingsClient';
+import { listFormAttrs } from '@/lib/forms/form-attrs';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 30;
@@ -47,6 +48,9 @@ export default async function RosterSettingsPage({ params }: { params: Params })
     ...c,
     sample_values: Array.isArray(c.sample_values) ? (c.sample_values as unknown[]).map(String) : [],
   }));
+  // Every question on the school's portal forms (emergency contacts,
+  // health answers, permissions…) — pickable just like contact fields.
+  attrs.push(...(await listFormAttrs(school.id)));
 
   // Current selections from the roster widget config.
   const { rows: dashRows } = await query<{ layout: Array<{ widget_id: string; config: Record<string, unknown> }> }>(
