@@ -376,6 +376,25 @@ export default async function SubmissionsInboxScoped({
             >
               <Download className="h-3 w-3" /> Export responses (CSV)
             </a>
+            <a
+              href={`/api/export/student-report/${locationId}?form=${def.id}&embed_token=${encodeURIComponent(deriveEmbedToken(locationId))}`}
+              target="_top"
+              rel="noopener"
+              download
+              className="inline-flex items-center gap-1 rounded-md border border-indigo-300 bg-white px-3 py-1.5 text-xs font-medium text-indigo-700 hover:bg-indigo-50"
+              title="Spreadsheet with every enrolled student on its own row — classroom, submitted / not submitted, and each answer from their latest submission"
+            >
+              <Download className="h-3 w-3" /> One row per student
+            </a>
+            <a
+              href={`/school/${locationId}/forms/${def.id}/print-all?chrome=none&embed_token=${encodeURIComponent(deriveEmbedToken(locationId))}`}
+              target="_blank"
+              rel="noopener"
+              className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+              title="Every student's latest submission, one per page — print or save as one PDF"
+            >
+              🖨 Print all
+            </a>
             <Link
               href={toggleTestUrl}
               className={

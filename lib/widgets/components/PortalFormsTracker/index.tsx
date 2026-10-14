@@ -338,6 +338,33 @@ function Component({
             ⬇ Export full answers
           </a>
         ) : null}
+        {sp.form && sp.form !== 'all' ? (
+          <a
+            href={`/api/export/student-report/${encodeURIComponent(school.locationId)}?form=${encodeURIComponent(sp.form)}&embed_token=${encodeURIComponent(deriveEmbedToken(school.locationId))}`}
+            className="inline-flex items-center gap-1.5 rounded-md border border-indigo-300 bg-white px-3 py-1.5 text-xs font-medium text-indigo-700 hover:bg-indigo-50"
+            title="Spreadsheet with EVERY enrolled student on its own row — classroom, submitted / not submitted, and each answer from their latest submission (family forms repeat for each sibling)"
+          >
+            ⬇ One row per student
+          </a>
+        ) : null}
+        {sp.form && sp.form !== 'all' ? (
+          <a
+            href={`/school/${encodeURIComponent(school.locationId)}/forms/${encodeURIComponent(sp.form)}/print-all?chrome=none&embed_token=${encodeURIComponent(deriveEmbedToken(school.locationId))}`}
+            target="_blank"
+            rel="noopener"
+            className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+            title="Every student's latest submission of this form, one per page — print or save as one PDF (filter by classroom on the page)"
+          >
+            🖨 Print all
+          </a>
+        ) : null}
+        <a
+          href={`/api/export/student-report/${encodeURIComponent(school.locationId)}?forms=all&match=${encodeURIComponent('allerg|anaphyl|epi-?pen')}&flagged=1&embed_token=${encodeURIComponent(deriveEmbedToken(school.locationId))}`}
+          className="inline-flex items-center gap-1.5 rounded-md border border-amber-300 bg-white px-3 py-1.5 text-xs font-medium text-amber-800 hover:bg-amber-50"
+          title="Every enrolled student with an allergy, anaphylaxis or EpiPen answer on ANY form — one row per student, by classroom"
+        >
+          ⬇ Students with allergies
+        </a>
         <span className="text-[10px] text-gray-400">
           {sp.form && sp.form !== 'all'
             ? 'Status exports: form, family, parent, email, phone, student, grade, status, date. Full answers: every question as a column.'
