@@ -132,8 +132,7 @@ export async function resolveFormAttrValues(
           })
           .filter(Boolean)
           // one contact per line — roster cells render with pre-wrap
-          .join('
-');
+          .join(String.fromCharCode(10));
       } else {
         v = row.values[`${p.formId}|${p.key}`] ?? '';
         if (EC_FIELD.test(p.key) && /phone/i.test(p.key)) v = tidyPhone(v);
