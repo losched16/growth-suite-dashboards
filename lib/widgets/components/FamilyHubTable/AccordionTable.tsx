@@ -363,11 +363,40 @@ function ParentBlock({
     }
   }
 
+  // "Resend invite" — emails a fresh 7-day sign-in link.
+  const [linkBusy, setLinkBusy] = useState(false);
+  const [linkMsg, setLinkMsg] = useState<string | null>(null);
+  const [linkErr, setLinkErr] = useState<string | null>(null);
+
+  async function sendLoginLink() {
+    if (linkBusy) return;
+    if (!window.confirm(`Email a new portal sign-in link to ${fullName} (${parent.email})?`)) return;
+    setLinkBusy(true);
+    setLinkErr(null);
+    setLinkMsg(null);
+    try {
+      const res = await fetch(`/api/school/parent/${parent.id}/send-login-link`, { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok || !data.ok) throw new Error(data.error || 'send_failed');
+      setLinkMsg(`Sign-in link sent to ${data.email}. It works for 7 days.`);
+    } catch {
+      setLinkErr('Could not send the link. Try again.');
+    } finally {
+      setLinkBusy(false);
+    }
+  }
+
   return (
     <div className="space-y-0.5">
       <SectionLabel>{label}</SectionLabel>
       <div className="text-gray-900 font-medium">{fullName}</div>
-      {parent.email ? <div className="text-gray-700 text-xs truncate">{parent.email}</div> : null}
+      {parent.email ? (
+        <div className="text-gray-700 text-xs truncate">{parent.email}</div>
+      ) : (
+        <div className="text-[11px] text-amber-700">
+          No email on file — they can&rsquo;t sign in until one is added to the contact record.
+        </div>
+      )}
       {parent.phone ? <div className="text-gray-700 text-xs">{parent.phone}</div> : null}
       <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5">
         {parent.portal_preview_url ? (
@@ -402,7 +431,20 @@ function ParentBlock({
             🔑 {resetBusy ? 'Resetting…' : 'Reset password'}
           </button>
         ) : null}
+        {parent.email ? (
+          <button
+            type="button"
+            onClick={sendLoginLink}
+            disabled={linkBusy}
+            className="inline-flex items-center gap-1 text-[11px] text-blue-600 hover:text-blue-800 hover:underline disabled:opacity-50"
+            title="Email this parent a new sign-in link (use this when an invite has expired)"
+          >
+            ✉️ {linkBusy ? 'Sending…' : 'Send sign-in link'}
+          </button>
+        ) : null}
       </div>
+      {linkMsg ? <div className="mt-1 text-[11px] text-emerald-700">{linkMsg}</div> : null}
+      {linkErr ? <div className="mt-1 text-[11px] text-red-600">{linkErr}</div> : null}
       {resetPw ? (
         <div className="mt-1 rounded border border-amber-300 bg-amber-50 px-2 py-1 text-[11px] text-amber-900">
           New temporary password:{' '}

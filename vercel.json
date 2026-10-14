@@ -15,6 +15,10 @@
     {
       "path": "/api/cron/reconcile-payments?apply=1&min_age_hours=24",
       "schedule": "0 16 * * *"
+    },
+    {
+      "path": "/api/cron/dedupe-opportunities",
+      "schedule": "20 * * * *"
     }
   ]
 }
