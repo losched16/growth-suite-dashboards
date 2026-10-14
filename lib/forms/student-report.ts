@@ -229,6 +229,12 @@ export async function buildStudentReport(opts: {
     }
   }
   columns.push(...legacyCols.values());
+  // With a question filter, forms that contribute no column are noise
+  // (their submitted / answered-on columns would just pad the sheet).
+  if (opts.match) {
+    const used = new Set(columns.map((c) => c.formId));
+    forms.splice(0, forms.length, ...forms.filter((f) => used.has(f.id)));
+  }
 
   const rows: ReportRow[] = [];
   for (const st of students) {
