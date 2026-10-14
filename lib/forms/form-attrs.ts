@@ -131,7 +131,9 @@ export async function resolveFormAttrValues(
             return `${name}${rel ? ` (${rel})` : ''}${phone ? ` ${phone}` : ''}`;
           })
           .filter(Boolean)
-          .join(' · ');
+          // one contact per line — roster cells render with pre-wrap
+          .join('
+');
       } else {
         v = row.values[`${p.formId}|${p.key}`] ?? '';
         if (EC_FIELD.test(p.key) && /phone/i.test(p.key)) v = tidyPhone(v);
