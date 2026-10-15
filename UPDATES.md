@@ -7,6 +7,32 @@ human digest.
 
 ---
 
+## October 15, 2026
+
+### DGM: Emmett McCourt's mom showed as "Ms. Olivia Break"
+**What the office saw:** on the Attendance and Curb Roster (Classroom 12)
+and on his emergency card information, his parent was listed as "Ms.
+Olivia Break".
+
+**Cause:** Emmett's student details live on Olivia Robertson's contact
+(a staff contact), and that contact's name had been saved as first name
+"Ms. Olivia", last name "Break". It was created from the conference
+scheduling calendar for Olivia, probably by booking her own break slot.
+Every screen reads the parent name from that contact, so every screen
+showed it.
+
+**Fix:** the contact is now Olivia Robertson in Growth Suite, and the
+dashboards picked it up within minutes (family is now "Robertson
+Family"). Nothing else on the contact changed. No other parent on the
+DGM roster has a name like this.
+
+**Watch for:** if someone books a break slot in the conference calendar
+again using her school email under the name "Ms. Olivia Break", Growth
+Suite may overwrite the name again. Block breaks with the calendar's
+own blocked-time option instead of a booking under her contact.
+
+---
+
 ## October 5, 2026
 
 ### DGM: application "family background" answers now sit in their own fields
