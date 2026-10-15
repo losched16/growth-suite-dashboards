@@ -25,7 +25,7 @@ export function DgmMenusView({
 }: {
   // slot -> { uploaded_at, ... } when an upload exists for that slot;
   // missing keys → use the fallback PNG.
-  assets: Record<string, { id: string; uploaded_at: Date; uploaded_by: string | null; mime_type: string }>;
+  assets: Record<string, { id: string; uploaded_at: Date; uploaded_by: string | null; mime_type: string; display_label?: string | null }>;
 }) {
   const images = MENU_SLOTS.map((slot) => {
     const a = assets[slot.key];
@@ -38,6 +38,7 @@ export function DgmMenusView({
       sub: slot.sub,
       isCustom: !!a,
       uploadedAt: a?.uploaded_at ?? null,
+      monthLabel: a?.display_label ?? null,
     };
   });
 
@@ -48,7 +49,7 @@ export function DgmMenusView({
           <h2 className="text-lg font-semibold text-slate-900">Kitchen menus</h2>
           <p className="text-xs text-slate-500 mt-0.5">
             Current lunch calendar, weekly snack menu, and the monthly Harvest highlight.
-            Designated editors can swap any image via the <em>Edit menus</em> link.
+            Menu editors can post a new month&rsquo;s PDF or photo with <em>Update menus</em>.
           </p>
         </div>
         <PrintButton label="Print menus" />
@@ -67,7 +68,7 @@ export function DgmMenusView({
               </div>
               {img.isCustom && img.uploadedAt ? (
                 <span className="text-[10px] uppercase tracking-wide text-emerald-700 font-semibold print:hidden">
-                  Updated {new Date(img.uploadedAt).toLocaleDateString()}
+                  {img.monthLabel ? `${img.monthLabel} · ` : ''}Updated {new Date(img.uploadedAt).toLocaleDateString()}
                 </span>
               ) : null}
             </header>

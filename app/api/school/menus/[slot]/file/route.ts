@@ -9,7 +9,7 @@ import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { query } from '@/lib/db';
 import { SCHOOL_SESSION_COOKIE, verifySchoolSession } from '@/lib/auth/school';
-import { isValidSlot } from '@/lib/menus';
+import { isValidSlot, MENU_IMAGE_MIME_TYPES } from '@/lib/menus';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -36,7 +36,9 @@ export async function GET(_req: Request, { params }: { params: Params }) {
   return new NextResponse(new Uint8Array(r.contents), {
     status: 200,
     headers: {
-      'Content-Type': r.mime_type || 'image/png',
+      // Only ever serve a stored upload as an image, never as a page/script.
+      'Content-Type': MENU_IMAGE_MIME_TYPES.includes(r.mime_type) ? r.mime_type : 'image/png',
+      'X-Content-Type-Options': 'nosniff',
       'Content-Length': String(r.size_bytes),
       'Content-Disposition': `inline; filename="${r.original_filename.replace(/[^a-z0-9._-]/gi, '_')}"`,
       // Short cache so a re-upload propagates within minutes without

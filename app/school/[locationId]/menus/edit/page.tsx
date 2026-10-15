@@ -14,11 +14,12 @@ import { loadSchoolByLocationId } from '@/lib/dashboards/loader';
 import { SCHOOL_SESSION_COOKIE, verifySchoolSession } from '@/lib/auth/school';
 import { getTeacherIdentity } from '@/lib/auth/teacher-identity';
 import { getStaffDirectory } from '@/lib/auth/staff-directory';
-import { MENU_SLOTS, isMenuEditor, getMenuAssetIndex } from '@/lib/menus';
+import { MENU_SLOTS, isMenuEditor, getMenuAssetIndex, getMenuEditors } from '@/lib/menus';
 import { ClassroomTopNav } from '@/components/ClassroomTopNav';
 import { IdentityPicker } from '../../staff-requests/IdentityPicker';
 import { IdentityIndicator } from '../../staff-requests/IdentityIndicator';
 import { MenuSlotEditor } from './MenuSlotEditor';
+import { MenuEditorsCard } from './MenuEditorsCard';
 
 export const dynamic = 'force-dynamic';
 
@@ -53,6 +54,7 @@ export default async function MenuEditorPage({
   const teacher = await getTeacherIdentity();
   const editor = teacher ? await isMenuEditor(school.id, teacher.email) : false;
   const assets = await getMenuAssetIndex(school.id);
+  const editors = await getMenuEditors(school.id);
 
   const thisUrl = `/school/${locationId}/menus/edit?chrome=none${fromQs}`;
   const viewUrl = `/school/${locationId}/menus?chrome=none${fromQs}`;
@@ -70,11 +72,11 @@ export default async function MenuEditorPage({
         <div className="flex items-baseline justify-between mb-4 flex-wrap gap-2">
           <div>
             <h1 className="text-2xl font-semibold text-slate-900 flex items-center gap-2">
-              <ImageIcon className="h-6 w-6 text-blue-600" /> Edit menus
+              <ImageIcon className="h-6 w-6 text-blue-600" /> Update menus
             </h1>
             <p className="text-sm text-slate-500 mt-0.5">
-              Replace any of the three menu images with the current month&rsquo;s
-              version. Changes are live for every staff member within ~1 minute.
+              Each month: choose the new PDF (or a photo), check the preview, and post it.
+              Staff see the change within about a minute.
             </p>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
@@ -99,11 +101,16 @@ export default async function MenuEditorPage({
             <div className="flex items-start gap-3">
               <Lock className="h-6 w-6 text-amber-700 mt-0.5" />
               <div>
-                <h2 className="text-sm font-semibold text-amber-900">You&rsquo;re not a menu editor</h2>
+                <h2 className="text-sm font-semibold text-amber-900">You&rsquo;re not set up to post menus</h2>
                 <p className="mt-1 text-xs text-amber-900">
-                  Only designated staff can replace menu images. To request access, ask the
-                  operator to add <span className="font-mono">{teacher.email}</span> on the
-                  Menu Editors admin page.
+                  {editors.length > 0 ? (
+                    <>
+                      To get access, ask {editors.map((e) => e.name || e.email).join(' or ')} to add{' '}
+                      <span className="font-mono">{teacher.email}</span> under &ldquo;Who can post menus&rdquo;.
+                    </>
+                  ) : (
+                    <>No one at your school can post menus yet. Contact Growth Suite support to add the first person.</>
+                  )}
                 </p>
                 <Link href={viewUrl} className="mt-3 inline-flex items-center gap-1 text-xs text-blue-700 underline">
                   Back to the menus
@@ -113,6 +120,9 @@ export default async function MenuEditorPage({
           </div>
         ) : (
           <div className="space-y-5">
+            <p className="text-xs text-slate-500">
+              The <strong>Monthly Lunch Calendar</strong> is the one that changes every month. The other two are optional.
+            </p>
             {MENU_SLOTS.map((slot) => (
               <MenuSlotEditor
                 key={slot.key}
@@ -122,9 +132,15 @@ export default async function MenuEditorPage({
                 hasUpload={!!assets[slot.key]}
                 lastUploadedAt={assets[slot.key]?.uploaded_at?.toString() ?? null}
                 lastUploadedBy={assets[slot.key]?.uploaded_by ?? null}
+                lastLabel={assets[slot.key]?.display_label ?? null}
                 fallbackPath={slot.fallbackPath}
               />
             ))}
+            <MenuEditorsCard
+              initialEditors={editors}
+              staff={await getStaffDirectory(school.id)}
+              myEmail={teacher.email}
+            />
           </div>
         )}
       </div>

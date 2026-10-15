@@ -14,7 +14,7 @@ import { cookies } from 'next/headers';
 import { query } from '@/lib/db';
 import { SCHOOL_SESSION_COOKIE, verifySchoolSession } from '@/lib/auth/school';
 import { getTeacherIdentity } from '@/lib/auth/teacher-identity';
-import { isValidSlot, isMenuEditor } from '@/lib/menus';
+import { isValidSlot, isMenuEditor, MENU_IMAGE_MIME_TYPES } from '@/lib/menus';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -66,7 +66,13 @@ export async function POST(request: NextRequest, { params }: { params: Params })
       detail: `${file.name} is ${(file.size / 1024 / 1024).toFixed(1)}MB; max is 15MB.`,
     }, { status: 413 });
   }
-  const displayLabel = String(fd.get('display_label') ?? '').trim() || null;
+  if (!MENU_IMAGE_MIME_TYPES.includes(file.type)) {
+    return NextResponse.json({
+      error: 'unsupported_file',
+      detail: 'Menus must be an image (PNG, JPG or WebP). A PDF is converted automatically in the Update menus screen.',
+    }, { status: 415 });
+  }
+  const displayLabel = String(fd.get('display_label') ?? '').trim().slice(0, 60) || null;
 
   const buf = Buffer.from(await file.arrayBuffer());
 
@@ -83,7 +89,7 @@ export async function POST(request: NextRequest, { params }: { params: Params })
            contents          = EXCLUDED.contents,
            uploaded_by       = EXCLUDED.uploaded_by,
            uploaded_at       = now()`,
-    [session.school_id, slot, displayLabel, file.name, file.type || 'image/png', file.size, buf, teacher.email],
+    [session.school_id, slot, displayLabel, file.name, file.type, file.size, buf, teacher.email],
   );
 
   return NextResponse.json({ ok: true, slot, uploaded_at: new Date().toISOString() });

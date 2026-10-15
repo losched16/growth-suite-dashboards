@@ -9,6 +9,23 @@ human digest.
 
 ## October 15, 2026
 
+### Menus: the school can now post the monthly lunch calendar itself (PDF or photo)
+**What changed:** on the Menus tab there is now an **Update menus** button.
+Pick the new month's PDF (or a photo), check the preview, and click **Post it for all
+staff**. A PDF is converted to a picture automatically, so it also prints and opens
+cleanly on iPads. The label (e.g. "October 2026") shows next to the calendar.
+Before this, only images could be uploaded and nobody at DGM ever had: staff were
+looking at the bundled **May 2026** calendar.
+
+**Who can post:** V. Fettig and S. Jain (already on the list). Any editor can add
+another staff member from the same page ("Who can post menus"); nobody can remove
+themselves. The button shows for every staff member; non-editors are told whom to ask.
+
+**Also:** uploads are now checked server-side to be real images (PNG/JPG/WebP/GIF).
+
+**Office to do:** V. Fettig or S. Jain: first time on a computer, click Staff Forms and
+pick your name (stays for 30 days), then Menus > Update menus.
+
 ### DGM: Emmett McCourt's mom showed as "Ms. Olivia Break"
 **What the office saw:** on the Attendance and Curb Roster (Classroom 12)
 and on his emergency card information, his parent was listed as "Ms.

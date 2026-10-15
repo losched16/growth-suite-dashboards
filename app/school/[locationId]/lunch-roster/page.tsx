@@ -182,16 +182,16 @@ export default async function LunchRosterPage({
 
         {tab === 'menus' ? (
           <>
-            {menuEditor ? (
-              <div className="flex justify-end mb-2 print:hidden">
-                <Link
-                  href={`/school/${locationId}/menus/edit?chrome=none${fromQs}`}
-                  className="inline-flex items-center gap-1 rounded-md border border-blue-300 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-100"
-                >
-                  <Pencil className="h-3.5 w-3.5" /> Edit menus
-                </Link>
-              </div>
-            ) : null}
+            <div className="flex justify-end mb-2 print:hidden">
+              <Link
+                href={`/school/${locationId}/menus/edit?chrome=none${fromQs}`}
+                className={menuEditor
+                  ? 'inline-flex items-center gap-1 rounded-md border border-blue-300 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-100'
+                  : 'inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-500 hover:bg-slate-50'}
+              >
+                <Pencil className="h-3.5 w-3.5" /> Update menus
+              </Link>
+            </div>
             <DgmMenusView assets={assets} />
           </>
         ) : tab === 'admin' ? (
