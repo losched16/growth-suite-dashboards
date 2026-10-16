@@ -15,6 +15,7 @@ import { query } from '@/lib/db';
 import { loadSchoolByLocationId } from '@/lib/dashboards/loader';
 import { RosterSettingsClient } from './RosterSettingsClient';
 import { listFormAttrs } from '@/lib/forms/form-attrs';
+import { listFamilyAttrs } from '@/lib/roster/family-attrs';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 30;
@@ -51,6 +52,8 @@ export default async function RosterSettingsPage({ params }: { params: Params })
   // Every question on the school's portal forms (emergency contacts,
   // health answers, permissions…) — pickable just like contact fields.
   attrs.push(...(await listFormAttrs(school.id)));
+  // Parents/guardians, siblings, authorized pickups — one column each.
+  attrs.push(...(await listFamilyAttrs(school.id)));
 
   // Current selections from the roster widget config.
   const { rows: dashRows } = await query<{ layout: Array<{ widget_id: string; config: Record<string, unknown> }> }>(

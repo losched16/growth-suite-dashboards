@@ -7,6 +7,7 @@ import type { SchoolContext, WidgetSearchParams } from '@/lib/widgets/types';
 import type { StudentRosterConfig } from './config';
 import { ghlContactUrl } from '@/lib/ghl/contact-url';
 import { FORM_ATTR_PREFIX, listFormAttrs, resolveFormAttrValues } from '@/lib/forms/form-attrs';
+import { FAMILY_ATTR_PREFIX, listFamilyAttrs, resolveFamilyAttrValues } from '@/lib/roster/family-attrs';
 
 // Filler / no-detail values teachers commonly see in legacy GHL data.
 // Treat these as "no useful prose" — when the field is just "Yes" or
@@ -466,6 +467,8 @@ export async function fetcher(
   const factsByStudent = new Map<string, Map<string, number>>();
   // student id → portal-form answer values for form: attrs in play
   let formValsByStudent = new Map<string, Record<string, string>>();
+  // student id → family-structure / pickup values for family: attrs in play
+  let familyValsByStudent = new Map<string, Record<string, string>>();
 
   if (activeAttrs.size > 0) {
     const { rows: cat } = await query<CatalogRow>(
@@ -483,6 +486,15 @@ export async function fetcher(
           .map((f) => ({ attr_key: f.attr_key, attr_type: f.attr_type, label: f.label, data_type: f.data_type, sample_values: f.sample_values })),
       );
       formValsByStudent = await resolveFormAttrValues(school.schoolId, [...activeAttrs]);
+    }
+    // Family structure + pickups (family:<key>) — same synthesis.
+    if ([...activeAttrs].some((a) => a.startsWith(FAMILY_ATTR_PREFIX))) {
+      const famAttrs = await listFamilyAttrs(school.schoolId);
+      catalogRows = catalogRows.concat(
+        famAttrs.filter((f) => activeAttrs.has(f.attr_key))
+          .map((f) => ({ attr_key: f.attr_key, attr_type: f.attr_type, label: f.label, data_type: f.data_type, sample_values: f.sample_values })),
+      );
+      familyValsByStudent = await resolveFamilyAttrValues(school.schoolId, [...activeAttrs]);
     }
 
     const { rows: parentLinks } = await query<{ family_id: string; ghl_contact_id: string }>(
@@ -609,6 +621,9 @@ export async function fetcher(
         if (cents != null) out[attr] = fmtFactsCents(cents);
       } else if (attr.startsWith(FORM_ATTR_PREFIX)) {
         const v = formValsByStudent.get(studentId)?.[attr];
+        if (v) out[attr] = v;
+      } else if (attr.startsWith(FAMILY_ATTR_PREFIX)) {
+        const v = familyValsByStudent.get(studentId)?.[attr];
         if (v) out[attr] = v;
       } else if (attr === 'tag') {
         const tags = new Set<string>();
