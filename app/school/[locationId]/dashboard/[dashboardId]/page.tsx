@@ -6,6 +6,8 @@
 // dashboard. Widget endpoints redirect back here via the Referer.
 
 import { notFound } from 'next/navigation';
+import { headers } from 'next/headers';
+import { query } from '@/lib/db';
 import { loadSchoolByLocationId } from '@/lib/dashboards/loader';
 import { DashboardConfigEditor } from '@/app/admin/[schoolId]/dashboard/[dashboardId]/page';
 
@@ -22,13 +24,29 @@ export default async function SchoolDashboardEditPage({
   const school = await loadSchoolByLocationId(locationId);
   if (!school) notFound();
 
+  // Opened from a no-sidebar dashboard (?chrome=none): stay sidebar-less and
+  // go back to that dashboard, not the full-shell dashboards list.
+  const embedded = (await headers()).get('x-chrome') === 'none';
+  let backHref = `/school/${locationId}`;
+  let backLabel = 'Back to dashboards';
+  if (embedded) {
+    const { rows } = await query<{ dashboard_slug: string; display_name: string }>(
+      `SELECT dashboard_slug, display_name FROM school_dashboards WHERE id = $1 AND school_id = $2`,
+      [dashboardId, school.id],
+    );
+    if (rows[0]) {
+      backHref = `/school/${locationId}/${rows[0].dashboard_slug}?chrome=none`;
+      backLabel = `Back to ${rows[0].display_name}`;
+    }
+  }
+
   return (
     <DashboardConfigEditor
       schoolId={school.id}
       dashboardId={dashboardId}
-      returnTo={`/school/${locationId}/dashboard/${dashboardId}`}
-      backHref={`/school/${locationId}`}
-      backLabel="Back to dashboards"
+      returnTo={`/school/${locationId}/dashboard/${dashboardId}${embedded ? '?chrome=none' : ''}`}
+      backHref={backHref}
+      backLabel={backLabel}
       allowDelete={false}
       msg={msg}
       err={err}

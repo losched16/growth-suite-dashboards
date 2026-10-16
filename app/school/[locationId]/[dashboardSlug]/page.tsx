@@ -6,6 +6,7 @@ import {
 } from '@/lib/dashboards/loader';
 import { WidgetRenderer } from '@/components/WidgetRenderer';
 import { ClassroomTopNav } from '@/components/ClassroomTopNav';
+import { loadSchoolSettings } from '@/lib/school-settings';
 import type { SchoolContext, WidgetSearchParams } from '@/lib/widgets/types';
 
 // Classroom + program hubs get a top tab bar (Roster / Submit
@@ -44,9 +45,11 @@ export default async function DashboardPage({
   if (!dashboard || !dashboard.is_enabled) notFound();
 
   // Show the "Edit layout" affordance only in the full-shell staff view —
-  // not in bare GHL embeds (chrome=none), where the viewer may be a parent.
+  // not in bare GHL embeds (chrome=none), where the viewer may be a parent
+  // or teacher — unless the school opted in (settings.edit_layout_in_embeds).
   const reqHeaders = await headers();
   const embedded = reqHeaders.get('x-chrome') === 'none';
+  const showEditLayout = !embedded || (await loadSchoolSettings(school.id)).edit_layout_in_embeds;
 
   const ctx: SchoolContext = {
     schoolId: school.id,
@@ -95,9 +98,9 @@ export default async function DashboardPage({
             <p className="text-sm text-gray-500 mt-0.5">{dashboard.description}</p>
           ) : null}
         </div>
-        {!embedded ? (
+        {showEditLayout ? (
           <a
-            href={`/school/${locationId}/dashboard/${dashboard.id}`}
+            href={`/school/${locationId}/dashboard/${dashboard.id}${embedded ? '?chrome=none' : ''}`}
             className="shrink-0 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
           >
             Edit layout

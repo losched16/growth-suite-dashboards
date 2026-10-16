@@ -90,6 +90,11 @@ export interface SchoolSettings {
   // (lib/sync/enrolled-family-sync). Off = the enrollment trigger runs only
   // for billing-active schools, as before.
   auto_create_enrolled_families: boolean;
+  // Show the "Edit layout" button on bare embeds (?chrome=none) too. Off by
+  // default: no-sidebar links get shared with teachers, who shouldn't
+  // rearrange the office's dashboards. Opt in when the links stay with
+  // office staff (Wooster).
+  edit_layout_in_embeds: boolean;
 }
 
 // GHL sidebar items the Custom JS snippet can hide (docs/ghl-menu-snippet.js).
@@ -128,6 +133,7 @@ export const SCHOOL_SETTINGS_DEFAULTS: SchoolSettings = {
   enrollment_notification_emails: [],
   opportunity_student_fields: {},
   auto_create_enrolled_families: false,
+  edit_layout_in_embeds: false,
 };
 
 export function normalizeSchoolSettings(raw: unknown): SchoolSettings {
@@ -166,6 +172,7 @@ export function normalizeSchoolSettings(raw: unknown): SchoolSettings {
           )
         : {},
     auto_create_enrolled_families: r.auto_create_enrolled_families === true,
+    edit_layout_in_embeds: r.edit_layout_in_embeds === true,
   };
 }
 

@@ -13,6 +13,7 @@ export function editorRedirect(
   q: { msg?: string; err?: string },
 ): NextResponse {
   let dest = `/admin/${schoolId}/dashboard/${dashboardId}`;
+  let chrome: string | null = null;
   const ref = request.headers.get('referer');
   if (ref) {
     try {
@@ -20,10 +21,13 @@ export function editorRedirect(
       if (u.origin === request.nextUrl.origin
         && /^\/(admin|school)\/[^/]+\/dashboard\/[^/?#]+/.test(u.pathname)) {
         dest = u.pathname;
+        // keep a no-sidebar editor no-sidebar after each save
+        chrome = u.searchParams.get('chrome');
       }
     } catch { /* ignore unparseable referer */ }
   }
   const url = new URL(dest, request.nextUrl.origin);
+  if (chrome) url.searchParams.set('chrome', chrome);
   if (q.msg) url.searchParams.set('msg', q.msg);
   if (q.err) url.searchParams.set('err', q.err);
   return NextResponse.redirect(url, 303);
