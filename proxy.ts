@@ -335,6 +335,10 @@ const FORCE_NO_CHROME_LOCATIONS = new Set<string>([
   '1JOwnyxFSKEwJNgmq84I', // Desert Garden Montessori (2.0) — every /school
                           // surface is embedded as a GHL Custom Menu Link, so
                           // internal links must never unwrap to the full shell.
+  'tFP5UnlBYQayjettNeuG', // Montessori School of Wooster — staff open dashboards
+                          // sidebar-less; family/student/forms links inside them
+                          // must not escape to the full shell (Clint, 2026-10-16).
+                          // Operator escape hatch: ?chrome=full.
 ]);
 
 function passThroughWithChrome(request: NextRequest): NextResponse {
