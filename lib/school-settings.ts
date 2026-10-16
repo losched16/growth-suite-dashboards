@@ -95,6 +95,10 @@ export interface SchoolSettings {
   // rearrange the office's dashboards. Opt in when the links stay with
   // office staff (Wooster).
   edit_layout_in_embeds: boolean;
+  // The school runs kiosk check-in/out (parent + pickup-person PINs). On by
+  // default (existing behavior); off hides every PIN control in the office
+  // views — the roster's family panel and the office pickups page.
+  kiosk_enabled: boolean;
 }
 
 // GHL sidebar items the Custom JS snippet can hide (docs/ghl-menu-snippet.js).
@@ -134,6 +138,7 @@ export const SCHOOL_SETTINGS_DEFAULTS: SchoolSettings = {
   opportunity_student_fields: {},
   auto_create_enrolled_families: false,
   edit_layout_in_embeds: false,
+  kiosk_enabled: true,
 };
 
 export function normalizeSchoolSettings(raw: unknown): SchoolSettings {
@@ -173,6 +178,7 @@ export function normalizeSchoolSettings(raw: unknown): SchoolSettings {
         : {},
     auto_create_enrolled_families: r.auto_create_enrolled_families === true,
     edit_layout_in_embeds: r.edit_layout_in_embeds === true,
+    kiosk_enabled: r.kiosk_enabled !== false,
   };
 }
 

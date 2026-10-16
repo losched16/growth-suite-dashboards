@@ -138,6 +138,8 @@ interface PickupPersonManage {
 
 interface FamilyDetail {
   family: { id: string; display_name: string | null; notes: string | null };
+  // false → the school doesn't run the kiosk: hide PIN controls
+  kiosk_enabled: boolean;
   parents: ParentInfo[];
   students: FamilyStudent[];
   // Family home address (GHL-synced), e.g. "1024 E Frye Road, Phoenix, AZ, 85048".
@@ -233,6 +235,7 @@ export function StudentTableWithAccordion({
           ...d,
           [targetId]: {
             family: data.family,
+            kiosk_enabled: data.kiosk_enabled !== false,
             parents: data.parents,
             students: data.students,
             address: data.address ?? null,
@@ -1193,7 +1196,7 @@ function FamilyDetailPanel({
                           <Phone className="h-3 w-3" />{p.phone}
                         </a>
                       ) : null}
-                      <ParentPinCell familyId={detail.family.id} parent={p} />
+                      {detail.kiosk_enabled ? <ParentPinCell familyId={detail.family.id} parent={p} /> : null}
                       {p.email && embedToken ? (
                         // Per-parent portal impersonation — split/married
                         // co-parents each have their OWN portal login, so
@@ -1292,11 +1295,13 @@ function FamilyDetailPanel({
                 ))}
               </ul>
             )}
-            <PickupPeopleManager
-              familyId={detail.family.id}
-              people={detail.pickup_people_manage}
-              students={detail.students.map((st) => ({ id: st.id, label: `${st.preferred_name?.trim() || st.first_name} ${st.last_name}`.trim() }))}
-            />
+            {detail.kiosk_enabled ? (
+              <PickupPeopleManager
+                familyId={detail.family.id}
+                people={detail.pickup_people_manage}
+                students={detail.students.map((st) => ({ id: st.id, label: `${st.preferred_name?.trim() || st.first_name} ${st.last_name}`.trim() }))}
+              />
+            ) : null}
           </div> : null}
 
           {/* Unauthorized pickup — who CANNOT collect this family's kids.

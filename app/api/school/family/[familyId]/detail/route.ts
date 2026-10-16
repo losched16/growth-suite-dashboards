@@ -15,6 +15,7 @@ import { SCHOOL_SESSION_COOKIE, verifySchoolSession } from '@/lib/auth/school';
 import { SESSION_COOKIE, verifySessionToken } from '@/lib/auth/operator';
 import { query } from '@/lib/db';
 import { decrypt } from '@/lib/crypto';
+import { loadSchoolSettings } from '@/lib/school-settings';
 import { resolveFamilyGhlAttrs, type ResolvedAttr } from '@/lib/widgets/ghl-attr-resolver';
 
 export const runtime = 'nodejs';
@@ -376,16 +377,19 @@ export async function GET(_request: NextRequest, { params }: { params: Params })
     }
   } catch { /* best-effort — panel just omits the address line */ }
 
+  const kioskEnabled = (await loadSchoolSettings(schoolId)).kiosk_enabled;
   return NextResponse.json({
     ok: true,
     family,
+    // No kiosk at this school → no PINs anywhere in the office panel.
+    kiosk_enabled: kioskEnabled,
     // PIN: decrypt the office-viewable copy; strip the raw crypto fields
     // from the payload. pin_state: 'none' | 'set_hidden' (pre-upgrade
     // hash-only PIN — parent must re-set to make it viewable) | the PIN.
     parents: parents.map((p) => {
       const { pin_encrypted, pin_iv, pin_tag, pin_set, ...rest } = p;
       let pin: string | null = null;
-      if (pin_encrypted && pin_iv && pin_tag) {
+      if (kioskEnabled && pin_encrypted && pin_iv && pin_tag) {
         try { pin = decrypt(pin_encrypted, pin_iv, pin_tag); } catch { pin = null; }
       }
       return { ...rest, pin, pin_state: pin ? 'visible' : pin_set ? 'set_hidden' : 'none' };

@@ -9,6 +9,7 @@ import { notFound } from 'next/navigation';
 import { UserPlus, Users } from 'lucide-react';
 import { query } from '@/lib/db';
 import { loadSchoolByLocationId } from '@/lib/dashboards/loader';
+import { loadSchoolSettings } from '@/lib/school-settings';
 
 export const dynamic = 'force-dynamic';
 
@@ -36,6 +37,7 @@ export default async function FamilyPickupsPage({ params, searchParams }: { para
     [familyId, school.id],
   );
   if (fam.length === 0) notFound();
+  const { kiosk_enabled: kiosk } = await loadSchoolSettings(school.id);
 
   const { rows: people } = await query<PickupRow>(
     `SELECT pp.id, pp.name, pp.relationship, pp.phone, pp.notes, pp.active,
@@ -57,9 +59,12 @@ export default async function FamilyPickupsPage({ params, searchParams }: { para
           </div>
           <h1 className="mt-1 text-xl font-semibold text-slate-900">{fam[0].display_name ?? 'Family'}</h1>
           <p className="mt-1 text-xs text-slate-500">
-            People on this list can pick up the family&rsquo;s students at the kiosk once the
-            parent generates a PIN for them in the portal. Parents at this school request
-            additions through the office — this page is where you add them.
+            {kiosk
+              ? <>People on this list can pick up the family&rsquo;s students at the kiosk once the
+                parent generates a PIN for them in the portal. Parents at this school request
+                additions through the office — this page is where you add them.</>
+              : <>People on this list are authorized to pick up the family&rsquo;s students.
+                Add or deactivate people here.</>}
           </p>
         </header>
 
@@ -80,7 +85,7 @@ export default async function FamilyPickupsPage({ params, searchParams }: { para
                     <div className="text-sm font-medium text-slate-900">
                       {p.name} <span className="font-normal text-slate-500">· {p.relationship}</span>
                       {!p.active ? <span className="ml-2 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] uppercase text-slate-500">deactivated</span> : null}
-                      {p.active && p.pin_set ? <span className="ml-2 rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] uppercase text-emerald-700">PIN set</span> : null}
+                      {kiosk && p.active && p.pin_set ? <span className="ml-2 rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] uppercase text-emerald-700">PIN set</span> : null}
                     </div>
                     <div className="mt-0.5 text-[11px] text-slate-500">
                       {p.phone ?? 'no phone'}{p.notes ? ` · ${p.notes}` : ''}
