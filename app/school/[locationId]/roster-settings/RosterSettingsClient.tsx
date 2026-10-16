@@ -5,7 +5,7 @@
 // config via /api/school/roster-settings.
 
 import { useMemo, useState } from 'react';
-import { Search, Loader2, Check, Tags, GitBranch, ListFilter, LayoutList, ArrowUp, ArrowDown, GripVertical } from 'lucide-react';
+import { Search, Loader2, Check, Tags, GitBranch, ListFilter, LayoutList, ArrowUp, ArrowDown, GripVertical, X } from 'lucide-react';
 import { AVAILABLE_COLUMNS, AVAILABLE_FILTERS, DETAIL_SECTIONS, orderColumns } from '@/lib/widgets/components/StudentRosterRich/config';
 import type { CatalogAttr } from './page';
 
@@ -111,6 +111,20 @@ export function RosterSettingsClient({
     setSaved(false);
   }
 
+  // Take a column off the roster: built-ins switch off, added attributes
+  // drop out (both can be turned back on further down the page).
+  function removeColumn(key: string) {
+    if (staticCols.has(key)) {
+      const next = new Set(staticCols); next.delete(key); setStaticCols(next);
+    } else if (columns.has(key)) {
+      const next = new Set(columns); next.delete(key); setColumns(next);
+    }
+    setColOrder(orderedColumns.filter((k) => k !== key));
+    setSaved(false);
+  }
+  // Never strand the roster without a way to tell students apart.
+  const nameCols = orderedColumns.filter((k) => k === 'student' || k === 'first_name' || k === 'last_name');
+
   async function save() {
     setBusy(true); setErr(null); setSaved(false);
     try {
@@ -178,7 +192,7 @@ export function RosterSettingsClient({
         <div className="flex items-center gap-2 border-b border-slate-100 bg-slate-50 px-4 py-2 text-sm font-semibold text-slate-700">
           <GripVertical className="h-4 w-4 text-blue-600" />
           Column order
-          <span className="font-normal text-slate-400">— move columns up/down to match your spreadsheet ({orderedColumns.length})</span>
+          <span className="font-normal text-slate-400">— move columns up/down, or ✕ to remove one ({orderedColumns.length})</span>
         </div>
         {orderedColumns.length === 0 ? (
           <div className="px-4 py-3 text-sm text-slate-500 italic">Turn on some columns below, then arrange them here.</div>
@@ -198,6 +212,12 @@ export function RosterSettingsClient({
                   <button type="button" onClick={() => moveColumn(i, 1)} disabled={i === orderedColumns.length - 1}
                     className="rounded border border-slate-300 p-0.5 text-slate-600 hover:bg-slate-100 disabled:opacity-30" title="Move down">
                     <ArrowDown className="h-3.5 w-3.5" />
+                  </button>
+                  <button type="button" onClick={() => removeColumn(key)}
+                    disabled={nameCols.length === 1 && nameCols[0] === key}
+                    className="ml-1 rounded border border-slate-300 p-0.5 text-slate-500 hover:border-rose-300 hover:bg-rose-50 hover:text-rose-700 disabled:opacity-30"
+                    title={nameCols.length === 1 && nameCols[0] === key ? 'Keep at least one name column' : 'Remove this column (turn it back on below)'}>
+                    <X className="h-3.5 w-3.5" />
                   </button>
                 </span>
               </li>
