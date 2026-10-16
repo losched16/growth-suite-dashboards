@@ -8,6 +8,8 @@ import type { StudentRosterConfig } from './config';
 import { ghlContactUrl } from '@/lib/ghl/contact-url';
 import { FORM_ATTR_PREFIX, listFormAttrs, resolveFormAttrValues } from '@/lib/forms/form-attrs';
 import { FAMILY_ATTR_PREFIX, listFamilyAttrs, resolveFamilyAttrValues } from '@/lib/roster/family-attrs';
+import { resolveFormAllergies, type FormAllergy } from '@/lib/forms/form-allergies';
+import { loadSchoolSettings } from '@/lib/school-settings';
 
 // Filler / no-detail values teachers commonly see in legacy GHL data.
 // Treat these as "no useful prose" — when the field is just "Yes" or
@@ -692,6 +694,12 @@ export async function fetcher(
 
   // Defensive: one roster row per student, always. The query is already
   // one-row-per-student, but this guarantees the invariant so a future
+  // Allergy text from portal-form answers, for schools whose GHL allergy
+  // field is empty (settings.roster_allergy_from_forms).
+  const formAllergies: Map<string, FormAllergy> = (await loadSchoolSettings(school.schoolId)).roster_allergy_from_forms
+    ? await resolveFormAllergies(school.schoolId)
+    : new Map();
+
   // join change can never surface a student twice.
   const seenStudentIds = new Set<string>();
   const all: RosterStudent[] = rows.filter((r) => {
@@ -706,7 +714,8 @@ export async function fetcher(
     // Pick whichever source has the longest meaningful TEXT, falling
     // back from the more-authoritative metadata.allergy → health_profiles.
     // A bare "Yes" / "No" / "None" is treated as no detail.
-    const allergy = bestText(metadataAllergy, r.hp_allergies);
+    const formAllergy = formAllergies.get(r.student_id);
+    const allergy = bestText(metadataAllergy, r.hp_allergies) ?? formAllergy?.text ?? null;
     const special_instructions = bestText(metadataSpecial, r.hp_medical_conditions);
     const iep = typeof md.iep === 'string' ? md.iep : null;
     const five04 = typeof md.five04_plan === 'string' ? md.five04_plan : null;
@@ -759,7 +768,7 @@ export async function fetcher(
     // flag (no detail) AND any non-empty health-profile allergy both
     // light up the badge, even if the rendered text is "(no detail
     // on file)". Teachers need the flag even when prose isn't there.
-    const has_allergy = isMeaningfulFlag(metadataAllergy) || isMeaningfulFlag(r.hp_allergies);
+    const has_allergy = isMeaningfulFlag(metadataAllergy) || isMeaningfulFlag(r.hp_allergies) || !!formAllergy?.flagged;
     // Flag from the CRM fields OR an uploaded IEP/504-category document
     // — the upload alone must trip the filter.
     const has_iep_or_504 = (!!iep && iep.toLowerCase() !== 'no')

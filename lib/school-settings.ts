@@ -99,6 +99,10 @@ export interface SchoolSettings {
   // default (existing behavior); off hides every PIN control in the office
   // views — the roster's family panel and the office pickups page.
   kiosk_enabled: boolean;
+  // Build the roster's Allergy column (+ "Allergies only" filter and the
+  // allergies-by-classroom view) from portal-form answers when the GHL
+  // allergy field is empty (lib/forms/form-allergies). Off by default.
+  roster_allergy_from_forms: boolean;
 }
 
 // GHL sidebar items the Custom JS snippet can hide (docs/ghl-menu-snippet.js).
@@ -139,6 +143,7 @@ export const SCHOOL_SETTINGS_DEFAULTS: SchoolSettings = {
   auto_create_enrolled_families: false,
   edit_layout_in_embeds: false,
   kiosk_enabled: true,
+  roster_allergy_from_forms: false,
 };
 
 export function normalizeSchoolSettings(raw: unknown): SchoolSettings {
@@ -179,6 +184,7 @@ export function normalizeSchoolSettings(raw: unknown): SchoolSettings {
     auto_create_enrolled_families: r.auto_create_enrolled_families === true,
     edit_layout_in_embeds: r.edit_layout_in_embeds === true,
     kiosk_enabled: r.kiosk_enabled !== false,
+    roster_allergy_from_forms: r.roster_allergy_from_forms === true,
   };
 }
 
