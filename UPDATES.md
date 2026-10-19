@@ -426,6 +426,25 @@ Also: a photo attached by staff to the SST Accident/Incident form was
 labelled "Uploaded by parent" on the Documents page. It now reads
 "Attached by staff".
 
+## October 19, 2026
+
+### November billing hold for Northern Lights (ready, not yet live)
+Northern Lights is moving to a new billing system for November and
+nobody should be charged by Growth Suite that month. A school-level
+billing hold now exists: from Nov 1 through Nov 30, autopay does not
+run, declined-card retries do not run, and no late fees accrue.
+Installments dated inside November are also skipped for good, so
+nothing is charged all at once when the hold ends on Dec 1. Anything
+due before Nov 1 or after Nov 30 bills normally.
+
+Not covered: payments a parent starts themselves from the portal or an
+emailed pay link, and any recurring product subscription set up
+through Stripe. To stop parents paying November invoices by hand, the
+office should void them in the new-system handoff.
+
+It takes effect only after migration 116 is applied and the parent
+portal change is deployed, in that order.
+
 ## September 10, 2026 (afternoon) — items from the 9/9 call
 
 ### Parent-uploaded documents are now visible to staff
