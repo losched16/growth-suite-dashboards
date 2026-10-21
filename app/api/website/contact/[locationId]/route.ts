@@ -146,8 +146,24 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   }
   if (errors.length) return reply({ error: errors.join(' ') }, 400);
 
-  const details = isRsvp
-    ? { event, event_label: label, party_size: party, ...(childAges ? { child_ages: childAges } : {}) }
+  // SMS consent counts only when the box was ticked AND a number was given.
+  // The time, page and exact wording shown are kept with the enquiry: that
+  // record is what a carrier asks for when an A2P 10DLC campaign is audited.
+  const smsConsent = body.sms_consent === true || body.sms_consent === 'yes';
+  const sms = smsConsent && phone
+    ? {
+        sms_consent: true,
+        sms_consent_at: new Date().toISOString(),
+        sms_consent_page: clean(request.headers.get('referer'), 300) || origin,
+        sms_consent_text: clean(body.sms_consent_text, 600) || null,
+      }
+    : null;
+
+  const details = isRsvp || sms
+    ? {
+        ...(isRsvp ? { event, event_label: label, party_size: party, ...(childAges ? { child_ages: childAges } : {}) } : {}),
+        ...(sms ?? {}),
+      }
     : null;
 
   const ip = (request.headers.get('x-forwarded-for') ?? '').split(',')[0].trim() || null;
@@ -203,6 +219,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       isRsvp ? `Coming: ${party} ${party === 1 ? 'person' : 'people'}` : null,
       childAges ? `Children's ages: ${childAges}` : null,
       program ? `Programme of interest: ${program}` : null,
+      sms ? `SMS: opted in on the website form, ${sms.sms_consent_at}` : (phone ? 'SMS: not opted in' : null),
       message ? '' : null,
       message || null,
     ].filter((l) => l !== null).join('\n');
@@ -210,6 +227,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const tags = isRsvp
       ? ['Open House RSVP', `Open House ${event}`]
       : [SOURCE, INTENTS[intent]];
+    // Only ever added, never removed here: someone who opted in before and
+    // leaves the box unticked this time has not opted out. Opting out is
+    // replying STOP, which GHL records on the contact itself.
+    if (sms) tags.push('SMS opt-in');
 
     const id = encodeURIComponent(contactId);
     await Promise.all([
