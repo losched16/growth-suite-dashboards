@@ -216,12 +216,13 @@ async function buildDailyCsv(
        SELECT generate_series($2::date, $3::date, interval '1 day')::date AS date
      )
      SELECT
-       dr.date,
+       to_char(dr.date, 'YYYY-MM-DD') AS date,
        s.id AS student_id, s.first_name, s.last_name,
        COALESCE(s.metadata->>'homeroom', s.metadata->>'classroom_name') AS classroom,
        p.first_name AS primary_parent_first, p.last_name AS primary_parent_last,
        COALESCE(da.status, 'not_yet') AS status,
-       da.first_check_in_at, da.last_check_out_at, da.total_minutes,
+       da.first_check_in_at, da.last_check_out_at,
+       COALESCE(da.total_minutes, CASE WHEN da.last_check_out_at > da.first_check_in_at THEN (EXTRACT(EPOCH FROM (da.last_check_out_at - da.first_check_in_at)) / 60)::int END) AS total_minutes,
        da.picked_up_by_name, da.curbside_pickup
      FROM date_range dr
      CROSS JOIN students s
@@ -234,6 +235,8 @@ async function buildDailyCsv(
        ORDER BY pp.created_at LIMIT 1
      ) p ON true
      WHERE s.school_id = $1 AND s.status = 'active'
+       -- enrolled students, plus anyone who has attendance that day (keeps history for withdrawn kids)
+       AND (lower(coalesce(s.metadata->>'enrollment_status','')) = 'enrolled' OR da.student_id IS NOT NULL)
        AND ($4::uuid IS NULL OR s.id = $4::uuid)
      ORDER BY dr.date, classroom NULLS LAST, s.first_name`,
     [schoolId, from, to, filters.studentId || null],
@@ -306,7 +309,7 @@ async function buildMonthlyCsv(
        COUNT(*) FILTER (WHERE da.status = 'absent') AS days_absent,
        0 AS days_not_yet,
        COUNT(*) FILTER (WHERE da.status = 'partial') AS days_partial,
-       COALESCE(SUM(da.total_minutes), 0) AS total_minutes,
+       COALESCE(SUM(COALESCE(da.total_minutes, CASE WHEN da.last_check_out_at > da.first_check_in_at THEN (EXTRACT(EPOCH FROM (da.last_check_out_at - da.first_check_in_at)) / 60)::int END)), 0) AS total_minutes,
        COUNT(*) FILTER (WHERE da.curbside_pickup = true) AS curbside_days
      FROM daily_attendance da
      JOIN students s ON s.id = da.student_id
