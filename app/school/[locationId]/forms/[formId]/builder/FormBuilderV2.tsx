@@ -345,7 +345,7 @@ export function FormBuilderV2({
     let key = slugify(src.label) || 'field';
     let n = 1;
     while (keys.has(key)) key = `${slugify(src.label)}_${++n}`;
-    const f: FieldBlock = { type: src.type, key, label: src.label, prefill: src.source, readOnly: true, _uid: nextUid() };
+    const f: FieldBlock = { type: src.type, key, label: src.label, prefill: src.source, readOnly: true, lock_if_prefilled: true, _uid: nextUid() };
     mutate([...fields, f]);
     setSel(fields.length);
   }
@@ -680,7 +680,7 @@ function Inspector({ field, allFields, ghlFields, metadataKeys, onPatch, onConne
           </label>
           <label className="flex items-center justify-between text-sm text-slate-700">
             Locked (read-only)
-            <input type="checkbox" checked={!!field.readOnly} onChange={(e) => onPatch({ readOnly: e.target.checked })} className="h-4 w-4 rounded border-slate-300 text-emerald-600" />
+            <input type="checkbox" checked={!!field.readOnly} onChange={(e) => onPatch({ readOnly: e.target.checked, lock_if_prefilled: e.target.checked ? true : undefined })} className="h-4 w-4 rounded border-slate-300 text-emerald-600" />
           </label>
         </>
       ) : null}

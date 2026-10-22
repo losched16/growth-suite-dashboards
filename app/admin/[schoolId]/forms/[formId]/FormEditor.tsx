@@ -41,6 +41,8 @@ interface FieldBlock {
   // edit it. Honored by the portal renderer, which locks `readOnly: true`
   // blocks (the value still submits).
   readOnly?: boolean;
+  // Locks the field in the portal whenever a value is on file (readOnly alone is stripped for new families).
+  lock_if_prefilled?: boolean;
   options?: Option[];
   emphasis?: 'normal' | 'note' | 'warning';
   description?: string;
@@ -872,7 +874,7 @@ function FieldBody({
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2">
         <ToggleField label="Required" checked={!!field.required} onChange={(v) => onPatch({ required: v })} />
-        <ToggleField label="Locked (read-only)" checked={!!field.readOnly} onChange={(v) => onPatch({ readOnly: v })}
+        <ToggleField label="Locked (read-only)" checked={!!field.readOnly} onChange={(v) => onPatch({ readOnly: v, lock_if_prefilled: v ? true : undefined })}
           hint="Parents see the value but can't change it — use it for info prefilled from the contact record (name, address, program)." />
       </div>
 

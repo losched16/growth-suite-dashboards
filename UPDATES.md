@@ -7,6 +7,31 @@ human digest.
 
 ---
 
+## October 22, 2026
+
+### Forms: fields marked "locked" now actually lock (Enrollment Agreement + Amendment)
+**What was wrong:** the form builder showed a "locked" tag on fields like Parent/Guardian 2's
+mobile phone and email, but in the parent portal those boxes were still editable. The portal
+ignores "locked" for families without a tuition record, which is every Desert Garden 2.0 family.
+Only dropdowns set up a different way were really locked.
+
+**Fixed:** a field now locks whenever a value is on file for it (name, phone, email, address,
+grade, tuition choice and so on), and stays editable only when nothing is on file, so the form can
+still be completed. This applies to the 16 locked fields on the Enrollment Agreement and to the
+Amendment. Ticking "Locked" in either form builder now sets this automatically, so a "locked"
+tag always means locked.
+
+**Amendment changes (same day):** Grade and Program are now read-only, Parent/Guardian 1 and 2
+show only what is on file (name and relationship, no editing, no "add a second parent" box, and
+Parent/Guardian 2 appears only if one is on file), the confusing LDMA instruction line is gone,
+and the "PLEASE NOTE" about Parent/Guardian 2 signing now sits under the new LDMA selection.
+
+**Not changed:** other forms with the same gap (mostly student name / birthday boxes): Desert Garden's
+release form, two medication forms and the feeding log; Media Children's House's tuition and DHS
+agreements; Spruce Tree's medical and permissions forms. Ask and they get the same fix.
+
+---
+
 ## October 15, 2026
 
 ### Menus: the school can now post the monthly lunch calendar itself (PDF or photo)
