@@ -87,6 +87,7 @@ export interface PromoteResult {
   skipped_no_p2_email: number;
   skipped_no_p1_contact: number;
   skipped_stage: number;
+  p1_tagged_now: number;   // families whose Parent 1 contact got the "Parent 1" tag this run (no Parent 2 needed)
   errors: number;
   details: Array<{
     family_id: string;
@@ -205,6 +206,7 @@ export async function promoteParent2sForSchool(
     skipped_no_p2_email: 0,
     skipped_no_p1_contact: 0,
     skipped_stage: 0,
+    p1_tagged_now: 0,
     errors: 0,
     details: [],
   };
@@ -221,7 +223,34 @@ export async function promoteParent2sForSchool(
     for (const f of cfData) if (f.fieldKey) fieldMap.set(f.fieldKey.replace(/^contact\./, ''), f.id);
   } catch { /* carry-over is skipped if we can't resolve field ids */ }
 
+  // Parent 1 contacts that already carry the tag (from the synced tag mirror), so we only
+  // call GHL for the ones that are missing it.
+  const { rows: p1TaggedRows } = await query<{ ghl_contact_id: string }>(
+    `SELECT DISTINCT ghl_contact_id FROM ghl_contact_tags WHERE school_id = $1 AND lower(tag) = 'parent 1'`,
+    [schoolId],
+  );
+  const p1Tagged = new Set(p1TaggedRows.map((r) => r.ghl_contact_id));
+
   for (const fam of families) {
+    // Every family that qualifies (stage gate / enrolled) gets "Parent 1" on its primary
+    // contact, with or without a second parent. Idempotent: skipped when already tagged.
+    if (
+      fam.p1_ghl_contact_id
+      && (!stageQualified || stageQualified.has(fam.family_id))
+      && !p1Tagged.has(fam.p1_ghl_contact_id)
+    ) {
+      if (opts?.dryRun) {
+        result.p1_tagged_now++;
+      } else {
+        try {
+          await addContactTags(client, fam.p1_ghl_contact_id, P1_TAGS);
+          p1Tagged.add(fam.p1_ghl_contact_id);
+          result.p1_tagged_now++;
+        } catch (tagErr) {
+          console.warn('[promote-p2] Parent 1 tag failed for', fam.family_display_name, tagErr instanceof Error ? tagErr.message : String(tagErr));
+        }
+      }
+    }
     const famName = fam.family_display_name ?? `${fam.p1_last_name ?? '(unnamed)'} Family`;
 
     // No Parent 2 row at all — single-parent family
