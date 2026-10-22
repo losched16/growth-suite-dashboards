@@ -8,6 +8,7 @@ export interface GhlContact {
   email?: string | null;
   phone?: string | null;
   address1?: string | null;
+  address?: string | null; // search results use this name for the street line
   city?: string | null;
   state?: string | null;
   postalCode?: string | null;
