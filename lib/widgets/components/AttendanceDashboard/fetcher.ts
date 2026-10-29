@@ -96,6 +96,8 @@ export interface AttendanceDashboardData {
   // Student dropdown options for the Compliance Reports panel — the
   // full active roster, not just today's filtered subset.
   all_students: Array<{ id: string; name: string }>;
+  // Family picker for the Reports panel ("Smith — Ava, Ben").
+  all_families: Array<{ id: string; name: string }>;
   // School-defined status categories (self-serve managed on this page).
   custom_statuses: CustomAttendanceStatus[];
 }
@@ -431,6 +433,17 @@ export async function fetcher(
     .map((r) => ({ id: r.student_id, name: `${r.first_name} ${r.last_name}` }))
     .sort((a, b) => a.name.localeCompare(b.name));
 
+  // One entry per family on the roster: "Parent last name — child, child".
+  const famMap = new Map<string, { parent: string | null; last: string; kids: string[] }>();
+  for (const r of studentRows) {
+    const e = famMap.get(r.family_id) ?? { parent: r.primary_parent_last, last: r.last_name, kids: [] };
+    e.kids.push(r.first_name);
+    famMap.set(r.family_id, e);
+  }
+  const all_families = [...famMap.entries()]
+    .map(([id, e]) => ({ id, name: `${e.parent || e.last} — ${e.kids.join(', ')}` }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+
   return {
     date_iso: dateIso,
     today_iso: today,
@@ -441,6 +454,7 @@ export async function fetcher(
     rows: filtered,
     recent_events: recentEvents,
     all_students,
+    all_families,
     custom_statuses: await readCustomStatuses(school.schoolId),
   };
 }

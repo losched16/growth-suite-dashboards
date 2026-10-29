@@ -1,7 +1,7 @@
 // CSV exports for attendance. Date range is inclusive on both ends.
 //
 //   format=events    one row per attendance_event in the range (audit log)
-//   format=daily     one row per (student, date) in the range
+//   format=daily     one row per (student, school day) in the range
 //   format=monthly   one row per (student, year-month) in the range —
 //                    days present / absent / total hours / curbside-pickup counts
 //
@@ -10,9 +10,14 @@
 //   from=YYYY-MM-DD          range start
 //   to=YYYY-MM-DD            range end
 //
-// Filters (all formats): classroom, status (daily only), student_id, q
+// Filters (all formats): classroom, status (daily only), student_id,
+// family_id (every child in one family), q
 //
-// Auth: school session cookie.
+// "School day" = a date on which the school has any attendance record. Weekends,
+// holidays and breaks therefore never appear as rows. A student with no record on
+// a school day in the past shows as `no_check_in` (today, `not_yet`).
+//
+// Auth: school session cookie, or location_id + embed_token.
 
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
@@ -25,6 +30,8 @@ export const dynamic = 'force-dynamic';
 
 // TODO: read schools.timezone when the column exists
 const TZ = 'America/Phoenix';
+
+interface Filters { classroom: string; status: string; studentId: string; familyId: string; q: string }
 
 export async function GET(request: NextRequest) {
   const sp = request.nextUrl.searchParams;
@@ -52,10 +59,17 @@ export async function GET(request: NextRequest) {
   const singleDate = (sp.get('date') ?? '').trim();
   const rangeFromRaw = (sp.get('from') ?? '').trim();
   const rangeToRaw = (sp.get('to') ?? '').trim();
-  const classroom = (sp.get('classroom') ?? '').trim();
-  const status = (sp.get('status') ?? '').trim();
-  const studentId = (sp.get('student_id') ?? '').trim();
-  const q = (sp.get('q') ?? '').trim().toLowerCase();
+  const filters: Filters = {
+    classroom: (sp.get('classroom') ?? '').trim(),
+    status: (sp.get('status') ?? '').trim(),
+    studentId: (sp.get('student_id') ?? '').trim(),
+    familyId: (sp.get('family_id') ?? '').trim(),
+    q: (sp.get('q') ?? '').trim().toLowerCase(),
+  };
+  const uuid = /^[0-9a-f-]{36}$/i;
+  if ((filters.studentId && !uuid.test(filters.studentId)) || (filters.familyId && !uuid.test(filters.familyId))) {
+    return new NextResponse('invalid id', { status: 400 });
+  }
 
   const today = todayInTz();
 
@@ -84,16 +98,17 @@ export async function GET(request: NextRequest) {
   let filename: string;
   const isRange = from !== to;
   const rangeTag = isRange ? `${from}_to_${to}` : from;
+  const scope = filters.familyId ? 'family' : filters.studentId ? 'student' : 'school';
 
   if (format === 'events') {
-    csv = await buildEventsCsv(schoolId, from, to, { classroom, studentId, q });
-    filename = `attendance-events-${rangeTag}.csv`;
+    csv = await buildEventsCsv(schoolId, from, to, filters);
+    filename = `attendance-events-${scope}-${rangeTag}.csv`;
   } else if (format === 'monthly') {
-    csv = await buildMonthlyCsv(schoolId, from, to, { classroom, studentId, q });
-    filename = `attendance-monthly-${rangeTag}.csv`;
+    csv = await buildMonthlyCsv(schoolId, from, to, filters, today);
+    filename = `attendance-monthly-${scope}-${rangeTag}.csv`;
   } else {
-    csv = await buildDailyCsv(schoolId, from, to, { classroom, status, studentId, q });
-    filename = `attendance-daily-${rangeTag}.csv`;
+    csv = await buildDailyCsv(schoolId, from, to, filters, today);
+    filename = `attendance-daily-${scope}-${rangeTag}.csv`;
   }
 
   return new NextResponse(csv, {
@@ -113,47 +128,62 @@ async function buildEventsCsv(
   schoolId: string,
   from: string,
   to: string,
-  filters: { classroom: string; studentId: string; q: string },
+  filters: Filters,
 ): Promise<string> {
   const { rows } = await query<{
     id: string;
     performed_at: string;
     student_first_name: string;
     student_last_name: string;
+    student_number: string | null;
+    family: string | null;
+    grade: string | null;
+    program: string | null;
     classroom: string | null;
     event_type: string;
     performed_by_parent_first: string | null;
     performed_by_parent_last: string | null;
     performed_by_admin_email: string | null;
+    performed_by_name_snapshot: string | null;
     picked_up_by_name_snapshot: string | null;
     curbside: boolean;
+    curbside_slot: string | null;
+    source: string | null;
     has_signature: boolean;
     notes: string | null;
   }>(
     `SELECT e.id, e.performed_at,
             s.first_name AS student_first_name, s.last_name AS student_last_name,
+            s.metadata->>'student_id' AS student_number,
+            f.display_name AS family,
+            s.metadata->>'grade_level' AS grade,
+            COALESCE(s.metadata->>'program_name', s.metadata->>'program') AS program,
             COALESCE(s.metadata->>'homeroom', s.metadata->>'classroom_name') AS classroom,
             e.event_type,
             p.first_name AS performed_by_parent_first, p.last_name AS performed_by_parent_last,
             e.performed_by_admin_email,
+            e.performed_by_name_snapshot,
             e.picked_up_by_name_snapshot,
-            e.curbside,
+            e.curbside, e.curbside_slot, e.source,
             EXISTS (SELECT 1 FROM attendance_signatures g WHERE g.event_id = e.id) AS has_signature,
             e.notes
      FROM attendance_events e
      JOIN students s ON s.id = e.student_id
+     LEFT JOIN families f ON f.id = s.family_id
      LEFT JOIN parents p ON p.id = e.performed_by_parent_id
      WHERE e.school_id = $1
        AND e.voided_at IS NULL
        AND (e.performed_at AT TIME ZONE $2)::date BETWEEN $3::date AND $4::date
        AND ($5::uuid IS NULL OR e.student_id = $5::uuid)
+       AND ($6::uuid IS NULL OR s.family_id = $6::uuid)
      ORDER BY e.performed_at`,
-    [schoolId, TZ, from, to, filters.studentId || null],
+    [schoolId, TZ, from, to, filters.studentId || null, filters.familyId || null],
   );
 
   const header = [
-    'event_id', 'date', 'time', 'student_name', 'classroom', 'event_type',
-    'performed_by', 'picked_up_by', 'curbside', 'signature_captured', 'notes',
+    'event_id', 'date', 'time', 'student_name', 'student_id', 'family', 'grade', 'program', 'classroom',
+    'event_type', 'performed_by', 'picked_up_by', 'curbside', 'curbside_slot', 'source',
+    'signature_captured', 'notes',
   ];
   const lines = [header.join(',')];
   for (const r of rows) {
@@ -165,17 +195,24 @@ async function buildEventsCsv(
     const performedAt = new Date(r.performed_at);
     const performer = r.performed_by_admin_email
       ? `admin:${r.performed_by_admin_email}`
-      : [r.performed_by_parent_first, r.performed_by_parent_last].filter(Boolean).join(' ').trim() || '';
+      : [r.performed_by_parent_first, r.performed_by_parent_last].filter(Boolean).join(' ').trim()
+        || r.performed_by_name_snapshot || '';
     lines.push([
       r.id,
       fmtDate(performedAt),
       fmtTime(performedAt),
       `${r.student_first_name} ${r.student_last_name}`,
+      r.student_number ?? '',
+      r.family ?? '',
+      r.grade ?? '',
+      r.program ?? '',
       r.classroom ?? '',
       r.event_type,
       performer,
       r.picked_up_by_name_snapshot ?? '',
       r.curbside ? 'yes' : 'no',
+      r.curbside_slot ?? '',
+      r.source ?? '',
       r.has_signature ? 'yes' : 'no',
       r.notes ?? '',
     ].map(csvField).join(','));
@@ -184,165 +221,214 @@ async function buildEventsCsv(
 }
 
 // ============================================================================
-// Daily summary: one row per (student, date) in the range. Students with no
-// events on a given date still get a row with status='not_yet'/'absent'
-// (depending on whether it's a school day — we treat any date in range as
-// reportable; admin can filter out weekends client-side or pre-filter).
+// Shared day-by-student dataset behind the daily and monthly reports.
+// One row per (student, school day). A school day is any date with at least one
+// attendance record school-wide, so weekends/holidays/breaks never show up.
+// Students with no record that day still get a row so absences are visible.
+// ============================================================================
+interface DayRow {
+  date: string;
+  weekday: string;
+  student_id: string;
+  first_name: string;
+  last_name: string;
+  student_number: string | null;
+  family: string | null;
+  grade: string | null;
+  program: string | null;
+  classroom: string | null;
+  parent_names: string | null;
+  parent_emails: string | null;
+  parent_phones: string | null;
+  status: string | null;
+  custom_status: string | null;
+  first_check_in_at: string | null;
+  last_check_out_at: string | null;
+  total_minutes: number | null;
+  picked_up_by_name: string | null;
+  curbside_pickup: boolean | null;
+  admin_notes: string | null;
+}
+
+async function loadDayRows(
+  schoolId: string,
+  from: string,
+  to: string,
+  filters: Filters,
+): Promise<DayRow[]> {
+  const { rows } = await query<DayRow>(
+    `WITH school_days AS (
+       SELECT DISTINCT date FROM daily_attendance
+        WHERE school_id = $1 AND date BETWEEN $2::date AND $3::date
+     )
+     SELECT
+       to_char(d.date, 'YYYY-MM-DD') AS date,
+       to_char(d.date, 'Dy') AS weekday,
+       s.id AS student_id, s.first_name, s.last_name,
+       s.metadata->>'student_id' AS student_number,
+       f.display_name AS family,
+       s.metadata->>'grade_level' AS grade,
+       COALESCE(s.metadata->>'program_name', s.metadata->>'program') AS program,
+       COALESCE(s.metadata->>'homeroom', s.metadata->>'classroom_name') AS classroom,
+       par.names AS parent_names, par.emails AS parent_emails, par.phones AS parent_phones,
+       da.status, da.custom_status,
+       da.first_check_in_at, da.last_check_out_at,
+       COALESCE(da.total_minutes, CASE WHEN da.last_check_out_at > da.first_check_in_at THEN (EXTRACT(EPOCH FROM (da.last_check_out_at - da.first_check_in_at)) / 60)::int END) AS total_minutes,
+       da.picked_up_by_name, da.curbside_pickup, da.admin_notes
+     FROM school_days d
+     CROSS JOIN students s
+     JOIN families f ON f.id = s.family_id
+     LEFT JOIN daily_attendance da
+       ON da.student_id = s.id AND da.school_id = s.school_id AND da.date = d.date
+     LEFT JOIN LATERAL (
+       SELECT string_agg(btrim(pp.first_name || ' ' || pp.last_name), '; ' ORDER BY pp.is_primary DESC, pp.created_at) AS names,
+              string_agg(NULLIF(btrim(pp.email), ''), '; ' ORDER BY pp.is_primary DESC, pp.created_at) AS emails,
+              string_agg(NULLIF(btrim(pp.phone), ''), '; ' ORDER BY pp.is_primary DESC, pp.created_at) AS phones
+         FROM parents pp
+        WHERE pp.family_id = s.family_id AND pp.status = 'active'
+     ) par ON true
+     WHERE s.school_id = $1 AND s.status = 'active'
+       -- enrolled students, plus anyone who has attendance that day (keeps history for withdrawn kids)
+       AND (lower(coalesce(s.metadata->>'enrollment_status','')) = 'enrolled' OR da.student_id IS NOT NULL)
+       AND ($4::uuid IS NULL OR s.id = $4::uuid)
+       AND ($5::uuid IS NULL OR s.family_id = $5::uuid)
+     ORDER BY d.date, classroom NULLS LAST, s.first_name`,
+    [schoolId, from, to, filters.studentId || null, filters.familyId || null],
+  );
+  return rows;
+}
+
+function effectiveStatus(r: DayRow, today: string): string {
+  if (r.status && r.status !== 'not_yet') return r.status;
+  // No check-in recorded: still "not yet" today, but a past school day is a miss.
+  return r.date < today ? 'no_check_in' : 'not_yet';
+}
+
+function matchesText(r: DayRow, q: string): boolean {
+  if (!q) return true;
+  const hay = (r.first_name + ' ' + r.last_name + ' ' + (r.parent_names ?? '') + ' ' + (r.family ?? '')).toLowerCase();
+  return hay.includes(q);
+}
+
+// ============================================================================
+// Daily summary: one row per (student, school day) in the range.
 // ============================================================================
 async function buildDailyCsv(
   schoolId: string,
   from: string,
   to: string,
-  filters: { classroom: string; status: string; studentId: string; q: string },
+  filters: Filters,
+  today: string,
 ): Promise<string> {
-  // Cross-join active students with each date in [from, to], left join
-  // daily_attendance so days with no events show as 'not_yet'.
-  const { rows } = await query<{
-    date: string;
-    student_id: string;
-    first_name: string;
-    last_name: string;
-    classroom: string | null;
-    primary_parent_first: string | null;
-    primary_parent_last: string | null;
-    status: string | null;
-    first_check_in_at: string | null;
-    last_check_out_at: string | null;
-    total_minutes: number | null;
-    picked_up_by_name: string | null;
-    curbside_pickup: boolean | null;
-  }>(
-    `WITH date_range AS (
-       SELECT generate_series($2::date, $3::date, interval '1 day')::date AS date
-     )
-     SELECT
-       to_char(dr.date, 'YYYY-MM-DD') AS date,
-       s.id AS student_id, s.first_name, s.last_name,
-       COALESCE(s.metadata->>'homeroom', s.metadata->>'classroom_name') AS classroom,
-       p.first_name AS primary_parent_first, p.last_name AS primary_parent_last,
-       COALESCE(da.status, 'not_yet') AS status,
-       da.first_check_in_at, da.last_check_out_at,
-       COALESCE(da.total_minutes, CASE WHEN da.last_check_out_at > da.first_check_in_at THEN (EXTRACT(EPOCH FROM (da.last_check_out_at - da.first_check_in_at)) / 60)::int END) AS total_minutes,
-       da.picked_up_by_name, da.curbside_pickup
-     FROM date_range dr
-     CROSS JOIN students s
-     LEFT JOIN daily_attendance da
-       ON da.student_id = s.id AND da.school_id = s.school_id AND da.date = dr.date
-     LEFT JOIN LATERAL (
-       SELECT first_name, last_name
-       FROM parents pp
-       WHERE pp.family_id = s.family_id AND pp.is_primary = true AND pp.status = 'active'
-       ORDER BY pp.created_at LIMIT 1
-     ) p ON true
-     WHERE s.school_id = $1 AND s.status = 'active'
-       -- enrolled students, plus anyone who has attendance that day (keeps history for withdrawn kids)
-       AND (lower(coalesce(s.metadata->>'enrollment_status','')) = 'enrolled' OR da.student_id IS NOT NULL)
-       AND ($4::uuid IS NULL OR s.id = $4::uuid)
-     ORDER BY dr.date, classroom NULLS LAST, s.first_name`,
-    [schoolId, from, to, filters.studentId || null],
-  );
+  const rows = await loadDayRows(schoolId, from, to, filters);
 
   const header = [
-    'date', 'student_name', 'classroom', 'primary_parent', 'status',
-    'first_check_in', 'last_check_out', 'total_hours', 'picked_up_by', 'curbside',
+    'date', 'weekday', 'student_name', 'student_id', 'family', 'grade', 'program', 'classroom',
+    'parents', 'parent_emails', 'parent_phones', 'status', 'office_status',
+    'first_check_in', 'last_check_out', 'total_hours', 'picked_up_by', 'curbside', 'office_notes',
   ];
   const lines = [header.join(',')];
   for (const r of rows) {
     if (filters.classroom && r.classroom !== filters.classroom) continue;
-    if (filters.status && r.status !== filters.status) continue;
-    if (filters.q) {
-      const hay = (r.first_name + ' ' + r.last_name + ' ' + (r.primary_parent_first ?? '') + ' ' + (r.primary_parent_last ?? '')).toLowerCase();
-      if (!hay.includes(filters.q)) continue;
-    }
-    const dateStr = typeof r.date === 'string' ? r.date.slice(0, 10) : fmtDate(r.date as unknown as Date);
+    const status = effectiveStatus(r, today);
+    if (filters.status && status !== filters.status && r.status !== filters.status) continue;
+    if (!matchesText(r, filters.q)) continue;
     const hours = r.total_minutes !== null ? (r.total_minutes / 60).toFixed(2) : '';
-    const checkIn = r.first_check_in_at ? fmtTime(new Date(r.first_check_in_at)) : '';
-    const checkOut = r.last_check_out_at ? fmtTime(new Date(r.last_check_out_at)) : '';
     lines.push([
-      dateStr,
+      r.date,
+      r.weekday,
       `${r.first_name} ${r.last_name}`,
+      r.student_number ?? '',
+      r.family ?? '',
+      r.grade ?? '',
+      r.program ?? '',
       r.classroom ?? '',
-      [r.primary_parent_first, r.primary_parent_last].filter(Boolean).join(' '),
-      r.status ?? 'not_yet',
-      checkIn,
-      checkOut,
+      r.parent_names ?? '',
+      r.parent_emails ?? '',
+      r.parent_phones ?? '',
+      status,
+      r.custom_status ?? '',
+      r.first_check_in_at ? fmtTime(new Date(r.first_check_in_at)) : '',
+      r.last_check_out_at ? fmtTime(new Date(r.last_check_out_at)) : '',
       hours,
       r.picked_up_by_name ?? '',
       r.curbside_pickup ? 'yes' : '',
+      r.admin_notes ?? '',
     ].map(csvField).join(','));
   }
   return utf8BomPrefix() + lines.join('\r\n') + '\r\n';
 }
 
 // ============================================================================
-// Monthly summary: one row per (student, year-month) in the range.
-// days_present  = days with status in ('present','checked_out','partial')
-// days_absent   = days with status='absent'
-// days_not_yet  = days with status='not_yet' (i.e. roster-day with no events)
-// total_hours   = SUM(total_minutes) / 60
-// curbside_days = days where curbside_pickup=true
+// Monthly summary: one row per (student, year-month) in the range, rolled up
+// from the same school-day dataset so it always agrees with the daily report.
+//   school_days   = school days in that month (within the range)
+//   days_present  = status present / checked_out
+//   days_partial  = status partial
+//   days_absent   = marked absent, or no check-in on a past school day
+//   attendance_rate = (present + partial) / school_days
 // ============================================================================
 async function buildMonthlyCsv(
   schoolId: string,
   from: string,
   to: string,
-  filters: { classroom: string; studentId: string; q: string },
+  filters: Filters,
+  today: string,
 ): Promise<string> {
-  const { rows } = await query<{
-    year_month: string;
-    student_id: string;
-    first_name: string;
-    last_name: string;
-    classroom: string | null;
-    days_present: number;
-    days_absent: number;
-    days_not_yet: number;
-    days_partial: number;
-    total_minutes: number;
-    curbside_days: number;
-  }>(
-    `SELECT
-       to_char(da.date, 'YYYY-MM') AS year_month,
-       s.id AS student_id, s.first_name, s.last_name,
-       COALESCE(s.metadata->>'homeroom', s.metadata->>'classroom_name') AS classroom,
-       COUNT(*) FILTER (WHERE da.status IN ('present','checked_out')) AS days_present,
-       COUNT(*) FILTER (WHERE da.status = 'absent') AS days_absent,
-       0 AS days_not_yet,
-       COUNT(*) FILTER (WHERE da.status = 'partial') AS days_partial,
-       COALESCE(SUM(COALESCE(da.total_minutes, CASE WHEN da.last_check_out_at > da.first_check_in_at THEN (EXTRACT(EPOCH FROM (da.last_check_out_at - da.first_check_in_at)) / 60)::int END)), 0) AS total_minutes,
-       COUNT(*) FILTER (WHERE da.curbside_pickup = true) AS curbside_days
-     FROM daily_attendance da
-     JOIN students s ON s.id = da.student_id
-     WHERE da.school_id = $1
-       AND da.date BETWEEN $2::date AND $3::date
-       AND s.status = 'active'
-       AND ($4::uuid IS NULL OR s.id = $4::uuid)
-     GROUP BY year_month, s.id, s.first_name, s.last_name, classroom
-     ORDER BY year_month, classroom NULLS LAST, s.first_name`,
-    [schoolId, from, to, filters.studentId || null],
-  );
+  const rows = await loadDayRows(schoolId, from, to, filters);
 
-  const header = [
-    'year_month', 'student_name', 'classroom',
-    'days_present', 'days_absent', 'days_partial',
-    'total_hours', 'curbside_pickup_days',
-  ];
-  const lines = [header.join(',')];
+  interface Agg {
+    year_month: string; r: DayRow;
+    school_days: number; present: number; partial: number; absent: number; minutes: number; curbside: number;
+  }
+  const byKey = new Map<string, Agg>();
   for (const r of rows) {
     if (filters.classroom && r.classroom !== filters.classroom) continue;
-    if (filters.q) {
-      const hay = (r.first_name + ' ' + r.last_name).toLowerCase();
-      if (!hay.includes(filters.q)) continue;
-    }
+    if (!matchesText(r, filters.q)) continue;
+    const status = effectiveStatus(r, today);
+    if (status === 'not_yet') continue; // today, not arrived yet — not a countable day
+    const ym = r.date.slice(0, 7);
+    const key = `${ym}|${r.student_id}`;
+    let a = byKey.get(key);
+    if (!a) { a = { year_month: ym, r, school_days: 0, present: 0, partial: 0, absent: 0, minutes: 0, curbside: 0 }; byKey.set(key, a); }
+    a.school_days++;
+    if (status === 'present' || status === 'checked_out') a.present++;
+    else if (status === 'partial') a.partial++;
+    else a.absent++;
+    a.minutes += r.total_minutes ?? 0;
+    if (r.curbside_pickup) a.curbside++;
+  }
+
+  const header = [
+    'year_month', 'student_name', 'student_id', 'family', 'grade', 'program', 'classroom',
+    'parents', 'parent_emails', 'school_days', 'days_present', 'days_partial', 'days_absent',
+    'attendance_rate', 'total_hours', 'avg_hours_per_day_present', 'curbside_pickup_days',
+  ];
+  const lines = [header.join(',')];
+  const sorted = [...byKey.values()].sort((x, y) =>
+    x.year_month.localeCompare(y.year_month)
+    || (x.r.classroom ?? '￿').localeCompare(y.r.classroom ?? '￿')
+    || x.r.first_name.localeCompare(y.r.first_name));
+  for (const a of sorted) {
+    const attended = a.present + a.partial;
     lines.push([
-      r.year_month,
-      `${r.first_name} ${r.last_name}`,
-      r.classroom ?? '',
-      String(r.days_present),
-      String(r.days_absent),
-      String(r.days_partial),
-      (r.total_minutes / 60).toFixed(2),
-      String(r.curbside_days),
+      a.year_month,
+      `${a.r.first_name} ${a.r.last_name}`,
+      a.r.student_number ?? '',
+      a.r.family ?? '',
+      a.r.grade ?? '',
+      a.r.program ?? '',
+      a.r.classroom ?? '',
+      a.r.parent_names ?? '',
+      a.r.parent_emails ?? '',
+      String(a.school_days),
+      String(a.present),
+      String(a.partial),
+      String(a.absent),
+      a.school_days ? `${Math.round((attended / a.school_days) * 100)}%` : '',
+      (a.minutes / 60).toFixed(2),
+      attended ? (a.minutes / 60 / attended).toFixed(2) : '',
+      String(a.curbside),
     ].map(csvField).join(','));
   }
   return utf8BomPrefix() + lines.join('\r\n') + '\r\n';
@@ -371,7 +457,7 @@ function csvField(v: unknown): string {
   return s;
 }
 function utf8BomPrefix(): string {
-  return '﻿';
+  return '\uFEFF';
 }
 function isValidDate(s: string): boolean {
   return /^\d{4}-\d{2}-\d{2}$/.test(s) && !Number.isNaN(new Date(s + 'T00:00:00Z').getTime());

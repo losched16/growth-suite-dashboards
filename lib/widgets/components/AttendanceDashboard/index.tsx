@@ -174,6 +174,7 @@ function Component({
       <ReportsSection
         classrooms={data.classrooms}
         studentOptions={data.all_students}
+        familyOptions={data.all_families}
         exportAuth={`location_id=${encodeURIComponent(school.locationId)}&embed_token=${encodeURIComponent(embedToken)}`}
       />
 

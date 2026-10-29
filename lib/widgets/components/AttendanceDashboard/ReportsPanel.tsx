@@ -18,6 +18,7 @@ import { Download, Calendar, FileSpreadsheet } from 'lucide-react';
 interface Props {
   classrooms: string[];
   studentOptions: Array<{ id: string; name: string }>;
+  familyOptions?: Array<{ id: string; name: string }>;
   // location_id + embed_token query string. Downloads navigate the top window,
   // which doesn't carry the CRM iframe's session cookie, so the link must be
   // self-authenticating (same as the roster's CSV links).
@@ -57,13 +58,14 @@ type Preset =
 
 const TZ = 'America/Phoenix';
 
-export function ReportsPanel({ classrooms, studentOptions, exportAuth }: Props) {
+export function ReportsPanel({ classrooms, studentOptions, familyOptions = [], exportAuth }: Props) {
   const [preset, setPreset] = useState<Preset>('last60');
   const [from, setFrom] = useState<string>(() => isoDaysAgo(60));
   const [to, setTo] = useState<string>(() => todayInTz());
   const [format, setFormat] = useState<Format>('daily');
   const [classroom, setClassroom] = useState('');
   const [studentId, setStudentId] = useState('');
+  const [familyId, setFamilyId] = useState('');
 
   // Resolved range from preset (custom overrides via state)
   const resolved = useMemo(() => {
@@ -78,8 +80,9 @@ export function ReportsPanel({ classrooms, studentOptions, exportAuth }: Props) 
     p.set('to', resolved.to);
     if (classroom) p.set('classroom', classroom);
     if (studentId) p.set('student_id', studentId);
+    if (familyId) p.set('family_id', familyId);
     return `/api/school/attendance/export?${p.toString()}${exportAuth ? `&${exportAuth}` : ''}`;
-  }, [format, resolved, classroom, studentId, exportAuth]);
+  }, [format, resolved, classroom, studentId, familyId, exportAuth]);
 
   const rangeDays = useMemo(() => {
     const a = new Date(resolved.from + 'T00:00:00Z').getTime();
@@ -152,7 +155,7 @@ export function ReportsPanel({ classrooms, studentOptions, exportAuth }: Props) 
       )}
 
       {/* Format + scope filters */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
         <label className="text-xs text-gray-700">
           <span className="block font-medium">Report format</span>
           <select
@@ -179,13 +182,26 @@ export function ReportsPanel({ classrooms, studentOptions, exportAuth }: Props) 
           </select>
         </label>
         <label className="text-xs text-gray-700">
+          <span className="block font-medium">Family</span>
+          <select
+            value={familyId}
+            onChange={(e) => { setFamilyId(e.target.value); if (e.target.value) setStudentId(''); }}
+            className="mt-0.5 w-full rounded-md border border-gray-300 bg-white px-2 py-1 text-sm focus:border-emerald-600 focus:outline-none"
+          >
+            <option value="">Whole school</option>
+            {familyOptions.map((f) => (
+              <option key={f.id} value={f.id}>{f.name}</option>
+            ))}
+          </select>
+        </label>
+        <label className="text-xs text-gray-700">
           <span className="block font-medium">Student</span>
           <select
             value={studentId}
-            onChange={(e) => setStudentId(e.target.value)}
+            onChange={(e) => { setStudentId(e.target.value); if (e.target.value) setFamilyId(''); }}
             className="mt-0.5 w-full rounded-md border border-gray-300 bg-white px-2 py-1 text-sm focus:border-emerald-600 focus:outline-none"
           >
-            <option value="">All students</option>
+            <option value="">All students (whole school)</option>
             {studentOptions.map((s) => (
               <option key={s.id} value={s.id}>{s.name}</option>
             ))}
