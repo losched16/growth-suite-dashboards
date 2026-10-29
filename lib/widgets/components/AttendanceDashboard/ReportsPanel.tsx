@@ -18,6 +18,36 @@ import { Download, Calendar, FileSpreadsheet } from 'lucide-react';
 interface Props {
   classrooms: string[];
   studentOptions: Array<{ id: string; name: string }>;
+  // location_id + embed_token query string. Downloads navigate the top window,
+  // which doesn't carry the CRM iframe's session cookie, so the link must be
+  // self-authenticating (same as the roster's CSV links).
+  exportAuth?: string;
+}
+
+// Collapsed-by-default bar that sits above the roster, so the reports are one
+// click from the top of the page instead of buried under 270 student rows.
+export function ReportsSection(props: Props) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div id="reports">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        className="flex w-full items-center justify-between gap-3 rounded-lg border-2 border-emerald-200 bg-emerald-50/40 px-4 py-2.5 text-left hover:bg-emerald-50"
+      >
+        <span className="flex items-center gap-2 text-sm font-semibold text-gray-900">
+          <FileSpreadsheet className="h-4 w-4 text-emerald-700" />
+          Reports &amp; exports
+          <span className="hidden text-xs font-normal text-gray-600 sm:inline">
+            — download attendance for the last 30 days, a month, or any date range
+          </span>
+        </span>
+        <span className="text-xs font-medium text-emerald-800">{open ? 'Hide' : 'Open'}</span>
+      </button>
+      {open ? <div className="mt-2"><ReportsPanel {...props} /></div> : null}
+    </div>
+  );
 }
 
 type Format = 'daily' | 'events' | 'monthly';
@@ -27,7 +57,7 @@ type Preset =
 
 const TZ = 'America/Phoenix';
 
-export function ReportsPanel({ classrooms, studentOptions }: Props) {
+export function ReportsPanel({ classrooms, studentOptions, exportAuth }: Props) {
   const [preset, setPreset] = useState<Preset>('last60');
   const [from, setFrom] = useState<string>(() => isoDaysAgo(60));
   const [to, setTo] = useState<string>(() => todayInTz());
@@ -48,8 +78,8 @@ export function ReportsPanel({ classrooms, studentOptions }: Props) {
     p.set('to', resolved.to);
     if (classroom) p.set('classroom', classroom);
     if (studentId) p.set('student_id', studentId);
-    return `/api/school/attendance/export?${p.toString()}`;
-  }, [format, resolved, classroom, studentId]);
+    return `/api/school/attendance/export?${p.toString()}${exportAuth ? `&${exportAuth}` : ''}`;
+  }, [format, resolved, classroom, studentId, exportAuth]);
 
   const rangeDays = useMemo(() => {
     const a = new Date(resolved.from + 'T00:00:00Z').getTime();

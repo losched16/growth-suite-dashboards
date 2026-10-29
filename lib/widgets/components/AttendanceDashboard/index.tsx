@@ -11,7 +11,7 @@ import {
 } from './config';
 import { fetcher, type AttendanceDashboardData } from './fetcher';
 import { RosterTable } from './RosterTable';
-import { ReportsPanel } from './ReportsPanel';
+import { ReportsSection } from './ReportsPanel';
 import { AutoSubmitForm } from '@/lib/widgets/components/_shared/AutoSubmitForm';
 import { deriveEmbedToken } from '@/lib/auth/embed';
 import { DateNav } from './DateNav';
@@ -168,6 +168,15 @@ function Component({
         </details>
       ) : null}
 
+      {/* Reports & exports — separate from the live view because operators
+          pull date-range exports for state reporting and audits, not for
+          "what's happening today." Sits above the roster so it's findable. */}
+      <ReportsSection
+        classrooms={data.classrooms}
+        studentOptions={data.all_students}
+        exportAuth={`location_id=${encodeURIComponent(school.locationId)}&embed_token=${encodeURIComponent(embedToken)}`}
+      />
+
       {/* Filter row */}
       <AutoSubmitForm className="flex flex-wrap items-center gap-2 rounded-lg border border-gray-200 bg-white p-3">
         <input
@@ -219,13 +228,6 @@ function Component({
       <div id="roster">
         <RosterTable rows={data.rows} dateIso={data.date_iso} isToday={data.is_today} customStatuses={data.custom_statuses}
           exportAuth={`location_id=${encodeURIComponent(school.locationId)}&embed_token=${encodeURIComponent(embedToken)}`} />
-      </div>
-
-      {/* Compliance Reports — separate from the live view because
-          operators pull date-range exports for state reporting and
-          audits, not for "what's happening today." */}
-      <div id="reports">
-        <ReportsPanel classrooms={data.classrooms} studentOptions={data.all_students} />
       </div>
 
       {void school}
