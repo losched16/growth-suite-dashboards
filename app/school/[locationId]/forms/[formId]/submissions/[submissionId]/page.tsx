@@ -36,6 +36,7 @@ interface FormDef {
     text?: string;       // header / paragraph / section
     description?: string;
     options?: Array<{ value: string; label: string }>;
+    visible_when?: unknown;
   }>;
 }
 
@@ -295,6 +296,10 @@ export default async function SubmissionDetail({
           <h2 className="text-sm font-semibold text-slate-700 uppercase tracking-wide mb-3 print:hidden">Responses</h2>
           <div id="submission-responses" className="space-y-4">
             {blocks
+              // A question that was conditionally hidden on the live form (e.g.
+              // "New LDMA" when the parent said No to amending) is left out
+              // instead of printing "— not answered —" for every skipped branch.
+              .filter((block) => reviewVisible(block, sub.responses))
               // Blocks hidden on the live form (e.g. the internal "add a second
               // parent/guardian" toggle when Parent 2 is already on file) stay
               // hidden on the admin view too. hide_on_review additionally hides
@@ -333,6 +338,37 @@ export default async function SubmissionDetail({
       </div>
     </main>
   );
+}
+
+// Was this block shown to the parent? Conditions that read another answer are
+// evaluated against the saved responses. Anything we can't evaluate here
+// (prefill-sourced facts, or a controlling field that was itself hidden and fell
+// back to a prefill) counts as shown. A keyed question that WAS hidden has no
+// answer, so an unanswered conditional question is dropped too.
+type VisCond = { field?: string; equals?: unknown[]; source?: string; fallback_prefill?: string };
+function reviewVisible(
+  block: FormDef['field_schema'][number],
+  responses: Record<string, unknown>,
+): boolean {
+  const vw = block.visible_when as ({ match?: string; conditions?: VisCond[] } & VisCond) | undefined;
+  if (!vw) return true;
+  const conds: VisCond[] = Array.isArray(vw.conditions) ? vw.conditions : [vw];
+  const results = conds.filter((c) => c && c.field).map((c) => {
+    if (c.source === 'prefill') return true;
+    const v = responses[c.field as string];
+    const empty = v == null || v === '' || (Array.isArray(v) && v.length === 0);
+    if (empty && c.fallback_prefill) return true;
+    const cur = Array.isArray(v) ? v.map(String) : [String(v ?? '')];
+    return (c.equals ?? []).map(String).some((e) => cur.includes(e));
+  });
+  if (results.length === 0) return true;
+  const shown = vw.match === 'any' ? results.some(Boolean) : results.every(Boolean);
+  if (!shown) return false;
+  if (block.key && block.type !== 'file_upload') {
+    const a = responses[block.key];
+    if (a == null || a === '' || (Array.isArray(a) && a.length === 0)) return false;
+  }
+  return true;
 }
 
 function Field({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
