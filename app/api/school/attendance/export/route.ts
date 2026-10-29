@@ -13,9 +13,12 @@
 // Filters (all formats): classroom, status (daily only), student_id,
 // family_id (every child in one family), q
 //
-// "School day" = a date on which the school has any attendance record. Weekends,
-// holidays and breaks therefore never appear as rows. A student with no record on
-// a school day in the past shows as `no_check_in` (today, `not_yet`).
+// "School day" = a date on which at least 25% of the enrolled roster was present.
+// Weekends, holidays and break weeks (a handful of kids in camp/intersession) are
+// therefore never counted as absences. Students who DID attend on a low-turnout day
+// still get their row in the daily report; the monthly roll-up counts school days
+// only. A student with no record on a school day in the past shows as
+// `no_check_in` (today, `not_yet`).
 //
 // Auth: school session cookie, or location_id + embed_token.
 
@@ -229,6 +232,7 @@ async function buildEventsCsv(
 interface DayRow {
   date: string;
   weekday: string;
+  is_school_day: boolean;
   student_id: string;
   first_name: string;
   last_name: string;
@@ -257,11 +261,21 @@ async function loadDayRows(
   filters: Filters,
 ): Promise<DayRow[]> {
   const { rows } = await query<DayRow>(
-    `WITH school_days AS (
-       SELECT DISTINCT date FROM daily_attendance
-        WHERE school_id = $1 AND date BETWEEN $2::date AND $3::date
+    `WITH roster AS (
+       SELECT count(*)::int AS n FROM students
+        WHERE school_id = $1 AND status = 'active'
+          AND lower(coalesce(metadata->>'enrollment_status','')) = 'enrolled'
+     ),
+     school_days AS (
+       SELECT da.date,
+              (count(*) FILTER (WHERE da.status IN ('present','checked_out','partial'))
+                 >= 0.25 * GREATEST((SELECT n FROM roster), 1)) AS is_school_day
+         FROM daily_attendance da
+        WHERE da.school_id = $1 AND da.date BETWEEN $2::date AND $3::date
+        GROUP BY da.date
      )
      SELECT
+       d.is_school_day,
        to_char(d.date, 'YYYY-MM-DD') AS date,
        to_char(d.date, 'Dy') AS weekday,
        s.id AS student_id, s.first_name, s.last_name,
@@ -290,6 +304,8 @@ async function loadDayRows(
      WHERE s.school_id = $1 AND s.status = 'active'
        -- enrolled students, plus anyone who has attendance that day (keeps history for withdrawn kids)
        AND (lower(coalesce(s.metadata->>'enrollment_status','')) = 'enrolled' OR da.student_id IS NOT NULL)
+       -- low-turnout days (breaks/camps) only list the kids who actually attended
+       AND (d.is_school_day OR da.status IN ('present','checked_out','partial'))
        AND ($4::uuid IS NULL OR s.id = $4::uuid)
        AND ($5::uuid IS NULL OR s.family_id = $5::uuid)
      ORDER BY d.date, classroom NULLS LAST, s.first_name`,
@@ -387,6 +403,7 @@ async function buildMonthlyCsv(
     if (!matchesText(r, filters.q)) continue;
     const status = effectiveStatus(r, today);
     if (status === 'not_yet') continue; // today, not arrived yet — not a countable day
+    if (!r.is_school_day) continue;     // break/camp day — not part of the school calendar
     const ym = r.date.slice(0, 7);
     const key = `${ym}|${r.student_id}`;
     let a = byKey.get(key);
