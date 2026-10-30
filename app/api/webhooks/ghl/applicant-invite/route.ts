@@ -15,9 +15,10 @@
 // Opt-in per school: does nothing unless settings.applicant_invites is true.
 // Idempotent — a stage that re-fires inside 6 hours sends nothing twice.
 //
-// Auth: same static shared token as /portal-welcome (GHL workflows can't HMAC
-// the body): `x-webhook-token` / `x-enroll-key` / `Authorization: Bearer` /
-// `?key=`, GHL_ENROLL_TOKEN falling back to GHL_WEBHOOK_SECRET; fails closed.
+// Auth: a static shared token (GHL workflows can't HMAC the body):
+// `x-webhook-token` / `x-enroll-key` / `Authorization: Bearer` / `?key=`.
+// APPLICANT_INVITE_TOKEN, falling back to GHL_ENROLL_TOKEN then
+// GHL_WEBHOOK_SECRET; fails closed when none is set.
 //
 // Always 200 (except a bad token → 401) so GHL doesn't retry-storm.
 
@@ -40,7 +41,9 @@ const TAG_SENT = 'portal invite sent';
 const TAG_FAILED = 'portal invite failed';
 
 function tokenOk(provided: string | null): boolean {
-  const expected = process.env.GHL_ENROLL_TOKEN || process.env.GHL_WEBHOOK_SECRET;
+  // Its own token first, so this webhook can be rotated or revoked without
+  // touching the contact / enroll / welcome workflows that share the older ones.
+  const expected = process.env.APPLICANT_INVITE_TOKEN || process.env.GHL_ENROLL_TOKEN || process.env.GHL_WEBHOOK_SECRET;
   if (!expected || !provided) return false; // fail closed
   const a = Buffer.from(provided);
   const b = Buffer.from(expected);
@@ -219,7 +222,7 @@ export async function POST(request: NextRequest) {
 
 // GET — self-diagnostic, like /portal-welcome: secret configured? recent activity?
 export async function GET() {
-  const secretConfigured = !!(process.env.GHL_ENROLL_TOKEN || process.env.GHL_WEBHOOK_SECRET);
+  const secretConfigured = !!(process.env.APPLICANT_INVITE_TOKEN || process.env.GHL_ENROLL_TOKEN || process.env.GHL_WEBHOOK_SECRET);
   const { rows } = await query<{ received_at: string; status: string; ghl_location_id: string | null; error_message: string | null }>(
     `SELECT received_at, status, ghl_location_id, error_message
        FROM ghl_webhook_log WHERE event_type = $1 ORDER BY received_at DESC LIMIT 10`,
