@@ -46,6 +46,21 @@ that calls the invite link (instructions with the secret token are in
 nativity-webhook-token.txt in the Windows home folder), and confirm who
 receives submission notifications (currently only Clint).
 
+### Nativity: the Portal Forms dashboard now tracks applicants
+Same dashboard DGM uses: a grid with one row per family and a column per
+form, plus the submissions inbox. Applicant children now appear in it with
+an "applicant" badge and their own count in the header ("2 students across
+1 families (2 applicants)") - they are never counted as enrolled. Each
+child shows which of the documents they have submitted and which are still
+outstanding, and **Export non-submitters** produces a chase list of exactly
+what is missing, per child. The IEP/504 form is optional, so it only shows
+once submitted - it never appears as missing and never lowers a child's
+completion. Both behaviors are opt-in per dashboard, so DGM's numbers do not
+change.
+
+Also: every Nativity form submission and parent upload now emails
+lbenjamin@nativityboston.org.
+
 ### Fix: uploading several files to one question kept only the first
 A question that lets a family select several files (for example the custody
 or LDMA documentation on the Enrollment Agreement and Amendment) saved only
