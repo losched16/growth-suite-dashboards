@@ -90,6 +90,12 @@ export interface SchoolSettings {
   // (lib/sync/enrolled-family-sync). Off = the enrollment trigger runs only
   // for billing-active schools, as before.
   auto_create_enrolled_families: boolean;
+  // Admissions schools that run their application + document collection in
+  // the parent portal: lets the applicant-invite webhook (a GHL workflow on
+  // the "ready to apply" stage) create a parent-only portal family for the
+  // contact and email the invite. Off = the webhook does nothing for this
+  // school (lib/sync/create-applicant-family, api/webhooks/ghl/applicant-invite).
+  applicant_invites: boolean;
   // Show the "Edit layout" button on bare embeds (?chrome=none) too. Off by
   // default: no-sidebar links get shared with teachers, who shouldn't
   // rearrange the office's dashboards. Opt in when the links stay with
@@ -141,6 +147,7 @@ export const SCHOOL_SETTINGS_DEFAULTS: SchoolSettings = {
   enrollment_notification_emails: [],
   opportunity_student_fields: {},
   auto_create_enrolled_families: false,
+  applicant_invites: false,
   edit_layout_in_embeds: false,
   kiosk_enabled: true,
   roster_allergy_from_forms: false,
@@ -182,6 +189,7 @@ export function normalizeSchoolSettings(raw: unknown): SchoolSettings {
           )
         : {},
     auto_create_enrolled_families: r.auto_create_enrolled_families === true,
+    applicant_invites: r.applicant_invites === true,
     edit_layout_in_embeds: r.edit_layout_in_embeds === true,
     kiosk_enabled: r.kiosk_enabled !== false,
     roster_allergy_from_forms: r.roster_allergy_from_forms === true,
