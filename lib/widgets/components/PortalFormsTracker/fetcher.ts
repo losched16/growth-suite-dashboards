@@ -113,6 +113,7 @@ interface DbForm {
   display_name: string;
   category: string | null;
   per_student: boolean;
+  is_optional: boolean;
   position: number;
   // Full visibility rule (portal_form_definitions.applies_to) — the
   // tracker evaluates the SAME criteria the portal does, so a student
@@ -173,6 +174,7 @@ export async function fetcher(
   // 1. Active parent-portal forms
   const { rows: forms } = await query<DbForm>(
     `SELECT id, slug, display_name, category, per_student, applies_to,
+            COALESCE(is_optional, false) AS is_optional,
             COALESCE((field_schema->'sort')::int, 0) AS position
        FROM portal_form_definitions
       WHERE school_id = $1
@@ -205,6 +207,8 @@ export async function fetcher(
   // Applicant children (settings.applicant_student schools) are opt-in: only
   // an explicit include_applicants widens the scope, so nobody else changes.
   const includeApplicants = config.include_applicants === true;
+  // Optional forms are shown when submitted but never counted as missing.
+  const optionalNotRequired = config.optional_forms_not_required === true;
   const enrollmentScope = [
     ...(includePending ? ['enrolled', 'pending'] : ['enrolled']),
     ...(includeApplicants ? ['application_submitted'] : []),
@@ -620,7 +624,12 @@ export async function fetcher(
           // Per-STUDENT targeting: a kid the rule doesn't cover (wrong
           // grade/program) is never "missing" — but a completed
           // submission always shows, whatever the current rule says.
-          const applies = studentMatchesForm(fullForm, s) || complete;
+          // optional_forms_not_required: an optional form (e.g. "IEP/504, if
+          // applicable") only shows once submitted — never as missing, never
+          // dragging a child's completion down.
+          const applies = optionalNotRequired && fullForm.is_optional
+            ? complete
+            : (studentMatchesForm(fullForm, s) || complete);
           if (applies) {
             applicableCount++;
             if (complete) completeCount++;
@@ -648,7 +657,7 @@ export async function fetcher(
         const sub = perFamily.get(`${form.id}|${fam.family_id}`);
         const complete = !!sub
           || ghlComplete(fam.family_id, form.slug, { familyLevel: true });
-        if (!visible && !complete) {
+        if ((!visible || (optionalNotRequired && fullForm.is_optional)) && !complete) {
           cells[form.id] = [];
         } else {
           applicableCount++;

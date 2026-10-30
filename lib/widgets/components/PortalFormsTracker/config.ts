@@ -60,6 +60,11 @@ export interface PortalFormsTrackerConfig {
   // an "applicant" badge and their own count in the header. OFF unless set,
   // so every other school's tracker is unchanged.
   include_applicants?: boolean;
+  // Forms marked optional (portal_form_definitions.is_optional — e.g. "IEP/504,
+  // if applicable") show only once a family has submitted them: never as
+  // "missing", never counted against completion, never on the CSV chase list.
+  // OFF unless set, so existing schools' numbers don't move.
+  optional_forms_not_required?: boolean;
   // Extra columns tracked from student metadata (see ExternalTrackedItem).
   external_items?: ExternalTrackedItem[];
 }
@@ -80,6 +85,7 @@ export const portalFormsTrackerSchema: ConfigSchema = {
     { key: 'enrolled_tag', label: 'Enrolled tag (case-insensitive, leave empty for all families)', type: 'text' },
     { key: 'excluded_tag', label: 'Excluded tag (e.g. "withdrawn")', type: 'text' },
     { key: 'include_pending', label: 'Include pending (mid-admissions) students', type: 'boolean' },
+    { key: 'optional_forms_not_required', label: 'Optional forms are never counted as missing', type: 'boolean' },
     { key: 'include_applicants', label: 'Include applicants (children who have submitted an application)', type: 'boolean' },
     { key: 'auto_refresh_ms', label: 'Auto-refresh interval (ms, 0 = off)', type: 'number', min: 0, max: 600_000 },
   ],
