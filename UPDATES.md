@@ -7,6 +7,52 @@ human digest.
 
 ---
 
+## October 30, 2026
+
+### Nativity: applicants apply and upload documents in the parent portal
+New applicants now do their whole application inside the portal instead of
+the old CRM survey and document forms. The flow: the admissions team moves a
+card to a "ready to apply" stage, the family gets an email, creates an
+account, fills out the Application, then uploads documents.
+
+What is built and live (tested end to end on a test contact; all test data
+removed afterward):
+- **The Application** - the same questions as last year's survey (student,
+  parents, household, learning and health, teacher emails), in the same
+  order. Answers are written to the same contact fields as before, plus Year
+  of Entry. Submitting it adds the "application submitted" tag.
+- **The documents**, as the school specified: **1040A first two pages** (once
+  per family); **IEP/504 and additional supporting documents** (optional),
+  **NWEA/MAP scores** and **two years of report cards** (once per child).
+  Each adds the same tag it used to ("1040 submitted", "report card 1/2
+  submitted", "nwea/map scores submitted", "iep/504 submitted").
+- **Each child gets a student record** when their application is submitted,
+  so their documents belong to the child (and are still on the child when they
+  enroll). They show in the Enrollment Hub and Portal Forms, and stay off the
+  Student Roster, Family Hub, classroom hubs and attendance board until
+  marked Enrolled.
+- **Siblings**: a family submits the Application once per child. The first
+  child's answers go to the contact exactly as before; a second child's name
+  goes to the next student slot and their full answers stay on the portal
+  record, so one child's answers never overwrite another's. Correcting an
+  application updates the child rather than creating a duplicate.
+- **The invite**: a new "applicant invite" link that a CRM workflow calls when
+  a card reaches the chosen stage. It creates the family login, sends the
+  invite email, and tags the contact "portal invite sent" (or "portal invite
+  failed" - for example when the contact has no email).
+
+Still to do (school side): add the "ready to apply" stage and the workflow
+that calls the invite link (instructions with the secret token are in
+nativity-webhook-token.txt in the Windows home folder), and confirm who
+receives submission notifications (currently only Clint).
+
+### Fix: uploading several files to one question kept only the first
+A question that lets a family select several files (for example the custody
+or LDMA documentation on the Enrollment Agreement and Amendment) saved only
+the first file and silently dropped the rest. It now saves every file. Files
+a family selected before today beyond the first were not saved and cannot be
+recovered - worth asking any family who attached multiple custody documents.
+
 ## October 22, 2026
 
 ### Forms: fields marked "locked" now actually lock (Enrollment Agreement + Amendment)
