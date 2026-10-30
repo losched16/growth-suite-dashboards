@@ -33,6 +33,21 @@ const SORTS = [
   { key: 'pct_asc', label: '% complete (low→high)' },
 ] as const;
 
+// "3 enrolled · 2 pending · 1 applicant" — null when everyone is enrolled, so
+// schools with no pending/applicant children see exactly what they saw before.
+// Applicants aren't enrolled, so they never count toward the enrolled number.
+function studentMix(stats: PortalFormsTrackerData['stats']): string | null {
+  const pending = stats.pending_students ?? 0;
+  const applicants = stats.applicant_students ?? 0;
+  if (!pending && !applicants) return null;
+  const enrolled = stats.total_students - pending - applicants;
+  const parts: string[] = [];
+  if (enrolled > 0 || applicants === 0) parts.push(`${enrolled} enrolled`);
+  if (pending) parts.push(`${pending} pending`);
+  if (applicants) parts.push(`${applicants} applicant${applicants === 1 ? '' : 's'}`);
+  return parts.join(' · ');
+}
+
 function pctColor(pct: number): string {
   if (pct === 100) return 'text-emerald-600';
   if (pct >= 50) return 'text-amber-600';
@@ -256,9 +271,7 @@ function Component({
           </h2>
           <p className="mt-1 text-xs text-gray-600">
             {data.stats.total_students} students across {data.stats.enrolled_families} families
-            {data.stats.pending_students
-              ? ` (${data.stats.total_students - data.stats.pending_students} enrolled · ${data.stats.pending_students} pending)`
-              : ''} ·{' '}
+            {studentMix(data.stats) ? ` (${studentMix(data.stats)})` : ''} ·{' '}
             Last loaded {new Date(data.last_loaded_at).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit', second: '2-digit' })}
           </p>
           {config.enrolled_tag || config.excluded_tag ? (
@@ -288,8 +301,8 @@ function Component({
           value={data.stats.total_students}
           label="Students Tracked"
           color="text-emerald-700"
-          sublabel={data.stats.pending_students
-            ? `${data.stats.total_students - data.stats.pending_students} enrolled · ${data.stats.pending_students} pending · ${data.stats.enrolled_families} families`
+          sublabel={studentMix(data.stats)
+            ? `${studentMix(data.stats)} · ${data.stats.enrolled_families} families`
             : `${data.stats.enrolled_families} families`}
         />
         <StatCard
@@ -443,6 +456,14 @@ function Component({
                         title="Mid-admissions: this family has students whose enrollment status is still Pending — they aren't enrolled until their forms are done."
                       >
                         pending
+                      </span>
+                    ) : null}
+                    {r.applicant_student_count > 0 ? (
+                      <span
+                        className="ml-1.5 inline-flex items-center rounded-full bg-sky-50 px-1.5 py-0.5 text-[10px] font-medium text-sky-800 align-middle"
+                        title="Applicant: this family has applied but the child is not enrolled yet."
+                      >
+                        applicant
                       </span>
                     ) : null}
                     <div className="text-[11px] text-gray-500">{r.primary_parent_email || '—'}</div>

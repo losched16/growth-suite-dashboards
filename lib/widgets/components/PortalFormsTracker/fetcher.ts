@@ -67,6 +67,9 @@ export interface FamilyRow {
   // Nonzero → the row gets a "pending" badge so the office can tell who's
   // still in process vs. currently enrolled.
   pending_student_count: number;
+  // Children who have submitted an application but are not enrolled
+  // (include_applicants). Nonzero → the row gets an "applicant" badge.
+  applicant_student_count: number;
   // Documents the family uploaded via the portal's Documents section.
   // Surfaced as their own column so uploads are as visible as submissions.
   uploads: FamilyUpload[];
@@ -95,6 +98,8 @@ export interface PortalFormsTrackerData {
     // include_pending config is on) — surfaced so the header can label
     // them instead of silently inflating the "enrolled" number.
     pending_students: number;
+    // Of total_students, how many are applicants (include_applicants).
+    applicant_students: number;
     students_fully_complete: number;
     students_in_progress: number;
     students_not_started: number;
@@ -197,7 +202,13 @@ export async function fetcher(
   // Default ON — only an explicit false pins the tracker to enrolled-only,
   // so widgets saved before this option existed get the intended behavior.
   const includePending = config.include_pending !== false;
-  const enrollmentScope = includePending ? ['enrolled', 'pending'] : ['enrolled'];
+  // Applicant children (settings.applicant_student schools) are opt-in: only
+  // an explicit include_applicants widens the scope, so nobody else changes.
+  const includeApplicants = config.include_applicants === true;
+  const enrollmentScope = [
+    ...(includePending ? ['enrolled', 'pending'] : ['enrolled']),
+    ...(includeApplicants ? ['application_submitted'] : []),
+  ];
   const { rows: allStudents } = await query<DbStudent>(
     `SELECT s.id AS student_id, s.family_id,
             s.first_name, s.last_name, s.preferred_name,
@@ -676,6 +687,7 @@ export async function fetcher(
       pct,
       status,
       pending_student_count: familyStudents.filter((s) => s.enrollment_status === 'pending').length,
+      applicant_student_count: familyStudents.filter((s) => s.enrollment_status === 'application_submitted').length,
       uploads: uploadsByFamily.get(fam.family_id) ?? [],
     });
   }
@@ -734,6 +746,7 @@ export async function fetcher(
     families_not_started: rows.filter((r) => r.status === 'not_started').length,
     total_students: rows.reduce((acc, r) => acc + r.enrolled_student_count, 0),
     pending_students: students.filter((s) => s.enrollment_status === 'pending').length,
+    applicant_students: students.filter((s) => s.enrollment_status === 'application_submitted').length,
     students_fully_complete: studentsFullyComplete,
     students_in_progress: studentsInProgress,
     students_not_started: studentsNotStarted,

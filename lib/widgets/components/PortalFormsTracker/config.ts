@@ -54,6 +54,12 @@ export interface PortalFormsTrackerConfig {
   // mix honest ("250 enrolled · 3 pending"). Turn off to pin the
   // tracker to currently-enrolled only (Student Roster scope).
   include_pending?: boolean;
+  // Also track APPLICANT children — students whose enrollment status is
+  // 'application_submitted' (admissions schools that take the application and
+  // supporting documents in the parent portal, e.g. Nativity). They show with
+  // an "applicant" badge and their own count in the header. OFF unless set,
+  // so every other school's tracker is unchanged.
+  include_applicants?: boolean;
   // Extra columns tracked from student metadata (see ExternalTrackedItem).
   external_items?: ExternalTrackedItem[];
 }
@@ -74,6 +80,7 @@ export const portalFormsTrackerSchema: ConfigSchema = {
     { key: 'enrolled_tag', label: 'Enrolled tag (case-insensitive, leave empty for all families)', type: 'text' },
     { key: 'excluded_tag', label: 'Excluded tag (e.g. "withdrawn")', type: 'text' },
     { key: 'include_pending', label: 'Include pending (mid-admissions) students', type: 'boolean' },
+    { key: 'include_applicants', label: 'Include applicants (children who have submitted an application)', type: 'boolean' },
     { key: 'auto_refresh_ms', label: 'Auto-refresh interval (ms, 0 = off)', type: 'number', min: 0, max: 600_000 },
   ],
 };
