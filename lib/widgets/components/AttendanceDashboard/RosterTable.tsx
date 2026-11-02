@@ -464,6 +464,7 @@ function AdminNotesEditor({ studentId, dateIso, initial }: {
 function ManualOverrideForm({ row: r, customStatuses }: { row: StudentRow; customStatuses: CustomAttendanceStatus[] }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   // Optional note attached to the override event itself (Clint, Aug 13:
   // "force a check in and also make a note at the same time"). Shows in
   // the Notes column + event feed alongside parent check-in notes.
@@ -495,6 +496,16 @@ function ManualOverrideForm({ row: r, customStatuses }: { row: StudentRow; custo
       if (!r2.ok) {
         const t = await r2.text();
         throw new Error(t || 'failed');
+      }
+      // The server skips a repeat of the student's latest action. Say so (and
+      // where the note went) instead of reloading as if something changed.
+      const j = (await r2.json().catch(() => null)) as { deduped?: boolean; noteSaved?: boolean } | null;
+      if (j?.deduped) {
+        const what = eventType === 'check_in' ? 'checked in' : eventType === 'check_out' ? 'checked out' : 'marked absent';
+        setNotice(`Already ${what} today — nothing changed.${j.noteSaved ? ' Your note was saved to the office notes.' : ''}`);
+        setBusy(false);
+        setTimeout(() => window.location.reload(), 2500);
+        return;
       }
       window.location.reload();
     } catch (e) {
@@ -603,6 +614,7 @@ function ManualOverrideForm({ row: r, customStatuses }: { row: StudentRow; custo
           </div>
         </div>
       ) : null}
+      {notice ? <div className="text-xs text-amber-800">{notice}</div> : null}
       {err ? <div className="text-xs text-red-700">{err}</div> : null}
     </div>
   );
