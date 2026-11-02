@@ -117,6 +117,21 @@ function FragmentRow({
   customStatuses: CustomAttendanceStatus[];
   exportAuth?: string;
 }) {
+  // What the office just did, applied in place. The old flow reloaded the whole
+  // page after every tap, which dropped the user back at the top of a 270-row
+  // list with the drawer closed — it looked like nothing had saved, so people
+  // tapped again. The server write is the same; only the display is immediate.
+  const [local, setLocal] = useState<{ status: StudentRow['status']; inAt?: string | null; outAt?: string | null } | null>(null);
+  const status = local ? local.status : r.status;
+  const inAt = local && local.inAt !== undefined ? local.inAt : r.first_check_in_at;
+  const outAt = local && local.outAt !== undefined ? local.outAt : r.last_check_out_at;
+  const customStatus = local ? null : r.custom_status;
+  function applied(eventType: 'check_in' | 'check_out' | 'absent') {
+    const now = new Date().toISOString();
+    if (eventType === 'check_in') setLocal({ status: 'present', inAt: r.first_check_in_at ?? now, outAt });
+    else if (eventType === 'check_out') setLocal({ status: 'checked_out', inAt, outAt: now });
+    else setLocal({ status: 'absent', inAt: null, outAt: null });
+  }
   return (
     <>
       {sectionLabel !== null ? (
@@ -150,7 +165,8 @@ function FragmentRow({
           <div className="text-[10px] text-gray-500">{r.primary_parent_name}</div>
         </td>
         <td className="px-3 py-2 align-top">
-          <StatusBadge status={r.status} custom={r.custom_status} categories={customStatuses} />
+          <StatusBadge status={status} custom={customStatus} categories={customStatuses} />
+          {isToday ? <QuickActions row={r} status={status} onApplied={applied} /> : null}
         </td>
         <td className="px-3 py-2 align-top">
           {r.pickup_time ? (
@@ -162,10 +178,10 @@ function FragmentRow({
           )}
         </td>
         <td className="px-3 py-2 align-top text-xs text-gray-700">
-          {r.first_check_in_at ? fmtTime(r.first_check_in_at) : EMDASH}
+          {inAt ? fmtTime(inAt) : EMDASH}
         </td>
         <td className="px-3 py-2 align-top text-xs text-gray-700">
-          {r.last_check_out_at ? fmtTime(r.last_check_out_at) : EMDASH}
+          {outAt ? fmtTime(outAt) : EMDASH}
         </td>
         <td className="px-3 py-2 align-top text-xs text-gray-700">
           {r.picked_up_by_name ?? EMDASH}
@@ -226,6 +242,60 @@ function FragmentRow({
         </tr>
       ) : null}
     </>
+  );
+}
+
+// One-tap In / Out / Absent straight from the row (no need to open the drawer).
+// Same server action as the drawer's Manual override; the row updates in place.
+function QuickActions({ row: r, status, onApplied }: {
+  row: StudentRow;
+  status: StudentRow['status'];
+  onApplied: (t: 'check_in' | 'check_out' | 'absent') => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ text: string; bad: boolean } | null>(null);
+
+  async function act(eventType: 'check_in' | 'check_out' | 'absent') {
+    if (busy) return;
+    if (eventType === 'absent' && (status === 'present' || status === 'partial' || status === 'checked_out')
+      && !window.confirm(`Mark ${r.first_name} absent? This replaces today's check-in/out for them.`)) return;
+    setBusy(true);
+    setMsg(null);
+    try {
+      const fd = new FormData();
+      fd.set('student_id', r.student_id);
+      fd.set('event_type', eventType);
+      fd.set('notes', eventType === 'check_in' ? 'Admin manual check-in' : eventType === 'check_out' ? 'Admin manual check-out' : 'Admin marked absent');
+      const res = await fetch('/api/school/attendance/manual-override', { method: 'POST', body: fd });
+      if (!res.ok) throw new Error((await res.text()) || 'Could not save — please try again');
+      const j = (await res.json().catch(() => null)) as { deduped?: boolean } | null;
+      onApplied(eventType);
+      if (j?.deduped) setMsg({ text: 'Already recorded — nothing changed', bad: false });
+    } catch (e) {
+      setMsg({ text: e instanceof Error ? e.message : 'Could not save — please try again', bad: true });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const btn = 'rounded border bg-white px-1.5 py-0.5 text-[10px] font-medium disabled:opacity-50';
+  return (
+    <div className="mt-1" onClick={(e) => e.stopPropagation()}>
+      <div className="flex gap-1">
+        {status === 'present' || status === 'partial' ? (
+          <button type="button" disabled={busy} onClick={() => act('check_out')}
+            className={`${btn} border-blue-300 text-blue-700 hover:bg-blue-50`}>→ Out</button>
+        ) : (
+          <button type="button" disabled={busy} onClick={() => act('check_in')}
+            className={`${btn} border-emerald-300 text-emerald-700 hover:bg-emerald-50`}>✓ In</button>
+        )}
+        {status !== 'absent' ? (
+          <button type="button" disabled={busy} onClick={() => act('absent')}
+            className={`${btn} border-zinc-300 text-zinc-700 hover:bg-zinc-100`}>Absent</button>
+        ) : null}
+      </div>
+      {msg ? <div className={`mt-0.5 text-[10px] ${msg.bad ? 'text-red-700' : 'text-amber-800'}`}>{msg.text}</div> : null}
+    </div>
   );
 }
 

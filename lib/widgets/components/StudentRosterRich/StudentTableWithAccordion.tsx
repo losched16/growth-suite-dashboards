@@ -807,21 +807,32 @@ function AttendanceCell({ s, embedToken }: { s: RosterStudent; embedToken?: stri
   // immediately — without it, post-tap rows read as bare "Present"
   // until a refresh (the MYHS "after 8:00 it only states present"
   // report) even though the event time was recorded fine.
-  const [localAt, setLocalAt] = useState<{ in?: string; out?: string }>({});
-  async function act(eventType: 'check_in' | 'check_out') {
+  const [localAt, setLocalAt] = useState<{ in?: string | null; out?: string | null }>({});
+  const [errMsg, setErrMsg] = useState<string | null>(null);
+  async function act(eventType: 'check_in' | 'check_out' | 'absent') {
     if (busy) return;
+    const cur = localStatus ?? s.attendance_status;
+    if (eventType === 'absent' && (cur === 'present' || cur === 'partial' || cur === 'checked_out')
+      && !window.confirm(`Mark ${s.first_name} absent? This replaces today's check-in/out for them.`)) return;
     setBusy(true);
+    setErrMsg(null);
     try {
       const fd = new FormData();
       fd.set('student_id', s.student_id);
       fd.set('event_type', eventType);
-      fd.set('notes', eventType === 'check_in' ? 'Admin check-in from roster' : 'Admin check-out from roster');
+      fd.set('notes', eventType === 'check_in' ? 'Admin check-in from roster' : eventType === 'check_out' ? 'Admin check-out from roster' : 'Admin marked absent');
       const r = await fetch('/api/school/attendance/manual-override', { method: 'POST', body: fd });
-      if (!r.ok) throw new Error(await r.text());
-      setLocalStatus(eventType === 'check_in' ? 'present' : 'checked_out');
-      setLocalAt((prev) => ({ ...prev, [eventType === 'check_in' ? 'in' : 'out']: new Date().toISOString() }));
-    } catch {
-      // leave status as-is; button re-enables for retry
+      if (!r.ok) throw new Error((await r.text()) || 'failed');
+      if (eventType === 'absent') {
+        setLocalStatus('absent');
+        setLocalAt({ in: null, out: null });
+      } else {
+        setLocalStatus(eventType === 'check_in' ? 'present' : 'checked_out');
+        setLocalAt((prev) => ({ ...prev, [eventType === 'check_in' ? 'in' : 'out']: new Date().toISOString() }));
+      }
+    } catch (e) {
+      // Say so — a silent failure made the office tap again and again.
+      setErrMsg(e instanceof Error && e.message ? e.message : 'Could not save — please try again');
     } finally {
       setBusy(false);
     }
@@ -833,8 +844,8 @@ function AttendanceCell({ s, embedToken }: { s: RosterStudent; embedToken?: stri
              : status === 'absent'       ? 'bg-rose-100 text-rose-800'
              :                              'bg-gray-100 text-gray-600';
   const label = status === 'not_yet' ? 'Not yet' : status.replace(/_/g, ' ');
-  const inAt = s.attendance_check_in_at ?? localAt.in ?? null;
-  const outAt = s.attendance_check_out_at ?? localAt.out ?? null;
+  const inAt = localAt.in === null ? null : (s.attendance_check_in_at ?? localAt.in ?? null);
+  const outAt = localAt.out === null ? null : (s.attendance_check_out_at ?? localAt.out ?? null);
   return (
     <div>
       <div className="flex items-center gap-1 flex-wrap">
@@ -876,6 +887,13 @@ function AttendanceCell({ s, embedToken }: { s: RosterStudent; embedToken?: stri
             → Out
           </button>
         ) : null}
+        {status !== 'absent' ? (
+          <button type="button" disabled={busy} onClick={() => act('absent')}
+            title="Mark absent today (writes an audit event with your email)"
+            className="rounded border border-zinc-300 bg-white px-1.5 py-0.5 text-[10px] font-medium text-zinc-700 hover:bg-zinc-100 disabled:opacity-50">
+            Absent
+          </button>
+        ) : null}
         <button
           type="button"
           onClick={() => window.open(attendanceHistoryHref(s.student_id, embedToken), '_blank', 'noopener')}
@@ -884,6 +902,7 @@ function AttendanceCell({ s, embedToken }: { s: RosterStudent; embedToken?: stri
           history
         </button>
       </div>
+      {errMsg ? <div className="mt-0.5 text-[10px] text-red-700">{errMsg}</div> : null}
     </div>
   );
 }
