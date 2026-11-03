@@ -224,7 +224,7 @@ export function StudentTableWithAccordion({
 
     (async () => {
       try {
-        const r = await fetch(`/api/school/family/${encodeURIComponent(targetId)}/detail`);
+        const r = await fetch(`/api/school/family/${encodeURIComponent(targetId)}/detail${embedToken ? `?embed_token=${encodeURIComponent(embedToken)}` : ''}`);
         const data = await r.json();
         if (cancelled) return;
         if (!r.ok || !data.ok) {

@@ -58,6 +58,33 @@ type Preset =
 
 const TZ = 'America/Phoenix';
 
+// Daily-report columns the office can pick from, in report order. `on` marks
+// the standard set (what the team asked for); the rest are one tick away.
+const DAILY_COLUMNS: Array<{ key: string; label: string; on: boolean }> = [
+  { key: 'date', label: 'Date', on: true },
+  { key: 'weekday', label: 'Weekday', on: false },
+  { key: 'first_name', label: 'Student first name', on: true },
+  { key: 'last_name', label: 'Student last name', on: true },
+  { key: 'student_name', label: 'Student full name', on: false },
+  { key: 'student_id', label: 'Student ID', on: true },
+  { key: 'program_day', label: 'Program day (Half / School Day, Extended)', on: true },
+  { key: 'first_check_in', label: 'Check-in time', on: true },
+  { key: 'last_check_out', label: 'Check-out time', on: true },
+  { key: 'parent_emails', label: 'Parent email(s)', on: true },
+  { key: 'status', label: 'Status', on: true },
+  { key: 'classroom', label: 'Classroom', on: false },
+  { key: 'grade', label: 'Grade', on: false },
+  { key: 'program', label: 'Program', on: false },
+  { key: 'family', label: 'Family', on: false },
+  { key: 'parents', label: 'Parent name(s)', on: false },
+  { key: 'parent_phones', label: 'Parent phone(s)', on: false },
+  { key: 'total_hours', label: 'Total hours', on: false },
+  { key: 'picked_up_by', label: 'Picked up by', on: false },
+  { key: 'curbside', label: 'Curbside', on: false },
+  { key: 'office_status', label: 'Office status category', on: false },
+  { key: 'office_notes', label: 'Office notes', on: false },
+];
+
 export function ReportsPanel({ classrooms, studentOptions, familyOptions = [], exportAuth }: Props) {
   const [preset, setPreset] = useState<Preset>('last60');
   const [from, setFrom] = useState<string>(() => isoDaysAgo(60));
@@ -66,6 +93,7 @@ export function ReportsPanel({ classrooms, studentOptions, familyOptions = [], e
   const [classroom, setClassroom] = useState('');
   const [studentId, setStudentId] = useState('');
   const [familyId, setFamilyId] = useState('');
+  const [cols, setCols] = useState<string[]>(() => DAILY_COLUMNS.filter((c) => c.on).map((c) => c.key));
 
   // Resolved range from preset (custom overrides via state)
   const resolved = useMemo(() => {
@@ -81,8 +109,9 @@ export function ReportsPanel({ classrooms, studentOptions, familyOptions = [], e
     if (classroom) p.set('classroom', classroom);
     if (studentId) p.set('student_id', studentId);
     if (familyId) p.set('family_id', familyId);
+    if (format === 'daily' && cols.length > 0) p.set('columns', DAILY_COLUMNS.filter((c) => cols.includes(c.key)).map((c) => c.key).join(','));
     return `/api/school/attendance/export?${p.toString()}${exportAuth ? `&${exportAuth}` : ''}`;
-  }, [format, resolved, classroom, studentId, familyId, exportAuth]);
+  }, [format, resolved, classroom, studentId, familyId, cols, exportAuth]);
 
   const rangeDays = useMemo(() => {
     const a = new Date(resolved.from + 'T00:00:00Z').getTime();
@@ -208,6 +237,30 @@ export function ReportsPanel({ classrooms, studentOptions, familyOptions = [], e
           </select>
         </label>
       </div>
+
+      {format === 'daily' ? (
+        <details className="rounded-md border border-emerald-200 bg-white px-3 py-2" open>
+          <summary className="cursor-pointer text-xs font-semibold text-gray-800">
+            Columns in the report ({cols.length} selected)
+          </summary>
+          <div className="mt-2 grid grid-cols-1 sm:grid-cols-3 gap-x-4 gap-y-1">
+            {DAILY_COLUMNS.map((c) => (
+              <label key={c.key} className="flex items-center gap-1.5 text-xs text-gray-700">
+                <input
+                  type="checkbox"
+                  checked={cols.includes(c.key)}
+                  onChange={(e) => setCols((prev) => e.target.checked ? [...prev, c.key] : prev.filter((k) => k !== c.key))}
+                />
+                {c.label}
+              </label>
+            ))}
+          </div>
+          <div className="mt-2 flex gap-3 text-[11px]">
+            <button type="button" className="text-emerald-800 underline" onClick={() => setCols(DAILY_COLUMNS.map((c) => c.key))}>Select all</button>
+            <button type="button" className="text-emerald-800 underline" onClick={() => setCols(DAILY_COLUMNS.filter((c) => c.on).map((c) => c.key))}>Standard set</button>
+          </div>
+        </details>
+      ) : null}
 
       <div className="flex items-center gap-3 border-t border-emerald-200 pt-3">
         <a

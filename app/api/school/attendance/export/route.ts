@@ -34,7 +34,21 @@ export const dynamic = 'force-dynamic';
 // TODO: read schools.timezone when the column exists
 const TZ = 'America/Phoenix';
 
-interface Filters { classroom: string; status: string; studentId: string; familyId: string; q: string }
+interface Filters { classroom: string; status: string; studentId: string; familyId: string; q: string; columns: string[] }
+
+// Daily report column catalog: key → header. `columns=` (comma-separated keys, in
+// the order wanted) picks and orders them; no `columns` = every column.
+const DAILY_COLUMNS: Array<[string, string]> = [
+  ['date', 'date'], ['weekday', 'weekday'], ['student_name', 'student_name'],
+  ['first_name', 'student_first_name'], ['last_name', 'student_last_name'],
+  ['student_id', 'student_id'], ['family', 'family'], ['grade', 'grade'], ['program', 'program'],
+  ['program_day', 'program_day'], ['classroom', 'classroom'],
+  ['parents', 'parents'], ['parent_emails', 'parent_emails'], ['parent_phones', 'parent_phones'],
+  ['status', 'status'], ['office_status', 'office_status'],
+  ['first_check_in', 'check_in_time'], ['last_check_out', 'check_out_time'],
+  ['total_hours', 'total_hours'], ['picked_up_by', 'picked_up_by'], ['curbside', 'curbside'],
+  ['office_notes', 'office_notes'],
+];
 
 export async function GET(request: NextRequest) {
   const sp = request.nextUrl.searchParams;
@@ -68,6 +82,7 @@ export async function GET(request: NextRequest) {
     studentId: (sp.get('student_id') ?? '').trim(),
     familyId: (sp.get('family_id') ?? '').trim(),
     q: (sp.get('q') ?? '').trim().toLowerCase(),
+    columns: (sp.get('columns') ?? '').split(',').map((x) => x.trim()).filter((x) => DAILY_COLUMNS.some(([k]) => k === x)),
   };
   const uuid = /^[0-9a-f-]{36}$/i;
   if ((filters.studentId && !uuid.test(filters.studentId)) || (filters.familyId && !uuid.test(filters.familyId))) {
@@ -240,6 +255,7 @@ interface DayRow {
   family: string | null;
   grade: string | null;
   program: string | null;
+  program_day: string | null;
   classroom: string | null;
   parent_names: string | null;
   parent_emails: string | null;
@@ -283,6 +299,9 @@ async function loadDayRows(
        f.display_name AS family,
        s.metadata->>'grade_level' AS grade,
        COALESCE(s.metadata->>'program_name', s.metadata->>'program') AS program,
+       NULLIF(concat_ws(' + ',
+         COALESCE(substring(s.metadata->>'program_tuition_choice' from '(Half Day|School Day|Full Day)'), NULLIF(btrim(s.metadata->>'daily_schedule'), '')),
+         CASE WHEN s.metadata->>'extended_day_choice' ILIKE 'Extended Day%' THEN 'Extended Day' END), '') AS program_day,
        COALESCE(s.metadata->>'homeroom', s.metadata->>'classroom_name') AS classroom,
        par.names AS parent_names, par.emails AS parent_emails, par.phones AS parent_phones,
        da.status, da.custom_status,
@@ -338,39 +357,41 @@ async function buildDailyCsv(
 ): Promise<string> {
   const rows = await loadDayRows(schoolId, from, to, filters);
 
-  const header = [
-    'date', 'weekday', 'student_name', 'student_id', 'family', 'grade', 'program', 'classroom',
-    'parents', 'parent_emails', 'parent_phones', 'status', 'office_status',
-    'first_check_in', 'last_check_out', 'total_hours', 'picked_up_by', 'curbside', 'office_notes',
-  ];
-  const lines = [header.join(',')];
+  // Which columns, in what order: the caller's `columns` list, else all of them.
+  const picked = filters.columns.length > 0
+    ? filters.columns.map((k) => DAILY_COLUMNS.find(([key]) => key === k)!)
+    : DAILY_COLUMNS;
+  const lines = [picked.map(([, h]) => h).join(',')];
   for (const r of rows) {
     if (filters.classroom && r.classroom !== filters.classroom) continue;
     const status = effectiveStatus(r, today);
     if (filters.status && status !== filters.status && r.status !== filters.status) continue;
     if (!matchesText(r, filters.q)) continue;
-    const hours = r.total_minutes !== null ? (r.total_minutes / 60).toFixed(2) : '';
-    lines.push([
-      r.date,
-      r.weekday,
-      `${r.first_name} ${r.last_name}`,
-      r.student_number ?? '',
-      r.family ?? '',
-      r.grade ?? '',
-      r.program ?? '',
-      r.classroom ?? '',
-      r.parent_names ?? '',
-      r.parent_emails ?? '',
-      r.parent_phones ?? '',
+    const cell: Record<string, string> = {
+      date: r.date,
+      weekday: r.weekday,
+      student_name: `${r.first_name} ${r.last_name}`,
+      first_name: r.first_name,
+      last_name: r.last_name,
+      student_id: r.student_number ?? '',
+      family: r.family ?? '',
+      grade: r.grade ?? '',
+      program: r.program ?? '',
+      program_day: r.program_day ?? '',
+      classroom: r.classroom ?? '',
+      parents: r.parent_names ?? '',
+      parent_emails: r.parent_emails ?? '',
+      parent_phones: r.parent_phones ?? '',
       status,
-      r.custom_status ?? '',
-      r.first_check_in_at ? fmtTime(new Date(r.first_check_in_at)) : '',
-      r.last_check_out_at ? fmtTime(new Date(r.last_check_out_at)) : '',
-      hours,
-      r.picked_up_by_name ?? '',
-      r.curbside_pickup ? 'yes' : '',
-      r.admin_notes ?? '',
-    ].map(csvField).join(','));
+      office_status: r.custom_status ?? '',
+      first_check_in: r.first_check_in_at ? fmtTime(new Date(r.first_check_in_at)) : '',
+      last_check_out: r.last_check_out_at ? fmtTime(new Date(r.last_check_out_at)) : '',
+      total_hours: r.total_minutes !== null ? (r.total_minutes / 60).toFixed(2) : '',
+      picked_up_by: r.picked_up_by_name ?? '',
+      curbside: r.curbside_pickup ? 'yes' : '',
+      office_notes: r.admin_notes ?? '',
+    };
+    lines.push(picked.map(([k]) => csvField(cell[k])).join(','));
   }
   return utf8BomPrefix() + lines.join('\r\n') + '\r\n';
 }

@@ -13,6 +13,7 @@ import type { NextRequest } from 'next/server';
 import { cookies } from 'next/headers';
 import { SCHOOL_SESSION_COOKIE, verifySchoolSession } from '@/lib/auth/school';
 import { SESSION_COOKIE, verifySessionToken } from '@/lib/auth/operator';
+import { checkEmbedToken } from '@/lib/auth/embed';
 import { query } from '@/lib/db';
 import { decrypt } from '@/lib/crypto';
 import { loadSchoolSettings } from '@/lib/school-settings';
@@ -23,7 +24,7 @@ export const dynamic = 'force-dynamic';
 
 type Params = Promise<{ familyId: string }>;
 
-export async function GET(_request: NextRequest, { params }: { params: Params }) {
+export async function GET(request: NextRequest, { params }: { params: Params }) {
   const { familyId } = await params;
   const ck = await cookies();
 
@@ -37,7 +38,22 @@ export async function GET(_request: NextRequest, { params }: { params: Params })
   // see the row, they have implicit access to that school.
   const schoolSession = await verifySchoolSession(ck.get(SCHOOL_SESSION_COOKIE)?.value);
   const operatorSession = verifySessionToken(ck.get(SESSION_COOKIE)?.value);
+  // Or the school's embed token (what the dashboards already carry): the iframe's
+  // session cookie can be missing/expired/blocked, and without it this panel came
+  // back empty — taking the parents list and the "view portal" (login-as) links
+  // with it.
+  let embedOk = false;
   if (!schoolSession && !operatorSession) {
+    const et = request.nextUrl.searchParams.get('embed_token');
+    if (et) {
+      const { rows: loc } = await query<{ ghl_location_id: string | null }>(
+        `SELECT s.ghl_location_id FROM families f JOIN schools s ON s.id = f.school_id WHERE f.id = $1`,
+        [familyId],
+      );
+      embedOk = !!loc[0]?.ghl_location_id && checkEmbedToken(loc[0].ghl_location_id, et);
+    }
+  }
+  if (!schoolSession && !operatorSession && !embedOk) {
     return NextResponse.json({ ok: false, error: 'unauthorized' }, { status: 401 });
   }
 

@@ -12,6 +12,10 @@ export interface StudentRow {
   // Used by the program filter on program-scoped dashboards. Not
   // currently displayed in the table.
   program: string | null;
+  // School-issued student ID, and the child's program day — "Half Day" /
+  // "School Day", plus "+ Extended Day" when they have it.
+  student_number: string | null;
+  schedule: string | null;
   primary_parent_name: string;
   primary_parent_email: string | null;
   status: 'present' | 'absent' | 'checked_out' | 'not_yet' | 'partial';
@@ -111,6 +115,8 @@ interface DbStudentRow {
   // Used only by the program filter (Upper El, MYHS dashboards). Not
   // displayed.
   program: string | null;
+  student_number: string | null;
+  schedule: string | null;
   primary_parent_first: string | null;
   primary_parent_last: string | null;
   primary_parent_email: string | null;
@@ -233,6 +239,10 @@ export async function fetcher(
        s.first_name, s.last_name,
        COALESCE(s.metadata->>'homeroom', s.metadata->>'classroom_name') AS classroom,
        s.metadata->>'program' AS program,
+       s.metadata->>'student_id' AS student_number,
+       NULLIF(concat_ws(' + ',
+         COALESCE(substring(s.metadata->>'program_tuition_choice' from '(Half Day|School Day|Full Day)'), NULLIF(btrim(s.metadata->>'daily_schedule'), '')),
+         CASE WHEN s.metadata->>'extended_day_choice' ILIKE 'Extended Day%' THEN 'Extended Day' END), '') AS schedule,
        p.first_name AS primary_parent_first,
        p.last_name AS primary_parent_last,
        p.email AS primary_parent_email,
@@ -359,6 +369,8 @@ export async function fetcher(
     last_name: r.last_name,
     classroom: r.classroom,
     program: r.program,
+    student_number: r.student_number,
+    schedule: r.schedule,
     primary_parent_name: [r.primary_parent_first, r.primary_parent_last].filter(Boolean).join(' ').trim() || '(no name)',
     primary_parent_email: r.primary_parent_email,
     status: (r.status ?? 'not_yet') as StudentRow['status'],

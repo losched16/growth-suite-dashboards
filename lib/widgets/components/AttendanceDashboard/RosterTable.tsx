@@ -66,6 +66,7 @@ export function RosterTable({ rows, dateIso, isToday, customStatuses = [], expor
           <tr>
             <th className="w-6 px-2 py-2" />
             <th className="px-3 py-2 font-medium">Student</th>
+            <th className="px-3 py-2 font-medium">Schedule</th>
             <th className="px-3 py-2 font-medium">Status</th>
             <th className="px-3 py-2 font-medium">Pickup at</th>
             <th className="px-3 py-2 font-medium">In</th>
@@ -136,7 +137,7 @@ function FragmentRow({
     <>
       {sectionLabel !== null ? (
         <tr className="bg-emerald-50/70 border-y border-emerald-200">
-          <td colSpan={12} className="px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-emerald-900">
+          <td colSpan={13} className="px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-emerald-900">
             {sectionLabel}
           </td>
         </tr>
@@ -162,7 +163,14 @@ function FragmentRow({
               </span>
             ) : null}
           </div>
-          <div className="text-[10px] text-gray-500">{r.primary_parent_name}</div>
+          <div className="text-[10px] text-gray-500">
+            {r.student_number ? <span className="font-mono">ID {r.student_number}</span> : null}
+            {r.student_number ? ' · ' : ''}{r.primary_parent_name}
+          </div>
+          {r.primary_parent_email ? <div className="text-[10px] text-gray-400 break-all">{r.primary_parent_email}</div> : null}
+        </td>
+        <td className="px-3 py-2 align-top text-xs text-gray-700 whitespace-nowrap">
+          {r.schedule ?? <span className="text-gray-400">{EMDASH}</span>}
         </td>
         <td className="px-3 py-2 align-top">
           <StatusBadge status={status} custom={customStatus} categories={customStatuses} />
@@ -236,7 +244,7 @@ function FragmentRow({
       </tr>
       {open ? (
         <tr>
-          <td colSpan={12} className="bg-gray-50 p-0 border-y border-emerald-200">
+          <td colSpan={13} className="bg-gray-50 p-0 border-y border-emerald-200">
             <Drawer row={r} dateIso={dateIso} isToday={isToday} customStatuses={customStatuses} exportAuth={exportAuth} />
           </td>
         </tr>
