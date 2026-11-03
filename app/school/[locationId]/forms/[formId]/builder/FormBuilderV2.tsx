@@ -142,6 +142,11 @@ export interface FormSettings {
   // Optional: listed + submittable, but never in Action Items /
   // completion % / reminder emails.
   is_optional: boolean;
+  // true = a family can submit this form several times and every entry is kept
+  // (e.g. one per medication); the portal shows "Add another" buttons.
+  allow_multiple_submissions: boolean;
+  // What one entry is called ("medication", "document"…): words the buttons.
+  add_another_label: string | null;
   // CLIENT-ONLY (never sent): sticky "Who sees this form" radio. Without
   // it the mode was inferred from content, so removing the last selected
   // student/grade silently snapped the radio back to "Everyone" and the
@@ -405,6 +410,8 @@ export function FormBuilderV2({
             submit_tags: settings.submit_tags,
             list_in_checklist: settings.list_in_checklist,
             is_optional: settings.is_optional,
+            allow_multiple_submissions: settings.allow_multiple_submissions,
+            add_another_label: settings.add_another_label,
             per_student: settings.per_student,
             resubmission_allowed: settings.resubmission_allowed,
             is_active: settings.is_active,
@@ -1386,6 +1393,27 @@ function FormSettingsPanel({ settings, onPatch, programOptions, gradeOptions, ta
       </div>
       <label className={toggle}>One form per student<input type="checkbox" checked={settings.per_student} onChange={(e) => onPatch({ per_student: e.target.checked })} className={cb} /></label>
       <label className={toggle}>Allow re-submission<input type="checkbox" checked={settings.resubmission_allowed} onChange={(e) => onPatch({ resubmission_allowed: e.target.checked })} className={cb} /></label>
+      <label className={toggle}>Allow several entries (“Add another” button)<input type="checkbox" checked={settings.allow_multiple_submissions} onChange={(e) => onPatch({ allow_multiple_submissions: e.target.checked })} className={cb} /></label>
+      <p className="-mt-2 text-[11px] text-slate-400">
+        {settings.allow_multiple_submissions
+          ? 'A family can submit this form as many times as they need. Every entry is saved separately, nothing is overwritten, and parents get “Submit & add another” and “Add another” buttons that reopen a blank form for the same child. Use it for medications, extra documents, pickup people, anything with more than one item.'
+          : 'Off: a family submits this form once, and a later submission replaces the earlier answers.'}
+      </p>
+      {settings.allow_multiple_submissions ? (
+        <div>
+          <label className={lbl}>What is one entry called?</label>
+          <input
+            value={settings.add_another_label ?? ''}
+            maxLength={60}
+            onChange={(e) => onPatch({ add_another_label: e.target.value || null })}
+            placeholder="e.g. medication, document, contact"
+            className={input}
+          />
+          <p className="mt-1 text-[11px] text-slate-400">
+            Parents see “Submit &amp; add another {settings.add_another_label?.trim() || '…'}”. Leave blank for a plain “Add another”.
+          </p>
+        </div>
+      ) : null}
       <label className={toggle}>Form is live<input type="checkbox" checked={settings.is_active} onChange={(e) => onPatch({ is_active: e.target.checked })} className={cb} /></label>
       <p className="-mt-2 text-[11px] text-slate-400">Going live is silent — parents aren’t told until you click “Send notification” in the top bar. Publish, test it yourself, then send.</p>
       <label className={toggle}>Optional form<input type="checkbox" checked={settings.is_optional} onChange={(e) => onPatch({ is_optional: e.target.checked })} className={cb} /></label>

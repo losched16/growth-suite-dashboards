@@ -56,11 +56,14 @@ export default async function FormBuilderPage({ params }: { params: Params }) {
     submit_tags: string[] | null;
     list_in_checklist: boolean | null;
     is_optional: boolean | null;
+    allow_multiple_submissions: boolean | null;
+    add_another_label: string | null;
   }>(
     `SELECT id, slug, display_name, field_schema,
             description, confirmation_message, notify_emails,
             per_student, resubmission_allowed, is_active, applies_to,
-            submit_tags, list_in_checklist, is_optional
+            submit_tags, list_in_checklist, is_optional,
+            allow_multiple_submissions, add_another_label
        FROM portal_form_definitions
       WHERE id = $1 AND school_id = $2`,
     [formId, school.id],
@@ -147,6 +150,8 @@ export default async function FormBuilderPage({ params }: { params: Params }) {
         submit_tags: form.submit_tags ?? [],
         list_in_checklist: form.list_in_checklist !== false,
         is_optional: form.is_optional === true,
+        allow_multiple_submissions: form.allow_multiple_submissions === true,
+        add_another_label: form.add_another_label ?? null,
       }}
       ghlFields={ghlFields}
       metadataKeys={metaKeyRows.rows.map((r) => r.v)}

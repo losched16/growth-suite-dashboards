@@ -91,6 +91,10 @@ interface Body {
     // a family (Send to families) or shares the direct link. The
     // Enrollment Amendment uses this.
     list_in_checklist?: unknown;
+    // migration 068 / 117 — accept several independent entries ("Add another"
+    // button) and what one entry is called.
+    allow_multiple_submissions?: unknown;
+    add_another_label?: unknown;
     // per-student form visibility rule (portal_form_definitions.applies_to).
     // null / {} → form shows for every student (historical behavior).
     applies_to?: unknown;
@@ -346,6 +350,13 @@ export async function PATCH(request: NextRequest, { params }: { params: Params }
     }
     if (body.meta.list_in_checklist !== undefined) {
       set('list_in_checklist', asBool(body.meta.list_in_checklist, true));
+    }
+    if (body.meta.allow_multiple_submissions !== undefined) {
+      set('allow_multiple_submissions', asBool(body.meta.allow_multiple_submissions, false));
+    }
+    if (body.meta.add_another_label !== undefined) {
+      const v = asStr(body.meta.add_another_label, null);
+      set('add_another_label', v && v.trim() ? v.trim().slice(0, 60) : null);
     }
     if (body.meta.submit_tags !== undefined) {
       const arr = Array.isArray(body.meta.submit_tags) ? body.meta.submit_tags : [];
