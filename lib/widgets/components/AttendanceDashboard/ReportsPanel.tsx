@@ -82,7 +82,8 @@ const DAILY_COLUMNS: Array<{ key: string; label: string; on: boolean }> = [
   { key: 'picked_up_by', label: 'Picked up by', on: false },
   { key: 'curbside', label: 'Curbside', on: false },
   { key: 'office_status', label: 'Office status category', on: false },
-  { key: 'office_notes', label: 'Office notes', on: false },
+  { key: 'parent_notes', label: 'Notes from check-in / check-out (parents and staff)', on: true },
+  { key: 'office_notes', label: 'Office notes (not visible to parents)', on: true },
 ];
 
 export function ReportsPanel({ classrooms, studentOptions, familyOptions = [], exportAuth }: Props) {

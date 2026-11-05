@@ -47,7 +47,7 @@ const DAILY_COLUMNS: Array<[string, string]> = [
   ['status', 'status'], ['office_status', 'office_status'],
   ['first_check_in', 'check_in_time'], ['last_check_out', 'check_out_time'],
   ['total_hours', 'total_hours'], ['picked_up_by', 'picked_up_by'], ['curbside', 'curbside'],
-  ['office_notes', 'office_notes'],
+  ['parent_notes', 'parent_notes'], ['office_notes', 'office_notes'],
 ];
 
 export async function GET(request: NextRequest) {
@@ -267,6 +267,7 @@ interface DayRow {
   total_minutes: number | null;
   picked_up_by_name: string | null;
   curbside_pickup: boolean | null;
+  parent_notes: string | null;
   admin_notes: string | null;
 }
 
@@ -307,7 +308,19 @@ async function loadDayRows(
        da.status, da.custom_status,
        da.first_check_in_at, da.last_check_out_at,
        COALESCE(da.total_minutes, CASE WHEN da.last_check_out_at > da.first_check_in_at THEN (EXTRACT(EPOCH FROM (da.last_check_out_at - da.first_check_in_at)) / 60)::int END) AS total_minutes,
-       da.picked_up_by_name, da.curbside_pickup, da.admin_notes
+       da.picked_up_by_name, da.curbside_pickup,
+       -- Notes left at check-in / check-out that day (the board's Notes column).
+       -- The office's own default audit phrases are left out.
+       (SELECT string_agg(btrim(e.notes), ' | ' ORDER BY e.performed_at)
+          FROM attendance_events e
+         WHERE e.student_id = s.id AND e.school_id = s.school_id AND e.voided_at IS NULL
+           AND e.event_type IN ('check_in', 'check_out')
+           AND (e.performed_at AT TIME ZONE 'America/Phoenix')::date = d.date
+           AND btrim(coalesce(e.notes, '')) <> ''
+           AND lower(btrim(e.notes)) NOT IN ('admin manual check-in', 'admin manual check-out', 'admin marked absent',
+                                             'admin check-in from roster', 'admin check-out from roster')
+           AND e.notes NOT ILIKE 'Admin set %' AND e.notes NOT ILIKE 'Admin manual override by%') AS parent_notes,
+       da.admin_notes
      FROM school_days d
      CROSS JOIN students s
      JOIN families f ON f.id = s.family_id
@@ -389,6 +402,7 @@ async function buildDailyCsv(
       total_hours: r.total_minutes !== null ? (r.total_minutes / 60).toFixed(2) : '',
       picked_up_by: r.picked_up_by_name ?? '',
       curbside: r.curbside_pickup ? 'yes' : '',
+      parent_notes: r.parent_notes ?? '',
       office_notes: r.admin_notes ?? '',
     };
     lines.push(picked.map(([k]) => csvField(cell[k])).join(','));
