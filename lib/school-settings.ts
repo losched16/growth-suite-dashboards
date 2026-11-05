@@ -26,6 +26,12 @@ export interface SchoolSettings {
   // (rescinded, declined, wait list). Empty = every family (original
   // behavior). Forward-only: already-promoted families are left as they are.
   promote_parent2_stages: string[];
+  // Label new prospects "Pre-Enrolled": a blank student status becomes
+  // Pre-Enrolled while the child's card sits before the portal gate stage
+  // (see lib/sync/pre-enroll-prospects.ts). Stage names to leave alone
+  // (cancelled, no-show, declined, wait list…) go in pre_enroll_exclude_stages.
+  pre_enroll_prospects: boolean;
+  pre_enroll_exclude_stages: string[];
   // When non-empty: only contacts carrying one of these tags become roster
   // families ("withdrawn" keeps the family but marks students withdrawn).
   roster_tag_filter: string[];
@@ -137,6 +143,8 @@ export const SCHOOL_SETTINGS_DEFAULTS: SchoolSettings = {
   auto_student_ids: false,
   promote_parent2: false,
   promote_parent2_stages: [],
+  pre_enroll_prospects: false,
+  pre_enroll_exclude_stages: [],
   roster_tag_filter: [],
   per_student_enrollment_status: false,
   ghl_hidden_menu: [],
@@ -162,6 +170,10 @@ export function normalizeSchoolSettings(raw: unknown): SchoolSettings {
       ? r.portal_gate_stage.trim() : null,
     auto_student_ids: r.auto_student_ids === true,
     promote_parent2: r.promote_parent2 === true,
+    pre_enroll_prospects: r.pre_enroll_prospects === true,
+    pre_enroll_exclude_stages: Array.isArray(r.pre_enroll_exclude_stages)
+      ? r.pre_enroll_exclude_stages.map((t) => String(t ?? '').trim()).filter(Boolean)
+      : [],
     promote_parent2_stages: Array.isArray(r.promote_parent2_stages)
       ? r.promote_parent2_stages.map((t) => String(t ?? '').trim()).filter(Boolean)
       : [],

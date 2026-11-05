@@ -185,6 +185,11 @@ export function normalizeEnrollmentStatus(raw: string, warnings: string[]): stri
   // GHL freetext variants
   const collapsed = v.replace(/[\s_-]+/g, ' ');
   if (collapsed === 'enrolled' || collapsed === 'enrolled not started' || collapsed === 'currently enrolled') return 'enrolled';
+  // "Pre-Enrolled" — a prospect with an open admissions card (set by the
+  // pre-enroll step or by hand). Same effect as a blank status: no enrollment
+  // row and not counted in any roster until the school sets Pending/Enrolled —
+  // but it's a known value, so no "unrecognized status" warning.
+  if (collapsed === 'pre enrolled' || collapsed === 'preenrolled') return null;
   // "Pending" — sent the enrollment agreement, awaiting completion/signature.
   if (collapsed === 'pending' || collapsed === 'pending enrollment' || collapsed === 'enrollment pending' || collapsed === 'pending opportunities') return 'pending';
   if (collapsed === 'accepted' || collapsed === 'admitted') return 'accepted';

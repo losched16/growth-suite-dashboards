@@ -21,6 +21,7 @@ import { mirrorP2Tags } from '@/lib/sync/mirror-p2-tags';
 import { importGhlDocuments } from '@/lib/sync/import-ghl-documents';
 import { backfillProgramFromGrade } from '@/lib/sync/program-from-grade';
 import { syncOpportunityStudentFields } from '@/lib/sync/opportunity-student-fields';
+import { preEnrollProspects } from '@/lib/sync/pre-enroll-prospects';
 import { runGhlSync, SyncSkippedError, type SyncResult } from '@/lib/sync/run-ghl-sync';
 import { backfillStudentIds } from '@/lib/sync/student-id-backfill';
 import { syncGhlAttributes } from '@/lib/sync/ghl-attributes';
@@ -177,6 +178,18 @@ async function runForAll(): Promise<NextResponse> {
         oppFieldSummary = ` Opp-fields FAILED: ${ofErr instanceof Error ? ofErr.message : String(ofErr)}`;
       }
 
+      // New prospects → "Pre-Enrolled" (settings.pre_enroll_prospects): a blank
+      // student status on a child whose card is before the portal gate stage.
+      let preEnrollSummary = '';
+      try {
+        const pe = await preEnrollProspects(s.id);
+        if (pe.ran && (pe.set > 0 || pe.errors > 0)) {
+          preEnrollSummary = ` Pre-enrolled: ${pe.set} student(s)${pe.errors ? `, ${pe.errors} errors` : ''}.`;
+        }
+      } catch (peErr) {
+        preEnrollSummary = ` Pre-enroll FAILED: ${peErr instanceof Error ? peErr.message : String(peErr)}`;
+      }
+
       // Enrollment trigger — for live, import-managed (attributes_only)
       // schools, create a loginable family for any contact whose opportunity
       // reached an "Enrolled" stage but isn't in the family graph yet.
@@ -229,7 +242,7 @@ async function runForAll(): Promise<NextResponse> {
       const dur = Date.now() - t0;
       const summary = (result
         ? `Synced ${result.families_created} families, ${result.students_created} students, ${result.enrollments_created} enrollments, ${result.classrooms_created} classrooms.`
-        : `Family-graph sync skipped (sync_mode=${s.sync_mode}).`) + attrSummary + p2TagSummary + docSummary + pgSummary + oppFieldSummary + enrollSummary + depositSummary + sidSummary;
+        : `Family-graph sync skipped (sync_mode=${s.sync_mode}).`) + attrSummary + p2TagSummary + docSummary + pgSummary + oppFieldSummary + preEnrollSummary + enrollSummary + depositSummary + sidSummary;
       results.push({
         school_id: s.id,
         name: s.name,
