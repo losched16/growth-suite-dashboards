@@ -358,7 +358,9 @@ function reviewVisible(
     const v = responses[c.field as string];
     const empty = v == null || v === '' || (Array.isArray(v) && v.length === 0);
     if (empty && c.fallback_prefill) return true;
-    const cur = Array.isArray(v) ? v.map(String) : [String(v ?? '')];
+    // A checkbox is saved as boolean true/false but gated on "1"/"0" in the schema.
+    const asStr = (x: unknown) => (x === true ? '1' : x === false ? '0' : String(x ?? ''));
+    const cur = Array.isArray(v) ? v.map(asStr) : [asStr(v)];
     return (c.equals ?? []).map(String).some((e) => cur.includes(e));
   });
   if (results.length === 0) return true;
