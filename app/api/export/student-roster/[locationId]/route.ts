@@ -23,7 +23,9 @@ const BASE: Record<string, { label: string; value: (s: RosterStudent) => string 
   student:        { label: 'Student',          value: (s) => `${s.preferred_name || s.first_name} ${s.last_name}`.trim() },
   first_name:     { label: 'First Name',       value: (s) => s.preferred_name || s.first_name },
   last_name:      { label: 'Last Name',        value: (s) => s.last_name },
-  gender_age:     { label: 'Gender / Age',     value: (s) => [s.gender, s.age_as_of_aug1].filter(Boolean).join(' · ') },
+  // Current age (as of the day of the export), matching what the dashboard shows.
+  gender_age:     { label: 'Gender / Age',     value: (s) => [s.gender, s.age_as_of_today].filter(Boolean).join(' · ') },
+  age_today:      { label: 'Age @ Today',      value: (s) => s.age_as_of_today },
   age_aug1:       { label: 'Age @ Aug 1',      value: (s) => s.age_as_of_aug1 },
   age_jan1:       { label: 'Age @ Jan 1',      value: (s) => s.age_as_of_jan1 },
   program:        { label: 'Program',          value: (s) => s.program ?? s.classroom_name ?? '' },
